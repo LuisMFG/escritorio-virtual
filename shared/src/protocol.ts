@@ -14,11 +14,17 @@ export const ClientMessage = {
   GetLayout: 'room.layout',
   /** `{ figure, gender }`: troca o visual (validado contra o manifesto do avatar). */
   UpdateAvatar: 'avatar.update',
+  /** `{ text }`: mensagem de chat para quem está na mesma sala. */
+  Chat: 'chat',
+  /** Requisição: responde com as últimas mensagens da sala (`ChatMessage[]`). */
+  GetChatHistory: 'chat.history',
 } as const;
 
 /** Mensagens servidor → cliente. */
 export const ServerMessage = {
   Error: 'error',
+  /** Mensagem de chat nova na sala (`ChatMessage`). */
+  Chat: 'chat.message',
 } as const;
 
 export const ErrorCode = {
@@ -28,6 +34,7 @@ export const ErrorCode = {
   InvalidPayload: 'INVALID_PAYLOAD',
   InvalidMove: 'INVALID_MOVE',
   InvalidFigure: 'INVALID_FIGURE',
+  InvalidChat: 'INVALID_CHAT',
   RateLimit: 'RATE_LIMIT',
 } as const;
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];
@@ -40,6 +47,7 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
   INVALID_PAYLOAD: 'Dados inválidos.',
   INVALID_MOVE: 'Não dá para andar até lá.',
   INVALID_FIGURE: 'Esse visual não é válido.',
+  INVALID_CHAT: 'Mensagem inválida.',
   RATE_LIMIT: 'Calma! Muitas ações em pouco tempo.',
 };
 
@@ -133,6 +141,50 @@ export interface RoomLayoutMessage {
   wallColor: string;
   /** Até a Fase 6 os móveis são fixos e vêm aqui; depois passam para o estado sincronizado. */
   furni: PlacedFurni[];
+}
+
+export const CHAT_MAX_LENGTH = 200;
+/** Quantas mensagens o servidor guarda por sala e quantas manda ao entrar. */
+export const CHAT_KEEP_PER_ROOM = 200;
+export const CHAT_HISTORY_ON_JOIN = 50;
+
+/**
+ * Limpa o texto do chat: remove caracteres de controle e invisíveis, junta espaços e quebras
+ * de linha num espaço só. O texto é sempre exibido como texto puro (nunca HTML).
+ */
+export function normalizeChatText(text: string): string {
+  return text
+    .normalize('NFC')
+    // eslint-disable-next-line no-control-regex -- remover caracteres de controle é o objetivo
+    .replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export const chatSchema = z.object({
+  text: z
+    .string()
+    .max(CHAT_MAX_LENGTH * 4)
+    .transform(normalizeChatText)
+    .pipe(
+      z
+        .string()
+        .min(1, 'Mensagem vazia.')
+        .max(CHAT_MAX_LENGTH, `A mensagem pode ter no máximo ${CHAT_MAX_LENGTH} caracteres.`),
+    ),
+});
+export type ChatInput = z.input<typeof chatSchema>;
+
+export interface ChatMessage {
+  id: number;
+  roomId: string;
+  userId: string;
+  /** Sessão (avatar) que falou, para o balão; vazio em mensagens antigas do histórico. */
+  sessionId: string;
+  name: string;
+  text: string;
+  /** Epoch em ms. */
+  ts: number;
 }
 
 export interface ErrorMessage {

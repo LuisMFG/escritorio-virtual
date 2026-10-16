@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CHAT_MAX_LENGTH,
+  chatSchema,
   figureSchema,
+  normalizeChatText,
   joinOptionsSchema,
   moveSchema,
   nameKey,
@@ -57,5 +60,25 @@ describe('payloads', () => {
   it('join exige sala e token', () => {
     expect(joinOptionsSchema.safeParse({ roomId: 'reception', token: 'abc' }).success).toBe(true);
     expect(joinOptionsSchema.safeParse({ roomId: 'reception' }).success).toBe(false);
+  });
+});
+
+describe('chat', () => {
+  it('limpa espaços, quebras de linha e caracteres invisíveis', () => {
+    expect(chatSchema.parse({ text: '  oi\n\n  tudo\tbem?​ ' }).text).toBe('oi tudo bem?');
+    expect(normalizeChatText('a\u0000b‮c')).toBe('a b c');
+  });
+
+  it('mantém o texto como está (HTML vira texto, não é removido)', () => {
+    expect(chatSchema.parse({ text: '<img src=x onerror=alert(1)>' }).text).toBe(
+      '<img src=x onerror=alert(1)>',
+    );
+  });
+
+  it('recusa vazio e longo demais', () => {
+    expect(chatSchema.safeParse({ text: '   \n ' }).success).toBe(false);
+    expect(chatSchema.safeParse({ text: 'a'.repeat(CHAT_MAX_LENGTH) }).success).toBe(true);
+    expect(chatSchema.safeParse({ text: 'a'.repeat(CHAT_MAX_LENGTH + 1) }).success).toBe(false);
+    expect(chatSchema.safeParse({ text: 42 }).success).toBe(false);
   });
 });
