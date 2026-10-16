@@ -1,7 +1,7 @@
 # PLAN — Escritório virtual isométrico
 
 > Documento vivo. Atualizar sempre que o plano mudar (ver "Como trabalhar" no SPEC.md).
-> Status: **rascunho aguardando aprovação** — nenhuma fase iniciada.
+> Status: **aprovado em 16/10/2026** — Fase 1 em andamento. Decisões registradas na §9.
 
 ---
 
@@ -48,7 +48,7 @@
      └─ fallback: PlaceholderFactory (Pixi Graphics → RenderTexture) se proxy e imager falharem
 ```
 
-- **`server/src/assets/HabboAssetsClient.ts`** — único ponto que fala com a API. Injeta `X-Hotel-ID: 2`, `Authorization` (só se `HABBOASSETS_TOKEN` existir, só nos endpoints de furniture), token bucket (alvo ≤ 120 req/min REST e ≤ 30 renders/min no imager, metade dos limites), retry respeitando `Retry-After`, timeout 10 s. **O token nunca vai para o cliente.**
+- **`server/src/assets/HabboAssetsClient.ts`** — único ponto que fala com a API. Injeta `X-Hotel-ID: 2`, `Authorization` (só se `HABBOASSETS_API_KEY` existir, só nos endpoints de furniture), token bucket (alvo ≤ 120 req/min REST e ≤ 30 renders/min no imager, metade dos limites), retry respeitando `Retry-After`, timeout 10 s. **O token nunca vai para o cliente.**
 - **`AssetProxy`** (rota Express `/hh/*`) — mapeia URLs estáveis nossas para o imager, grava a PNG em `data/asset-cache/<hash>.png` na primeira vez e serve do disco depois (`Cache-Control: immutable`, URLs incluem a revisão). Assim o cliente é same-origin e só o servidor consome a cota.
 - **`npm run assets:sync`** (script do servidor) — lê os manifestos curados e pré-baixa: renders de cada mobi em todas as direções suportadas, ícones, renders das peças de roupa para o editor e o JSON de furnidata. Resultado vai para `data/asset-cache` (e opcionalmente é "assado" para `client/public/assets/cache` no build Docker), deixando o runtime independente da API.
 - **Gamedata:** o catálogo de roupas válido (sets e paletas) vem de `/swfs/libraries?kind=clothing` + `/imaging/info/clothing/{library}`; o resultado é congelado num manifesto curado (ver §7) — o servidor valida contra esse manifesto, não contra a API ao vivo.
@@ -64,7 +64,7 @@
 /
 ├── package.json              # workspaces + scripts raiz (dev, build, test, lint)
 ├── tsconfig.base.json        # config TS compartilhada (strict, ESM, paths)
-├── .env.example              # INVITE_CODE, HABBOASSETS_TOKEN, PORT, DATABASE_PATH
+├── .env.example              # INVITE_CODE, HABBOASSETS_API_KEY, PORT, DATABASE_PATH
 ├── Dockerfile                # build multi-stage → um processo Node (Fase 7)
 ├── README.md / ASSETS.md     # como rodar/deploy / origem e licença dos assets
 ├── SPEC.md / PLAN.md
@@ -73,6 +73,8 @@
 │   └── src/
 │       ├── iso.ts            # tile ↔ tela, constantes de tile (64×32)
 │       ├── pathfinding.ts    # A* (usado no cliente na Fase 1 e no servidor depois)
+│       ├── depth.ts          # ordenação de profundidade (caixas de footprint + sort topológico)
+│       ├── habboassets.ts    # construtores de URL do imager / constantes da API (hotel 2)
 │       ├── grid.ts           # mapa de ocupação/altura da sala a partir de layout + móveis
 │       ├── placement.ts      # validação de colocar/mover/girar móvel
 │       ├── avatar.ts         # tipos de figure string, parser/serializer, validação
@@ -91,7 +93,7 @@
 │   └── src/
 │       ├── main.ts           # bootstrap: telas, app Pixi, conexão
 │       ├── net/              # cliente Colyseus, reconexão, handlers de mensagens
-│       ├── scene/            # RoomScene, TileLayer, WallLayer, DepthSorter, Camera
+│       ├── scene/            # RoomScene, RoomRenderer (chão/paredes), Camera
 │       ├── entities/         # AvatarView (interpolação/animação), FurniView, ChatBubble
 │       ├── assets/           # AssetLoader, PlaceholderFactory, AvatarTextureCache
 │       ├── ui/               # login, editor de avatar, chat, catálogo, lista de pessoas
@@ -117,7 +119,7 @@
 ### 4.1 SQLite (Drizzle)
 
 ```ts
-users          { id: text pk (nanoid), name: text, nameKey: text unique (lowercase),
+users          { id: text pk (nanoid), name: text,   // nome livre; pode repetir (ver §9)
                  sessionTokenHash: text, figure: text, gender: 'M'|'F',
                  createdAt: int, lastSeenAt: int }
 
@@ -184,7 +186,7 @@ Layout estático (heightmap, portas, cores) é enviado uma vez no join via mensa
 
 | Rota | Payload → Resposta |
 |---|---|
-| `POST /api/session` | `{ name, inviteCode, figure, token? }` → `{ userId, token, name, figure }` (cria ou reaproveita usuário; token salvo no localStorage) |
+| `POST /api/session` | `{ name, inviteCode, figure, token? }` → `{ userId, token, name, figure }` (cria ou reaproveita usuário; token salvo no localStorage; erro `NAME_IN_USE` se o nome estiver em uso por alguém online) |
 | `PUT /api/me/avatar` | `{ figure, gender }` (header `Authorization: Bearer token`) → `{ figure }` |
 | `GET /api/catalog` | → lista do `furni_catalog` com URLs `/hh/...` |
 | `GET /hh/*` | proxy/cache de imagens do imager |
@@ -242,7 +244,7 @@ screenToTile(sx, sy)  = { x: floor((sy/16 + sx/32) / 2), y: floor((sy/16 - sx/32
 - Cada objeto tem uma caixa no grid: `minX..maxX, minY..maxY, z..z+h`. Móvel = footprint girado; avatar parado = seu tile; avatar andando = **união** do tile atual e do próximo (evita "atravessar" a quina de um móvel durante a interpolação).
 - Chave de profundidade: `depth = (maxX + maxY) * 1000 + z * 10 + tie` com regra específica para móveis multi-tile: quando dois objetos têm caixas que se sobrepõem na diagonal, compara-se por "A está à frente de B se `A.minX > B.maxX` ou `A.minY > B.maxY`" (sort topológico). Com ≤ ~150 objetos por sala, o sort completo roda só quando algo muda (flag dirty), não a cada frame.
 - Tapetes (`canWalk`) recebem `depth` fixo logo acima do chão. Avatar sentado usa `z = sitHeight` do móvel e o tie-breaker o coloca à frente do assento e atrás do encosto (encosto via `state`/camada separada se o render do imager o tiver; senão aceita-se o render único — ver Riscos).
-- Testes unitários de `DepthSorter` com cenários: avatar atrás/na frente de mesa 2×1, passando ao lado de estante, sentado em sofá.
+- Lógica pura em `shared/depth.ts`; testes unitários com cenários: avatar atrás/na frente de mesa 2×1, passando ao lado de estante, sentado em sofá.
 
 ### 6.3 Pathfinding (`shared/pathfinding.ts`)
 
@@ -301,9 +303,9 @@ screenToTile(sx, sy)  = { x: floor((sy/16 + sx/32) / 2), y: floor((sy/16 - sx/32
 **Como testar:** `npm install && npm run dev` → abrir `http://localhost:5173`; ver a sala, clicar em tiles e o avatar desviar dos móveis; passar atrás/na frente de um móvel e ver a ordem correta; abrir com a rede bloqueada (DevTools → offline após carregar o JS, ou `?offline=1`) e ver placeholders; `npm test` passa (iso, grid, pathfinding).
 
 ### Fase 2 — Servidor em tempo real, vários usuários, tela de entrada
-- Servidor Express + Colyseus no mesmo http server; `config.ts` com `INVITE_CODE`, `PORT`, `DATABASE_PATH`, `HABBOASSETS_TOKEN`.
+- Servidor Express + Colyseus no mesmo http server; `config.ts` com `INVITE_CODE`, `PORT`, `DATABASE_PATH`, `HABBOASSETS_API_KEY`.
 - Drizzle: schema `users`, `rooms`, migrations, seed da Recepção.
-- `POST /api/session` (nome + convite → token; nome único por `nameKey`), `onAuth` no Colyseus.
+- `POST /api/session` (nome + convite → token; nome pode repetir, só é recusado se alguém **online agora** já usa o mesmo nome — comparação sem maiúsculas/acentos), `onAuth` no Colyseus.
 - `OfficeRoom` com `OfficeState`; `MovementSystem` usando o A* compartilhado no servidor; tick 50 ms; rate limit de `move`.
 - Cliente: tela de entrada (nome + código, lembra nome/token em localStorage), conexão Colyseus, `AvatarView` para cada `Player` com interpolação, lista de presentes, reconexão automática com backoff e banner "reconectando…".
 - `AssetProxy` `/hh/*` + `HabboAssetsClient` com rate limiter e cache em disco; Vite proxy em dev.
@@ -347,7 +349,7 @@ screenToTile(sx, sy)  = { x: floor((sy/16 + sx/32) / 2), y: floor((sy/16 - sx/32
 
 ### Fase 7 — Acabamento, Docker, README, deploy
 - Polimento visual: sombra dos avatares, nomes sobre a cabeça ao passar o mouse, indicador de destino, transição entre salas, sons opcionais (HabboAssets `/sounds` ou CC0, mudo por padrão), layout responsivo (painéis viram gavetas em telas pequenas).
-- `Dockerfile` multi-stage (build → runtime Node 24 slim, `data/` como volume), `fly.toml` exemplo e instruções Render/VPS; healthcheck `GET /healthz`.
+- `Dockerfile` multi-stage (build → runtime Node 24 slim, `data/` como volume), instruções para VPS (Docker + volume, ex. DigitalOcean/Hetzner) e `fly.toml` exemplo com Persistent Volume; healthcheck `GET /healthz`.
 - README completo (rodar local, `.env`, token HabboAssets, `assets:sync`, adicionar assets locais, deploy); `ASSETS.md` final.
 - Revisão de segurança leve (headers, limites de payload, logs) e testes finais.
 
@@ -361,17 +363,17 @@ screenToTile(sx, sy)  = { x: floor((sy/16 + sx/32) / 2), y: floor((sy/16 - sx/32
 1. **Sem animação de caminhada no imager.** `/imaging/avatar.png` só renderiza a pose em pé (testado: `action=wlk|sit` não funcionam). Mitigação v1: animação procedural sobre o render parado. Alternativa fiel (renderizar partes a partir das bibliotecas `.nitro` de roupas, como o Nitro faz) é um projeto grande por si só.
 2. **Âncora/offset das PNGs de mobis.** O imager devolve a imagem recortada, sem ponto de registro; precisamos calibrar offsets por item e direção (catálogo curado pequeno torna isso viável). Mobis com animação/camadas separadas (encosto da cadeira) vêm "achatados" numa PNG — o avatar sentado pode ficar levemente na frente do encosto.
 3. **Rate limit.** REST 240/min; renders não cacheados 60/min por IP. Mitigado com proxy + cache em disco + `assets:sync` antecipado; em produção o servidor nunca deveria precisar renderizar algo novo, exceto avatares com figure inédita (≤ 8 renders por troca de visual).
-4. **Token de furniture.** Os endpoints de mobis exigem token pessoal da HabboAssets; ele fica só no servidor (`HABBOASSETS_TOKEN`). Sem token, usamos só o imager + dados de footprint escritos à mão no manifesto.
+4. **Token de furniture.** Os endpoints de mobis exigem token pessoal da HabboAssets; ele fica só no servidor (`HABBOASSETS_API_KEY`). Sem token, usamos só o imager + dados de footprint escritos à mão no manifesto.
 5. **CORS.** Hoje a API e o imager respondem `Access-Control-Allow-Origin: *`, então carregar texturas WebGL direto funciona; se mudar, o proxy same-origin já cobre.
 6. **Disponibilidade/terceiros.** A HabboAssets é um arquivo comunitário; se cair ou mudar a API, o cache em disco + placeholders mantêm o app funcionando.
 7. **Direitos dos assets.** Os gráficos são da Sulake/Habbo, espelhados pela HabboAssets ("não afiliada"). OK para uso pessoal e privado (atrás de código de convite); não recomendável deixar público/indexado.
 8. **Ordenação isométrica com móveis multi-tile** é a fonte clássica de bugs visuais; mitigada com caixas de footprint, sort topológico e testes de cenário.
 9. **Colyseus 0.16** tem API que muda entre versões; vamos fixar versões exatas no `package.json`.
 
-### Decisões pendentes (preciso da sua aprovação)
-1. **Animação de caminhada:** aceitar a animação procedural sobre o render do imager na v1 (recomendado), ou investir num renderer de partes real (`.nitro`) com caminhada fiel?
-2. **Token HabboAssets:** você cria um token (conta gratuita) para importarmos furnidata/nomes PT-BR, ou seguimos só com imager + manifesto escrito à mão?
-3. **Quem pode decorar:** qualquer pessoa com o código de convite pode entrar no modo editar, ou só um "admin" (ex.: um segundo código `ADMIN_CODE`)?
-4. **Nomes:** nome deve ser único (recomendado, vira a identidade junto do token do navegador), ou pode repetir?
-5. **Destino de deploy:** Fly.io, Render ou VPS? (Impacta volume persistente para o SQLite — Render free não tem disco persistente.)
-6. **Idioma da UI:** tudo em PT-BR (assumido)?
+### Decisões tomadas (aprovadas em 16/10/2026)
+1. **Animação de caminhada:** render parado do imager + bob/balanço procedural na v1. Renderer de partes `.nitro` fica fora da v1 (a interface `AvatarRenderer` deixa a porta aberta).
+2. **Token HabboAssets:** sim, token gratuito lido de `HABBOASSETS_API_KEY` (só no servidor) para importar furnidata e nomes PT-BR. Sem a variável, o app continua funcionando com imager + manifesto manual.
+3. **Quem pode decorar:** qualquer pessoa conectada (entrou com o código de convite) pode usar o modo editar.
+4. **Nomes:** livres e podem repetir; só bloqueamos (erro `NAME_IN_USE`, sugerindo um sufixo) quando alguém **online no momento** já usa o mesmo nome. A identidade real é o token do navegador.
+5. **Deploy:** VPS simples (DigitalOcean/Hetzner) com Docker, ou Fly.io com Persistent Volume. Local: SQLite em arquivo (`DATABASE_PATH=./data/sqlite.db`).
+6. **Idioma:** 100% PT-BR — interface, botões, mensagens de erro, chat e instruções.
