@@ -1,7 +1,7 @@
 # PLAN — Escritório virtual isométrico
 
 > Documento vivo. Atualizar sempre que o plano mudar (ver "Como trabalhar" no SPEC.md).
-> Status: **aprovado em 16/10/2026** — Fases 1 a 5 aprovadas; Fase 6 concluída (aguardando validação). Decisões registradas na §9.
+> Status: **aprovado em 16/10/2026** — Fases 1 a 6 aprovadas; Fase 7 concluída (aguardando validação). v1 completa. Decisões registradas na §9.
 
 ---
 
@@ -338,7 +338,7 @@ screenToTile(sx, sy)  = { x: floor((sy/16 + sx/32) / 2), y: floor((sy/16 - sx/32
 
 **Como testar:** entrar no modo editar, colocar mesa, cadeiras e tapete; tentar colocar sobre parede/avatar/porta → bloqueado; girar e mover; a outra aba vê tudo em tempo real; reiniciar o servidor e o layout continua; sair do modo editar e clicar numa cadeira → avatar senta; andar sobre o tapete e não atravessar a mesa; `npm test` cobre `placement`.
 
-### Fase 7 — Acabamento, Docker, README, deploy
+### Fase 7 — Acabamento, Docker, README, deploy ✅ implementada
 - Polimento visual: sombra dos avatares, nomes sobre a cabeça ao passar o mouse, indicador de destino, transição entre salas, sons opcionais (HabboAssets `/sounds` ou CC0, mudo por padrão), layout responsivo (painéis viram gavetas em telas pequenas).
 - `Dockerfile` multi-stage (build → runtime Node 24 slim, `data/` como volume), instruções para VPS (Docker + volume, ex. DigitalOcean/Hetzner) e `fly.toml` exemplo com Persistent Volume; healthcheck `GET /healthz`.
 - README completo (rodar local, `.env`, token HabboAssets, `assets:sync`, adicionar assets locais, deploy); `ASSETS.md` final.
@@ -424,4 +424,16 @@ screenToTile(sx, sy)  = { x: floor((sy/16 + sx/32) / 2), y: floor((sy/16 - sx/32
 - Cliques em móveis usam teste por pixel (alfa da imagem), então clicar no encosto de uma cadeira senta, e clicar no piso ao lado anda.
 - Modo decorar: botão "Decorar" (qualquer pessoa na sala). Catálogo com miniaturas, clique para colocar (o item continua escolhido para colocar vários), clique para selecionar, arrastar para mover, R gira, Delete remove, Esc cancela. O chat fica escondido enquanto se decora.
 - **Bug corrigido nos testes:** o `MovementSystem` sobrescrevia a ação "sit" com "idle" depois do gancho de fim de passo.
+
+### Notas da Fase 7
+- **Produção = um processo:** `node --import tsx server/src/index.ts` serve `client/dist`, a API e o WebSocket. O `tsx` virou dependência de execução (o servidor roda direto do TypeScript; sem etapa de build do servidor).
+- **Docker:** build multi-stage em `node:24-bookworm-slim`; `npm ci --ignore-scripts` (o better-sqlite3 13 já traz binários para Linux). O entrypoint ajusta a dona da pasta de dados (volumes chegam como root) e troca para o usuário `node` com `setpriv`. Healthcheck em `/healthz`. `docker-compose.yml` para VPS e `fly.toml` com volume e máquina sempre ligada.
+- **Testado de ponta a ponta no container** (OrbStack, arm64): entrada com convite, token antigo recusado, chat, decorar, reinício do container com reconexão automática e móveis persistidos no volume.
+- **CSP de produção** sem `unsafe-eval`: o Pixi precisa de `import 'pixi.js/unsafe-eval'` (troca o `eval` dos shaders por código pronto); descoberto pelo teste no container.
+- Cabeçalhos: CSP, `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy`, `Permissions-Policy`. `trust proxy` = 1 em produção (IP real atrás de Caddy/Fly para o limite de tentativas de entrada). Mensagens WebSocket limitadas a 4 KB (padrão do transporte). Logs de entrada/saída por sala.
+- **Primeira carga mais rápida:** o limite local para o imager subiu para rajada de 20 e 45/min (ainda abaixo dos 60/min públicos) e o proxy responde 503 após 2 s de espera, para o cliente cair logo no imager direto em vez de esperar na fila.
+- **Telas pequenas:** controles de câmera numa linha no topo; zoom automático de 0,5× quando a tela é bem mais estreita que a sala (celular); 1× nos demais casos.
+- Acabamento: favicon, som de mensagem opcional (desligado por padrão, lembrado no navegador), móveis com arte local (`source: 'local'`), aviso de token expirado na entrada, `?debug=1` expõe o estado também em produção.
+- Os nomes ficam sempre visíveis sobre os avatares (decisão da Fase 2), em vez de só ao passar o mouse.
+- Não feito por falta de conta/credenciais: deploy real em VPS/Fly e teste com token da HabboAssets.
 

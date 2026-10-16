@@ -27,6 +27,15 @@ Desde a Fase 2 as imagens passam pelo proxy do servidor (`/hh/avatar.png`, `/hh/
 - **O quê:** piso e paredes (sempre), e substitutos de mobis e avatares quando a HabboAssets falha ou com `?offline=1`.
 - O avatar provisório (`client/src/assets/LayeredAvatar.ts`) é desenhado em camadas cinza e tingido com as cores reais das paletas do manifesto.
 
-## Pacotes CC0
+## Outros recursos próprios
 
-Nenhum por enquanto. Ao adicionar um, registrar aqui: nome, autor, URL, licença e arquivos usados.
+- **Ícone do site** (`client/public/favicon.svg`): desenhado para o projeto.
+- **Som de mensagem** (`client/src/ui/sound.ts`): sintetizado na hora com Web Audio, sem arquivo de áudio.
+
+## Arte local e pacotes CC0
+
+Móveis com `source: 'local'` usam imagens em `client/public/assets/local/furni/{id}_{direção}.png` (ver README). Nenhum por enquanto. Ao adicionar, registre aqui:
+
+| Arquivo(s) | Autor | Licença | URL de origem |
+|---|---|---|---|
+| — | — | — | — |

@@ -1,8 +1,18 @@
 # Escritório Virtual
 
-Escritório virtual isométrico para amigos e colegas: avatares andando em salas no estilo Habbo, com movimento em tempo real e chat. Veja [SPEC.md](SPEC.md) (requisitos) e [PLAN.md](PLAN.md) (plano e decisões).
+Escritório virtual isométrico para amigos e colegas (até ~10 pessoas online): avatares no estilo Habbo andando por salas, conversando por balões de chat, sentando nas cadeiras e decorando o espaço juntos. Projeto pessoal, sem fins comerciais.
 
-> Em construção — **Fase 6** (decorar as salas com o catálogo de móveis e sentar). O README completo, com deploy, entra na Fase 7.
+- **Requisitos:** [SPEC.md](SPEC.md) · **Plano e decisões:** [PLAN.md](PLAN.md) · **Origem dos assets:** [ASSETS.md](ASSETS.md)
+
+## O que dá para fazer
+
+- Entrar com um nome e o código de convite; o navegador lembra de você.
+- Montar o visual do avatar (270 peças do Habbo Brasil, cores das paletas reais) na entrada ou pelo botão **Meu visual**.
+- Andar clicando no piso, com desvio de móveis e outras pessoas, sincronizado em tempo real.
+- Conversar: **Enter** abre o campo de mensagem; a fala aparece em balão sobre o avatar e fica no histórico **Conversa**. Há um som de mensagem opcional (🔔/🔕).
+- Três salas: **Recepção**, **Sala de reunião** e **Copa**, ligadas por portas. Dá para abrir direto numa sala pela URL: `#/reception`, `#/meeting`, `#/pantry`.
+- Sentar: clique numa cadeira ou sofá.
+- Decorar: botão **Decorar** → escolha um móvel no catálogo e clique no piso. Clique num móvel para selecionar, arraste para mover, **R** gira, **Delete** remove, **Esc** cancela. Tudo fica salvo.
 
 ## Rodar localmente
 
@@ -10,50 +20,145 @@ Requer Node.js 22 ou mais recente (testado com o 24).
 
 ```bash
 npm install
-cp .env.example .env   # opcional: ajuste INVITE_CODE e o token da HabboAssets
+```
+
+```bash
+cp .env.example .env
+```
+
+(O `.env` é opcional em desenvolvimento.) Depois:
+
+```bash
 npm run dev
 ```
 
-Isso sobe o servidor (http://localhost:2567) e o cliente (http://localhost:5173). Abra o cliente, digite um nome e o código de convite (`INVITE_CODE` do `.env`; sem `.env`, o código de desenvolvimento é `convite`).
+Isso sobe o servidor (http://localhost:2567) e o cliente (http://localhost:5173). Abra o cliente e entre com um nome e o código de convite: o `INVITE_CODE` do `.env`, ou `convite` se não houver `.env`.
 
-Para sentar, clique numa cadeira ou sofá. Para decorar, use o botão **Decorar**: escolha um móvel no catálogo e clique no piso; clique num móvel para selecionar, arraste para mover, **R** gira e **Delete** remove.
+Para testar com várias pessoas sozinho, abra uma janela **anônima** (cada navegador guarda o próprio acesso) ou rode robôs que passeiam e conversam na Recepção:
 
-Para ir a outra sala, clique numa porta (o tile escuro na parede, destacado em azul ao passar o mouse). Dá para abrir direto numa sala pela URL: `#/reception`, `#/meeting` ou `#/pantry`.
+```bash
+npm run bot -- Bia 3
+```
 
-Para testar com várias pessoas:
+Opções de URL do cliente: `?offline=1` usa só a arte provisória gerada por código (sem chamar a HabboAssets); `?debug=1` desenha os footprints da ordenação de profundidade.
 
-- abra uma segunda janela **anônima** (cada navegador guarda o seu próprio token), ou
-- rode robôs que passeiam e conversam pela sala: `npm run bot` (ou `npm run bot -- Bia 3` para três robôs).
+### Variáveis de ambiente
 
-Opções de URL do cliente:
+| Variável | Padrão | Para quê |
+|---|---|---|
+| `INVITE_CODE` | `convite` em dev; **obrigatória** em produção | Código pedido na entrada |
+| `HABBOASSETS_API_KEY` | vazio | Token gratuito da HabboAssets (só no servidor), usado pelo `assets:sync` para ler dados de móveis |
+| `PORT` | `2567` | Porta HTTP/WebSocket |
+| `DATABASE_PATH` | `./data/sqlite.db` | Arquivo SQLite |
+| `ASSET_CACHE_DIR` | `./data/asset-cache` | Cache em disco das imagens da HabboAssets |
 
-- `?offline=1` — usa só a arte provisória gerada por código (não chama a HabboAssets).
-- `?debug=1` — desenha os footprints usados na ordenação de profundidade.
-
-## Scripts
+### Scripts
 
 | Comando | O que faz |
 |---|---|
 | `npm run dev` | Servidor (tsx watch) + cliente (Vite) juntos |
 | `npm run dev:server` / `npm run dev:client` | Só um dos dois |
-| `npm run bot` | Robôs de teste andando pela Recepção |
-| `npm run assets:sync` | Regera os manifestos do avatar e dos móveis a partir da HabboAssets (`-- --thumbs` também baixa as miniaturas das roupas) |
 | `npm test` | Testes unitários e de integração (Vitest) |
 | `npm run typecheck` | Checagem de tipos de todos os pacotes |
-| `npm run lint` | ESLint |
-| `npm run build` | Build de produção do cliente |
+| `npm run lint` / `npm run format` | ESLint / Prettier |
+| `npm run build` | Build de produção do cliente (`client/dist`) |
+| `npm start` | Servidor em modo produção (serve o `client/dist`) |
+| `npm run bot` | Robôs de teste |
+| `npm run assets:sync` | Regera os manifestos de roupas e móveis a partir da HabboAssets |
 | `npm run db:generate` | Gera migration SQL após mudar `server/src/db/schema.ts` |
 
 ## Estrutura
 
-- `shared/` — código comum: coordenadas isométricas, A*, ordenação de profundidade, protocolo de rede, estado sincronizado.
-- `server/` — Express + Colyseus no mesmo processo, SQLite (better-sqlite3 + Drizzle), proxy de assets com cache.
-- `client/` — Vite + PixiJS; interface em HTML/CSS.
+```
+shared/   código comum: coordenadas isométricas, A*, ordenação de profundidade, regras de
+          colocação de móveis, validação de visual, protocolo de rede e estado sincronizado
+server/   Express + Colyseus no mesmo processo; SQLite (better-sqlite3 + Drizzle);
+          proxy de imagens com cache; scripts (assets:sync, bot)
+client/   Vite + PixiJS (cena isométrica) e HTML/CSS (entrada, editor, chat, catálogo)
+data/     banco e cache de imagens (fora do git)
+```
 
-Os dados locais (banco SQLite e cache de imagens) ficam em `data/`, fora do git.
+## Assets: HabboAssets e arte própria
 
-## Assets
+Os gráficos vêm do imager público da [HabboAssets](https://www.habboassets.com/api) (Habbo Brasil, `X-Hotel-ID: 2`). O navegador pede as imagens ao próprio servidor (`/hh/...`), que baixa cada uma uma única vez e guarda em `data/asset-cache`. Se o servidor não conseguir, o navegador tenta o imager direto e, por último, desenha uma arte provisória por código.
 
-Os gráficos vêm do imager público da [HabboAssets](https://www.habboassets.com/api) (Habbo Brasil), servidos pelo proxy com cache do servidor em `/hh/*`. A origem de cada asset fica em [ASSETS.md](ASSETS.md). Para adicionar um móvel ao catálogo, inclua o classname (com nome e categoria em português) em `server/src/assets/furniCatalog.ts` e rode `npm run assets:sync`: o script mede âncoras e tamanho a partir das imagens do imager.
+**Catálogos.** Os manifestos `client/public/assets/avatar/manifest.json` (roupas) e `client/public/assets/furni/manifest.json` (móveis) são gerados e versionados no git:
 
-O catálogo de roupas do editor (`client/public/assets/avatar/manifest.json`) é gerado por `npm run assets:sync`. Para mudar categorias ou bibliotecas, edite a curadoria em `server/src/assets/avatarManifest.ts` e rode o script de novo. Na primeira vez, rode `npm run assets:sync -- --thumbs` para o editor abrir com as miniaturas já em cache.
+```bash
+npm run assets:sync -- --thumbs
+```
+
+- Roupas: a curadoria (categorias e bibliotecas `hh_human_*`) fica em `server/src/assets/avatarManifest.ts`. `--thumbs` pré-baixa as miniaturas do editor.
+- Móveis: liste o classname, o nome e a categoria em português em `server/src/assets/furniCatalog.ts`. O script baixa os renders e mede a âncora (onde o móvel encosta no piso) e o tamanho a partir das imagens. Se souber o tamanho, informe `width`/`depth`, que têm prioridade.
+- Com `HABBOASSETS_API_KEY`, o script também tenta ler nome e tamanho da furnidata (esse caminho ainda não foi testado com um token real).
+
+**Arte própria ou CC0.** Para um móvel que não vem da HabboAssets:
+
+1. Salve as imagens em `client/public/assets/local/furni/{id}_{direção}.png` (uma por direção: 0, 2, 4 e/ou 6).
+2. Adicione em `server/src/assets/furniCatalog.ts` uma entrada com `source: 'local'`, `width`, `depth`, `directions` e `anchors` (o pixel de cada imagem que fica sobre o canto da frente do piso).
+3. Rode `npm run assets:sync` e registre autor, licença e URL no [ASSETS.md](ASSETS.md).
+
+## Deploy
+
+O app é **um único processo Node** (cliente compilado + API + WebSocket) com SQLite em arquivo. Rode **uma instância só**: as salas vivem na memória do processo. O que precisa persistir fica em `/app/data` (banco e cache de imagens), então use um volume.
+
+### Docker
+
+```bash
+docker build -t escritorio-virtual .
+```
+
+```bash
+docker run -d --name escritorio -p 2567:2567 -e INVITE_CODE=troque-isto -v escritorio-dados:/app/data escritorio-virtual
+```
+
+A imagem roda como usuário `node`, tem healthcheck em `GET /healthz` e encerra com elegância no `SIGTERM`.
+
+### VPS (DigitalOcean, Hetzner…)
+
+1. Instale Docker e copie o projeto para o servidor.
+2. Crie o `.env` com `INVITE_CODE` (e, se tiver, `HABBOASSETS_API_KEY`).
+3. Suba com o `docker-compose.yml` do projeto:
+
+```bash
+docker compose up -d --build
+```
+
+4. Coloque HTTPS na frente. Com o [Caddy](https://caddyserver.com), um `Caddyfile` assim basta (certificado automático, WebSocket incluído):
+
+```
+escritorio.seu-dominio.com {
+	reverse_proxy localhost:2567
+}
+```
+
+Backup: copie a pasta `data/` (o `sqlite.db` com o app parado, ou use `sqlite3 data/sqlite.db ".backup copia.db"`).
+
+### Fly.io
+
+O `fly.toml` do projeto já tem volume, healthcheck e a máquina sempre ligada:
+
+```bash
+fly apps create escritorio-virtual-SEU-NOME
+```
+
+```bash
+fly volumes create escritorio_dados --size 1 --region gru
+```
+
+```bash
+fly secrets set INVITE_CODE=troque-isto
+```
+
+```bash
+fly deploy
+```
+
+Troque `app` no `fly.toml` pelo nome criado. Mantenha uma máquina só.
+
+### Segurança
+
+- Entrada por código de convite (limite de 10 tentativas por minuto por IP); o token de sessão fica no navegador e o banco guarda só o hash.
+- Em produção: CSP restrita (sem `eval`), `X-Frame-Options: DENY`, `nosniff`; mensagens WebSocket de no máximo 4 KB; limites por ação (andar, chat, decorar, trocar visual).
+- Texto do chat sempre exibido como texto puro; visuais e colocações de móveis validados no servidor.
+- Os gráficos são da Sulake/Habbo (via HabboAssets, não afiliada): uso pessoal e privado. Não publique o site de forma aberta.
