@@ -1,15 +1,19 @@
 import type { Application, Container, FederatedPointerEvent, Point } from 'pixi.js';
 
-const ZOOM_LEVELS = [1, 2, 3];
+/** 0,5× só para caber em telas pequenas; o resto é inteiro para a pixel art ficar nítida. */
+const ZOOM_LEVELS = [0.5, 1, 2, 3];
+const DEFAULT_LEVEL = 1;
 /** Distância (px) a partir da qual um clique vira arrasto. */
 const DRAG_THRESHOLD = 5;
 
 /**
- * Câmera 2D: arrastar para mover, roda do mouse/botões para zoom inteiro (1×, 2×, 3×),
+ * Câmera 2D: arrastar para mover, roda do mouse/botões para zoom (0,5× só em telas pequenas; 1×, 2×, 3×),
  * mantendo a pixel art nítida. Cliques sem arrasto são repassados via `onTap`.
  */
 export class Camera {
-  private levelIndex = 0;
+  private levelIndex = DEFAULT_LEVEL;
+  /** A pessoa escolheu o zoom (botões/roda): o enquadramento automático não mexe mais. */
+  private userZoomed = false;
   private pointerDown: { x: number; y: number; worldX: number; worldY: number } | null = null;
   private dragging = false;
   private userMoved = false;
@@ -66,8 +70,14 @@ export class Camera {
 
   /** Centraliza o conteúdo do mundo na tela. */
   center(): void {
-    this.world.scale.set(this.zoom);
     const b = this.world.getLocalBounds();
+    if (!this.userZoomed) {
+      // 1× sempre que der (cortar um pouco é ok: dá para arrastar); 0,5× só em telas bem
+      // estreitas (celular), onde a sala em 1× ficaria muito maior que a tela.
+      const roomWidth = b.maxX - b.minX;
+      this.levelIndex = this.app.screen.width < roomWidth * 0.75 ? 0 : DEFAULT_LEVEL;
+    }
+    this.world.scale.set(this.zoom);
     const cx = (b.minX + b.maxX) / 2;
     const cy = (b.minY + b.maxY) / 2;
     this.world.position.set(
@@ -78,10 +88,12 @@ export class Camera {
   }
 
   zoomIn(): void {
+    this.userZoomed = true;
     this.setLevel(this.levelIndex + 1);
   }
 
   zoomOut(): void {
+    this.userZoomed = true;
     this.setLevel(this.levelIndex - 1);
   }
 
@@ -137,6 +149,7 @@ export class Camera {
     if (Math.abs(this.wheelAccum) < 60) return;
     const rect = this.app.canvas.getBoundingClientRect();
     const focus = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    this.userZoomed = true;
     this.setLevel(this.levelIndex + (this.wheelAccum < 0 ? 1 : -1), focus);
     this.wheelAccum = 0;
     this.userMoved = true;

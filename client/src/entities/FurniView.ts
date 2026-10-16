@@ -38,10 +38,11 @@ export class FurniView extends Container {
     const token = ++this.loadToken;
     const opts = { direction: dir, revision: def.revision, color: def.color };
     // Proxy com cache do servidor primeiro; imager direto se o servidor não responder.
+    // Locais (CC0 ou próprios): client/public/assets/local/furni/{id}_{dir}.png.
     const urls =
       def.source === 'habboassets'
         ? [furniImageUrl(def.id, opts, '/hh'), furniImageUrl(def.id, opts)]
-        : [];
+        : [`/assets/local/furni/${def.id}_${dir}.png`];
     const loaded = await this.loader.load(`furni:${def.id}:${dir}:${def.color ?? ''}`, urls, () =>
       this.placeholders.furni(def, placed.rot),
     );

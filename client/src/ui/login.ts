@@ -7,7 +7,7 @@ import {
   type SessionResponse,
 } from '@office/shared';
 import { ApiRequestError, createSession } from '../net/api.js';
-import { loadSession, saveSession } from '../net/storage.js';
+import { forgetToken, loadSession, saveSession } from '../net/storage.js';
 import { openAvatarEditor } from './avatarEditor.js';
 
 export interface LoginOptions {
@@ -142,7 +142,14 @@ export function showLogin(opts: LoginOptions): Promise<SessionResponse> {
         resolve(session);
       } catch (err) {
         const body = err instanceof ApiRequestError ? err.body : {};
-        showError((err as Error).message, body.suggestion);
+        if (body.error === 'INVALID_INVITE' && !inviteInput.value && loadSession()?.token) {
+          // O acesso salvo não vale mais (ex.: banco recriado): esquece e pede o código.
+          forgetToken();
+          hint.hidden = true;
+          showError('Seu acesso salvo neste navegador expirou. Digite o código de convite.');
+        } else {
+          showError((err as Error).message, body.suggestion);
+        }
         if (body.error === 'INVALID_INVITE') inviteInput.focus();
       } finally {
         submit.disabled = false;

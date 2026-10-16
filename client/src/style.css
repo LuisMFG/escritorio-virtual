@@ -950,3 +950,28 @@ body.decorating .hud-decor {
     left: 16px;
   }
 }
+
+/* ---------- Celular: controles de câmera no topo, sem cobrir chat e lista ---------- */
+
+@media (max-width: 600px) {
+  .hud-zoom {
+    flex-direction: row;
+    top: 60px;
+    right: 16px;
+    bottom: auto;
+  }
+
+  .hud-zoom button {
+    width: 36px;
+    height: 36px;
+    font-size: 16px;
+  }
+
+  .people {
+    right: 16px;
+  }
+
+  .hud-decor {
+    right: 16px;
+  }
+}

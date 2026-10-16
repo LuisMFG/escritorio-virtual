@@ -12,5 +12,9 @@ export default defineConfig({
       '/healthz': SERVER,
     },
   },
-  build: { target: 'es2022' },
+  build: {
+    target: 'es2022',
+    // O PixiJS sozinho passa de 500 kB; com gzip o app inteiro fica em ~110 kB.
+    chunkSizeWarningLimit: 700,
+  },
 });

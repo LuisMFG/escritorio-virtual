@@ -12,6 +12,9 @@ export function mountHud(opts: {
   loader: AssetLoader;
   onEditAvatar: () => void;
   onToggleDecor: () => void;
+  /** Liga/desliga o som de mensagem; devolve o novo estado. */
+  onToggleSound: () => boolean;
+  soundOn: boolean;
 }): Hud {
   const card = document.createElement('header');
   card.className = 'hud-card';
@@ -33,6 +36,18 @@ export function mountHud(opts: {
     button('−', 'Afastar', () => opts.getCamera()?.zoomOut()),
     button('⌖', 'Centralizar a sala', () => opts.getCamera()?.center()),
   );
+  const soundBtn = button(opts.soundOn ? '🔔' : '🔕', '', () => renderSound(opts.onToggleSound()));
+  const renderSound = (on: boolean) => {
+    soundBtn.textContent = on ? '🔔' : '🔕';
+    const label = on
+      ? 'Som de mensagem ligado (clique para desligar)'
+      : 'Som de mensagem desligado (clique para ligar)';
+    soundBtn.title = label;
+    soundBtn.setAttribute('aria-label', label);
+    soundBtn.setAttribute('aria-pressed', String(on));
+  };
+  renderSound(opts.soundOn);
+  zoom.prepend(soundBtn);
 
   const avatarBtn = document.createElement('button');
   avatarBtn.type = 'button';

@@ -1,4 +1,6 @@
 import './style.css';
+// Sem isto o Pixi usa `eval` para shaders, e a CSP de produção (sem 'unsafe-eval') o bloqueia.
+import 'pixi.js/unsafe-eval';
 import { Callbacks } from '@colyseus/sdk';
 import {
   parseAvatarManifest,
@@ -19,7 +21,7 @@ import { Application, TextureSource } from 'pixi.js';
 import { AssetLoader } from './assets/AssetLoader.js';
 import { AvatarTextureCache, ImagerAvatarRenderer } from './assets/AvatarTextureCache.js';
 import { PlaceholderFactory } from './assets/PlaceholderFactory.js';
-import { OFFLINE_ASSETS } from './config.js';
+import { DEBUG, OFFLINE_ASSETS } from './config.js';
 import type { AvatarSnapshot } from './entities/AvatarView.js';
 import { isSessionError, OfficeConnection, type OfficeRoomClient } from './net/OfficeConnection.js';
 import { forgetToken, loadSession, saveSession } from './net/storage.js';
@@ -29,6 +31,7 @@ import { ChatPanel } from './ui/chat.js';
 import { DecorPanel } from './ui/decorPanel.js';
 import { mountHud } from './ui/hud.js';
 import { showLogin } from './ui/login.js';
+import { ChatSound } from './ui/sound.js';
 import { Overlay } from './ui/overlay.js';
 
 /** Sala pedida na URL (`#/meeting`), para recarregar no mesmo lugar. */
@@ -102,6 +105,7 @@ async function start(): Promise<void> {
   let connection: OfficeConnection | undefined;
   let session: SessionResponse | undefined;
   const overlay = new Overlay();
+  const sound = new ChatSound();
   const chat = new ChatPanel((text) => connection?.say(text));
   let decorating = false;
   const setDecorating = (on: boolean) => {
@@ -120,6 +124,8 @@ async function start(): Promise<void> {
     getCamera: () => scene?.camera,
     loader,
     onToggleDecor: () => setDecorating(!decorating),
+    onToggleSound: () => sound.toggle(),
+    soundOn: sound.enabled,
     onEditAvatar: async () => {
       if (!session || !connection) return;
       const choice = await openAvatarEditor({
@@ -226,6 +232,7 @@ async function start(): Promise<void> {
       serverError: (err) => overlay.notify(err.message),
       chat: (msg) => {
         chat.add(msg);
+        if (msg.userId !== session?.userId) sound.play();
         scene?.say(msg.sessionId, msg.name, msg.text);
       },
       sessionInvalid: () => {
@@ -240,7 +247,7 @@ async function start(): Promise<void> {
     await conn.join(roomFromHash(), current.token);
     // Saída "educada" ao fechar/recarregar: o servidor remove o avatar na hora.
     window.addEventListener('pagehide', () => void conn.leave());
-    if (import.meta.env.DEV) {
+    if (import.meta.env.DEV || DEBUG) {
       Object.assign(window, { __office: { app, connection: conn, getScene: () => scene } });
     }
   }
