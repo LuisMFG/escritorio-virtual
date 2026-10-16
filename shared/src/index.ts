@@ -8,3 +8,5 @@ export * from './habboassets.js';
 export * from './rooms.js';
 export * from './manifests.js';
 export * from './figure.js';
+export * from './protocol.js';
+export * from './state.js';

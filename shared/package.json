@@ -7,6 +7,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "@colyseus/schema": "5.0.40",
     "zod": "^4.6.7"
   }
 }
