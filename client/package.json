@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@colyseus/sdk": "0.18.5",
     "@office/shared": "*",
     "pixi.js": "^8.22.0"
   }

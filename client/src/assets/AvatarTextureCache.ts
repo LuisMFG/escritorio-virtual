@@ -35,7 +35,11 @@ export class ImagerAvatarRenderer implements AvatarRenderer {
       Array.from({ length: 8 }, async (_, dir): Promise<AvatarFrame> => {
         const loaded = await this.loader.load(
           `avatar:${figure}:${dir}`,
-          [avatarImageUrl(figure, { direction: dir }, base)],
+          // Proxy com cache do servidor primeiro; imager direto se o servidor não responder.
+          [
+            avatarImageUrl(figure, { direction: dir }, '/hh'),
+            avatarImageUrl(figure, { direction: dir }, base),
+          ],
           () => this.placeholders.avatar(figure, dir),
         );
         return {

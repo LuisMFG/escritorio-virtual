@@ -1,12 +1,15 @@
 import type { AssetLoader, AssetStats } from '../assets/AssetLoader.js';
 import type { Camera } from '../scene/Camera.js';
 
-/** Interface fixa da Fase 1: nome da sala, status dos assets e controles de zoom. */
-export function mountHud(opts: { roomName: string; camera: Camera; loader: AssetLoader }): void {
+export interface Hud {
+  setRoomName(name: string): void;
+}
+
+/** Nome da sala, status dos assets e controles de zoom (que agem sobre a cena atual). */
+export function mountHud(opts: { getCamera: () => Camera | undefined; loader: AssetLoader }): Hud {
   const card = document.createElement('header');
   card.className = 'hud-card';
   const title = document.createElement('h1');
-  title.textContent = opts.roomName;
   const hint = document.createElement('p');
   hint.textContent =
     'Clique no piso para andar. Arraste para mover a câmera e use a roda do mouse para o zoom.';
@@ -20,12 +23,18 @@ export function mountHud(opts: { roomName: string; camera: Camera; loader: Asset
   const zoom = document.createElement('div');
   zoom.className = 'hud-zoom';
   zoom.append(
-    button('+', 'Aproximar', () => opts.camera.zoomIn()),
-    button('−', 'Afastar', () => opts.camera.zoomOut()),
-    button('⌖', 'Centralizar a sala', () => opts.camera.center()),
+    button('+', 'Aproximar', () => opts.getCamera()?.zoomIn()),
+    button('−', 'Afastar', () => opts.getCamera()?.zoomOut()),
+    button('⌖', 'Centralizar a sala', () => opts.getCamera()?.center()),
   );
 
   document.body.append(card, status, zoom);
+  return {
+    setRoomName(name) {
+      title.textContent = name;
+      document.title = `${name} · Escritório Virtual`;
+    },
+  };
 }
 
 function renderStatus(el: HTMLElement, stats: AssetStats): void {

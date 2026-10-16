@@ -5,11 +5,27 @@ import {
   type DepthBox,
   type TilePoint,
 } from '@office/shared';
-import { Container, Graphics, Sprite } from 'pixi.js';
+import { Container, Graphics, Sprite, Text } from 'pixi.js';
 import type { AvatarFrames } from '../assets/AvatarTextureCache.js';
 
 /** Deslocamento vertical (px) por quarto de passo: o "bob" da caminhada procedural. */
 const BOB_Y = [0, -1, -2, -1];
+/** Com passos acumulados (atraso de rede), anda um pouco mais rápido para alcançar o servidor. */
+const CATCH_UP_SPEED = 1.5;
+/** Altura do nome acima dos pés. */
+const NAME_Y = -88;
+
+/** O que a cena sabe de um jogador do estado sincronizado. */
+export interface AvatarSnapshot {
+  name: string;
+  figure: string;
+  x: number;
+  y: number;
+  nextX: number;
+  nextY: number;
+  dir: number;
+  away: boolean;
+}
 
 interface Step {
   from: TilePoint;
@@ -18,9 +34,11 @@ interface Step {
 }
 
 /**
- * Avatar na cena. A posição lógica é sempre um tile; durante um passo, a posição de tela
- * é interpolada entre o tile atual e o próximo. A animação de caminhada é procedural
- * (o imager só tem a pose parada): bob vertical + leve balanço lateral alternado.
+ * Avatar na cena, dirigido pelo servidor. A cada passo o servidor publica o próximo tile
+ * (`nextX/nextY`); a view enfileira o passo e interpola em `STEP_MS`. Se a posição recebida
+ * não for vizinha da atual (entrada na sala, atraso grande), teleporta.
+ * A animação de caminhada é procedural (o imager só tem a pose parada): bob vertical
+ * e leve balanço lateral alternado.
  */
 export class AvatarView extends Container {
   tile: TilePoint;
@@ -28,23 +46,38 @@ export class AvatarView extends Container {
   private frames: AvatarFrames | null = null;
   private readonly body = new Sprite();
   private readonly shadow = new Graphics();
+  private readonly nameTag: Text;
   private step: Step | null = null;
-  private path: TilePoint[] = [];
+  private readonly queue: TilePoint[] = [];
   private walkTime = 0;
   private stepCount = 0;
 
   constructor(
     readonly avatarId: string,
-    start: TilePoint,
-    dir: number,
+    snapshot: AvatarSnapshot,
+    readonly isLocal: boolean,
     private readonly heightAt: (x: number, y: number) => number,
   ) {
     super();
     this.label = `avatar:${avatarId}`;
-    this.tile = { x: start.x, y: start.y };
-    this.dir = dir;
+    this.tile = { x: snapshot.x, y: snapshot.y };
+    this.dir = snapshot.dir;
     this.shadow.ellipse(0, 0, 14, 6).fill({ color: 0x000000, alpha: 0.22 });
-    this.addChild(this.shadow, this.body);
+    this.nameTag = new Text({
+      text: snapshot.name,
+      resolution: 2,
+      style: {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: 11,
+        fontWeight: isLocal ? '700' : '500',
+        fill: isLocal ? 0xffe28a : 0xffffff,
+        stroke: { color: 0x101114, width: 3 },
+      },
+    });
+    this.nameTag.anchor.set(0.5, 1);
+    this.nameTag.position.set(0, NAME_Y);
+    this.addChild(this.shadow, this.body, this.nameTag);
+    this.applySnapshot(snapshot);
     this.applyPosition();
   }
 
@@ -53,26 +86,45 @@ export class AvatarView extends Container {
     this.applyFrame();
   }
 
-  /** Tile de onde um novo caminho deve partir (o passo em andamento sempre termina). */
-  get nextTile(): TilePoint {
-    return this.step ? this.step.to : this.tile;
-  }
-
   get isWalking(): boolean {
-    return this.step !== null || this.path.length > 0;
+    return this.step !== null || this.queue.length > 0;
   }
 
-  /** Substitui o caminho pendente. `path` começa no tile seguinte a `nextTile`. */
-  walk(path: TilePoint[]): void {
-    this.path = [...path];
-    if (!this.step) this.startNextStep();
+  /** Aplica um estado novo vindo do servidor. */
+  applySnapshot(s: AvatarSnapshot): void {
+    this.nameTag.text = s.name;
+    this.alpha = s.away ? 0.45 : 1;
+
+    const target = { x: s.nextX, y: s.nextY };
+    const last = this.queue.at(-1) ?? this.step?.to ?? this.tile;
+    if (target.x === last.x && target.y === last.y) {
+      if (!this.isWalking && s.dir !== this.dir) {
+        this.dir = s.dir;
+        this.applyFrame();
+      }
+      return;
+    }
+    if (Math.max(Math.abs(target.x - last.x), Math.abs(target.y - last.y)) === 1) {
+      this.queue.push(target);
+      if (!this.step) this.startNextStep();
+      return;
+    }
+    // Fora de sincronia: teleporta para o tile atual do servidor e segue dali.
+    this.queue.length = 0;
+    this.step = null;
+    this.tile = { x: s.x, y: s.y };
+    this.dir = s.dir;
+    if (s.nextX !== s.x || s.nextY !== s.y) this.queue.push(target);
+    this.startNextStep();
+    this.applyFrame();
+    this.applyPosition();
   }
 
   update(dtMs: number): void {
-    let remaining = dtMs;
+    const speed = this.queue.length > 0 ? CATCH_UP_SPEED : 1;
+    let remaining = dtMs * speed;
     while (this.step && remaining > 0) {
-      const left = STEP_MS - this.step.elapsed;
-      const used = Math.min(left, remaining);
+      const used = Math.min(STEP_MS - this.step.elapsed, remaining);
       this.step.elapsed += used;
       remaining -= used;
       if (this.step.elapsed >= STEP_MS) {
@@ -82,7 +134,7 @@ export class AvatarView extends Container {
         this.startNextStep();
       }
     }
-    this.walkTime = this.step ? this.walkTime + dtMs : 0;
+    this.walkTime = this.step ? this.walkTime + dtMs * speed : 0;
     this.applyPosition();
   }
 
@@ -101,7 +153,7 @@ export class AvatarView extends Container {
   }
 
   private startNextStep(): void {
-    const next = this.path.shift();
+    const next = this.queue.shift();
     if (!next) return;
     this.step = { from: this.tile, to: next, elapsed: 0 };
     this.dir = directionBetween(this.tile, next, this.dir);

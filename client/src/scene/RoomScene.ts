@@ -1,7 +1,5 @@
 import {
   depthOrder,
-  findNearestReachable,
-  findPath,
   parseHeightmap,
   pointInTile,
   RoomGrid,
@@ -11,6 +9,7 @@ import {
   type FurniManifestEntry,
   type Heightmap,
   type RoomDefinition,
+  type RoomLayoutMessage,
   type TilePoint,
 } from '@office/shared';
 import { Container, Graphics, type Application, type Point } from 'pixi.js';
@@ -18,12 +17,12 @@ import type { AssetLoader } from '../assets/AssetLoader.js';
 import type { AvatarTextureCache } from '../assets/AvatarTextureCache.js';
 import type { PlaceholderFactory } from '../assets/PlaceholderFactory.js';
 import { DEBUG } from '../config.js';
-import { AvatarView } from '../entities/AvatarView.js';
+import { AvatarView, type AvatarSnapshot } from '../entities/AvatarView.js';
 import { FurniView } from '../entities/FurniView.js';
 import { Camera } from './Camera.js';
 import { drawRoom } from './RoomRenderer.js';
 
-interface SceneDeps {
+export interface SceneDeps {
   loader: AssetLoader;
   placeholders: PlaceholderFactory;
   avatars: AvatarTextureCache;
@@ -32,7 +31,7 @@ interface SceneDeps {
 
 /**
  * Cena de uma sala: piso/paredes, móveis, avatares, ordenação de profundidade e cliques.
- * Na Fase 1 há um único avatar local, movido por pathfinding no próprio cliente.
+ * Não decide nada sobre movimento: só mostra o estado do servidor e repassa cliques.
  */
 export class RoomScene {
   readonly world = new Container({ label: 'world' });
@@ -44,19 +43,21 @@ export class RoomScene {
   private readonly target = new Graphics({ label: 'target' });
   private readonly debugLayer = new Graphics({ label: 'debug' });
   private readonly furni: FurniView[] = [];
-  private avatar: AvatarView | null = null;
+  private readonly avatars = new Map<string, AvatarView>();
   private depthKey = '';
   private targetFade = 0;
+  private localId: string | null = null;
 
   constructor(
     private readonly app: Application,
-    readonly room: RoomDefinition,
+    readonly layout: RoomLayoutMessage,
     private readonly deps: SceneDeps,
+    private readonly onTileClick: (tile: TilePoint) => void,
   ) {
-    this.map = parseHeightmap(room.heightmap);
-    // Fase 1: ainda não dá para sentar, então cadeiras não são destino de caminhada.
-    this.grid = new RoomGrid(this.map, room.furni, deps.furniDefs, { seatsAsGoal: false });
+    this.map = parseHeightmap(layout.heightmap);
+    this.grid = new RoomGrid(this.map, layout.furni, deps.furniDefs, { seatsAsGoal: false });
 
+    const room: RoomDefinition = { ...layout, id: layout.roomId };
     this.world.addChild(
       drawRoom(this.map, room),
       this.hover,
@@ -67,12 +68,13 @@ export class RoomScene {
     app.stage.addChild(this.world);
     this.camera = new Camera(app, this.world);
     this.camera.onTap((p) => this.handleTap(p));
-    app.stage.on('globalpointermove', (e) => this.updateHover(e.global));
+    app.stage.on('globalpointermove', this.onPointerMove, this);
   }
 
-  async load(figure: string): Promise<void> {
-    const { loader, placeholders, furniDefs, avatars } = this.deps;
-    for (const placed of this.room.furni) {
+  /** Carrega os móveis e centraliza a câmera. */
+  async load(): Promise<void> {
+    const { loader, placeholders, furniDefs } = this.deps;
+    for (const placed of this.layout.furni) {
       const def = furniDefs.get(placed.defId);
       if (!def) {
         console.warn(`[sala] móvel sem definição no manifesto: ${placed.defId}`);
@@ -82,49 +84,67 @@ export class RoomScene {
       this.furni.push(view);
       this.objects.addChild(view);
     }
-
-    const { spawn } = this.room;
-    this.avatar = new AvatarView('local', spawn, spawn.dir, (x, y) => this.grid.heightAt(x, y));
-    this.objects.addChild(this.avatar);
-
-    await Promise.all([
-      ...this.furni.map((f) => f.load(loader, placeholders)),
-      avatars.get(figure).then((frames) => this.avatar?.setFrames(frames)),
-    ]);
+    await Promise.all(this.furni.map((f) => f.load(loader, placeholders)));
     this.camera.center();
   }
 
+  addAvatar(id: string, snapshot: AvatarSnapshot, isLocal: boolean): void {
+    if (this.avatars.has(id)) return this.updateAvatar(id, snapshot);
+    const view = new AvatarView(id, snapshot, isLocal, (x, y) => this.grid.heightAt(x, y));
+    this.avatars.set(id, view);
+    if (isLocal) this.localId = id;
+    this.objects.addChild(view);
+    void this.deps.avatars.get(snapshot.figure).then((frames) => {
+      if (!view.destroyed) view.setFrames(frames);
+    });
+  }
+
+  updateAvatar(id: string, snapshot: AvatarSnapshot): void {
+    this.avatars.get(id)?.applySnapshot(snapshot);
+  }
+
+  removeAvatar(id: string): void {
+    const view = this.avatars.get(id);
+    if (!view) return;
+    this.avatars.delete(id);
+    view.destroy({ children: true });
+  }
+
   update(dtMs: number): void {
-    this.avatar?.update(dtMs);
+    for (const a of this.avatars.values()) a.update(dtMs);
     this.sortDepth();
     if (this.targetFade > 0) {
-      this.targetFade = Math.max(0, this.targetFade - dtMs / 600);
+      this.targetFade = Math.max(0, this.targetFade - dtMs / 900);
       this.target.alpha = this.targetFade;
-      if (this.avatar && !this.avatar.isWalking) this.targetFade = 0;
     }
   }
 
-  /** Reordena só quando alguma caixa muda (avatar troca de tile, móvel muda). */
+  destroy(): void {
+    this.camera.destroy();
+    this.app.stage.off('globalpointermove', this.onPointerMove, this);
+    this.world.destroy({ children: true });
+  }
+
+  /** Reordena só quando alguma caixa muda (avatar troca de tile, alguém entra ou sai). */
   private sortDepth(): void {
     const boxes: DepthBox[] = this.furni.map((f) => f.depthBox);
-    if (this.avatar) boxes.push(this.avatar.depthBox);
+    for (const a of this.avatars.values()) boxes.push(a.depthBox);
     const key = boxes
       .map((b) => `${b.id}:${b.minX},${b.minY},${b.maxX},${b.maxY},${b.z}`)
       .join('|');
     if (key === this.depthKey) return;
     this.depthKey = key;
 
-    const order = depthOrder(boxes);
     const views = new Map<string, Container>(this.furni.map((f) => [f.placed.id, f]));
-    if (this.avatar) views.set(this.avatar.avatarId, this.avatar);
-    order.forEach((id, i) => {
+    for (const [id, a] of this.avatars) views.set(id, a);
+    depthOrder(boxes).forEach((id, i) => {
       const v = views.get(id);
       if (v) v.zIndex = i;
     });
     if (DEBUG) this.drawDebug(boxes);
   }
 
-  /** Tile sob um ponto do mundo, considerando a altura (testa de frente para trás). */
+  /** Tile sob um ponto da tela, considerando a altura (testa de frente para trás). */
   pickTile(global: Point): TilePoint | null {
     const p = this.world.toLocal(global);
     let best: TilePoint | null = null;
@@ -143,29 +163,15 @@ export class RoomScene {
   }
 
   private handleTap(global: Point): void {
-    const avatar = this.avatar;
-    const goal = this.pickTile(global);
-    if (!avatar || !goal) return;
-    const start = avatar.nextTile;
-    let dest = goal;
-    let path = findPath(this.grid, start, goal);
-    if (!path) {
-      const near = findNearestReachable(this.grid, start, goal, 2);
-      if (near) {
-        dest = near.tile;
-        path = near.path;
-      }
-    }
-    if (!path) {
-      this.flashTarget(goal, 0xe05555);
-      return;
-    }
-    avatar.walk(path);
-    this.flashTarget(dest, 0xffffff);
+    const tile = this.pickTile(global);
+    if (!tile || !this.localId) return;
+    // O servidor decide o caminho; aqui é só um retorno visual imediato.
+    this.flashTarget(tile, this.grid.isWalkable(tile.x, tile.y, true) ? 0xffffff : 0xe0a040);
+    this.onTileClick(tile);
   }
 
-  private updateHover(global: Point): void {
-    const t = this.pickTile(global);
+  private onPointerMove(e: { global: Point }): void {
+    const t = this.pickTile(e.global);
     this.hover.clear();
     if (!t) return;
     const z = tileHeight(this.map, t.x, t.y) ?? 0;

@@ -29,9 +29,11 @@ export class FurniView extends Container {
   async load(loader: AssetLoader, placeholders: PlaceholderFactory): Promise<void> {
     const { def, placed } = this;
     const dir = renderDirection(def, placed.rot);
+    const opts = { direction: dir, revision: def.revision, color: def.color };
+    // Proxy com cache do servidor primeiro; imager direto se o servidor não responder.
     const urls =
       def.source === 'habboassets'
-        ? [furniImageUrl(def.id, { direction: dir, revision: def.revision, color: def.color })]
+        ? [furniImageUrl(def.id, opts, '/hh'), furniImageUrl(def.id, opts)]
         : [];
     const loaded = await loader.load(`furni:${def.id}:${dir}:${def.color ?? ''}`, urls, () =>
       placeholders.furni(def, placed.rot),

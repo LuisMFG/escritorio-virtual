@@ -27,11 +27,27 @@ export class Camera {
     stage.on('pointerdown', this.onDown, this);
     stage.on('globalpointermove', this.onMove, this);
     stage.on('pointerup', this.onUp, this);
-    stage.on('pointerupoutside', () => this.reset());
-    app.canvas.addEventListener('wheel', (e) => this.onWheel(e), { passive: false });
-    app.renderer.on('resize', () => {
-      if (!this.userMoved) this.center();
-    });
+    stage.on('pointerupoutside', this.reset, this);
+    app.canvas.addEventListener('wheel', this.handleWheel, { passive: false });
+    app.renderer.on('resize', this.onResize, this);
+  }
+
+  /** Remove os listeners (a cena é recriada ao trocar de sala ou reconectar). */
+  destroy(): void {
+    const stage = this.app.stage;
+    stage.off('pointerdown', this.onDown, this);
+    stage.off('globalpointermove', this.onMove, this);
+    stage.off('pointerup', this.onUp, this);
+    stage.off('pointerupoutside', this.reset, this);
+    this.app.canvas.removeEventListener('wheel', this.handleWheel);
+    this.app.renderer.off('resize', this.onResize, this);
+    this.tapListeners.length = 0;
+  }
+
+  private readonly handleWheel = (e: WheelEvent) => this.onWheel(e);
+
+  private onResize(): void {
+    if (!this.userMoved) this.center();
   }
 
   get zoom(): number {
