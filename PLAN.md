@@ -1,7 +1,7 @@
 # PLAN — Escritório virtual isométrico
 
 > Documento vivo. Atualizar sempre que o plano mudar (ver "Como trabalhar" no SPEC.md).
-> Status: **aprovado em 16/10/2026** — Fases 1 a 4 aprovadas; Fase 5 concluída (aguardando validação). Decisões registradas na §9.
+> Status: **aprovado em 16/10/2026** — Fases 1 a 5 aprovadas; Fase 6 concluída (aguardando validação). Decisões registradas na §9.
 
 ---
 
@@ -131,16 +131,14 @@ rooms          { id: text pk ('reception'|'meeting'|'pantry'), name: text,
 room_doors     { id: int pk, roomId: fk rooms, x: int, y: int,
                  targetRoomId: fk rooms, targetX: int, targetY: int, targetDir: int }
 
-furni_catalog  { id: text pk (classname), name: text, category: text,
-                 width: int, depth: int, height: real,     // footprint e altura de empilhar
-                 canSit: bool, canWalk: bool (tapete), canStack: bool, sitHeight: real,
-                 directions: text (json [0,2,4,6]), colors: text (json),
-                 offsets: text (json {dir: [ox, oy]}),     // âncora calibrada da PNG
-                 source: 'habboassets'|'local', revision: int }
+rooms          … + furniSeeded: bool   // móveis iniciais já inseridos (não repõe o que foi removido)
 
-room_furni     { id: text pk, roomId: fk rooms, catalogId: fk furni_catalog,
-                 x: int, y: int, z: real, rot: int (0|2|4|6), color: int null,
+room_furni     { id: text pk, roomId: fk rooms, defId: text (classname do catálogo),
+                 x: int, y: int, z: real, rot: int (0|2|4|6),
                  placedBy: fk users null, updatedAt: int }
+
+// Catálogo de móveis: não é tabela. Fica em client/public/assets/furni/manifest.json
+// (gerado pelo assets:sync, versionado), lido pelo cliente e pelo servidor. Ver Notas da Fase 6.
 
 chat_messages  { id: int pk, roomId: fk rooms, userId: fk users, nameSnapshot: text,
                  text: text, createdAt: int }   // manter últimas 200 por sala
@@ -182,7 +180,6 @@ Layout estático (heightmap, portas, cores e, até a Fase 6, os móveis) é pedi
 | Rota | Payload → Resposta |
 |---|---|
 | `POST /api/session` | `{ name, inviteCode?, figure?, gender?, token? }` → `{ userId, token, name, figure, gender }` (cria ou reaproveita usuário; token salvo no localStorage; erro `NAME_IN_USE` se o nome estiver em uso por alguém online) |
-| `GET /api/catalog` | → lista do `furni_catalog` com URLs `/hh/...` |
 | `GET /api/presence` | (header `Authorization: Bearer token`) → `{ rooms: [{ roomId, name, people: [{ name }] }] }` |
 | `GET /hh/*` | proxy/cache de imagens do imager (`avatar.png`, `furniture/{c}.png`, `clothing/set/{id}.png`) |
 
@@ -198,12 +195,10 @@ Layout estático (heightmap, portas, cores e, até a Fase 6, os móveis) é pedi
 | `move` | `{ x, y }` | rate limit 5/s; A* no servidor a partir da posição atual; destino bloqueado → tile livre mais próximo; sem caminho → `error INVALID_MOVE` |
 | `chat` | `{ text }` | normaliza (remove controle/invisíveis, junta espaços), 1–200 chars, rate limit 3 msgs/5 s; texto puro |
 | `chat.history` (requisição) | — | responde com as últimas 50 mensagens da sala |
-| `door.use` | `{ doorId }` | jogador precisa estar no tile da porta (também disparado automaticamente ao pisar) |
-| `furni.place` | `{ catalogId, x, y, rot, color? }` | modo editar; `placement.canPlace` |
-| `furni.move` | `{ furniId, x, y }` | idem; não pode haver alguém sentado |
-| `furni.rotate` | `{ furniId, rot }` | idem, recalcula footprint |
+| `furni.place` | `{ defId, x, y, rot }` | rate limit 10 + 4/s; `canPlace` (shared); persiste em `room_furni` |
+| `furni.move` | `{ furniId, x, y, rot }` | mover e/ou girar; idem; recusado se alguém está sentado nele |
 | `furni.remove` | `{ furniId }` | idem |
-| `interact` | `{ furniId }` | se `canSit`: caminha até o tile do móvel e senta (dir = rot do móvel) |
+| `interact` | `{ furniId }` | se `canSit`: anda até o assento livre mais perto e senta (`action='sit'`, `z = z do móvel + sitHeight`, dir = rot do móvel) |
 | `avatar.update` | `{ figure, gender }` | valida contra manifesto; persiste; atualiza `Player.figure` |
 | `typing` | `{ on: boolean }` | opcional, indicador "digitando…" |
 
@@ -333,7 +328,7 @@ screenToTile(sx, sy)  = { x: floor((sy/16 + sx/32) / 2), y: floor((sy/16 - sx/32
 
 **Como testar:** andar até a porta da Recepção e chegar na Sala de reunião; outra aba na Recepção deixa de ver você e não recebe seu chat; lista de pessoas mostra quem está onde; recarregar mantém a sala atual.
 
-### Fase 6 — Decoração, catálogo, sentar, persistência das salas
+### Fase 6 — Decoração, catálogo, sentar, persistência das salas ✅ implementada
 - `HabboAssetsClient` com token: importa furnidata dos itens curados para `furni_catalog`; `assets:sync` baixa renders/ícones; `GET /api/catalog`.
 - `shared/placement.ts`: `canPlace(layout, furni[], item, x, y, rot)` (limites, tiles existentes, sobreposição, avatares no caminho, porta livre, tapete empilhável) + testes.
 - Modo "editar sala" (botão com estado visível): catálogo por categoria, fantasma verde/vermelho seguindo o mouse, clique para colocar, arrastar para mover, `R` para girar, `Delete` para remover.
@@ -418,4 +413,15 @@ screenToTile(sx, sy)  = { x: floor((sy/16 + sx/32) / 2), y: floor((sy/16 - sx/32
 - Lista de pessoas: a sala atual ao vivo pelo estado; as outras por `GET /api/presence` a cada 10 s.
 - URL reflete a sala (`#/meeting`); recarregar entra direto nela.
 - Novo móvel: máquina de café (`sunsetcafe_c20_coffeemachine`), na Copa.
+
+### Notas da Fase 6
+- **Desvio do plano (para validar):** o catálogo de móveis ficou no manifesto JSON (`client/public/assets/furni/manifest.json`), sem a tabela `furni_catalog` nem o `GET /api/catalog`. O manifesto já é versionado, servido estático e lido pelo servidor para validar; uma tabela só duplicaria os dados. Se preferir a tabela, dá para migrar depois sem mudar o protocolo.
+- Catálogo com 28 móveis em 8 categorias (cadeiras, sofás, mesas, plantas, estantes, escritório, cozinha, tapetes). Curadoria em `server/src/assets/furniCatalog.ts`; o `assets:sync` baixa os renders, mede **âncora** (pixel opaco mais baixo) e **tamanho** (distância da âncora até a borda esquerda em duas direções) e escreve o manifesto. A medição bateu com todos os tamanhos já conhecidos; os sem tamanho na curadoria usam a estimativa (ex.: sofá executivo 3×1, conferido no navegador). Isso substituiu a "ferramenta de calibração" prevista.
+- **Sem token da HabboAssets:** `HABBOASSETS_API_KEY` não está configurado, então a leitura da furnidata (`/furniture/{classname}`) está implementada de forma tolerante, mas **não foi verificada** contra a resposta real. Os dados atuais vêm só do imager público + curadoria.
+- Regras de colocação em `shared/placement.ts` (as mesmas no cliente, para o fantasma verde/vermelho, e no servidor, que decide): dentro da sala, piso plano, sem cobrir portas/entrada/tile de chegada, sem sobrepor (móvel sólido pode ficar em cima de tapete), sem esmagar avatar e sem bloquear o caminho da entrada até nenhuma porta. Limite de 150 móveis por sala.
+- Móveis iniciais de `shared/rooms.ts` são inseridos uma única vez (`rooms.furni_seeded`); depois o layout é das pessoas.
+- Sentar: assento só vale como destino para quem clicou nele. A pose sentada é simulada (o imager não tem): corpo na altura do assento, um pouco mais baixo, com as pernas escondidas por máscara. Andar levanta.
+- Cliques em móveis usam teste por pixel (alfa da imagem), então clicar no encosto de uma cadeira senta, e clicar no piso ao lado anda.
+- Modo decorar: botão "Decorar" (qualquer pessoa na sala). Catálogo com miniaturas, clique para colocar (o item continua escolhido para colocar vários), clique para selecionar, arrastar para mover, R gira, Delete remove, Esc cancela. O chat fica escondido enquanto se decora.
+- **Bug corrigido nos testes:** o `MovementSystem` sobrescrevia a ação "sit" com "idle" depois do gancho de fim de passo.
 

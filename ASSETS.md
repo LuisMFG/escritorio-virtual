@@ -17,18 +17,9 @@ Desde a Fase 2 as imagens passam pelo proxy do servidor (`/hh/avatar.png`, `/hh/
 | Catálogo de roupas e paletas (dados) | `/imaging/info/clothing/hh_human_*` | `server/scripts/assets-sync.ts` → `client/public/assets/avatar/manifest.json` |
 | Mobis (render por direção, revisão fixada) | `/imaging/furniture/{classname}.png?revision=…&direction=…` | `client/src/entities/FurniView.ts` |
 
-### Mobis usados na Fase 1 (`client/public/assets/furni/manifest.json`)
+### Mobis do catálogo (`client/public/assets/furni/manifest.json`)
 
-| Classname | Nome | Revisão |
-|---|---|---|
-| `chair_norja` | Cadeira Norja | 61856 |
-| `couch_norja` | Sofá Norja | 61856 |
-| `table_norja_med` | Mesa Norja | 61856 |
-| `plant_big_cactus` | Cacto Grande | 48082 |
-| `shelves_norja` | Estante Norja | 61856 |
-| `carpet_standard` | Tapete | 48082 |
-
-Dimensões (footprint) e âncoras foram medidas a partir dos renders; serão conferidas com a furnidata da API (token) na Fase 6.
+28 móveis do Habbo Brasil, listados em `server/src/assets/furniCatalog.ts` (classname, nome em português e categoria). Revisões, direções, âncoras e tamanhos medidos são gravados pelo `npm run assets:sync`. Renders: `/imaging/furniture/{classname}.png?revision=…&direction=…`; miniaturas do catálogo: o mesmo com `size=32`.
 
 ## Arte provisória gerada por código
 

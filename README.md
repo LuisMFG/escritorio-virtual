@@ -2,7 +2,7 @@
 
 Escritório virtual isométrico para amigos e colegas: avatares andando em salas no estilo Habbo, com movimento em tempo real e chat. Veja [SPEC.md](SPEC.md) (requisitos) e [PLAN.md](PLAN.md) (plano e decisões).
 
-> Em construção — **Fase 5** (Recepção, Sala de reunião e Copa, ligadas por portas). O README completo, com deploy, entra na Fase 7.
+> Em construção — **Fase 6** (decorar as salas com o catálogo de móveis e sentar). O README completo, com deploy, entra na Fase 7.
 
 ## Rodar localmente
 
@@ -15,6 +15,8 @@ npm run dev
 ```
 
 Isso sobe o servidor (http://localhost:2567) e o cliente (http://localhost:5173). Abra o cliente, digite um nome e o código de convite (`INVITE_CODE` do `.env`; sem `.env`, o código de desenvolvimento é `convite`).
+
+Para sentar, clique numa cadeira ou sofá. Para decorar, use o botão **Decorar**: escolha um móvel no catálogo e clique no piso; clique num móvel para selecionar, arraste para mover, **R** gira e **Delete** remove.
 
 Para ir a outra sala, clique numa porta (o tile escuro na parede, destacado em azul ao passar o mouse). Dá para abrir direto numa sala pela URL: `#/reception`, `#/meeting` ou `#/pantry`.
 
@@ -35,7 +37,7 @@ Opções de URL do cliente:
 | `npm run dev` | Servidor (tsx watch) + cliente (Vite) juntos |
 | `npm run dev:server` / `npm run dev:client` | Só um dos dois |
 | `npm run bot` | Robôs de teste andando pela Recepção |
-| `npm run assets:sync` | Regera o manifesto do avatar a partir da HabboAssets (`-- --thumbs` também baixa as miniaturas) |
+| `npm run assets:sync` | Regera os manifestos do avatar e dos móveis a partir da HabboAssets (`-- --thumbs` também baixa as miniaturas das roupas) |
 | `npm test` | Testes unitários e de integração (Vitest) |
 | `npm run typecheck` | Checagem de tipos de todos os pacotes |
 | `npm run lint` | ESLint |
@@ -52,6 +54,6 @@ Os dados locais (banco SQLite e cache de imagens) ficam em `data/`, fora do git.
 
 ## Assets
 
-Os gráficos vêm do imager público da [HabboAssets](https://www.habboassets.com/api) (Habbo Brasil), servidos pelo proxy com cache do servidor em `/hh/*`. A origem de cada asset fica em [ASSETS.md](ASSETS.md). Para adicionar um móvel, inclua-o em `client/public/assets/furni/manifest.json`.
+Os gráficos vêm do imager público da [HabboAssets](https://www.habboassets.com/api) (Habbo Brasil), servidos pelo proxy com cache do servidor em `/hh/*`. A origem de cada asset fica em [ASSETS.md](ASSETS.md). Para adicionar um móvel ao catálogo, inclua o classname (com nome e categoria em português) em `server/src/assets/furniCatalog.ts` e rode `npm run assets:sync`: o script mede âncoras e tamanho a partir das imagens do imager.
 
 O catálogo de roupas do editor (`client/public/assets/avatar/manifest.json`) é gerado por `npm run assets:sync`. Para mudar categorias ou bibliotecas, edite a curadoria em `server/src/assets/avatarManifest.ts` e rode o script de novo. Na primeira vez, rode `npm run assets:sync -- --thumbs` para o editor abrir com as miniaturas já em cache.
