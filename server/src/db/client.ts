@@ -3,6 +3,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ROOMS } from '@office/shared';
 import Database from 'better-sqlite3';
+import { eq } from 'drizzle-orm';
 import { drizzle, type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import * as schema from './schema.js';
@@ -48,6 +49,23 @@ function seedRooms(db: Db): void {
       .run();
   }
   db.transaction((tx) => {
+    // Móveis iniciais só na primeira vez; depois o layout é das pessoas.
+    for (const room of ROOMS) {
+      const row = tx
+        .select({ seeded: schema.rooms.furniSeeded })
+        .from(schema.rooms)
+        .where(eq(schema.rooms.id, room.id))
+        .get();
+      if (row?.seeded) continue;
+      for (const f of room.furni) {
+        tx.insert(schema.roomFurni)
+          .values({ ...f, roomId: room.id, updatedAt: new Date() })
+          .onConflictDoNothing()
+          .run();
+      }
+      tx.update(schema.rooms).set({ furniSeeded: true }).where(eq(schema.rooms.id, room.id)).run();
+    }
+
     tx.delete(schema.roomDoors).run();
     for (const room of ROOMS) {
       for (const d of room.doors) {

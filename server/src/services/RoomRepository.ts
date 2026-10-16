@@ -1,7 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
-  findRoom,
   parseAvatarManifest,
   parseFurniManifest,
   type AvatarManifest,
@@ -62,7 +61,6 @@ export class RoomRepository {
       floorColor: row.floorColor,
       wallColor: row.wallColor,
       doors,
-      furni: findRoom(roomId)?.furni ?? [],
     };
   }
 }

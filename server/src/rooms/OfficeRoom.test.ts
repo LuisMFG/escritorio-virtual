@@ -9,6 +9,7 @@ import {
   ServerMessage,
   STEP_MS,
   type ChatMessage,
+  type Furni,
   type PresenceResponse,
   type RoomTransferMessage,
   type ErrorMessage,
@@ -78,7 +79,7 @@ describe('OfficeRoom', () => {
     const a = await join(ana.token);
     const layout = (await a.request(ClientMessage.GetLayout)) as RoomLayoutMessage;
     expect(layout.name).toBe('Recepção');
-    expect(layout.furni.length).toBeGreaterThan(0);
+    expect(a.state.furni.size).toBeGreaterThan(0);
 
     const b = await join(beto.token);
     expect(b.roomId).toBe(a.roomId);
@@ -238,5 +239,83 @@ describe('OfficeRoom', () => {
       body.rooms.map((r) => [r.roomId, r.people.map((p) => p.name)]),
     );
     expect(byRoom).toEqual({ reception: ['Ana'], meeting: ['Beto'], pantry: [] });
+  });
+
+  describe('decorar', () => {
+    const furniAt = (room: { state: { furni: Map<string, Furni> } }, x: number, y: number) =>
+      [...room.state.furni.values()].find((f) => f.x === x && f.y === y);
+
+    it('colocar, girar, mover e remover sincroniza com todos e persiste no banco', async () => {
+      const a = await join(newUser('Ana').token);
+      const b = await join(newUser('Beto').token);
+      a.send(ClientMessage.FurniPlace, { defId: 'plant_yukka', x: 11, y: 9, rot: 0 });
+      await wait(200);
+      const placed = furniAt(b, 11, 9);
+      expect(placed?.defId).toBe('plant_yukka');
+      expect(svc.furni.list(RECEPTION.id).some((f) => f.id === placed!.id)).toBe(true);
+
+      a.send(ClientMessage.FurniMove, { furniId: placed!.id, x: 10, y: 9, rot: 2 });
+      await wait(200);
+      expect(b.state.furni.get(placed!.id)).toMatchObject({ x: 10, y: 9, rot: 2 });
+      expect(svc.furni.list(RECEPTION.id).find((f) => f.id === placed!.id)).toMatchObject({
+        x: 10,
+        rot: 2,
+      });
+
+      a.send(ClientMessage.FurniRemove, { furniId: placed!.id });
+      await wait(200);
+      expect(b.state.furni.has(placed!.id)).toBe(false);
+      expect(svc.furni.list(RECEPTION.id).some((f) => f.id === placed!.id)).toBe(false);
+    });
+
+    it('recusa colocações inválidas com o motivo', async () => {
+      const a = await join(newUser('Ana').token);
+      const door = RECEPTION.doors[0]!;
+      a.send(ClientMessage.FurniPlace, { defId: 'plant_yukka', x: door.x, y: door.y, rot: 0 });
+      const err = (await a.waitForMessage(ServerMessage.Error)) as ErrorMessage;
+      expect(err).toMatchObject({
+        code: 'INVALID_PLACEMENT',
+        message: 'Deixe a porta e a entrada livres.',
+      });
+      const before = a.state.furni.size;
+      a.send(ClientMessage.FurniPlace, { defId: 'nao-existe', x: 11, y: 9, rot: 0 });
+      a.send(ClientMessage.FurniPlace, { defId: 'plant_yukka', x: 11, y: 9, rot: 3 });
+      await wait(200);
+      expect(a.state.furni.size).toBe(before);
+    });
+
+    it('a sala recriada carrega os móveis do banco', async () => {
+      const ana = newUser('Ana');
+      const a = await join(ana.token);
+      a.send(ClientMessage.FurniPlace, { defId: 'plant_bonsai', x: 11, y: 8, rot: 0 });
+      await wait(200);
+      await a.leave();
+      await colyseus.cleanup();
+      const again = await join(ana.token);
+      expect(furniAt(again, 11, 8)?.defId).toBe('plant_bonsai');
+    });
+
+    it(
+      'sentar: anda até a cadeira, senta virado como ela; ninguém mexe na cadeira ocupada',
+      { timeout: 20_000 },
+      async () => {
+        const a = await join(newUser('Ana').token);
+        const chair = [...a.state.furni.values()].find((f) => f.id === 'r-chair-1')!;
+        a.send(ClientMessage.Interact, { furniId: chair.id });
+        await wait(STEP_MS * 14);
+        const me = a.state.players.get(a.sessionId)!;
+        expect(me).toMatchObject({ x: chair.x, y: chair.y, action: 'sit', dir: chair.rot });
+        expect(me.z).toBeGreaterThan(0);
+
+        a.send(ClientMessage.FurniRemove, { furniId: chair.id });
+        const err = (await a.waitForMessage(ServerMessage.Error)) as ErrorMessage;
+        expect(err.message).toBe('Tem alguém sentado aí.');
+
+        // Andar de novo levanta.
+        a.send(ClientMessage.Move, { x: 4, y: 6 });
+        await wait(STEP_MS * 2);
+        expect(a.state.players.get(a.sessionId)!.action).not.toBe('sit');
+      },
+    );
   });
 });

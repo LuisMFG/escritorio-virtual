@@ -1,7 +1,14 @@
 import { Room, ServerError, validate, type Client, type Deferred } from '@colyseus/core';
 import {
+  canPlace,
   chatSchema,
   ClientMessage,
+  footprint,
+  Furni,
+  furniMoveSchema,
+  furniPlaceSchema,
+  furniRefSchema,
+  nearestSeatTile,
   ERROR_MESSAGES,
   ErrorCode,
   joinOptionsSchema,
@@ -14,6 +21,10 @@ import {
   RoomGrid,
   ServerMessage,
   type ErrorMessage,
+  type FurniMoveMessage,
+  type FurniPlaceMessage,
+  type PlacedFurni,
+  type PlacementRequest,
   type Heightmap,
   type MoveMessage,
   type UpdateAvatarMessage,
@@ -47,6 +58,10 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
   private readonly avatarLimiter = new KeyedRateLimiter(3, 0.5);
   /** Chat: até 3 mensagens seguidas, recarregando 3 a cada 5 s. */
   private readonly chatLimiter = new KeyedRateLimiter(3, 3 / 5);
+  /** Decorar: rajada de 10 ações, recarregando 4 por segundo. */
+  private readonly editLimiter = new KeyedRateLimiter(10, 4);
+  /** Quem clicou numa cadeira e está andando até ela (sessionId → móvel e assento). */
+  private readonly pendingSit = new Map<string, { furniId: string; seat: TilePoint }>();
   /** Reconexões pendentes por sessionId, para cancelar quando a pessoa volta numa aba nova. */
   private readonly pendingReconnects = new Map<string, Deferred<Client>>();
 
@@ -64,6 +79,18 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     [ClientMessage.UpdateAvatar]: validate(updateAvatarSchema, (client, msg) =>
       this.handleUpdateAvatar(client as OfficeClient, msg),
     ),
+    [ClientMessage.FurniPlace]: validate(furniPlaceSchema, (client, msg) =>
+      this.handlePlace(client as OfficeClient, msg),
+    ),
+    [ClientMessage.FurniMove]: validate(furniMoveSchema, (client, msg) =>
+      this.handleFurniMove(client as OfficeClient, msg),
+    ),
+    [ClientMessage.FurniRemove]: validate(furniRefSchema, (client, msg) =>
+      this.handleRemove(client as OfficeClient, msg.furniId),
+    ),
+    [ClientMessage.Interact]: validate(furniRefSchema, (client, msg) =>
+      this.handleInteract(client as OfficeClient, msg.furniId),
+    ),
   };
 
   override onCreate(options: { officeRoomId: string }): void {
@@ -77,6 +104,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     );
     this.state = new OfficeState();
     this.state.roomId = layout.roomId;
+    for (const f of services().furni.list(layout.roomId)) this.state.furni.set(f.id, toFurni(f));
     this.setSimulationInterval(
       (dt) => this.movement.tick(dt, this.state.players.entries()),
       TICK_MS,
@@ -152,12 +180,19 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     this.moveLimiter.delete(client.sessionId);
     this.avatarLimiter.delete(client.sessionId);
     this.chatLimiter.delete(client.sessionId);
+    this.editLimiter.delete(client.sessionId);
+    this.pendingSit.delete(client.sessionId);
     services().presence.remove(client.sessionId);
     if (client.auth) services().users.touch(client.auth.id);
   }
 
-  /** Terminou um passo: se foi numa porta, manda a pessoa para a sala de destino. */
+  /** Terminou um passo: chegou na cadeira (senta) ou numa porta (troca de sala). */
   private onStepEnd(sessionId: string, m: Mover): boolean {
+    const sit = this.pendingSit.get(sessionId);
+    if (sit && sit.seat.x === m.x && sit.seat.y === m.y) {
+      this.sitDown(sessionId, sit.furniId);
+      return true;
+    }
     const door = this.layout.doors.find((d) => d.x === m.x && d.y === m.y);
     const client = door && this.clients.getById(sessionId);
     if (!door || !client?.auth) return false;
@@ -180,8 +215,155 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     if (!player) return;
     if (!this.moveLimiter.tryTake(client.sessionId))
       return this.sendError(client, ErrorCode.RateLimit);
+    this.pendingSit.delete(client.sessionId);
     const res = this.movement.request(client.sessionId, player, msg);
     if (!res.ok) this.sendError(client, ErrorCode.InvalidMove);
+  }
+
+  // ---------- Sentar ----------
+
+  /** Clique num assento: anda até o lugar livre mais perto e senta virado como o móvel. */
+  private handleInteract(client: OfficeClient, furniId: string): void {
+    const player = this.state.players.get(client.sessionId);
+    const f = this.state.furni.get(furniId);
+    const def = f && services().furniDefs.get(f.defId);
+    if (!player || !f || !def?.canSit) return;
+    if (!this.moveLimiter.tryTake(client.sessionId))
+      return this.sendError(client, ErrorCode.RateLimit);
+    const from =
+      player.nextX !== player.x || player.nextY !== player.y
+        ? { x: player.nextX, y: player.nextY }
+        : player;
+    const seat = nearestSeatTile(def, toPlaced(f), from);
+    if (this.isTileTaken(seat, client.sessionId)) {
+      return this.sendError(client, ErrorCode.InvalidMove, 'Esse lugar está ocupado.');
+    }
+    this.pendingSit.set(client.sessionId, { furniId, seat });
+    if (
+      player.x === seat.x &&
+      player.y === seat.y &&
+      player.nextX === player.x &&
+      player.nextY === player.y
+    ) {
+      return this.sitDown(client.sessionId, furniId);
+    }
+    const res = this.movement.request(client.sessionId, player, seat);
+    if (!res.ok || res.dest.x !== seat.x || res.dest.y !== seat.y) {
+      this.pendingSit.delete(client.sessionId);
+      this.movement.remove(client.sessionId);
+      this.sendError(client, ErrorCode.InvalidMove, 'Não dá para chegar nesse lugar.');
+    }
+  }
+
+  private sitDown(sessionId: string, furniId: string): void {
+    this.pendingSit.delete(sessionId);
+    const player = this.state.players.get(sessionId);
+    const f = this.state.furni.get(furniId);
+    const def = f && services().furniDefs.get(f.defId);
+    if (!player || !f || !def) return;
+    player.action = 'sit';
+    player.dir = f.rot;
+    player.z = f.z + def.sitHeight;
+  }
+
+  // ---------- Decorar ----------
+
+  private handlePlace(client: OfficeClient, msg: FurniPlaceMessage): void {
+    if (!client.auth || !this.canEdit(client)) return;
+    const res = canPlace(this.placementContext(), msg);
+    if (!res.ok) return this.sendError(client, ErrorCode.InvalidPlacement, res.reason);
+    const placed = services().furni.add(
+      this.layout.roomId,
+      { defId: msg.defId, x: msg.x, y: msg.y, z: res.z, rot: msg.rot },
+      client.auth.id,
+    );
+    this.state.furni.set(placed.id, toFurni(placed));
+  }
+
+  private handleFurniMove(client: OfficeClient, msg: FurniMoveMessage): void {
+    if (!this.canEdit(client)) return;
+    const f = this.state.furni.get(msg.furniId);
+    if (!f)
+      return this.sendError(client, ErrorCode.InvalidPlacement, 'Esse móvel não existe mais.');
+    if (this.someoneSeatedOn(f)) {
+      return this.sendError(client, ErrorCode.InvalidPlacement, 'Tem alguém sentado aí.');
+    }
+    const req: PlacementRequest = {
+      defId: f.defId,
+      x: msg.x,
+      y: msg.y,
+      rot: msg.rot,
+      ignoreId: f.id,
+    };
+    const res = canPlace(this.placementContext(), req);
+    if (!res.ok) return this.sendError(client, ErrorCode.InvalidPlacement, res.reason);
+    services().furni.update(this.layout.roomId, f.id, {
+      x: msg.x,
+      y: msg.y,
+      z: res.z,
+      rot: msg.rot,
+    });
+    Object.assign(f, { x: msg.x, y: msg.y, z: res.z, rot: msg.rot });
+  }
+
+  private handleRemove(client: OfficeClient, furniId: string): void {
+    if (!this.canEdit(client)) return;
+    const f = this.state.furni.get(furniId);
+    if (!f) return;
+    if (this.someoneSeatedOn(f)) {
+      return this.sendError(client, ErrorCode.InvalidPlacement, 'Tem alguém sentado aí.');
+    }
+    services().furni.remove(this.layout.roomId, furniId);
+    this.state.furni.delete(furniId);
+  }
+
+  /** Qualquer pessoa na sala pode decorar (decisão da v1); só limitamos a frequência. */
+  private canEdit(client: OfficeClient): boolean {
+    if (!this.state.players.has(client.sessionId)) return false;
+    if (!this.editLimiter.tryTake(client.sessionId)) {
+      this.sendError(client, ErrorCode.RateLimit);
+      return false;
+    }
+    return true;
+  }
+
+  private someoneSeatedOn(f: Furni): boolean {
+    const def = services().furniDefs.get(f.defId);
+    // Tapete não tem ninguém "sentado": quem está em cima pode continuar lá.
+    if (!def || def.canWalk) return false;
+    const fp = footprint(def, f.x, f.y, f.rot);
+    return [...this.state.players.values()].some(
+      (p) => p.x >= fp.minX && p.x <= fp.maxX && p.y >= fp.minY && p.y <= fp.maxY,
+    );
+  }
+
+  /** Tile parado ou destino de outra pessoa. */
+  private isTileTaken(t: TilePoint, exceptSessionId: string): boolean {
+    for (const [id, p] of this.state.players.entries()) {
+      if (id === exceptSessionId) continue;
+      const d = this.movement.destinationOf(id, p);
+      if ((p.x === t.x && p.y === t.y) || (d.x === t.x && d.y === t.y)) return true;
+    }
+    return false;
+  }
+
+  private furniList(): PlacedFurni[] {
+    return [...this.state.furni.values()].map(toPlaced);
+  }
+
+  private placementContext() {
+    const avatars: TilePoint[] = [];
+    for (const [id, p] of this.state.players.entries()) {
+      avatars.push({ x: p.x, y: p.y }, this.movement.destinationOf(id, p));
+    }
+    return {
+      map: this.map,
+      furni: this.furniList(),
+      defs: services().furniDefs,
+      doors: this.layout.doors,
+      spawn: this.layout.spawn,
+      avatars,
+    };
   }
 
   private handleChat(client: OfficeClient, msg: { text: string }): void {
@@ -227,10 +409,10 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     for (const [id, p] of this.state.players.entries()) {
       if (id !== sessionId) occupied.push(this.movement.destinationOf(id, p));
     }
-    return new RoomGrid(this.map, this.layout.furni, services().furniDefs, {
+    return new RoomGrid(this.map, this.furniList(), services().furniDefs, {
       occupied,
-      // Ainda não dá para sentar (Fase 6).
-      seatsAsGoal: false,
+      // Assento só vale como destino para quem clicou nele (`interact`).
+      seatsAsGoal: this.pendingSit.has(sessionId),
     });
   }
 
@@ -249,4 +431,19 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     }
     return origin;
   }
+}
+
+function toFurni(f: PlacedFurni): Furni {
+  return Object.assign(new Furni(), {
+    id: f.id,
+    defId: f.defId,
+    x: f.x,
+    y: f.y,
+    z: f.z,
+    rot: f.rot,
+  });
+}
+
+function toPlaced(f: Furni): PlacedFurni {
+  return { id: f.id, defId: f.defId, x: f.x, y: f.y, z: f.z, rot: f.rot };
 }

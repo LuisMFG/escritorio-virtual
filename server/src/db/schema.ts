@@ -1,4 +1,4 @@
-import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { index, integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
 export const users = sqliteTable('users', {
   id: text('id').primaryKey(),
@@ -24,7 +24,28 @@ export const rooms = sqliteTable('rooms', {
   spawnDir: integer('spawn_dir').notNull(),
   floorColor: text('floor_color').notNull(),
   wallColor: text('wall_color').notNull(),
+  /** Já recebeu os móveis iniciais? (Para não repor móveis que alguém removeu.) */
+  furniSeeded: integer('furni_seeded', { mode: 'boolean' }).notNull().default(false),
 });
+
+export const roomFurni = sqliteTable(
+  'room_furni',
+  {
+    id: text('id').primaryKey(),
+    roomId: text('room_id')
+      .notNull()
+      .references(() => rooms.id),
+    /** Classname do catálogo (`furni/manifest.json`). */
+    defId: text('def_id').notNull(),
+    x: integer('x').notNull(),
+    y: integer('y').notNull(),
+    z: real('z').notNull(),
+    rot: integer('rot').notNull(),
+    placedBy: text('placed_by').references(() => users.id),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [index('room_furni_room_id_idx').on(t.roomId)],
+);
 
 export const roomDoors = sqliteTable('room_doors', {
   id: integer('id').primaryKey({ autoIncrement: true }),
@@ -62,3 +83,4 @@ export const chatMessages = sqliteTable(
 export type UserRow = typeof users.$inferSelect;
 export type RoomRow = typeof rooms.$inferSelect;
 export type ChatMessageRow = typeof chatMessages.$inferSelect;
+export type RoomFurniRow = typeof roomFurni.$inferSelect;

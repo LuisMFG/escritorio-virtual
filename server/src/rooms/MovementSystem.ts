@@ -81,7 +81,8 @@ export class MovementSystem {
         m.z = this.gridFor(id).heightAt(m.x, m.y);
         if (this.onStepEnd?.(id, m) === true) {
           this.walks.delete(id);
-          m.action = 'idle';
+          // O gancho pode ter definido outra ação (ex.: 'sit'); só "parado" se ainda andava.
+          if (m.action === 'walk') m.action = 'idle';
           break;
         }
         this.startStep(id, m, walk);
