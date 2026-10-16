@@ -13,6 +13,8 @@ Desde a Fase 2 as imagens passam pelo proxy do servidor (`/hh/avatar.png`, `/hh/
 | Recurso | Endpoint | Onde é usado |
 |---|---|---|
 | Avatar (pose em pé, 8 direções) | `/imaging/avatar.png?figure=…&direction=0-7` | `client/src/assets/AvatarTextureCache.ts` |
+| Miniaturas de roupa (peça no boneco "fantasma") | `/imaging/clothing/set/{id}.png?direction=2` | `client/src/ui/avatarEditor.ts` |
+| Catálogo de roupas e paletas (dados) | `/imaging/info/clothing/hh_human_*` | `server/scripts/assets-sync.ts` → `client/public/assets/avatar/manifest.json` |
 | Mobis (render por direção, revisão fixada) | `/imaging/furniture/{classname}.png?revision=…&direction=…` | `client/src/entities/FurniView.ts` |
 
 ### Mobis usados na Fase 1 (`client/public/assets/furni/manifest.json`)
@@ -32,7 +34,7 @@ Dimensões (footprint) e âncoras foram medidas a partir dos renders; serão con
 
 - **Fonte:** este projeto (`client/src/assets/PlaceholderFactory.ts`, `client/src/scene/RoomRenderer.ts`). Licença: a mesma do código.
 - **O quê:** piso e paredes (sempre), e substitutos de mobis e avatares quando a HabboAssets falha ou com `?offline=1`.
-- As cores do avatar provisório vêm das paletas aproximadas em `client/public/assets/avatar/manifest.json`.
+- O avatar provisório (`client/src/assets/LayeredAvatar.ts`) é desenhado em camadas cinza e tingido com as cores reais das paletas do manifesto.
 
 ## Pacotes CC0
 

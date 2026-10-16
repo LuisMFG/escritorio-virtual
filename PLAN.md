@@ -1,7 +1,7 @@
 # PLAN — Escritório virtual isométrico
 
 > Documento vivo. Atualizar sempre que o plano mudar (ver "Como trabalhar" no SPEC.md).
-> Status: **aprovado em 16/10/2026** — Fase 1 aprovada; Fase 2 concluída (aguardando validação). Decisões registradas na §9.
+> Status: **aprovado em 16/10/2026** — Fases 1 e 2 aprovadas; Fase 3 concluída (aguardando validação). Decisões registradas na §9.
 
 ---
 
@@ -181,10 +181,9 @@ Layout estático (heightmap, portas, cores e, até a Fase 6, os móveis) é pedi
 
 | Rota | Payload → Resposta |
 |---|---|
-| `POST /api/session` | `{ name, inviteCode, figure, token? }` → `{ userId, token, name, figure }` (cria ou reaproveita usuário; token salvo no localStorage; erro `NAME_IN_USE` se o nome estiver em uso por alguém online) |
-| `PUT /api/me/avatar` | `{ figure, gender }` (header `Authorization: Bearer token`) → `{ figure }` |
+| `POST /api/session` | `{ name, inviteCode?, figure?, gender?, token? }` → `{ userId, token, name, figure, gender }` (cria ou reaproveita usuário; token salvo no localStorage; erro `NAME_IN_USE` se o nome estiver em uso por alguém online) |
 | `GET /api/catalog` | → lista do `furni_catalog` com URLs `/hh/...` |
-| `GET /hh/*` | proxy/cache de imagens do imager |
+| `GET /hh/*` | proxy/cache de imagens do imager (`avatar.png`, `furniture/{c}.png`, `clothing/set/{id}.png`) |
 
 ### 5.2 Colyseus — join
 
@@ -258,20 +257,20 @@ screenToTile(sx, sy)  = { x: floor((sy/16 + sx/32) / 2), y: floor((sy/16 - sx/32
 ### 7.1 Avatar
 
 - **Representação:** figure string Habbo (`tipo-set-cor[-cor2]` unidos por `.`). Categorias e ordem de camadas (de trás para frente, direção 2): `hd` (corpo/pele) → `lg` (calça) → `sh` (sapato) → `ch` (blusa) → `wa` (cintura) → `cc` (casaco) → `ca` (acessório de peito) → `hr` (cabelo) → `fa` (rosto) → `ea` (óculos) → `ha` (chapéu). A ordem varia por direção — o render do imager já resolve isso.
-- **Manifesto `client/public/assets/avatar/manifest.json`** (curado, gerado por `assets:sync` e revisado à mão):
+- **Manifesto `client/public/assets/avatar/manifest.json`** (gerado por `npm run assets:sync`, versionado no git; curadoria em `server/src/assets/avatarManifest.ts`):
   ```json
   { "version": 1, "hotelId": 2,
     "imager": "https://www.habboassets.com/imaging/avatar.png",
-    "palettes": { "skin": [1,2,3,…], "hair": […], "clothes": […] },   // id → hex para os seletores
+    "defaults": { "M": "hd-180-1.hr-100-61.ch-210-66.lg-270-82.sh-290-80", "F": "hd-600-1.hr-515-33.ch-630-73.lg-695-82.sh-725-64" },
+    "palettes": { "1": [{ "id": 14, "hex": "#f5da88" }, …], "2": […], "3": […] },   // ordem = ordem de exibição
     "categories": [
-      { "type": "hr", "label": "Cabelo", "palette": "hair", "required": false,
-        "sets": [{ "id": 115, "gender": "U", "colorable": true, "preview": "/hh/clothing/set/115.png" }] } ],
-    "defaults": { "M": "hd-180-1.ch-210-66.lg-270-82.sh-290-80", "F": "…" },
-    "local": { "layers": [ … ] }   // sprites locais opcionais (fallback)
+      { "type": "hr", "label": "Cabelo", "palette": "2", "required": false, "layer": 6,
+        "sets": [{ "id": 115, "gender": "M", "colors": 1, "defaultColors": [45], "club": 0, "library": "hh_human_hair" }] } ]
   }
   ```
-  O servidor importa o mesmo arquivo para validar: cada `set` deve existir na categoria e gênero, cada cor na paleta, categorias obrigatórias (`hd`, `lg`, `ch`) presentes, máx. 1 set por tipo, string ≤ 512 chars.
-- **Recoloração:** com o imager, a recoloração é feita pelo próprio Habbo via ids de paleta na figure string (os seletores do editor mostram as cores hex da paleta e gravam o id). No renderer local de fallback, cada peça é uma sprite em tons de cinza tingida com `sprite.tint = hex` (multiply), igual ao método do Habbo.
+  Fonte dos dados: `/imaging/info/clothing/{biblioteca}` da HabboAssets, que traz sets (tipo, gênero, nº de cores, paleta, cores padrão) e paletas (id, hex, selecionável) — o figuredata do Habbo por biblioteca. Usamos as bibliotecas base `hh_human_*` (270 peças em 9 categorias). O figuredata do habbo.com.br não é usado: o site bloqueia acesso por script.
+  O servidor importa o mesmo arquivo para validar (`validateFigure` em `shared/src/avatar.ts`): cada set deve existir na categoria e servir para o gênero, cada cor na paleta da categoria, categorias obrigatórias (`hd`, `ch`, `lg`) presentes, máx. 1 set por tipo, string ≤ 512 chars.
+- **Recoloração:** com o imager, a recoloração é feita pelo próprio Habbo via ids de paleta na figure string (os seletores do editor mostram as cores hex da paleta e gravam o id). No renderer local de fallback (`client/src/assets/LayeredAvatar.ts`), cada peça é um desenho em tons de cinza tingido com `tint = hex` (multiply), empilhado pela ordem `layer` do manifesto e assado numa textura por combinação.
 - **Renderização e cache (`AvatarTextureCache`):** chave `figure|dir|pose|frame`. Primeira vez: baixa as 8 direções do render (`size=n`, 64×110) pelo proxy, cria `Texture`s e guarda num LRU (máx. ~200 entradas, ≤ 10 usuários × 8 direções sobra muito). Nunca compõe camadas por frame; no renderer local, as camadas são compostas uma vez num `RenderTexture` por combinação.
 - **Caminhada:** o imager só tem pose parada. Plano v1 (pendente de aprovação, ver §9): render parado por direção + animação procedural (bob vertical de 2 px em 4 frames, leve deslocamento horizontal alternado e sombra elíptica), mais a pose sentada simulada (render com `z` e recorte inferior). Interface `AvatarRenderer` permite trocar por um renderer real de partes (bibliotecas `.nitro`) no futuro sem tocar no resto.
 - **Editor:** prévia grande (`size=l`) com botões de girar (direção 0–7), abas por categoria, grade de miniaturas de sets e paleta de cores; debounce de 300 ms antes de pedir novo render; mostra placeholder enquanto carrega.
@@ -309,11 +308,11 @@ screenToTile(sx, sy)  = { x: floor((sy/16 + sx/32) / 2), y: floor((sy/16 - sx/32
 
 **Como testar:** `npm run dev`; abrir duas abas (ou janela anônima), entrar com nomes diferentes e o código do `.env`; andar numa e ver o movimento suave na outra; código errado mostra erro; matar o servidor e subir de novo → as abas reconectam sozinhas; `npm test` cobre validação de payload e movimento autoritativo (servidor recusa destino em parede).
 
-### Fase 3 — Editor de avatar completo + persistência
-- `assets:sync` gera o `avatar/manifest.json` (categorias, sets PT-BR curados, paletas) a partir de `/swfs/libraries?kind=clothing` + `/imaging/info/clothing/*`; revisão manual da curadoria.
+### Fase 3 — Editor de avatar completo + persistência ✅ implementada
+- `assets:sync` gera o `avatar/manifest.json` (categorias, sets curados, paletas) a partir de `/imaging/info/clothing/*`; `--thumbs` pré-baixa as miniaturas para o cache do servidor.
 - `shared/avatar.ts`: parser/serializer de figure string + `validateFigure(figure, manifest)` + testes.
 - UI do editor: prévia com rotação, abas, miniaturas, seletores de cor, gênero, botão aleatório; acessível antes de entrar e por um botão no escritório.
-- `PUT /api/me/avatar` e mensagem `avatar.update` (atualiza todos na sala ao vivo); localStorage guarda a última figure.
+- Mensagem `avatar.update` (atualiza todos na sala ao vivo) e visual/gênero no `POST /api/session`; localStorage guarda a última figure. (O `PUT /api/me/avatar` previsto ficou desnecessário: na entrada o visual vai na sessão e dentro do escritório pela sala.)
 - Renderer local de fallback com camadas tingidas (sprites provisórios gerados por código).
 
 **Como testar:** abrir o editor na entrada, trocar cabelo/roupa/cores e girar a prévia; entrar e ver o avatar; mudar o visual dentro do escritório e ver a outra aba atualizar; recarregar a página e o visual persistir; enviar uma figure adulterada via console (`room.send('avatar.update', {figure:'hr-99999-1'})`) e ver o erro; `npm test` cobre o parser/validador.
@@ -394,4 +393,11 @@ screenToTile(sx, sy)  = { x: floor((sy/16 + sx/32) / 2), y: floor((sy/16 - sx/32
 - `npm run bot -- Nome N` coloca N robôs andando pela Recepção (útil para testar sozinho).
 - Testes de integração com `@colyseus/testing` (servidor real em memória): entrada com/sem token, dois usuários se vendo, movimento autoritativo, saída e "fantasma" de reconexão.
 - Nomes aparecem sempre sobre os avatares (antecipado da Fase 7, ajuda a testar com várias pessoas).
+
+### Notas da Fase 3
+- Editor (`client/src/ui/avatarEditor.ts`): prévia `size=l` com rotação nas 8 direções, gênero, aleatório, 9 abas, grade de miniaturas e cores da paleta (1 ou 2 cores conforme a peça). Prévia com debounce de 250 ms: proxy → imager direto → avatar provisório em camadas.
+- Miniaturas: imagem da peça no boneco "fantasma" (`/imaging/clothing/set/{id}.png`), servidas pelo proxy `/hh/clothing/set/…` com cache de 30 dias. A HabboAssets não tem imagens estáticas por set para as bibliotecas base, por isso o `assets:sync --thumbs` (269 de 270 baixadas; a peça de óculos #1404 dá 502 na própria HabboAssets e o editor mostra o número no lugar).
+- Visual novo na sala leva alguns segundos para aparecer para todos: são 8 renders novos (um por direção) passando pelo limite de requisições do servidor; depois ficam em cache.
+- Peças "Habbo Club" entram normalmente (aqui não há assinatura); só cores marcadas como selecionáveis aparecem.
+- Gênero salvo em `users.gender` e validado junto com a figure (peças `U` servem para os dois).
 

@@ -2,7 +2,7 @@
 
 Escritório virtual isométrico para amigos e colegas: avatares andando em salas no estilo Habbo, com movimento em tempo real e chat. Veja [SPEC.md](SPEC.md) (requisitos) e [PLAN.md](PLAN.md) (plano e decisões).
 
-> Em construção — **Fase 2** (servidor em tempo real, várias pessoas na mesma sala, tela de entrada). O README completo, com deploy, entra na Fase 7.
+> Em construção — **Fase 3** (editor de avatar com camadas, cores e visual salvo). O README completo, com deploy, entra na Fase 7.
 
 ## Rodar localmente
 
@@ -33,6 +33,7 @@ Opções de URL do cliente:
 | `npm run dev` | Servidor (tsx watch) + cliente (Vite) juntos |
 | `npm run dev:server` / `npm run dev:client` | Só um dos dois |
 | `npm run bot` | Robôs de teste andando pela Recepção |
+| `npm run assets:sync` | Regera o manifesto do avatar a partir da HabboAssets (`-- --thumbs` também baixa as miniaturas) |
 | `npm test` | Testes unitários e de integração (Vitest) |
 | `npm run typecheck` | Checagem de tipos de todos os pacotes |
 | `npm run lint` | ESLint |
@@ -50,3 +51,5 @@ Os dados locais (banco SQLite e cache de imagens) ficam em `data/`, fora do git.
 ## Assets
 
 Os gráficos vêm do imager público da [HabboAssets](https://www.habboassets.com/api) (Habbo Brasil), servidos pelo proxy com cache do servidor em `/hh/*`. A origem de cada asset fica em [ASSETS.md](ASSETS.md). Para adicionar um móvel, inclua-o em `client/public/assets/furni/manifest.json`.
+
+O catálogo de roupas do editor (`client/public/assets/avatar/manifest.json`) é gerado por `npm run assets:sync`. Para mudar categorias ou bibliotecas, edite a curadoria em `server/src/assets/avatarManifest.ts` e rode o script de novo. Na primeira vez, rode `npm run assets:sync -- --thumbs` para o editor abrir com as miniaturas já em cache.
