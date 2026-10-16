@@ -1,5 +1,6 @@
-# Para um VPS (DigitalOcean, Hetzner…): `docker compose up -d --build`.
-# Coloque um proxy com HTTPS na frente (ex.: Caddy, veja o README).
+# Produção num VPS (Oracle Cloud, DigitalOcean, Hetzner…): `docker compose up -d --build`.
+# O Caddy pega o certificado HTTPS sozinho para o DOMAIN do .env e repassa tudo
+# (inclusive o WebSocket) para o app. A porta 2567 não fica exposta na internet.
 services:
   escritorio:
     build: .
@@ -9,7 +10,27 @@ services:
     env_file: .env
     environment:
       NODE_ENV: production
-    ports:
-      - '2567:2567'
     volumes:
       - ./data:/app/data
+    expose:
+      - '2567'
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - escritorio
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+    environment:
+      DOMAIN: '${DOMAIN:?Defina DOMAIN no .env, por exemplo escritorio.203-0-113-10.sslip.io}'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

@@ -437,3 +437,8 @@ screenToTile(sx, sy)  = { x: floor((sy/16 + sx/32) / 2), y: floor((sy/16 - sx/32
 - Os nomes ficam sempre visíveis sobre os avatares (decisão da Fase 2), em vez de só ao passar o mouse.
 - Não feito por falta de conta/credenciais: deploy real em VPS/Fly e teste com token da HabboAssets.
 
+### Deploy na Oracle Cloud (pós-v1)
+- `docker-compose.yml` agora inclui o **Caddy** (HTTPS automático para `DOMAIN`, HTTP/2 e HTTP/3); o app só é exposto na rede interna do compose. Sem domínio próprio, `sslip.io` com o IP.
+- `scripts/setup-oracle.sh` (Docker, regras no iptables das imagens Ubuntu da Oracle, swap em VMs de pouca memória) e `scripts/deploy.sh` (rsync + `docker compose up -d --build`, sem enviar `.env`/`data`).
+- Guia: `docs/DEPLOY-ORACLE.md`. Testado localmente com `DOMAIN=localhost`: HTTPS, redirecionamento, CSP, API e WebSocket (WSS) pelo Caddy.
+

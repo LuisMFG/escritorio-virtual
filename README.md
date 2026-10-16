@@ -114,25 +114,19 @@ docker run -d --name escritorio -p 2567:2567 -e INVITE_CODE=troque-isto -v escri
 
 A imagem roda como usuário `node`, tem healthcheck em `GET /healthz` e encerra com elegância no `SIGTERM`.
 
-### VPS (DigitalOcean, Hetzner…)
+### VPS (Oracle Cloud grátis, DigitalOcean, Hetzner…)
 
-1. Instale Docker e copie o projeto para o servidor.
-2. Crie o `.env` com `INVITE_CODE` (e, se tiver, `HABBOASSETS_API_KEY`).
-3. Suba com o `docker-compose.yml` do projeto:
+O `docker-compose.yml` sobe o app e o **Caddy**, que pega o certificado HTTPS sozinho para o `DOMAIN` do `.env` (sem domínio próprio, use `escritorio.<ip-com-hifens>.sslip.io`). Só as portas 80 e 443 ficam abertas.
+
+Passo a passo completo para a **Oracle Cloud Always Free** (criar a VM, liberar portas, `.env`, primeiro deploy, backup e problemas comuns): **[docs/DEPLOY-ORACLE.md](docs/DEPLOY-ORACLE.md)**. Em resumo, com o `.env` criado na VM:
 
 ```bash
-docker compose up -d --build
+scripts/deploy.sh ubuntu@IP-DA-VM ~/caminho/da-chave.key --setup
 ```
 
-4. Coloque HTTPS na frente. Com o [Caddy](https://caddyserver.com), um `Caddyfile` assim basta (certificado automático, WebSocket incluído):
+O `--setup` (só na primeira vez) instala o Docker, libera as portas no firewall interno da VM e cria swap se precisar. Depois, para atualizar, rode o mesmo comando sem `--setup`: o código vai por rsync e os dados da VM (`~/escritorio/data`) nunca são apagados.
 
-```
-escritorio.seu-dominio.com {
-	reverse_proxy localhost:2567
-}
-```
-
-Backup: copie a pasta `data/` (o `sqlite.db` com o app parado, ou use `sqlite3 data/sqlite.db ".backup copia.db"`).
+Backup: copie `~/escritorio/data` com o app parado (veja o guia).
 
 ### Fly.io
 
