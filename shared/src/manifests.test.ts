@@ -76,7 +76,9 @@ describe('parseAvatarManifest', () => {
         imager: 'https://www.habboassets.com/imaging/avatar.png',
         defaults: { M: 'hd-180-1', F: 'hd-600-1' },
         palettes: {},
-        categories: [{ type: 'hr', label: 'Cabelo', palette: 'hair', required: false, sets: [] }],
+        categories: [
+          { type: 'hr', label: 'Cabelo', palette: 'hair', required: false, layer: 6, sets: [] },
+        ],
       }),
     ).toThrow(/paleta inexistente/);
   });

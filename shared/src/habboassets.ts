@@ -68,3 +68,13 @@ function query(params: Record<string, string | number | undefined>): string {
     .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
     .join('&');
 }
+
+/** URL da miniatura de uma peça de roupa (no boneco cinza "fantasma"), pelo id do set. */
+export function clothingSetImageUrl(
+  setId: number,
+  opts: { direction?: number } = {},
+  base = HABBOASSETS_IMAGER,
+): string {
+  const qs = query({ direction: opts.direction });
+  return `${base}/clothing/set/${setId}.png${qs ? `?${qs}` : ''}`;
+}

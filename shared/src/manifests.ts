@@ -60,36 +60,59 @@ export function renderDirection(item: Pick<FurniManifestEntry, 'directions'>, ro
 }
 
 const figurePartType = z.string().regex(/^[a-z]{2}$/);
+const gender = z.enum(['M', 'F']);
+
+export const avatarSetSchema = z.object({
+  id: z.number().int().nonnegative(),
+  gender: z.enum(['M', 'F', 'U']),
+  /** Quantas cores a peça aceita (0 = não recolorível, 1 ou 2). */
+  colors: z.number().int().min(0).max(2),
+  defaultColors: z.array(z.number().int().nonnegative()).max(2).default([]),
+  /** 0 = livre, 1/2 = Habbo Club no hotel (aqui não restringe nada; só informativo). */
+  club: z.number().int().min(0).default(0),
+  /** Biblioteca de roupa de origem na HabboAssets (para miniaturas e auditoria). */
+  library: z.string().optional(),
+});
+
+export const avatarCategorySchema = z.object({
+  type: figurePartType,
+  label: z.string().min(1),
+  /** Id da paleta (chave de `palettes`). */
+  palette: z.string().min(1),
+  required: z.boolean(),
+  /** Ordem de desenho no renderer local de camadas (menor = mais atrás). */
+  layer: z.number().int(),
+  sets: z.array(avatarSetSchema),
+});
 
 export const avatarManifestSchema = z.object({
   version: z.literal(1),
   hotelId: z.number().int().positive(),
   imager: z.string().url(),
+  generatedAt: z.string().optional(),
   defaults: z.object({ M: z.string().min(1), F: z.string().min(1) }),
-  /** Paletas: id da cor no Habbo → hex, usado pelos seletores do editor (Fase 3). */
-  palettes: z.record(z.string(), z.record(z.string(), z.string().regex(/^#[0-9a-f]{6}$/i))),
-  categories: z.array(
-    z.object({
-      type: figurePartType,
-      label: z.string().min(1),
-      palette: z.string().min(1),
-      required: z.boolean(),
-      sets: z.array(
-        z.object({
-          id: z.number().int().nonnegative(),
-          gender: z.enum(['M', 'F', 'U']),
-          colorable: z.boolean(),
-        }),
-      ),
-    }),
+  /** Paletas na ordem de exibição: id da cor no Habbo + hex. */
+  palettes: z.record(
+    z.string(),
+    z.array(
+      z.object({ id: z.number().int().nonnegative(), hex: z.string().regex(/^#[0-9a-f]{6}$/i) }),
+    ),
   ),
+  categories: z.array(avatarCategorySchema),
 });
 
+export type Gender = z.infer<typeof gender>;
+export const genderSchema = gender;
+export type AvatarSet = z.infer<typeof avatarSetSchema>;
+export type AvatarCategory = z.infer<typeof avatarCategorySchema>;
 export type AvatarManifest = z.infer<typeof avatarManifestSchema>;
 
 export function parseAvatarManifest(json: unknown): AvatarManifest {
   const manifest = avatarManifestSchema.parse(json);
+  const types = new Set<string>();
   for (const cat of manifest.categories) {
+    if (types.has(cat.type)) throw new Error(`Categoria duplicada no manifesto: ${cat.type}`);
+    types.add(cat.type);
     if (!(cat.palette in manifest.palettes)) {
       throw new Error(`Categoria ${cat.type} usa a paleta inexistente "${cat.palette}"`);
     }

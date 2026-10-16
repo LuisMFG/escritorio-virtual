@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { genderSchema, type Gender } from './manifests.js';
 import type { PlacedFurni } from './furni.js';
 import type { RoomDoor } from './rooms.js';
 import type { TilePoint } from './iso.js';
@@ -11,6 +12,8 @@ export const ClientMessage = {
   Move: 'move',
   /** Requisição (`room.request`): responde com o `RoomLayoutMessage` da sala. */
   GetLayout: 'room.layout',
+  /** `{ figure, gender }`: troca o visual (validado contra o manifesto do avatar). */
+  UpdateAvatar: 'avatar.update',
 } as const;
 
 /** Mensagens servidor → cliente. */
@@ -24,6 +27,7 @@ export const ErrorCode = {
   NameInUse: 'NAME_IN_USE',
   InvalidPayload: 'INVALID_PAYLOAD',
   InvalidMove: 'INVALID_MOVE',
+  InvalidFigure: 'INVALID_FIGURE',
   RateLimit: 'RATE_LIMIT',
 } as const;
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];
@@ -35,6 +39,7 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
   NAME_IN_USE: 'Já tem alguém online com esse nome. Tente outro (ou adicione um sufixo).',
   INVALID_PAYLOAD: 'Dados inválidos.',
   INVALID_MOVE: 'Não dá para andar até lá.',
+  INVALID_FIGURE: 'Esse visual não é válido.',
   RATE_LIMIT: 'Calma! Muitas ações em pouco tempo.',
 };
 
@@ -82,6 +87,7 @@ export const sessionRequestSchema = z.object({
   /** Opcional quando o navegador já tem um token válido. */
   inviteCode: z.string().max(100).optional(),
   figure: figureSchema.optional(),
+  gender: genderSchema.optional(),
   token: z.string().max(200).optional(),
 });
 export type SessionRequest = z.input<typeof sessionRequestSchema>;
@@ -91,6 +97,7 @@ export interface SessionResponse {
   token: string;
   name: string;
   figure: string;
+  gender: Gender;
 }
 
 export interface ApiError {
@@ -111,6 +118,9 @@ const tileCoord = z.number().int().min(0).max(255);
 
 export const moveSchema = z.object({ x: tileCoord, y: tileCoord });
 export type MoveMessage = z.infer<typeof moveSchema>;
+
+export const updateAvatarSchema = z.object({ figure: figureSchema, gender: genderSchema });
+export type UpdateAvatarMessage = z.infer<typeof updateAvatarSchema>;
 
 /** Layout estático da sala, pedido pelo cliente logo depois de entrar. */
 export interface RoomLayoutMessage {
