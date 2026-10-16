@@ -15,6 +15,13 @@ export interface FurniCuration {
   canSit?: boolean;
   canWalk?: boolean;
   sitHeight?: number;
+  /**
+   * `local`: arte própria/CC0 em client/public/assets/local/furni/{id}_{dir}.png (registre a
+   * origem no ASSETS.md). Nesse caso informe `width`, `depth`, `directions` e `anchors`.
+   */
+  source?: 'habboassets' | 'local';
+  directions?: number[];
+  anchors?: Record<string, [number, number]>;
 }
 
 const SIT = { canSit: true, sitHeight: 0.5 } as const;
@@ -194,6 +201,24 @@ export function estimateSize(byDir: ReadonlyMap<number, RenderAnalysis>): {
   return d0
     ? { width: r(any.leftTiles), depth: r(any.rightTiles) }
     : { width: r(any.rightTiles), depth: r(any.leftTiles) };
+}
+
+/** Entrada de um móvel local (não passa pelo imager). */
+export function buildLocalEntry(cur: FurniCuration): FurniManifestEntry {
+  return {
+    id: cur.id,
+    name: cur.name,
+    category: cur.category,
+    width: cur.width ?? 1,
+    depth: cur.depth ?? 1,
+    height: cur.height,
+    canSit: cur.canSit ?? false,
+    canWalk: cur.canWalk ?? false,
+    sitHeight: cur.sitHeight ?? 0,
+    directions: cur.directions ?? [0],
+    source: 'local',
+    anchors: cur.anchors ?? {},
+  };
 }
 
 /** Entrada do manifesto a partir da curadoria + dados medidos. */

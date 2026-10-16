@@ -30,6 +30,7 @@ import {
 import {
   analyzeRender,
   buildFurniEntry,
+  buildLocalEntry,
   FURNI_CURATION,
   type RenderAnalysis,
 } from '../src/assets/furniCatalog.js';
@@ -120,6 +121,11 @@ function readFurnidata(json: unknown): { name?: string; width?: number; depth?: 
 const furniEntries: FurniManifestEntry[] = [];
 console.log('[sync] móveis…');
 for (const cur of FURNI_CURATION) {
+  if (cur.source === 'local') {
+    furniEntries.push(buildLocalEntry(cur));
+    console.log(`[sync]   ${cur.id.padEnd(30)} local`);
+    continue;
+  }
   const info = await client.getImagerJson<FurniInfo>(`/info/furniture/${cur.id}`);
   const analyses = new Map<number, RenderAnalysis>();
   for (const dir of info.directions) {

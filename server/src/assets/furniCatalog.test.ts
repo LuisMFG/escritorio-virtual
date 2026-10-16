@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { analyzeRender, buildFurniEntry, estimateSize, type RgbaImage } from './furniCatalog.js';
+import {
+  analyzeRender,
+  buildFurniEntry,
+  buildLocalEntry,
+  estimateSize,
+  type RgbaImage,
+} from './furniCatalog.js';
 
 /** Imagem transparente com retângulos opacos. */
 function image(
@@ -61,5 +67,25 @@ describe('buildFurniEntry', () => {
     );
     expect(entry).toMatchObject({ width: 2, depth: 2, revision: 123, anchors: { '0': [25, 54] } });
     expect(estimated).toEqual({ width: 1, depth: 1 });
+  });
+});
+
+describe('buildLocalEntry', () => {
+  it('móvel local usa os dados da curadoria e source local', () => {
+    expect(
+      buildLocalEntry({
+        id: 'meu_banco',
+        name: 'Banco',
+        category: 'sofás',
+        width: 2,
+        depth: 1,
+        height: 1,
+        canSit: true,
+        sitHeight: 0.5,
+        source: 'local',
+        directions: [2, 4],
+        anchors: { '2': [40, 60] },
+      }),
+    ).toMatchObject({ source: 'local', width: 2, directions: [2, 4], anchors: { '2': [40, 60] } });
   });
 });

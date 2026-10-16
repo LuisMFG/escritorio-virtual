@@ -1,0 +1,39 @@
+# Exemplo para o Fly.io. Antes do primeiro deploy:
+#   fly apps create escritorio-virtual-SEU-NOME
+#   fly volumes create escritorio_dados --size 1 --region gru
+#   fly secrets set INVITE_CODE=... HABBOASSETS_API_KEY=...
+#   fly deploy
+# Rode uma máquina só: as salas vivem na memória do processo e o banco é um arquivo SQLite.
+app = 'escritorio-virtual-SEU-NOME'
+primary_region = 'gru'
+
+[build]
+
+[env]
+  NODE_ENV = 'production'
+  PORT = '2567'
+  DATABASE_PATH = '/data/sqlite.db'
+  ASSET_CACHE_DIR = '/data/asset-cache'
+
+[[mounts]]
+  source = 'escritorio_dados'
+  destination = '/data'
+
+[http_service]
+  internal_port = 2567
+  force_https = true
+  # WebSocket e estado em memória: a máquina não pode dormir.
+  auto_stop_machines = 'off'
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    grace_period = '15s'
+    interval = '30s'
+    method = 'GET'
+    path = '/healthz'
+    timeout = '5s'
+
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '512mb'

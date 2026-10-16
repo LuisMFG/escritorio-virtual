@@ -1,0 +1,15 @@
+# Para um VPS (DigitalOcean, Hetzner…): `docker compose up -d --build`.
+# Coloque um proxy com HTTPS na frente (ex.: Caddy, veja o README).
+services:
+  escritorio:
+    build: .
+    image: escritorio-virtual
+    restart: unless-stopped
+    init: true
+    env_file: .env
+    environment:
+      NODE_ENV: production
+    ports:
+      - '2567:2567'
+    volumes:
+      - ./data:/app/data

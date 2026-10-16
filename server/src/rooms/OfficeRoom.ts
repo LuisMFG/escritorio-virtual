@@ -156,6 +156,9 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       roomId: this.layout.roomId,
     });
     services().users.touch(user.id);
+    console.log(
+      `[sala ${this.layout.roomId}] ${user.name} entrou (${this.state.players.size} na sala)`,
+    );
   }
 
   override onDrop(client: OfficeClient): void {
@@ -183,7 +186,12 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     this.editLimiter.delete(client.sessionId);
     this.pendingSit.delete(client.sessionId);
     services().presence.remove(client.sessionId);
-    if (client.auth) services().users.touch(client.auth.id);
+    if (client.auth) {
+      services().users.touch(client.auth.id);
+      console.log(
+        `[sala ${this.layout.roomId}] ${client.auth.name} saiu (${this.state.players.size} na sala)`,
+      );
+    }
   }
 
   /** Terminou um passo: chegou na cadeira (senta) ou numa porta (troca de sala). */

@@ -4,6 +4,11 @@ import { TokenBucket } from '../util/rateLimiter.js';
 /** A Cloudflare da HabboAssets recusa User-Agents genéricos de script; nos identificamos. */
 const USER_AGENT = 'escritorio-virtual/0.1 (projeto pessoal, nao comercial)';
 const TIMEOUT_MS = 10_000;
+/**
+ * Espera máxima por uma ficha local. Passou disso, responde 503 na hora e o cliente cai para
+ * o imager direto (que tem limite por IP de cada pessoa) em vez de esperar na fila.
+ */
+const MAX_LOCAL_WAIT_MS = 2_000;
 
 export class UpstreamError extends Error {
   constructor(
@@ -18,13 +23,13 @@ export interface HabboAssetsClientOptions {
   apiKey?: string;
   /** Requisições REST por minuto (limite da API: 240). */
   restPerMinute?: number;
-  /** Renders do imager por minuto (limite de renders não cacheados: 60/IP). */
+  /** Renders do imager por minuto (limite público de renders não cacheados: 60/IP). */
   imagerPerMinute?: number;
   fetchFn?: typeof fetch;
 }
 
 /**
- * Único ponto do projeto que fala com a HabboAssets. Usa metade dos limites públicos,
+ * Único ponto do projeto que fala com a HabboAssets. Fica abaixo dos limites públicos,
  * respeita `Retry-After` em 429 e só envia o token nos endpoints de móveis.
  */
 export class HabboAssetsClient {
@@ -36,9 +41,10 @@ export class HabboAssetsClient {
 
   constructor(private readonly options: HabboAssetsClientOptions = {}) {
     const restPerMin = options.restPerMinute ?? 120;
-    const imagerPerMin = options.imagerPerMinute ?? 30;
+    const imagerPerMin = options.imagerPerMinute ?? 45;
     this.rest = new TokenBucket(Math.min(20, restPerMin), restPerMin / 60);
-    this.imager = new TokenBucket(Math.min(10, imagerPerMin), imagerPerMin / 60);
+    // Rajada de 20: a primeira carga de uma sala pede ~15 imagens (8 do avatar + móveis).
+    this.imager = new TokenBucket(Math.min(20, imagerPerMin), imagerPerMin / 60);
     this.fetchFn = options.fetchFn ?? fetch;
   }
 
@@ -78,7 +84,7 @@ export class HabboAssetsClient {
   private acquire(bucket: TokenBucket): Promise<void> {
     const turn = this.queue.then(async () => {
       const wait = bucket.msUntil();
-      if (wait > 5_000)
+      if (wait > MAX_LOCAL_WAIT_MS)
         throw new UpstreamError(503, 'Limite local de requisições à HabboAssets atingido');
       if (wait > 0) await sleep(wait);
       bucket.tryTake();
