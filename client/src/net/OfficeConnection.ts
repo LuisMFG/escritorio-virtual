@@ -4,6 +4,7 @@ import {
   OFFICE_ROOM,
   OfficeState,
   ServerMessage,
+  type ChatMessage,
   type ErrorMessage,
   type JoinOptions,
   type MoveMessage,
@@ -29,6 +30,7 @@ interface Handlers {
   /** Entrou (ou reentrou) numa sala: a cena deve ser (re)montada. */
   joined: (room: OfficeRoomClient, layout: RoomLayoutMessage) => void;
   serverError: (err: ErrorMessage) => void;
+  chat: (msg: ChatMessage) => void;
   /** Sessão recusada pelo servidor: voltar para a tela de entrada. */
   sessionInvalid: () => void;
 }
@@ -59,6 +61,10 @@ export class OfficeConnection {
     this.room?.send(ClientMessage.Move, msg);
   }
 
+  say(text: string): void {
+    this.room?.send(ClientMessage.Chat, { text });
+  }
+
   updateAvatar(msg: UpdateAvatarMessage): void {
     this.room?.send(ClientMessage.UpdateAvatar, msg);
   }
@@ -73,6 +79,7 @@ export class OfficeConnection {
     const room = await this.client.joinOrCreate(OFFICE_ROOM, options, OfficeState);
     this.room = room;
     room.onMessage(ServerMessage.Error, (err: ErrorMessage) => this.on.serverError(err));
+    room.onMessage(ServerMessage.Chat, (msg: ChatMessage) => this.on.chat(msg));
     room.onDrop(() => this.on.status('reconnecting', 'Conexão perdida. Reconectando…'));
     room.onReconnect(() => this.on.status('online'));
     room.onLeave((code) => {

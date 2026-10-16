@@ -16,7 +16,7 @@ export function mountHud(opts: {
   const title = document.createElement('h1');
   const hint = document.createElement('p');
   hint.textContent =
-    'Clique no piso para andar. Arraste para mover a câmera e use a roda do mouse para o zoom.';
+    'Clique no piso para andar · Enter para conversar · arraste para mover a câmera.';
   card.append(title, hint);
 
   const status = document.createElement('div');

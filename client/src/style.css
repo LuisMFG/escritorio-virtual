@@ -331,7 +331,8 @@ body {
 
 .toast {
   position: fixed;
-  bottom: 16px;
+  z-index: 6;
+  bottom: 78px;
   left: 50%;
   transform: translateX(-50%);
   max-width: calc(100vw - 96px);
@@ -646,5 +647,133 @@ body {
 
   .editor-sets {
     max-height: none;
+  }
+}
+
+/* ---------- Chat ---------- */
+
+.chat-bar {
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  width: min(520px, calc(100vw - 260px));
+  display: flex;
+  gap: 6px;
+  padding: 6px;
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+}
+
+.chat-input {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 12px;
+  border-radius: 8px;
+  border: 1px solid #3a3f4d;
+  background: #15171d;
+  color: var(--text);
+  font: inherit;
+}
+
+.chat-input:focus-visible {
+  outline: 2px solid #7aa7ff;
+  outline-offset: 1px;
+}
+
+.chat-bar .btn-primary {
+  padding: 9px 14px;
+}
+
+.chat-history {
+  position: fixed;
+  left: 16px;
+  top: 128px;
+  width: 280px;
+  max-height: calc(100vh - 200px);
+  display: flex;
+  flex-direction: column;
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  font-size: 13px;
+}
+
+.chat-history summary {
+  padding: 10px 12px;
+  cursor: pointer;
+  font-weight: 600;
+  user-select: none;
+}
+
+.chat-history[open] {
+  height: min(360px, calc(100vh - 200px));
+}
+
+.chat-log {
+  list-style: none;
+  margin: 0;
+  padding: 0 12px 10px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-wrap: anywhere;
+}
+
+.chat-log time {
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.chat-log li.mine strong {
+  color: #ffe28a;
+}
+
+.chat-empty {
+  padding: 0 12px 10px;
+}
+
+@media (max-width: 900px) {
+  .chat-bar {
+    width: auto;
+    left: 140px;
+    right: 72px;
+    transform: none;
+  }
+
+  .chat-history {
+    width: min(280px, calc(100vw - 32px));
+  }
+}
+
+@media (max-width: 600px) {
+  .chat-bar {
+    left: 16px;
+    right: 16px;
+    bottom: 68px;
+  }
+
+  .hud-avatar {
+    bottom: 16px;
+  }
+
+  .people {
+    bottom: 124px;
+  }
+
+  .chat-history {
+    top: 96px;
+  }
+
+  .toast {
+    bottom: 124px;
+  }
+
+  .conn-banner {
+    bottom: calc(40vh + 140px);
   }
 }

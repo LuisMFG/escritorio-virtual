@@ -18,9 +18,14 @@ import type { AvatarTextureCache } from '../assets/AvatarTextureCache.js';
 import type { PlaceholderFactory } from '../assets/PlaceholderFactory.js';
 import { DEBUG } from '../config.js';
 import { AvatarView, type AvatarSnapshot } from '../entities/AvatarView.js';
+import { ChatBubble } from '../entities/ChatBubble.js';
 import { FurniView } from '../entities/FurniView.js';
 import { Camera } from './Camera.js';
 import { drawRoom } from './RoomRenderer.js';
+
+/** Ponta do balão: um pouco acima do nome do avatar. */
+const HEAD_OFFSET_Y = -100;
+const MAX_BUBBLES = 10;
 
 export interface SceneDeps {
   loader: AssetLoader;
@@ -42,6 +47,7 @@ export class RoomScene {
   private readonly hover = new Graphics({ label: 'hover' });
   private readonly target = new Graphics({ label: 'target' });
   private readonly debugLayer = new Graphics({ label: 'debug' });
+  private readonly bubbles = new Container({ label: 'bubbles' });
   private readonly furni: FurniView[] = [];
   private readonly avatars = new Map<string, AvatarView>();
   private depthKey = '';
@@ -64,6 +70,7 @@ export class RoomScene {
       this.target,
       this.objects,
       this.debugLayer,
+      this.bubbles,
     );
     app.stage.addChild(this.world);
     this.camera = new Camera(app, this.world);
@@ -119,8 +126,30 @@ export class RoomScene {
     view.destroy({ children: true });
   }
 
+  /**
+   * Balão de fala sobre a cabeça de quem falou. Como no Habbo, os balões já na tela sobem
+   * para dar lugar ao novo e somem depois de alguns segundos.
+   */
+  say(sessionId: string, name: string, text: string): void {
+    const avatar = this.avatars.get(sessionId);
+    if (!avatar) return;
+    const bubble = new ChatBubble(name, text, avatar.isLocal);
+    const gap = 3;
+    for (const b of this.bubbles.children as ChatBubble[]) b.targetY -= bubble.stackHeight + gap;
+    bubble.position.set(avatar.x, avatar.y + HEAD_OFFSET_Y);
+    bubble.targetY = bubble.y;
+    this.bubbles.addChild(bubble);
+    while (this.bubbles.children.length > MAX_BUBBLES) {
+      this.bubbles.children[0]?.destroy({ children: true });
+    }
+  }
+
   update(dtMs: number): void {
     for (const a of this.avatars.values()) a.update(dtMs);
+    for (const b of [...this.bubbles.children] as ChatBubble[]) {
+      b.update(dtMs);
+      if (b.expired) b.destroy({ children: true });
+    }
     this.sortDepth();
     if (this.targetFade > 0) {
       this.targetFade = Math.max(0, this.targetFade - dtMs / 900);

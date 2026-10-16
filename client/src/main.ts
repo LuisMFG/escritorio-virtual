@@ -6,6 +6,8 @@ import {
   RECEPTION,
   type FurniManifestEntry,
   type Player,
+  ClientMessage,
+  type ChatMessage,
   type RoomLayoutMessage,
   type SessionResponse,
 } from '@office/shared';
@@ -19,6 +21,7 @@ import { isSessionError, OfficeConnection, type OfficeRoomClient } from './net/O
 import { forgetToken, loadSession, saveSession } from './net/storage.js';
 import { RoomScene, type SceneDeps } from './scene/RoomScene.js';
 import { openAvatarEditor } from './ui/avatarEditor.js';
+import { ChatPanel } from './ui/chat.js';
 import { mountHud } from './ui/hud.js';
 import { showLogin } from './ui/login.js';
 import { Overlay } from './ui/overlay.js';
@@ -80,6 +83,7 @@ async function start(): Promise<void> {
   let connection: OfficeConnection | undefined;
   let session: SessionResponse | undefined;
   const overlay = new Overlay();
+  const chat = new ChatPanel((text) => connection?.say(text));
   const hud = mountHud({
     getCamera: () => scene?.camera,
     loader,
@@ -135,21 +139,28 @@ async function start(): Promise<void> {
       s.removeAvatar(id);
       refreshPeople();
     });
+
+    const history = (await room.request(ClientMessage.GetChatHistory)) as ChatMessage[];
+    if (scene === s) chat.setHistory(history, session?.userId ?? '');
   }
 
   async function enter(current: SessionResponse): Promise<void> {
     const conn: OfficeConnection = new OfficeConnection({
       status: (status, detail) => overlay.setStatus(status, detail),
       serverError: (err) => overlay.notify(err.message),
+      chat: (msg) => {
+        chat.add(msg);
+        scene?.say(msg.sessionId, msg.name, msg.text);
+      },
       sessionInvalid: () => {
         forgetToken();
         location.reload();
       },
       joined: (room, layout) => void mountRoom(conn, room, layout),
     });
-    await conn.join(RECEPTION.id, current.token);
-    connection = conn;
     session = current;
+    connection = conn;
+    await conn.join(RECEPTION.id, current.token);
     // Saída "educada" ao fechar/recarregar: o servidor remove o avatar na hora.
     window.addEventListener('pagehide', () => void conn.leave());
     if (import.meta.env.DEV) {
