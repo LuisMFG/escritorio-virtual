@@ -16,6 +16,8 @@ export class Camera {
   /** Acumula a roda do mouse para trackpads não pularem vários níveis de uma vez. */
   private wheelAccum = 0;
   private readonly tapListeners: ((global: Point) => void)[] = [];
+  /** Se devolver true no pointerdown, a câmera ignora o gesto (ex.: arrastar um móvel). */
+  private pointerGuard: ((global: Point) => boolean) | null = null;
 
   constructor(
     private readonly app: Application,
@@ -52,6 +54,10 @@ export class Camera {
 
   get zoom(): number {
     return ZOOM_LEVELS[this.levelIndex]!;
+  }
+
+  setPointerGuard(guard: ((global: Point) => boolean) | null): void {
+    this.pointerGuard = guard;
   }
 
   onTap(listener: (global: Point) => void): void {
@@ -94,6 +100,10 @@ export class Camera {
   }
 
   private onDown(e: FederatedPointerEvent): void {
+    if (this.pointerGuard?.(e.global)) {
+      this.reset();
+      return;
+    }
     this.pointerDown = { x: e.global.x, y: e.global.y, worldX: this.world.x, worldY: this.world.y };
     this.dragging = false;
   }

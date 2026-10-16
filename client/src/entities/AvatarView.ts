@@ -14,6 +14,9 @@ const BOB_Y = [0, -1, -2, -1];
 const CATCH_UP_SPEED = 1.5;
 /** Altura do nome acima dos pés. */
 const NAME_Y = -88;
+/** Pose sentada simulada (o imager não tem): desce o corpo e esconde as pernas abaixo do assento. */
+const SIT_DROP = 8;
+const SIT_CUT_Y = -2;
 
 /** O que a cena sabe de um jogador do estado sincronizado. */
 export interface AvatarSnapshot {
@@ -25,6 +28,10 @@ export interface AvatarSnapshot {
   nextY: number;
   dir: number;
   away: boolean;
+  /** 'idle' | 'walk' | 'sit' */
+  action: string;
+  /** Altura em que o servidor colocou o avatar (assento quando sentado). */
+  z: number;
 }
 
 interface Step {
@@ -49,6 +56,9 @@ export class AvatarView extends Container {
   private readonly body = new Sprite();
   private readonly shadow = new Graphics();
   private readonly nameTag: Text;
+  private readonly legMask = new Graphics();
+  private sitting = false;
+  private sitZ = 0;
   private step: Step | null = null;
   private readonly queue: TilePoint[] = [];
   private walkTime = 0;
@@ -79,7 +89,9 @@ export class AvatarView extends Container {
     });
     this.nameTag.anchor.set(0.5, 1);
     this.nameTag.position.set(0, NAME_Y);
-    this.addChild(this.shadow, this.body, this.nameTag);
+    this.legMask.rect(-60, -220, 120, 220 + SIT_CUT_Y).fill(0xffffff);
+    this.legMask.visible = false;
+    this.addChild(this.shadow, this.body, this.nameTag, this.legMask);
     this.applySnapshot(snapshot);
     this.applyPosition();
   }
@@ -87,6 +99,11 @@ export class AvatarView extends Container {
   setFrames(frames: AvatarFrames): void {
     this.frames = frames;
     this.applyFrame();
+  }
+
+  /** Tile onde o avatar vai terminar o que já recebeu do servidor. */
+  get destination(): TilePoint {
+    return this.queue.at(-1) ?? this.step?.to ?? this.tile;
   }
 
   get isWalking(): boolean {
@@ -97,6 +114,7 @@ export class AvatarView extends Container {
   applySnapshot(s: AvatarSnapshot): void {
     this.nameTag.text = s.name;
     this.alpha = s.away ? 0.45 : 1;
+    this.setSitting(s.action === 'sit', s.z);
 
     const target = { x: s.nextX, y: s.nextY };
     const last = this.queue.at(-1) ?? this.step?.to ?? this.tile;
@@ -155,6 +173,14 @@ export class AvatarView extends Container {
     };
   }
 
+  private setSitting(on: boolean, z: number): void {
+    this.sitting = on;
+    this.sitZ = z;
+    this.body.mask = on ? this.legMask : null;
+    this.legMask.visible = on;
+    this.shadow.visible = !on;
+  }
+
   private startNextStep(): void {
     const next = this.queue.shift();
     if (!next) return;
@@ -176,7 +202,7 @@ export class AvatarView extends Container {
   private applyPosition(): void {
     let x = this.tile.x;
     let y = this.tile.y;
-    let z = this.heightAt(x, y);
+    let z = this.sitting && !this.step ? this.sitZ : this.heightAt(x, y);
     if (this.step) {
       const t = this.step.elapsed / STEP_MS;
       const { from, to } = this.step;
@@ -192,7 +218,7 @@ export class AvatarView extends Container {
       const sway = quarter === 2 ? (this.stepCount % 2 === 0 ? 1 : -1) : 0;
       this.body.position.set(sway, BOB_Y[quarter]!);
     } else {
-      this.body.position.set(0, 0);
+      this.body.position.set(0, this.sitting ? SIT_DROP : 0);
     }
   }
 }

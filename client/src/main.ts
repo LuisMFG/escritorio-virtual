@@ -7,6 +7,8 @@ import {
   RECEPTION,
   type FurniManifestEntry,
   type PresenceResponse,
+  type Furni,
+  type PlacedFurni,
   type Player,
   ClientMessage,
   type ChatMessage,
@@ -24,6 +26,7 @@ import { forgetToken, loadSession, saveSession } from './net/storage.js';
 import { RoomScene, type SceneDeps } from './scene/RoomScene.js';
 import { openAvatarEditor } from './ui/avatarEditor.js';
 import { ChatPanel } from './ui/chat.js';
+import { DecorPanel } from './ui/decorPanel.js';
 import { mountHud } from './ui/hud.js';
 import { showLogin } from './ui/login.js';
 import { Overlay } from './ui/overlay.js';
@@ -42,6 +45,10 @@ async function fetchJson(url: string): Promise<unknown> {
   return res.json();
 }
 
+function placed(f: Furni): PlacedFurni {
+  return { id: f.id, defId: f.defId, x: f.x, y: f.y, z: f.z, rot: f.rot };
+}
+
 function snapshot(p: Player): AvatarSnapshot {
   return {
     name: p.name,
@@ -52,6 +59,8 @@ function snapshot(p: Player): AvatarSnapshot {
     nextY: p.nextY,
     dir: p.dir,
     away: p.away,
+    action: p.action,
+    z: p.z,
   };
 }
 
@@ -94,9 +103,23 @@ async function start(): Promise<void> {
   let session: SessionResponse | undefined;
   const overlay = new Overlay();
   const chat = new ChatPanel((text) => connection?.say(text));
+  let decorating = false;
+  const setDecorating = (on: boolean) => {
+    decorating = on;
+    scene?.decor.setActive(on);
+    decorPanel.show(on);
+    hud.setDecorating(on);
+  };
+  const decorPanel = new DecorPanel(furniManifest.items, {
+    pick: (defId) => scene?.decor.pick(defId),
+    rotate: () => scene?.decor.rotate(),
+    remove: () => scene?.decor.removeSelected(),
+    close: () => setDecorating(false),
+  });
   const hud = mountHud({
     getCamera: () => scene?.camera,
     loader,
+    onToggleDecor: () => setDecorating(!decorating),
     onEditAvatar: async () => {
       if (!session || !connection) return;
       const choice = await openAvatarEditor({
@@ -121,8 +144,26 @@ async function start(): Promise<void> {
     layout: RoomLayoutMessage,
   ): Promise<void> {
     scene?.destroy();
-    const s = new RoomScene(app, layout, deps, (tile) => connection.move(tile));
+    const s = new RoomScene(
+      app,
+      layout,
+      deps,
+      {
+        move: (tile) => connection.move(tile),
+        interact: (furniId) => connection.interact(furniId),
+        placeFurni: (msg) => connection.placeFurni(msg),
+        moveFurni: (msg) => connection.moveFurni(msg),
+        removeFurni: (furniId) => connection.removeFurni(furniId),
+      },
+      {
+        onPickChange: (defId) => decorPanel.setPicked(defId),
+        onSelectionChange: (sel) => decorPanel.setSelected(sel),
+        onError: (message) => overlay.notify(message),
+      },
+    );
     scene = s;
+    s.decor.setActive(decorating);
+    decorPanel.setPicked(null);
     hud.setRoomName(layout.name);
     history.replaceState(null, '', `#/${layout.roomId}`);
     overlay.setPeople([], layout.name);
@@ -153,6 +194,11 @@ async function start(): Promise<void> {
       s.removeAvatar(id);
       refreshPeople();
     });
+    cb.onAdd('furni', (f, id) => {
+      s.setFurni(id, placed(f));
+      cb.onChange(f, () => s.setFurni(id, placed(f)));
+    });
+    cb.onRemove('furni', (_f, id) => s.removeFurni(id));
 
     const chatHistory = (await room.request(ClientMessage.GetChatHistory)) as ChatMessage[];
     if (scene === s) chat.setHistory(chatHistory, session?.userId ?? '');

@@ -814,3 +814,139 @@ body {
 .room-fade.on {
   opacity: 1;
 }
+
+/* ---------- Modo decorar ---------- */
+
+.decor-panel[hidden] {
+  display: none;
+}
+
+.decor-panel {
+  position: fixed;
+  left: 16px;
+  top: 128px;
+  bottom: 80px;
+  width: 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  z-index: 3;
+}
+
+.decor-panel header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.decor-panel h2 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.decor-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 6px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 80px;
+  align-content: start;
+}
+
+.decor-grid button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  min-height: 84px;
+  padding: 6px 4px;
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background: #2a2e3a;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.decor-grid button:hover {
+  background: #343949;
+}
+
+.decor-grid button[aria-pressed='true'] {
+  border-color: #3fbf6f;
+  background: #2b3f35;
+  color: var(--text);
+}
+
+.decor-grid img {
+  max-width: 64px;
+  max-height: 48px;
+  image-rendering: pixelated;
+}
+
+.decor-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.decor-status .btn-secondary {
+  padding: 5px 10px;
+  font-size: 12px;
+}
+
+.decor-help {
+  font-size: 12px;
+}
+
+.hud-decor {
+  position: fixed;
+  left: 132px;
+  bottom: 16px;
+}
+
+body.decorating .chat-history,
+body.decorating .chat-bar {
+  display: none;
+}
+
+body.decorating .hud-decor {
+  background: #2b3f35;
+  border-color: #3fbf6f;
+}
+
+@media (max-width: 900px) {
+  .chat-bar {
+    left: 248px;
+  }
+}
+
+@media (max-width: 600px) {
+  .decor-panel {
+    left: 8px;
+    right: 8px;
+    width: auto;
+    top: auto;
+    bottom: 64px;
+    height: 46vh;
+  }
+
+  .hud-decor {
+    left: auto;
+    right: 72px;
+  }
+
+  .chat-bar {
+    left: 16px;
+  }
+}

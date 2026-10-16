@@ -6,6 +6,8 @@ import {
   ServerMessage,
   type ChatMessage,
   type ErrorMessage,
+  type FurniMoveMessage,
+  type FurniPlaceMessage,
   type JoinOptions,
   type MoveMessage,
   type UpdateAvatarMessage,
@@ -70,6 +72,22 @@ export class OfficeConnection {
 
   move(msg: MoveMessage): void {
     this.room?.send(ClientMessage.Move, msg);
+  }
+
+  interact(furniId: string): void {
+    this.room?.send(ClientMessage.Interact, { furniId });
+  }
+
+  placeFurni(msg: FurniPlaceMessage): void {
+    this.room?.send(ClientMessage.FurniPlace, msg);
+  }
+
+  moveFurni(msg: FurniMoveMessage): void {
+    this.room?.send(ClientMessage.FurniMove, msg);
+  }
+
+  removeFurni(furniId: string): void {
+    this.room?.send(ClientMessage.FurniRemove, { furniId });
   }
 
   say(text: string): void {

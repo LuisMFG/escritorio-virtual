@@ -3,6 +3,7 @@ import type { Camera } from '../scene/Camera.js';
 
 export interface Hud {
   setRoomName(name: string): void;
+  setDecorating(on: boolean): void;
 }
 
 /** Nome da sala, status dos assets e controles de zoom (que agem sobre a cena atual). */
@@ -10,6 +11,7 @@ export function mountHud(opts: {
   getCamera: () => Camera | undefined;
   loader: AssetLoader;
   onEditAvatar: () => void;
+  onToggleDecor: () => void;
 }): Hud {
   const card = document.createElement('header');
   card.className = 'hud-card';
@@ -38,8 +40,19 @@ export function mountHud(opts: {
   avatarBtn.textContent = 'Meu visual';
   avatarBtn.addEventListener('click', opts.onEditAvatar);
 
-  document.body.append(card, status, zoom, avatarBtn);
+  const decorBtn = document.createElement('button');
+  decorBtn.type = 'button';
+  decorBtn.className = 'hud-decor btn-secondary';
+  decorBtn.textContent = 'Decorar';
+  decorBtn.setAttribute('aria-pressed', 'false');
+  decorBtn.addEventListener('click', opts.onToggleDecor);
+
+  document.body.append(card, status, zoom, avatarBtn, decorBtn);
   return {
+    setDecorating(on) {
+      decorBtn.textContent = on ? 'Concluir decoração' : 'Decorar';
+      decorBtn.setAttribute('aria-pressed', String(on));
+    },
     setRoomName(name) {
       title.textContent = name;
       document.title = `${name} · Escritório Virtual`;
