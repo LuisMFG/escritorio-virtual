@@ -12,7 +12,7 @@ import {
   type RoomLayoutMessage,
   type TilePoint,
 } from '@office/shared';
-import { Container, Graphics, type Application, type Point } from 'pixi.js';
+import { Container, Graphics, Text, type Application, type Point } from 'pixi.js';
 import type { AssetLoader } from '../assets/AssetLoader.js';
 import type { AvatarTextureCache } from '../assets/AvatarTextureCache.js';
 import type { PlaceholderFactory } from '../assets/PlaceholderFactory.js';
@@ -48,6 +48,17 @@ export class RoomScene {
   private readonly target = new Graphics({ label: 'target' });
   private readonly debugLayer = new Graphics({ label: 'debug' });
   private readonly bubbles = new Container({ label: 'bubbles' });
+  private readonly doorLabel = new Text({
+    text: '',
+    resolution: 2,
+    style: {
+      fontFamily: 'system-ui, sans-serif',
+      fontSize: 12,
+      fontWeight: '700',
+      fill: 0xffffff,
+      stroke: { color: 0x1d4ed8, width: 4 },
+    },
+  });
   private readonly furni: FurniView[] = [];
   private readonly avatars = new Map<string, AvatarView>();
   private depthKey = '';
@@ -71,7 +82,10 @@ export class RoomScene {
       this.objects,
       this.debugLayer,
       this.bubbles,
+      this.doorLabel,
     );
+    this.doorLabel.anchor.set(0.5, 1);
+    this.doorLabel.visible = false;
     app.stage.addChild(this.world);
     this.camera = new Camera(app, this.world);
     this.camera.onTap((p) => this.handleTap(p));
@@ -211,9 +225,21 @@ export class RoomScene {
   private onPointerMove(e: { global: Point }): void {
     const t = this.pickTile(e.global);
     this.hover.clear();
-    if (!t) return;
+    if (!t) {
+      this.doorLabel.visible = false;
+      return;
+    }
     const z = tileHeight(this.map, t.x, t.y) ?? 0;
     const pts = tileCorners(t.x, t.y, z).flatMap((c) => [c.sx, c.sy]);
+    const door = this.layout.doors.find((d) => d.x === t.x && d.y === t.y);
+    this.doorLabel.visible = Boolean(door);
+    if (door) {
+      // Porta: contorno azul e para onde ela leva.
+      this.hover.poly(pts, true).stroke({ width: 2, color: 0x7aa7ff, alpha: 0.95 });
+      this.doorLabel.text = `→ ${door.targetName ?? door.targetRoomId}`;
+      this.doorLabel.position.set(pts[0]!, pts[1]! - 6);
+      return;
+    }
     const ok = this.grid.isWalkable(t.x, t.y, true);
     this.hover.poly(pts, true).stroke({ width: 2, color: ok ? 0xffffff : 0xe05555, alpha: 0.7 });
   }

@@ -777,3 +777,40 @@ body {
     bottom: calc(40vh + 140px);
   }
 }
+
+/* ---------- Várias salas ---------- */
+
+.people-body {
+  padding: 0 12px 10px;
+}
+
+.people-body h3 {
+  margin: 6px 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.people-body .people-list {
+  padding: 0;
+}
+
+.people-list li.elsewhere::before {
+  background: #7aa7ff;
+}
+
+.room-fade {
+  position: fixed;
+  inset: 0;
+  z-index: 4;
+  background: var(--bg);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+
+.room-fade.on {
+  opacity: 1;
+}

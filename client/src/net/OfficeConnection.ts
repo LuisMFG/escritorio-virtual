@@ -10,6 +10,7 @@ import {
   type MoveMessage,
   type UpdateAvatarMessage,
   type RoomLayoutMessage,
+  type RoomTransferMessage,
 } from '@office/shared';
 
 export type ConnectionStatus = 'connecting' | 'online' | 'reconnecting' | 'offline';
@@ -31,6 +32,8 @@ interface Handlers {
   joined: (room: OfficeRoomClient, layout: RoomLayoutMessage) => void;
   serverError: (err: ErrorMessage) => void;
   chat: (msg: ChatMessage) => void;
+  /** Vai trocar de sala por uma porta (hora de escurecer a tela). */
+  transferStart: (targetRoomId: string) => void;
   /** Sessão recusada pelo servidor: voltar para a tela de entrada. */
   sessionInvalid: () => void;
 }
@@ -47,6 +50,9 @@ export class OfficeConnection {
   private token = '';
   private leaving = false;
   private rejoining = false;
+  private switching = false;
+  /** Ticket da porta, usado só na próxima entrada. */
+  private ticket: string | undefined;
 
   constructor(private readonly on: Handlers) {}
 
@@ -55,6 +61,11 @@ export class OfficeConnection {
     this.token = token;
     this.on.status('connecting');
     await this.connectOnce();
+  }
+
+  /** Sala física atual (`reception`, `meeting`…). */
+  get currentRoomId(): string {
+    return this.roomId;
   }
 
   move(msg: MoveMessage): void {
@@ -75,11 +86,20 @@ export class OfficeConnection {
   }
 
   private async connectOnce(): Promise<void> {
-    const options: JoinOptions = { roomId: this.roomId, token: this.token };
+    const options: JoinOptions = {
+      officeRoomId: this.roomId,
+      token: this.token,
+      ticket: this.ticket,
+    };
+    this.ticket = undefined;
     const room = await this.client.joinOrCreate(OFFICE_ROOM, options, OfficeState);
     this.room = room;
     room.onMessage(ServerMessage.Error, (err: ErrorMessage) => this.on.serverError(err));
     room.onMessage(ServerMessage.Chat, (msg: ChatMessage) => this.on.chat(msg));
+    room.onMessage(
+      ServerMessage.RoomTransfer,
+      (msg: RoomTransferMessage) => void this.switchRoom(msg),
+    );
     room.onDrop(() => this.on.status('reconnecting', 'Conexão perdida. Reconectando…'));
     room.onReconnect(() => this.on.status('online'));
     room.onLeave((code) => {
@@ -89,6 +109,30 @@ export class OfficeConnection {
     const layout = (await room.request(ClientMessage.GetLayout)) as RoomLayoutMessage;
     this.on.joined(room, layout);
     this.on.status('online');
+  }
+
+  /** Passou por uma porta: sai desta sala (com consentimento) e entra na outra com o ticket. */
+  private async switchRoom(msg: RoomTransferMessage): Promise<void> {
+    if (this.switching) return;
+    this.switching = true;
+    this.on.transferStart(msg.targetRoomId);
+    this.on.status('connecting', 'Trocando de sala…');
+    const previous = this.room;
+    this.room = null;
+    try {
+      await previous?.leave(true);
+    } catch {
+      // A sala antiga já pode ter caído; seguimos para a nova.
+    }
+    this.roomId = msg.targetRoomId;
+    this.ticket = msg.ticket;
+    try {
+      await this.connectOnce();
+    } catch {
+      void this.rejoinLoop();
+    } finally {
+      this.switching = false;
+    }
   }
 
   private async rejoinLoop(): Promise<void> {

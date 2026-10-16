@@ -3,8 +3,10 @@ import { Callbacks } from '@colyseus/sdk';
 import {
   parseAvatarManifest,
   parseFurniManifest,
+  findRoom,
   RECEPTION,
   type FurniManifestEntry,
+  type PresenceResponse,
   type Player,
   ClientMessage,
   type ChatMessage,
@@ -25,6 +27,14 @@ import { ChatPanel } from './ui/chat.js';
 import { mountHud } from './ui/hud.js';
 import { showLogin } from './ui/login.js';
 import { Overlay } from './ui/overlay.js';
+
+/** Sala pedida na URL (`#/meeting`), para recarregar no mesmo lugar. */
+function roomFromHash(): string {
+  return findRoom(location.hash.replace(/^#\/?/, ''))?.id ?? RECEPTION.id;
+}
+
+/** Intervalo da consulta de quem está nas outras salas. */
+const PRESENCE_POLL_MS = 10_000;
 
 async function fetchJson(url: string): Promise<unknown> {
   const res = await fetch(url);
@@ -114,8 +124,12 @@ async function start(): Promise<void> {
     const s = new RoomScene(app, layout, deps, (tile) => connection.move(tile));
     scene = s;
     hud.setRoomName(layout.name);
+    history.replaceState(null, '', `#/${layout.roomId}`);
+    overlay.setPeople([], layout.name);
     await s.load();
     if (scene !== s) return;
+    overlay.setFading(false);
+    void refreshOtherRooms();
 
     const refreshPeople = () =>
       overlay.setPeople(
@@ -140,9 +154,25 @@ async function start(): Promise<void> {
       refreshPeople();
     });
 
-    const history = (await room.request(ClientMessage.GetChatHistory)) as ChatMessage[];
-    if (scene === s) chat.setHistory(history, session?.userId ?? '');
+    const chatHistory = (await room.request(ClientMessage.GetChatHistory)) as ChatMessage[];
+    if (scene === s) chat.setHistory(chatHistory, session?.userId ?? '');
   }
+
+  /** Quem está nas outras salas (a lista da sala atual vem ao vivo do estado). */
+  async function refreshOtherRooms(): Promise<void> {
+    if (!session || !connection) return;
+    try {
+      const res = await fetch('/api/presence', {
+        headers: { Authorization: `Bearer ${session.token}` },
+      });
+      if (!res.ok) return;
+      const body = (await res.json()) as PresenceResponse;
+      overlay.setOtherRooms(body.rooms, connection.currentRoomId);
+    } catch {
+      // Sem rede: a lista das outras salas espera a próxima rodada.
+    }
+  }
+  setInterval(() => void refreshOtherRooms(), PRESENCE_POLL_MS);
 
   async function enter(current: SessionResponse): Promise<void> {
     const conn: OfficeConnection = new OfficeConnection({
@@ -156,11 +186,12 @@ async function start(): Promise<void> {
         forgetToken();
         location.reload();
       },
+      transferStart: () => overlay.setFading(true),
       joined: (room, layout) => void mountRoom(conn, room, layout),
     });
     session = current;
     connection = conn;
-    await conn.join(RECEPTION.id, current.token);
+    await conn.join(roomFromHash(), current.token);
     // Saída "educada" ao fechar/recarregar: o servidor remove o avatar na hora.
     window.addEventListener('pagehide', () => void conn.leave());
     if (import.meta.env.DEV) {
