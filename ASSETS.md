@@ -8,6 +8,8 @@ Registro de onde vem cada recurso visual/sonoro do projeto (exigência do SPEC).
 - **Direitos:** os gráficos pertencem à Sulake/Habbo. Uso **pessoal, privado e não comercial** (escritório fechado por código de convite). Não publicar o site de forma aberta/indexada.
 - **Hotel:** Habbo Brasil (`X-Hotel-ID: 2`).
 
+Desde a Fase 2 as imagens passam pelo proxy do servidor (`/hh/avatar.png`, `/hh/furniture/…`), que baixa cada uma uma única vez e guarda em `data/asset-cache/`; o imager direto fica como reserva.
+
 | Recurso | Endpoint | Onde é usado |
 |---|---|---|
 | Avatar (pose em pé, 8 direções) | `/imaging/avatar.png?figure=…&direction=0-7` | `client/src/assets/AvatarTextureCache.ts` |

@@ -1,7 +1,7 @@
 # PLAN — Escritório virtual isométrico
 
 > Documento vivo. Atualizar sempre que o plano mudar (ver "Como trabalhar" no SPEC.md).
-> Status: **aprovado em 16/10/2026** — Fase 1 concluída (aguardando validação). Decisões registradas na §9.
+> Status: **aprovado em 16/10/2026** — Fase 1 aprovada; Fase 2 concluída (aguardando validação). Decisões registradas na §9.
 
 ---
 
@@ -12,7 +12,7 @@
 | Linguagem / monorepo | TypeScript + **npm workspaces** (`client`, `server`, `shared`) | Zero ferramenta extra (sem Turborepo/pnpm); `shared` é importado como pacote `@office/shared` pelos dois lados. |
 | Renderização | **PixiJS v8** (não Phaser 3) | Precisamos só de um renderer 2D rápido com controle total de ordenação de profundidade e texturas; Phaser traria física, cenas e loader que não usaríamos e brigaria com nosso sort isométrico próprio. |
 | UI | HTML/CSS puro + TypeScript (sem framework) | Chat, catálogo, editor e lista são poucos painéis; manter DOM simples evita mais uma dependência. Se a UI crescer, reavaliar (Preact). |
-| Tempo real | **Colyseus 0.16** (não Socket.IO) | Já entrega exatamente o modelo do SPEC: salas com estado autoritativo, sincronização por diffs binários, `onAuth`, e reconexão (`allowReconnection`) prontos — com Socket.IO teríamos que escrever tudo isso. |
+| Tempo real | **Colyseus 0.18** (não Socket.IO) | Já entrega exatamente o modelo do SPEC: salas com estado autoritativo, sincronização por diffs binários, `onAuth`, e reconexão (`allowReconnection`) prontos — com Socket.IO teríamos que escrever tudo isso. |
 | Persistência | **SQLite via better-sqlite3 + Drizzle ORM** (não Prisma) | better-sqlite3 é síncrono e rápido; Drizzle dá schema/migrations tipados sem o engine binário do Prisma, o que simplifica o Docker e mantém um único processo Node. |
 | Validação | **zod** em `shared` | Mesmos schemas validam payloads no servidor e formulários no cliente. |
 | Testes | **Vitest** | Nativo com Vite/ESM/TS, roda em `shared`, `server` e `client`. |
@@ -150,33 +150,28 @@ A aparência fica no próprio `users.figure` (figure string Habbo, ex. `hd-180-1
 
 ### 4.2 Estado sincronizado em tempo real (Colyseus `@colyseus/schema`)
 
+Definido com `schema()` do `@colyseus/schema` v5 em `shared/src/state.ts` (sem decorators), para o cliente decodificar com tipos.
+
 ```ts
-class Player extends Schema {
-  @type('string') id;          // users.id
-  @type('string') name;
-  @type('string') figure;
-  @type('uint8')  x; @type('uint8') y; @type('float32') z;
-  @type('uint8')  dir;          // 0–7 (direções Habbo)
-  @type('string') action;       // 'idle' | 'walk' | 'sit'
-  @type('uint8')  nextX; @type('uint8') nextY;  // passo em andamento (interpolação)
-  @type('uint32') stepStartedAt;
-}
+const Player = schema({
+  userId: t.string(),           // users.id
+  name: t.string(),
+  figure: t.string(),
+  x: t.uint8(), y: t.uint8(), z: t.float32(),   // tile atual
+  nextX: t.uint8(), nextY: t.uint8(),            // tile do passo em andamento (= x,y parado)
+  dir: t.uint8(),               // 0–7 (direções Habbo)
+  action: t.string(),           // 'idle' | 'walk' | 'sit'
+  away: t.boolean(),            // caiu e está no prazo de reconexão
+}, 'Player');
 
-class Furni extends Schema {
-  @type('string') id; @type('string') catalogId;
-  @type('uint8') x; @type('uint8') y; @type('float32') z;
-  @type('uint8') rot; @type('uint8') color;
-  @type('string') occupiedBy;   // id do player sentado, '' se livre
-}
-
-class OfficeState extends Schema {
-  @type('string') roomId;
-  @type({ map: Player }) players = new MapSchema<Player>();
-  @type({ map: Furni })  furni   = new MapSchema<Furni>();
-}
+const OfficeState = schema({
+  roomId: t.string(),
+  players: t.map(Player),       // chave = sessionId
+  // furni: t.map(Furni)        // Fase 6: { id, catalogId, x, y, z, rot, color, occupiedBy }
+}, 'OfficeState');
 ```
 
-Layout estático (heightmap, portas, cores) é enviado uma vez no join via mensagem `room.layout` (não muda durante a sessão). Chat **não** fica no estado: é broadcast efêmero + histórico vindo do banco.
+Layout estático (heightmap, portas, cores e, até a Fase 6, os móveis) é pedido pelo cliente logo depois de entrar, via `room.request('room.layout')` — uma requisição evita a corrida de uma mensagem enviada no `onJoin` chegar antes de o cliente registrar o handler. Chat **não** fica no estado: é broadcast efêmero + histórico vindo do banco.
 
 ---
 
@@ -199,7 +194,8 @@ Layout estático (heightmap, portas, cores) é enviado uma vez no join via mensa
 
 | Tipo | Payload | Regras no servidor |
 |---|---|---|
-| `move` | `{ x, y }` | rate limit 5/s; A* no servidor a partir da posição atual; rejeita destino inválido |
+| `room.layout` (requisição) | — | responde com `{ roomId, name, heightmap, spawn, doors[], wallColor, floorColor, furni[] }` |
+| `move` | `{ x, y }` | rate limit 5/s; A* no servidor a partir da posição atual; destino bloqueado → tile livre mais próximo; sem caminho → `error INVALID_MOVE` |
 | `chat` | `{ text }` | 1–200 chars, trim, rate limit 3 msgs/5 s; texto tratado como texto puro |
 | `door.use` | `{ doorId }` | jogador precisa estar no tile da porta (também disparado automaticamente ao pisar) |
 | `furni.place` | `{ catalogId, x, y, rot, color? }` | modo editar; `placement.canPlace` |
@@ -214,14 +210,15 @@ Layout estático (heightmap, portas, cores) é enviado uma vez no join via mensa
 
 | Tipo | Payload |
 |---|---|
-| `room.layout` | `{ roomId, name, heightmap, doors[], wallColor, floorColor }` |
 | `chat.message` | `{ id, userId, name, text, ts }` |
 | `chat.history` | `{ messages: ChatMessage[] }` (últimas 50, no join) |
 | `room.transfer` | `{ targetRoomId, ticket }` — cliente sai e entra na outra sala com o ticket (spawn na porta de destino) |
 | `room.presence` | derivado do estado (`players`); lista de presentes de todas as salas via `GET /api/presence` (polling 10 s) |
 | `error` | `{ code: 'RATE_LIMIT'|'INVALID_MOVE'|'INVALID_PLACEMENT'|…, message }` |
 
-Movimento: o servidor roda um tick de 50 ms; cada passo dura 500 ms (2 tiles/s, diagonal igual — estilo Habbo). Ao iniciar um passo ele seta `nextX/nextY/stepStartedAt/dir/action='walk'`; o cliente interpola de `(x,y)` a `(next)` pelo tempo decorrido. Reconexão: `allowReconnection(client, 30)` no servidor + `client.reconnect(reconnectionToken)` com backoff exponencial no cliente.
+Movimento: o servidor roda um tick de 50 ms; cada passo dura 500 ms (2 tiles/s, diagonal igual — estilo Habbo). Ao iniciar um passo ele seta `nextX/nextY/dir/action='walk'`; ao terminar, `x/y`. O cliente enfileira cada `next` recebido e interpola em 500 ms (acelera 1,5× se acumular passos por atraso de rede; teleporta se a posição não for vizinha).
+
+Reconexão: queda curta → `onDrop` marca `away` e chama `allowReconnection(client, 30)`; o SDK reconecta sozinho (`onDrop`/`onReconnect` no cliente). Se a sala sumiu (servidor reiniciou), o cliente reentra do zero com o mesmo token, com backoff 1/2/4/8/15 s. Se a mesma pessoa entra de novo (recarregou a página) enquanto há um avatar `away` dela, a reconexão pendente é cancelada na hora; e o cliente faz `leave()` no `pagehide`.
 
 ---
 
@@ -302,7 +299,7 @@ screenToTile(sx, sy)  = { x: floor((sy/16 + sx/32) / 2), y: floor((sy/16 - sx/32
 
 **Como testar:** `npm install && npm run dev` → abrir `http://localhost:5173`; ver a sala, clicar em tiles e o avatar desviar dos móveis; passar atrás/na frente de um móvel e ver a ordem correta; abrir com a rede bloqueada (DevTools → offline após carregar o JS, ou `?offline=1`) e ver placeholders; `npm test` passa (iso, grid, pathfinding).
 
-### Fase 2 — Servidor em tempo real, vários usuários, tela de entrada
+### Fase 2 — Servidor em tempo real, vários usuários, tela de entrada ✅ implementada
 - Servidor Express + Colyseus no mesmo http server; `config.ts` com `INVITE_CODE`, `PORT`, `DATABASE_PATH`, `HABBOASSETS_API_KEY`.
 - Drizzle: schema `users`, `rooms`, migrations, seed da Recepção.
 - `POST /api/session` (nome + convite → token; nome pode repetir, só é recusado se alguém **online agora** já usa o mesmo nome — comparação sem maiúsculas/acentos), `onAuth` no Colyseus.
@@ -368,7 +365,7 @@ screenToTile(sx, sy)  = { x: floor((sy/16 + sx/32) / 2), y: floor((sy/16 - sx/32
 6. **Disponibilidade/terceiros.** A HabboAssets é um arquivo comunitário; se cair ou mudar a API, o cache em disco + placeholders mantêm o app funcionando.
 7. **Direitos dos assets.** Os gráficos são da Sulake/Habbo, espelhados pela HabboAssets ("não afiliada"). OK para uso pessoal e privado (atrás de código de convite); não recomendável deixar público/indexado.
 8. **Ordenação isométrica com móveis multi-tile** é a fonte clássica de bugs visuais; mitigada com caixas de footprint, sort topológico e testes de cenário.
-9. **Colyseus 0.16** tem API que muda entre versões; vamos fixar versões exatas no `package.json`.
+9. **Colyseus** muda de API entre versões: a 0.18 (atual em out/2026) é a usada, com versões exatas fixadas no `package.json` (`@colyseus/core`, `schema`, `sdk`, `ws-transport`, `testing`).
 10. **Cloudflare na HabboAssets** (descoberto na Fase 1): requisições com User-Agent de script (ex. Python) recebem 403; `fetch` do Node 24 passa. O `HabboAssetsClient` vai enviar um User-Agent identificando o projeto.
 11. **Redirect 302 sem `revision`** (descoberto na Fase 1): o imager redireciona para a URL com a revisão fixada. Por isso o manifesto de mobis guarda `revision` de cada item.
 
@@ -386,3 +383,15 @@ screenToTile(sx, sy)  = { x: floor((sy/16 + sx/32) / 2), y: floor((sy/16 - sx/32
 4. **Nomes:** livres e podem repetir; só bloqueamos (erro `NAME_IN_USE`, sugerindo um sufixo) quando alguém **online no momento** já usa o mesmo nome. A identidade real é o token do navegador.
 5. **Deploy:** VPS simples (DigitalOcean/Hetzner) com Docker, ou Fly.io com Persistent Volume. Local: SQLite em arquivo (`DATABASE_PATH=./data/sqlite.db`).
 6. **Idioma:** 100% PT-BR — interface, botões, mensagens de erro, chat e instruções.
+
+### Notas da Fase 2
+- **Colyseus 0.18 em vez de 0.16** (mesma biblioteca; só a versão atual). Usamos `@colyseus/core` + `ws-transport` direto, sem o pacote `colyseus` (que puxa Redis, auth e monitor). Mensagens validadas com `validate(zodSchema, handler)`.
+- Estado em `shared/src/state.ts`; protocolo (nomes de mensagens, schemas zod, códigos e textos de erro em PT-BR) em `shared/src/protocol.ts`.
+- Serviços do servidor (`UserService`, `PresenceRegistry`, `RoomRepository`) ficam num registro do processo (`setServices`), porque as salas são instanciadas pelo Colyseus.
+- Token da sessão: 24 bytes aleatórios no navegador; no banco só o SHA-256. Com token válido o convite não é pedido de novo. `POST /api/session` limitado a 10 tentativas/min por IP.
+- Proxy `/hh/avatar.png` e `/hh/furniture/{classname}.png` com cache em disco (`data/asset-cache`), deduplicação de downloads simultâneos e `Cache-Control: immutable` para URLs com revisão fixada. O cliente tenta o proxy primeiro e o imager direto como reserva.
+- Em dev, `/api` e `/hh` passam pelo proxy do Vite; o WebSocket vai direto para `:2567` (CORS do Colyseus).
+- `npm run bot -- Nome N` coloca N robôs andando pela Recepção (útil para testar sozinho).
+- Testes de integração com `@colyseus/testing` (servidor real em memória): entrada com/sem token, dois usuários se vendo, movimento autoritativo, saída e "fantasma" de reconexão.
+- Nomes aparecem sempre sobre os avatares (antecipado da Fase 7, ajuda a testar com várias pessoas).
+

@@ -2,7 +2,7 @@
 
 Escritório virtual isométrico para amigos e colegas: avatares andando em salas no estilo Habbo, com movimento em tempo real e chat. Veja [SPEC.md](SPEC.md) (requisitos) e [PLAN.md](PLAN.md) (plano e decisões).
 
-> Em construção — **Fase 1** (sala única, avatar andando sem rede). O README completo, com deploy, entra na Fase 7.
+> Em construção — **Fase 2** (servidor em tempo real, várias pessoas na mesma sala, tela de entrada). O README completo, com deploy, entra na Fase 7.
 
 ## Rodar localmente
 
@@ -10,10 +10,18 @@ Requer Node.js 22 ou mais recente (testado com o 24).
 
 ```bash
 npm install
+cp .env.example .env   # opcional: ajuste INVITE_CODE e o token da HabboAssets
 npm run dev
 ```
 
-Abra http://localhost:5173.
+Isso sobe o servidor (http://localhost:2567) e o cliente (http://localhost:5173). Abra o cliente, digite um nome e o código de convite (`INVITE_CODE` do `.env`; sem `.env`, o código de desenvolvimento é `convite`).
+
+Para testar com várias pessoas:
+
+- abra uma segunda janela **anônima** (cada navegador guarda o seu próprio token), ou
+- rode robôs que passeiam pela sala: `npm run bot` (ou `npm run bot -- Bia 3` para três robôs).
+
+Opções de URL do cliente:
 
 - `?offline=1` — usa só a arte provisória gerada por código (não chama a HabboAssets).
 - `?debug=1` — desenha os footprints usados na ordenação de profundidade.
@@ -22,12 +30,23 @@ Abra http://localhost:5173.
 
 | Comando | O que faz |
 |---|---|
-| `npm run dev` | Servidor de desenvolvimento do cliente (Vite) |
-| `npm test` | Testes unitários (Vitest) |
+| `npm run dev` | Servidor (tsx watch) + cliente (Vite) juntos |
+| `npm run dev:server` / `npm run dev:client` | Só um dos dois |
+| `npm run bot` | Robôs de teste andando pela Recepção |
+| `npm test` | Testes unitários e de integração (Vitest) |
 | `npm run typecheck` | Checagem de tipos de todos os pacotes |
 | `npm run lint` | ESLint |
 | `npm run build` | Build de produção do cliente |
+| `npm run db:generate` | Gera migration SQL após mudar `server/src/db/schema.ts` |
+
+## Estrutura
+
+- `shared/` — código comum: coordenadas isométricas, A*, ordenação de profundidade, protocolo de rede, estado sincronizado.
+- `server/` — Express + Colyseus no mesmo processo, SQLite (better-sqlite3 + Drizzle), proxy de assets com cache.
+- `client/` — Vite + PixiJS; interface em HTML/CSS.
+
+Os dados locais (banco SQLite e cache de imagens) ficam em `data/`, fora do git.
 
 ## Assets
 
-Os gráficos vêm do imager público da [HabboAssets](https://www.habboassets.com/api) (Habbo Brasil). A origem de cada asset fica em [ASSETS.md](ASSETS.md). Para adicionar um móvel, inclua-o em `client/public/assets/furni/manifest.json`.
+Os gráficos vêm do imager público da [HabboAssets](https://www.habboassets.com/api) (Habbo Brasil), servidos pelo proxy com cache do servidor em `/hh/*`. A origem de cada asset fica em [ASSETS.md](ASSETS.md). Para adicionar um móvel, inclua-o em `client/public/assets/furni/manifest.json`.
