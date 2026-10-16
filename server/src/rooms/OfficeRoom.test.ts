@@ -119,4 +119,20 @@ describe('OfficeRoom', () => {
     expect(anas).toHaveLength(1);
     expect(observer.state.players.has(second.sessionId)).toBe(true);
   });
+
+  it('avatar.update troca o visual para todos e persiste; visual inválido dá erro', async () => {
+    const ana = newUser('Ana');
+    const a = await join(ana.token);
+    const b = await join(newUser('Beto').token);
+    const figure = svc.avatarManifest.defaults.F;
+    a.send(ClientMessage.UpdateAvatar, { figure, gender: 'F' });
+    await wait(300);
+    expect(b.state.players.get(a.sessionId)!.figure).toBe(figure);
+    expect(svc.users.findById(ana.user.id)).toMatchObject({ figure, gender: 'F' });
+
+    a.send(ClientMessage.UpdateAvatar, { figure: 'hd-180-1.ch-210-66.lg-270-82', gender: 'F' });
+    const err = (await a.waitForMessage(ServerMessage.Error)) as ErrorMessage;
+    expect(err.code).toBe('INVALID_FIGURE');
+    expect(b.state.players.get(a.sessionId)!.figure).toBe(figure);
+  });
 });

@@ -1,13 +1,15 @@
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { avatarImageUrl, figureSchema, furniImageUrl } from '@office/shared';
+import { avatarImageUrl, clothingSetImageUrl, figureSchema, furniImageUrl } from '@office/shared';
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { UpstreamError, type HabboAssetsClient } from './HabboAssetsClient.js';
 
 /** URLs sem revisão fixada podem mudar; o cache em disco delas expira em 1 dia. */
 const UNPINNED_TTL_MS = 24 * 60 * 60 * 1000;
+/** Miniaturas de roupa quase nunca mudam: 30 dias. */
+const CLOTHING_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 const dir = z.coerce.number().int().min(0).max(7);
 const avatarQuery = z.object({
@@ -42,11 +44,16 @@ export function createAssetRouter(client: HabboAssetsClient, cacheDir: string): 
   const router = Router();
   const inflight = new Map<string, Promise<Buffer>>();
 
-  async function serve(res: Response, upstreamUrl: string, pinned: boolean): Promise<void> {
-    const key = createHash('sha256').update(upstreamUrl).digest('hex');
-    const file = join(cacheDir, key.slice(0, 2), `${key}.png`);
+  async function serve(
+    res: Response,
+    upstreamUrl: string,
+    pinned: boolean,
+    ttlMs = UNPINNED_TTL_MS,
+  ): Promise<void> {
+    const key = cacheKey(upstreamUrl);
+    const file = cacheFileFor(cacheDir, upstreamUrl);
     try {
-      let body = await readCached(file, pinned ? Infinity : UNPINNED_TTL_MS);
+      let body = await readCached(file, pinned ? Infinity : ttlMs);
       let hit = true;
       if (!body) {
         hit = false;
@@ -100,7 +107,25 @@ export function createAssetRouter(client: HabboAssetsClient, cacheDir: string): 
     void serve(res, url, q.data.revision !== undefined);
   });
 
+  router.get('/clothing/set/:file', (req: Request, res: Response) => {
+    const id = String(req.params.file ?? '').replace(/\.png$/, '');
+    const q = z.object({ direction: dir.optional() }).safeParse(req.query);
+    if (!/^\d{1,6}$/.test(id) || !q.success)
+      return void res.status(400).json({ error: 'Parâmetros inválidos' });
+    void serve(res, clothingSetImageUrl(Number(id), q.data), false, CLOTHING_TTL_MS);
+  });
+
   return router;
+}
+
+function cacheKey(upstreamUrl: string): string {
+  return createHash('sha256').update(upstreamUrl).digest('hex');
+}
+
+/** Caminho do arquivo em cache para uma URL do imager (usado também pelo `assets:sync`). */
+export function cacheFileFor(cacheDir: string, upstreamUrl: string): string {
+  const key = cacheKey(upstreamUrl);
+  return join(cacheDir, key.slice(0, 2), `${key}.png`);
 }
 
 async function readCached(file: string, ttlMs: number): Promise<Buffer | null> {
@@ -115,7 +140,7 @@ async function readCached(file: string, ttlMs: number): Promise<Buffer | null> {
   }
 }
 
-async function writeAtomic(file: string, body: Buffer): Promise<void> {
+export async function writeAtomic(file: string, body: Buffer): Promise<void> {
   await mkdir(join(file, '..'), { recursive: true });
   const tmp = `${file}.${process.pid}.tmp`;
   await writeFile(tmp, body);

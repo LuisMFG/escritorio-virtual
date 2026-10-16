@@ -1,7 +1,7 @@
-import type { FurniManifestEntry } from '@office/shared';
+import type { AvatarManifest, FurniManifestEntry } from '@office/shared';
 import type { Db } from '../db/client.js';
 import { PresenceRegistry } from './PresenceRegistry.js';
-import { loadFurniDefs, RoomRepository } from './RoomRepository.js';
+import { loadAvatarManifest, loadFurniDefs, RoomRepository } from './RoomRepository.js';
 import { UserService } from './UserService.js';
 
 export interface Services {
@@ -10,6 +10,7 @@ export interface Services {
   presence: PresenceRegistry;
   rooms: RoomRepository;
   furniDefs: ReadonlyMap<string, FurniManifestEntry>;
+  avatarManifest: AvatarManifest;
 }
 
 export function createServices(db: Db): Services {
@@ -19,6 +20,7 @@ export function createServices(db: Db): Services {
     presence: new PresenceRegistry(),
     rooms: new RoomRepository(db),
     furniDefs: loadFurniDefs(),
+    avatarManifest: loadAvatarManifest(),
   };
 }
 

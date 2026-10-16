@@ -5,6 +5,8 @@ import {
   ErrorCode,
   joinOptionsSchema,
   moveSchema,
+  updateAvatarSchema,
+  validateFigure,
   OfficeState,
   parseHeightmap,
   Player,
@@ -13,6 +15,7 @@ import {
   type ErrorMessage,
   type Heightmap,
   type MoveMessage,
+  type UpdateAvatarMessage,
   type RoomLayoutMessage,
   type TilePoint,
 } from '@office/shared';
@@ -39,6 +42,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
   private map!: Heightmap;
   private movement!: MovementSystem;
   private readonly moveLimiter = new KeyedRateLimiter(5, 5);
+  private readonly avatarLimiter = new KeyedRateLimiter(3, 0.5);
   /** Reconexões pendentes por sessionId, para cancelar quando a pessoa volta numa aba nova. */
   private readonly pendingReconnects = new Map<string, Deferred<Client>>();
 
@@ -49,6 +53,9 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     // Pedido explícito evita a corrida de uma mensagem enviada no onJoin chegar antes
     // de o cliente registrar o handler.
     [ClientMessage.GetLayout]: () => this.layout,
+    [ClientMessage.UpdateAvatar]: validate(updateAvatarSchema, (client, msg) =>
+      this.handleUpdateAvatar(client as OfficeClient, msg),
+    ),
   };
 
   override onCreate(options: { roomId: string }): void {
@@ -125,6 +132,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     this.state.players.delete(client.sessionId);
     this.movement.remove(client.sessionId);
     this.moveLimiter.delete(client.sessionId);
+    this.avatarLimiter.delete(client.sessionId);
     services().presence.remove(client.sessionId);
     if (client.auth) services().users.touch(client.auth.id);
   }
@@ -138,11 +146,27 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     if (!res.ok) this.sendError(client, ErrorCode.InvalidMove);
   }
 
-  private sendError(client: OfficeClient, code: ErrorCode): void {
-    client.send(ServerMessage.Error, {
-      code,
-      message: ERROR_MESSAGES[code],
-    } satisfies ErrorMessage);
+  private handleUpdateAvatar(client: OfficeClient, msg: UpdateAvatarMessage): void {
+    const player = this.state.players.get(client.sessionId);
+    if (!player || !client.auth) return;
+    if (!this.avatarLimiter.tryTake(client.sessionId)) {
+      return this.sendError(client, ErrorCode.RateLimit);
+    }
+    const res = validateFigure(msg.figure, msg.gender, services().avatarManifest);
+    if (!res.ok) return this.sendError(client, ErrorCode.InvalidFigure, res.error);
+    const user = services().users.update(client.auth.id, {
+      figure: res.figure,
+      gender: msg.gender,
+    });
+    client.auth = user;
+    // Todas as conexões da mesma pessoa nesta sala mudam juntas.
+    for (const p of this.state.players.values()) {
+      if (p.userId === user.id) p.figure = res.figure;
+    }
+  }
+
+  private sendError(client: OfficeClient, code: ErrorCode, message = ERROR_MESSAGES[code]): void {
+    client.send(ServerMessage.Error, { code, message } satisfies ErrorMessage);
   }
 
   /** Grade vista por um jogador: os destinos dos outros avatares contam como ocupados. */

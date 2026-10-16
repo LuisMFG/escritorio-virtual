@@ -1,47 +1,3146 @@
 {
-  "$comment": "Manifesto do avatar. Na Fase 3 o script assets:sync preenche categories[].sets e as paletas completas a partir da HabboAssets API (hotel 2). As cores abaixo são aproximações usadas só pela arte provisória.",
+  "$comment": "Gerado por `npm run assets:sync` a partir de /imaging/info/clothing/* da HabboAssets (hotel 2). Curadoria em server/src/assets/avatarManifest.ts. Não editar à mão: rode o script de novo.",
   "version": 1,
   "hotelId": 2,
   "imager": "https://www.habboassets.com/imaging/avatar.png",
+  "generatedAt": "2026-10-16T22:21:05.984Z",
   "defaults": {
-    "M": "hd-180-1.ch-210-66.lg-270-82.sh-290-80.hr-100-61",
-    "F": "hd-600-1.ch-630-62.lg-695-62.sh-725-62.hr-515-33"
+    "M": "hd-180-1.hr-100-61.ch-210-66.lg-270-82.sh-290-80",
+    "F": "hd-600-1.hr-515-33.ch-630-73.lg-695-82.sh-725-64"
   },
   "palettes": {
-    "skin": {
-      "1": "#ffcb98",
-      "2": "#f4ac54",
-      "3": "#ffdbc1",
-      "4": "#ffb696",
-      "5": "#e2a65c",
-      "6": "#c58c55",
-      "7": "#a46c3a"
-    },
-    "hair": {
-      "31": "#d6b48a",
-      "32": "#ae7748",
-      "33": "#945c2f",
-      "34": "#7c4b2a",
-      "45": "#eecb6e",
-      "61": "#2d2d2d"
-    },
-    "clothes": {
-      "62": "#3b5fa0",
-      "64": "#e3e3e3",
-      "66": "#c43b3b",
-      "80": "#2d2d2d",
-      "82": "#4a5b74",
-      "110": "#ffffff"
-    }
+    "1": [
+      {
+        "id": 14,
+        "hex": "#f5da88"
+      },
+      {
+        "id": 10,
+        "hex": "#ffdbc1"
+      },
+      {
+        "id": 1,
+        "hex": "#ffcb98"
+      },
+      {
+        "id": 8,
+        "hex": "#f4ac54"
+      },
+      {
+        "id": 12,
+        "hex": "#ff987f"
+      },
+      {
+        "id": 1369,
+        "hex": "#e0a9a9"
+      },
+      {
+        "id": 1370,
+        "hex": "#ca8154"
+      },
+      {
+        "id": 19,
+        "hex": "#b87560"
+      },
+      {
+        "id": 20,
+        "hex": "#9c543f"
+      },
+      {
+        "id": 1371,
+        "hex": "#904925"
+      },
+      {
+        "id": 30,
+        "hex": "#4c311e"
+      },
+      {
+        "id": 1372,
+        "hex": "#543d35"
+      },
+      {
+        "id": 1373,
+        "hex": "#653a1d"
+      },
+      {
+        "id": 21,
+        "hex": "#6e392c"
+      },
+      {
+        "id": 1374,
+        "hex": "#714947"
+      },
+      {
+        "id": 1375,
+        "hex": "#856860"
+      },
+      {
+        "id": 1376,
+        "hex": "#895048"
+      },
+      {
+        "id": 1377,
+        "hex": "#a15253"
+      },
+      {
+        "id": 1378,
+        "hex": "#aa7870"
+      },
+      {
+        "id": 1379,
+        "hex": "#be8263"
+      },
+      {
+        "id": 1380,
+        "hex": "#b6856d"
+      },
+      {
+        "id": 1381,
+        "hex": "#ba8a82"
+      },
+      {
+        "id": 1382,
+        "hex": "#c88f82"
+      },
+      {
+        "id": 1383,
+        "hex": "#d9a792"
+      },
+      {
+        "id": 1384,
+        "hex": "#c68383"
+      },
+      {
+        "id": 1368,
+        "hex": "#bc576a"
+      },
+      {
+        "id": 1367,
+        "hex": "#ff5757"
+      },
+      {
+        "id": 1366,
+        "hex": "#ff7575"
+      },
+      {
+        "id": 1358,
+        "hex": "#b65e38"
+      },
+      {
+        "id": 1385,
+        "hex": "#a76644"
+      },
+      {
+        "id": 1386,
+        "hex": "#7c5133"
+      },
+      {
+        "id": 1387,
+        "hex": "#9a7257"
+      },
+      {
+        "id": 5,
+        "hex": "#945c2f"
+      },
+      {
+        "id": 1389,
+        "hex": "#d98c63"
+      },
+      {
+        "id": 4,
+        "hex": "#ae7748"
+      },
+      {
+        "id": 1388,
+        "hex": "#c57040"
+      },
+      {
+        "id": 1359,
+        "hex": "#b88655"
+      },
+      {
+        "id": 3,
+        "hex": "#c99263"
+      },
+      {
+        "id": 18,
+        "hex": "#a89473"
+      },
+      {
+        "id": 17,
+        "hex": "#c89f56"
+      },
+      {
+        "id": 9,
+        "hex": "#dc9b4c"
+      },
+      {
+        "id": 1357,
+        "hex": "#ff8c40"
+      },
+      {
+        "id": 1390,
+        "hex": "#de9d75"
+      },
+      {
+        "id": 1391,
+        "hex": "#eca782"
+      },
+      {
+        "id": 11,
+        "hex": "#ffb696"
+      },
+      {
+        "id": 2,
+        "hex": "#e3ae7d"
+      },
+      {
+        "id": 7,
+        "hex": "#ffc680"
+      },
+      {
+        "id": 15,
+        "hex": "#dfc375"
+      },
+      {
+        "id": 13,
+        "hex": "#f0dca3"
+      },
+      {
+        "id": 22,
+        "hex": "#eaefd0"
+      },
+      {
+        "id": 23,
+        "hex": "#e2e4b0"
+      },
+      {
+        "id": 24,
+        "hex": "#d5d08c"
+      },
+      {
+        "id": 1361,
+        "hex": "#bde05f"
+      },
+      {
+        "id": 1362,
+        "hex": "#5dc446"
+      },
+      {
+        "id": 1360,
+        "hex": "#a2cc89"
+      },
+      {
+        "id": 26,
+        "hex": "#c2c4a7"
+      },
+      {
+        "id": 28,
+        "hex": "#f1e5da"
+      },
+      {
+        "id": 1392,
+        "hex": "#f6d3d4"
+      },
+      {
+        "id": 1393,
+        "hex": "#e5b6b0"
+      },
+      {
+        "id": 25,
+        "hex": "#c4a7b3"
+      },
+      {
+        "id": 1363,
+        "hex": "#ac94b3"
+      },
+      {
+        "id": 1364,
+        "hex": "#d288ce"
+      },
+      {
+        "id": 1365,
+        "hex": "#6799cc"
+      },
+      {
+        "id": 29,
+        "hex": "#b3bdc3"
+      },
+      {
+        "id": 27,
+        "hex": "#c5c0c2"
+      }
+    ],
+    "2": [
+      {
+        "id": 40,
+        "hex": "#d8d3d9"
+      },
+      {
+        "id": 34,
+        "hex": "#ffeeb9"
+      },
+      {
+        "id": 35,
+        "hex": "#f6d059"
+      },
+      {
+        "id": 36,
+        "hex": "#f2b11d"
+      },
+      {
+        "id": 31,
+        "hex": "#ffd6a9"
+      },
+      {
+        "id": 32,
+        "hex": "#dfa66f"
+      },
+      {
+        "id": 37,
+        "hex": "#9a5d2e"
+      },
+      {
+        "id": 38,
+        "hex": "#ac5300"
+      },
+      {
+        "id": 43,
+        "hex": "#f29159"
+      },
+      {
+        "id": 46,
+        "hex": "#ff8746"
+      },
+      {
+        "id": 47,
+        "hex": "#fc610c"
+      },
+      {
+        "id": 48,
+        "hex": "#de3900"
+      },
+      {
+        "id": 44,
+        "hex": "#9e3d3b"
+      },
+      {
+        "id": 39,
+        "hex": "#783400"
+      },
+      {
+        "id": 45,
+        "hex": "#5c4332"
+      },
+      {
+        "id": 42,
+        "hex": "#4a4656"
+      },
+      {
+        "id": 61,
+        "hex": "#2d2d2d"
+      },
+      {
+        "id": 1394,
+        "hex": "#3f2113"
+      },
+      {
+        "id": 1395,
+        "hex": "#774422"
+      },
+      {
+        "id": 33,
+        "hex": "#d1803a"
+      },
+      {
+        "id": 1396,
+        "hex": "#cc8b33"
+      },
+      {
+        "id": 1397,
+        "hex": "#e5ba6a"
+      },
+      {
+        "id": 1398,
+        "hex": "#f6d990"
+      },
+      {
+        "id": 49,
+        "hex": "#ffffff"
+      },
+      {
+        "id": 1342,
+        "hex": "#fffdd6"
+      },
+      {
+        "id": 1343,
+        "hex": "#fff392"
+      },
+      {
+        "id": 1399,
+        "hex": "#ffff00"
+      },
+      {
+        "id": 1344,
+        "hex": "#ffe508"
+      },
+      {
+        "id": 1400,
+        "hex": "#ff7716"
+      },
+      {
+        "id": 1401,
+        "hex": "#aa2c1b"
+      },
+      {
+        "id": 59,
+        "hex": "#e71b0a"
+      },
+      {
+        "id": 1345,
+        "hex": "#ff3e3e"
+      },
+      {
+        "id": 1348,
+        "hex": "#ff638f"
+      },
+      {
+        "id": 54,
+        "hex": "#ffbdbc"
+      },
+      {
+        "id": 1346,
+        "hex": "#ffddf1"
+      },
+      {
+        "id": 1347,
+        "hex": "#ffaedc"
+      },
+      {
+        "id": 55,
+        "hex": "#de34a4"
+      },
+      {
+        "id": 1349,
+        "hex": "#9e326a"
+      },
+      {
+        "id": 56,
+        "hex": "#9f5699"
+      },
+      {
+        "id": 1350,
+        "hex": "#8a4fb5"
+      },
+      {
+        "id": 1351,
+        "hex": "#722ba6"
+      },
+      {
+        "id": 1352,
+        "hex": "#4c1d6f"
+      },
+      {
+        "id": 1402,
+        "hex": "#322c7a"
+      },
+      {
+        "id": 1403,
+        "hex": "#71584a"
+      },
+      {
+        "id": 1404,
+        "hex": "#aa8864"
+      },
+      {
+        "id": 1405,
+        "hex": "#bbb1aa"
+      },
+      {
+        "id": 1353,
+        "hex": "#c1c6ef"
+      },
+      {
+        "id": 57,
+        "hex": "#d5f9fb"
+      },
+      {
+        "id": 60,
+        "hex": "#95fffa"
+      },
+      {
+        "id": 58,
+        "hex": "#6699cc"
+      },
+      {
+        "id": 1354,
+        "hex": "#4481e5"
+      },
+      {
+        "id": 1355,
+        "hex": "#2c50aa"
+      },
+      {
+        "id": 1356,
+        "hex": "#2a4167"
+      },
+      {
+        "id": 53,
+        "hex": "#3a7b93"
+      },
+      {
+        "id": 52,
+        "hex": "#339966"
+      },
+      {
+        "id": 1406,
+        "hex": "#70c100"
+      },
+      {
+        "id": 51,
+        "hex": "#a3ff8f"
+      },
+      {
+        "id": 1316,
+        "hex": "#d2ff00"
+      },
+      {
+        "id": 50,
+        "hex": "#e5ff09"
+      },
+      {
+        "id": 41,
+        "hex": "#918d98"
+      },
+      {
+        "id": 1407,
+        "hex": "#333333"
+      }
+    ],
+    "3": [
+      {
+        "id": 1408,
+        "hex": "#dddddd"
+      },
+      {
+        "id": 90,
+        "hex": "#96743d"
+      },
+      {
+        "id": 91,
+        "hex": "#6b573b"
+      },
+      {
+        "id": 66,
+        "hex": "#e7b027"
+      },
+      {
+        "id": 1320,
+        "hex": "#fff7b7"
+      },
+      {
+        "id": 68,
+        "hex": "#f8c790"
+      },
+      {
+        "id": 73,
+        "hex": "#9f2b31"
+      },
+      {
+        "id": 72,
+        "hex": "#ed5c50"
+      },
+      {
+        "id": 71,
+        "hex": "#ffbfc2"
+      },
+      {
+        "id": 74,
+        "hex": "#e7d1ee"
+      },
+      {
+        "id": 75,
+        "hex": "#ac94b3"
+      },
+      {
+        "id": 76,
+        "hex": "#7e5b90"
+      },
+      {
+        "id": 82,
+        "hex": "#4f7aa2"
+      },
+      {
+        "id": 81,
+        "hex": "#75b7c7"
+      },
+      {
+        "id": 80,
+        "hex": "#c5ede6"
+      },
+      {
+        "id": 83,
+        "hex": "#bbf3bd"
+      },
+      {
+        "id": 84,
+        "hex": "#6bae61"
+      },
+      {
+        "id": 85,
+        "hex": "#456f40"
+      },
+      {
+        "id": 88,
+        "hex": "#7a7d22"
+      },
+      {
+        "id": 64,
+        "hex": "#595959"
+      },
+      {
+        "id": 110,
+        "hex": "#1e1e1e"
+      },
+      {
+        "id": 1325,
+        "hex": "#84573c"
+      },
+      {
+        "id": 67,
+        "hex": "#a86b19"
+      },
+      {
+        "id": 1409,
+        "hex": "#c69f71"
+      },
+      {
+        "id": 89,
+        "hex": "#f3e1af"
+      },
+      {
+        "id": 92,
+        "hex": "#ffffff"
+      },
+      {
+        "id": 93,
+        "hex": "#fff41d"
+      },
+      {
+        "id": 1321,
+        "hex": "#ffe508"
+      },
+      {
+        "id": 1410,
+        "hex": "#ffcc00"
+      },
+      {
+        "id": 1322,
+        "hex": "#ffa508"
+      },
+      {
+        "id": 94,
+        "hex": "#ff9211"
+      },
+      {
+        "id": 1323,
+        "hex": "#ff5b08"
+      },
+      {
+        "id": 70,
+        "hex": "#c74400"
+      },
+      {
+        "id": 1411,
+        "hex": "#da6a43"
+      },
+      {
+        "id": 1324,
+        "hex": "#b18276"
+      },
+      {
+        "id": 1329,
+        "hex": "#ae4747"
+      },
+      {
+        "id": 1330,
+        "hex": "#813033"
+      },
+      {
+        "id": 1331,
+        "hex": "#5b2420"
+      },
+      {
+        "id": 100,
+        "hex": "#9b001d"
+      },
+      {
+        "id": 1412,
+        "hex": "#d2183c"
+      },
+      {
+        "id": 1413,
+        "hex": "#e53624"
+      },
+      {
+        "id": 96,
+        "hex": "#ff1300"
+      },
+      {
+        "id": 1328,
+        "hex": "#ff638f"
+      },
+      {
+        "id": 1414,
+        "hex": "#fe86b1"
+      },
+      {
+        "id": 97,
+        "hex": "#ff6d8f"
+      },
+      {
+        "id": 1326,
+        "hex": "#ffc7e4"
+      },
+      {
+        "id": 98,
+        "hex": "#e993ff"
+      },
+      {
+        "id": 1327,
+        "hex": "#ff88f4"
+      },
+      {
+        "id": 95,
+        "hex": "#ff27a6"
+      },
+      {
+        "id": 99,
+        "hex": "#c600ad"
+      },
+      {
+        "id": 1415,
+        "hex": "#a1295e"
+      },
+      {
+        "id": 1416,
+        "hex": "#a723c9"
+      },
+      {
+        "id": 1417,
+        "hex": "#6a0481"
+      },
+      {
+        "id": 1418,
+        "hex": "#693959"
+      },
+      {
+        "id": 1419,
+        "hex": "#62368c"
+      },
+      {
+        "id": 79,
+        "hex": "#544a81"
+      },
+      {
+        "id": 1420,
+        "hex": "#957caf"
+      },
+      {
+        "id": 78,
+        "hex": "#6d80bb"
+      },
+      {
+        "id": 1340,
+        "hex": "#574bfb"
+      },
+      {
+        "id": 1421,
+        "hex": "#6b71ed"
+      },
+      {
+        "id": 1339,
+        "hex": "#8791f0"
+      },
+      {
+        "id": 1337,
+        "hex": "#c1c6ef"
+      },
+      {
+        "id": 105,
+        "hex": "#94ffec"
+      },
+      {
+        "id": 104,
+        "hex": "#00b9a8"
+      },
+      {
+        "id": 1422,
+        "hex": "#009db9"
+      },
+      {
+        "id": 106,
+        "hex": "#1bd2ff"
+      },
+      {
+        "id": 1423,
+        "hex": "#2f8ce9"
+      },
+      {
+        "id": 107,
+        "hex": "#1f55ff"
+      },
+      {
+        "id": 1424,
+        "hex": "#1946c7"
+      },
+      {
+        "id": 108,
+        "hex": "#0219a5"
+      },
+      {
+        "id": 1341,
+        "hex": "#394a7e"
+      },
+      {
+        "id": 1425,
+        "hex": "#2d547b"
+      },
+      {
+        "id": 1426,
+        "hex": "#406184"
+      },
+      {
+        "id": 1338,
+        "hex": "#6fa5cc"
+      },
+      {
+        "id": 77,
+        "hex": "#acc9e6"
+      },
+      {
+        "id": 1427,
+        "hex": "#c8c8c8"
+      },
+      {
+        "id": 63,
+        "hex": "#a4a4a4"
+      },
+      {
+        "id": 1428,
+        "hex": "#868686"
+      },
+      {
+        "id": 1334,
+        "hex": "#89906e"
+      },
+      {
+        "id": 1335,
+        "hex": "#738b6e"
+      },
+      {
+        "id": 1429,
+        "hex": "#626738"
+      },
+      {
+        "id": 109,
+        "hex": "#3a5341"
+      },
+      {
+        "id": 1336,
+        "hex": "#1d301a"
+      },
+      {
+        "id": 1430,
+        "hex": "#0a6437"
+      },
+      {
+        "id": 1431,
+        "hex": "#47891f"
+      },
+      {
+        "id": 1432,
+        "hex": "#10a32f"
+      },
+      {
+        "id": 1433,
+        "hex": "#69bb2d"
+      },
+      {
+        "id": 87,
+        "hex": "#babb3d"
+      },
+      {
+        "id": 86,
+        "hex": "#edff9a"
+      },
+      {
+        "id": 1315,
+        "hex": "#d2ff00"
+      },
+      {
+        "id": 103,
+        "hex": "#aff203"
+      },
+      {
+        "id": 102,
+        "hex": "#1cdc00"
+      },
+      {
+        "id": 101,
+        "hex": "#76ff2d"
+      },
+      {
+        "id": 1332,
+        "hex": "#9eff8d"
+      },
+      {
+        "id": 1333,
+        "hex": "#a2cc89"
+      }
+    ]
   },
   "categories": [
-    { "type": "hd", "label": "Corpo", "palette": "skin", "required": true, "sets": [] },
-    { "type": "hr", "label": "Cabelo", "palette": "hair", "required": false, "sets": [] },
-    { "type": "ch", "label": "Blusa", "palette": "clothes", "required": true, "sets": [] },
-    { "type": "lg", "label": "Calça", "palette": "clothes", "required": true, "sets": [] },
-    { "type": "sh", "label": "Sapatos", "palette": "clothes", "required": false, "sets": [] },
-    { "type": "ha", "label": "Chapéu", "palette": "clothes", "required": false, "sets": [] },
-    { "type": "ea", "label": "Óculos", "palette": "clothes", "required": false, "sets": [] },
-    { "type": "cc", "label": "Casaco", "palette": "clothes", "required": false, "sets": [] }
+    {
+      "type": "hd",
+      "label": "Pele e rosto",
+      "palette": "1",
+      "required": true,
+      "layer": 0,
+      "sets": [
+        {
+          "id": 180,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [14],
+          "club": 0,
+          "library": "hh_human_body"
+        },
+        {
+          "id": 185,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [14],
+          "club": 0,
+          "library": "hh_human_body"
+        },
+        {
+          "id": 190,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [14],
+          "club": 0,
+          "library": "hh_human_body"
+        },
+        {
+          "id": 195,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [14],
+          "club": 0,
+          "library": "hh_human_body"
+        },
+        {
+          "id": 200,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [14],
+          "club": 0,
+          "library": "hh_human_body"
+        },
+        {
+          "id": 205,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [14],
+          "club": 0,
+          "library": "hh_human_body"
+        },
+        {
+          "id": 206,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [14],
+          "club": 0,
+          "library": "hh_human_body"
+        },
+        {
+          "id": 207,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [14],
+          "club": 0,
+          "library": "hh_human_body"
+        },
+        {
+          "id": 208,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [14],
+          "club": 0,
+          "library": "hh_human_body"
+        },
+        {
+          "id": 209,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [14],
+          "club": 0,
+          "library": "hh_human_body"
+        },
+        {
+          "id": 600,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [14],
+          "club": 0,
+          "library": "hh_human_body"
+        },
+        {
+          "id": 605,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [14],
+          "club": 0,
+          "library": "hh_human_body"
+        },
+        {
+          "id": 610,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [14],
+          "club": 0,
+          "library": "hh_human_body"
+        },
+        {
+          "id": 615,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [14],
+          "club": 0,
+          "library": "hh_human_body"
+        },
+        {
+          "id": 620,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [14],
+          "club": 0,
+          "library": "hh_human_body"
+        },
+        {
+          "id": 625,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [14],
+          "club": 0,
+          "library": "hh_human_body"
+        },
+        {
+          "id": 626,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [14],
+          "club": 0,
+          "library": "hh_human_body"
+        },
+        {
+          "id": 627,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [14],
+          "club": 0,
+          "library": "hh_human_body"
+        },
+        {
+          "id": 628,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [14],
+          "club": 0,
+          "library": "hh_human_body"
+        },
+        {
+          "id": 629,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [14],
+          "club": 0,
+          "library": "hh_human_body"
+        },
+        {
+          "id": 3091,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [14],
+          "club": 2,
+          "library": "hh_human_body"
+        },
+        {
+          "id": 3092,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [14],
+          "club": 2,
+          "library": "hh_human_body"
+        },
+        {
+          "id": 3093,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [14],
+          "club": 2,
+          "library": "hh_human_body"
+        },
+        {
+          "id": 3094,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [14],
+          "club": 2,
+          "library": "hh_human_body"
+        },
+        {
+          "id": 3095,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [14],
+          "club": 2,
+          "library": "hh_human_body"
+        },
+        {
+          "id": 3096,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [14],
+          "club": 2,
+          "library": "hh_human_body"
+        },
+        {
+          "id": 3097,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [14],
+          "club": 2,
+          "library": "hh_human_body"
+        },
+        {
+          "id": 3098,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [14],
+          "club": 2,
+          "library": "hh_human_body"
+        },
+        {
+          "id": 3099,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [14],
+          "club": 2,
+          "library": "hh_human_body"
+        },
+        {
+          "id": 3100,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [14],
+          "club": 2,
+          "library": "hh_human_body"
+        },
+        {
+          "id": 3101,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [14],
+          "club": 2,
+          "library": "hh_human_body"
+        },
+        {
+          "id": 3102,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [14],
+          "club": 2,
+          "library": "hh_human_body"
+        },
+        {
+          "id": 3103,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [14],
+          "club": 2,
+          "library": "hh_human_body"
+        },
+        {
+          "id": 3104,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [14],
+          "club": 2,
+          "library": "hh_human_body"
+        },
+        {
+          "id": 3105,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [14],
+          "club": 2,
+          "library": "hh_human_body"
+        },
+        {
+          "id": 3106,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [14],
+          "club": 2,
+          "library": "hh_human_body"
+        },
+        {
+          "id": 6021,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [14],
+          "club": 0,
+          "library": "hh_human_body"
+        },
+        {
+          "id": 6022,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [14],
+          "club": 0,
+          "library": "hh_human_body"
+        },
+        {
+          "id": 6045,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [14],
+          "club": 0,
+          "library": "hh_human_body"
+        },
+        {
+          "id": 6046,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [14],
+          "club": 0,
+          "library": "hh_human_body"
+        },
+        {
+          "id": 6047,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [14],
+          "club": 0,
+          "library": "hh_human_body"
+        },
+        {
+          "id": 6048,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [14],
+          "club": 0,
+          "library": "hh_human_body"
+        },
+        {
+          "id": 6507,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [14],
+          "club": 0,
+          "library": "hh_human_body"
+        }
+      ]
+    },
+    {
+      "type": "hr",
+      "label": "Cabelo",
+      "palette": "2",
+      "required": false,
+      "layer": 6,
+      "sets": [
+        {
+          "id": 100,
+          "gender": "M",
+          "colors": 0,
+          "defaultColors": [],
+          "club": 0,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 105,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 0,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 110,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 0,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 115,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 0,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 125,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 0,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 135,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 0,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 145,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 0,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 155,
+          "gender": "U",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 0,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 165,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 0,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 170,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 0,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 500,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 0,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 505,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 0,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 510,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 0,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 515,
+          "gender": "U",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 0,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 520,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 0,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 530,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 0,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 540,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 0,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 545,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 0,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 550,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 0,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 555,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 0,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 556,
+          "gender": "F",
+          "colors": 0,
+          "defaultColors": [],
+          "club": 2,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 575,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 0,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 596,
+          "gender": "F",
+          "colors": 0,
+          "defaultColors": [],
+          "club": 0,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 676,
+          "gender": "U",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 0,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 677,
+          "gender": "U",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 2,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 678,
+          "gender": "U",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 2,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 679,
+          "gender": "U",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 0,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 681,
+          "gender": "U",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 0,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 802,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 0,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 811,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 0,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 828,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 2,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 829,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 2,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 830,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 0,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 831,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 2,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 832,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 2,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 833,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 2,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 834,
+          "gender": "U",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 2,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 835,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 2,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 836,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 2,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 837,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 0,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 838,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 2,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 839,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 2,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 840,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 2,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 841,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 2,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 842,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 2,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 843,
+          "gender": "U",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 2,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 844,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 2,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 845,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 2,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 846,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 2,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 847,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 2,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 848,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 2,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 849,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 2,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 850,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 2,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 851,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 2,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 852,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 2,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 853,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 2,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 854,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 2,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 855,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 2,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 856,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 2,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 857,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 2,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 858,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 2,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 859,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 2,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 860,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 2,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 861,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 2,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 862,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 2,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 863,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 2,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 864,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 2,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 865,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 2,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 866,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 2,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 867,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 2,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 868,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 2,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 869,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 2,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 870,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 2,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 871,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 2,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 872,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 2,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 873,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 2,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 874,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 2,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 889,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 0,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 890,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 0,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 891,
+          "gender": "U",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 0,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 892,
+          "gender": "U",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 0,
+          "library": "hh_human_hair"
+        },
+        {
+          "id": 893,
+          "gender": "U",
+          "colors": 1,
+          "defaultColors": [37],
+          "club": 0,
+          "library": "hh_human_hair"
+        }
+      ]
+    },
+    {
+      "type": "ha",
+      "label": "Chapéu",
+      "palette": "3",
+      "required": false,
+      "layer": 8,
+      "sets": [
+        {
+          "id": 1001,
+          "gender": "U",
+          "colors": 0,
+          "defaultColors": [],
+          "club": 0,
+          "library": "hh_human_hats"
+        },
+        {
+          "id": 1002,
+          "gender": "U",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_hats"
+        },
+        {
+          "id": 1003,
+          "gender": "U",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_hats"
+        },
+        {
+          "id": 1004,
+          "gender": "U",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_hats"
+        },
+        {
+          "id": 1005,
+          "gender": "U",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_hats"
+        },
+        {
+          "id": 1006,
+          "gender": "U",
+          "colors": 0,
+          "defaultColors": [],
+          "club": 0,
+          "library": "hh_human_hats"
+        },
+        {
+          "id": 1007,
+          "gender": "U",
+          "colors": 0,
+          "defaultColors": [],
+          "club": 0,
+          "library": "hh_human_hats"
+        },
+        {
+          "id": 1008,
+          "gender": "U",
+          "colors": 0,
+          "defaultColors": [],
+          "club": 0,
+          "library": "hh_human_hats"
+        },
+        {
+          "id": 1009,
+          "gender": "U",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_hats"
+        },
+        {
+          "id": 1010,
+          "gender": "U",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_hats"
+        },
+        {
+          "id": 1011,
+          "gender": "U",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 2,
+          "library": "hh_human_hats"
+        },
+        {
+          "id": 1012,
+          "gender": "U",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 2,
+          "library": "hh_human_hats"
+        },
+        {
+          "id": 1013,
+          "gender": "U",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_hats"
+        },
+        {
+          "id": 1014,
+          "gender": "U",
+          "colors": 0,
+          "defaultColors": [],
+          "club": 0,
+          "library": "hh_human_hats"
+        },
+        {
+          "id": 1015,
+          "gender": "U",
+          "colors": 0,
+          "defaultColors": [],
+          "club": 0,
+          "library": "hh_human_hats"
+        },
+        {
+          "id": 1016,
+          "gender": "U",
+          "colors": 0,
+          "defaultColors": [],
+          "club": 2,
+          "library": "hh_human_hats"
+        },
+        {
+          "id": 1017,
+          "gender": "U",
+          "colors": 0,
+          "defaultColors": [],
+          "club": 0,
+          "library": "hh_human_hats"
+        },
+        {
+          "id": 1018,
+          "gender": "U",
+          "colors": 0,
+          "defaultColors": [],
+          "club": 0,
+          "library": "hh_human_hats"
+        },
+        {
+          "id": 1019,
+          "gender": "U",
+          "colors": 0,
+          "defaultColors": [],
+          "club": 2,
+          "library": "hh_human_hats"
+        },
+        {
+          "id": 1020,
+          "gender": "U",
+          "colors": 0,
+          "defaultColors": [],
+          "club": 0,
+          "library": "hh_human_hats"
+        },
+        {
+          "id": 1021,
+          "gender": "U",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_hats"
+        },
+        {
+          "id": 1022,
+          "gender": "U",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_hats"
+        },
+        {
+          "id": 1023,
+          "gender": "U",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_hats"
+        },
+        {
+          "id": 1024,
+          "gender": "U",
+          "colors": 0,
+          "defaultColors": [],
+          "club": 2,
+          "library": "hh_human_hats"
+        },
+        {
+          "id": 1025,
+          "gender": "U",
+          "colors": 0,
+          "defaultColors": [],
+          "club": 2,
+          "library": "hh_human_hats"
+        },
+        {
+          "id": 1026,
+          "gender": "U",
+          "colors": 0,
+          "defaultColors": [],
+          "club": 2,
+          "library": "hh_human_hats"
+        },
+        {
+          "id": 1027,
+          "gender": "U",
+          "colors": 0,
+          "defaultColors": [],
+          "club": 2,
+          "library": "hh_human_hats"
+        }
+      ]
+    },
+    {
+      "type": "ea",
+      "label": "Óculos",
+      "palette": "3",
+      "required": false,
+      "layer": 7,
+      "sets": [
+        {
+          "id": 1401,
+          "gender": "U",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_acc_eye"
+        },
+        {
+          "id": 1402,
+          "gender": "U",
+          "colors": 0,
+          "defaultColors": [],
+          "club": 2,
+          "library": "hh_human_acc_eye"
+        },
+        {
+          "id": 1403,
+          "gender": "U",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_acc_eye"
+        },
+        {
+          "id": 1404,
+          "gender": "U",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_acc_eye"
+        },
+        {
+          "id": 1405,
+          "gender": "U",
+          "colors": 0,
+          "defaultColors": [],
+          "club": 2,
+          "library": "hh_human_acc_eye"
+        },
+        {
+          "id": 1406,
+          "gender": "U",
+          "colors": 0,
+          "defaultColors": [],
+          "club": 0,
+          "library": "hh_human_acc_eye"
+        }
+      ]
+    },
+    {
+      "type": "ch",
+      "label": "Blusa",
+      "palette": "3",
+      "required": true,
+      "layer": 3,
+      "sets": [
+        {
+          "id": 210,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 215,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 220,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 225,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 230,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 235,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 240,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 245,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 250,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 255,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 262,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 265,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 266,
+          "gender": "M",
+          "colors": 0,
+          "defaultColors": [],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 267,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 630,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 635,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 640,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 645,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 650,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 655,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 660,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 665,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 667,
+          "gender": "F",
+          "colors": 0,
+          "defaultColors": [],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 669,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 670,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 675,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 680,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 685,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 690,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 691,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 803,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 2,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 804,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 805,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 806,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 807,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 808,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 809,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 812,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 813,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 814,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 815,
+          "gender": "F",
+          "colors": 2,
+          "defaultColors": [82, 1408],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 816,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 817,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 818,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 819,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 820,
+          "gender": "F",
+          "colors": 2,
+          "defaultColors": [82, 1408],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 821,
+          "gender": "F",
+          "colors": 2,
+          "defaultColors": [82, 1408],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 822,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 823,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 824,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 2,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 825,
+          "gender": "F",
+          "colors": 2,
+          "defaultColors": [82, 1408],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 826,
+          "gender": "F",
+          "colors": 2,
+          "defaultColors": [82, 1408],
+          "club": 2,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 875,
+          "gender": "M",
+          "colors": 2,
+          "defaultColors": [82, 1408],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 876,
+          "gender": "M",
+          "colors": 2,
+          "defaultColors": [82, 1408],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 877,
+          "gender": "M",
+          "colors": 2,
+          "defaultColors": [82, 1408],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 878,
+          "gender": "M",
+          "colors": 2,
+          "defaultColors": [82, 1408],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 879,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 880,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 881,
+          "gender": "F",
+          "colors": 2,
+          "defaultColors": [82, 1408],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 882,
+          "gender": "F",
+          "colors": 2,
+          "defaultColors": [82, 1408],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 883,
+          "gender": "F",
+          "colors": 2,
+          "defaultColors": [82, 1408],
+          "club": 2,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 884,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 885,
+          "gender": "F",
+          "colors": 2,
+          "defaultColors": [82, 1408],
+          "club": 2,
+          "library": "hh_human_shirt"
+        }
+      ]
+    },
+    {
+      "type": "cc",
+      "label": "Casaco",
+      "palette": "3",
+      "required": false,
+      "layer": 5,
+      "sets": [
+        {
+          "id": 260,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 886,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 2,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 887,
+          "gender": "U",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 2,
+          "library": "hh_human_shirt"
+        },
+        {
+          "id": 888,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 2,
+          "library": "hh_human_shirt"
+        }
+      ]
+    },
+    {
+      "type": "ca",
+      "label": "Acessório",
+      "palette": "3",
+      "required": false,
+      "layer": 4,
+      "sets": [
+        {
+          "id": 1801,
+          "gender": "U",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_acc_chest"
+        },
+        {
+          "id": 1802,
+          "gender": "U",
+          "colors": 0,
+          "defaultColors": [],
+          "club": 0,
+          "library": "hh_human_acc_chest"
+        },
+        {
+          "id": 1803,
+          "gender": "U",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_acc_chest"
+        },
+        {
+          "id": 1804,
+          "gender": "U",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_acc_chest"
+        },
+        {
+          "id": 1805,
+          "gender": "U",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_acc_chest"
+        },
+        {
+          "id": 1806,
+          "gender": "U",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_acc_chest"
+        },
+        {
+          "id": 1807,
+          "gender": "U",
+          "colors": 0,
+          "defaultColors": [],
+          "club": 0,
+          "library": "hh_human_acc_chest"
+        },
+        {
+          "id": 1808,
+          "gender": "U",
+          "colors": 0,
+          "defaultColors": [],
+          "club": 0,
+          "library": "hh_human_acc_chest"
+        },
+        {
+          "id": 1809,
+          "gender": "U",
+          "colors": 0,
+          "defaultColors": [],
+          "club": 0,
+          "library": "hh_human_acc_chest"
+        },
+        {
+          "id": 1810,
+          "gender": "U",
+          "colors": 0,
+          "defaultColors": [],
+          "club": 0,
+          "library": "hh_human_acc_chest"
+        },
+        {
+          "id": 1811,
+          "gender": "U",
+          "colors": 0,
+          "defaultColors": [],
+          "club": 2,
+          "library": "hh_human_acc_chest"
+        },
+        {
+          "id": 1812,
+          "gender": "U",
+          "colors": 0,
+          "defaultColors": [],
+          "club": 0,
+          "library": "hh_human_acc_chest"
+        },
+        {
+          "id": 1813,
+          "gender": "U",
+          "colors": 0,
+          "defaultColors": [],
+          "club": 0,
+          "library": "hh_human_acc_chest"
+        },
+        {
+          "id": 1814,
+          "gender": "U",
+          "colors": 0,
+          "defaultColors": [],
+          "club": 2,
+          "library": "hh_human_acc_chest"
+        },
+        {
+          "id": 1815,
+          "gender": "U",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_acc_chest"
+        },
+        {
+          "id": 1816,
+          "gender": "U",
+          "colors": 0,
+          "defaultColors": [],
+          "club": 2,
+          "library": "hh_human_acc_chest"
+        },
+        {
+          "id": 1817,
+          "gender": "U",
+          "colors": 0,
+          "defaultColors": [],
+          "club": 0,
+          "library": "hh_human_acc_chest"
+        },
+        {
+          "id": 1818,
+          "gender": "U",
+          "colors": 0,
+          "defaultColors": [],
+          "club": 0,
+          "library": "hh_human_acc_chest"
+        },
+        {
+          "id": 1819,
+          "gender": "U",
+          "colors": 0,
+          "defaultColors": [],
+          "club": 0,
+          "library": "hh_human_acc_chest"
+        }
+      ]
+    },
+    {
+      "type": "lg",
+      "label": "Calça",
+      "palette": "3",
+      "required": true,
+      "layer": 1,
+      "sets": [
+        {
+          "id": 270,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_leg"
+        },
+        {
+          "id": 275,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_leg"
+        },
+        {
+          "id": 280,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_leg"
+        },
+        {
+          "id": 281,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_leg"
+        },
+        {
+          "id": 285,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_leg"
+        },
+        {
+          "id": 695,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_leg"
+        },
+        {
+          "id": 696,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_leg"
+        },
+        {
+          "id": 700,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_leg"
+        },
+        {
+          "id": 705,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_leg"
+        },
+        {
+          "id": 710,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_leg"
+        },
+        {
+          "id": 715,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_leg"
+        },
+        {
+          "id": 716,
+          "gender": "F",
+          "colors": 2,
+          "defaultColors": [82, 1408],
+          "club": 0,
+          "library": "hh_human_leg"
+        },
+        {
+          "id": 720,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_leg"
+        },
+        {
+          "id": 827,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 2,
+          "library": "hh_human_leg"
+        }
+      ]
+    },
+    {
+      "type": "sh",
+      "label": "Sapatos",
+      "palette": "3",
+      "required": false,
+      "layer": 2,
+      "sets": [
+        {
+          "id": 290,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shoe"
+        },
+        {
+          "id": 295,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shoe"
+        },
+        {
+          "id": 300,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shoe"
+        },
+        {
+          "id": 305,
+          "gender": "M",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shoe"
+        },
+        {
+          "id": 725,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shoe"
+        },
+        {
+          "id": 730,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shoe"
+        },
+        {
+          "id": 735,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shoe"
+        },
+        {
+          "id": 740,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shoe"
+        },
+        {
+          "id": 905,
+          "gender": "U",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shoe"
+        },
+        {
+          "id": 906,
+          "gender": "U",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shoe"
+        },
+        {
+          "id": 907,
+          "gender": "F",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shoe"
+        },
+        {
+          "id": 908,
+          "gender": "U",
+          "colors": 1,
+          "defaultColors": [82],
+          "club": 0,
+          "library": "hh_human_shoe"
+        }
+      ]
+    }
   ]
 }

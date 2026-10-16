@@ -1,7 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
+  parseAvatarManifest,
   parseFurniManifest,
+  type AvatarManifest,
   ROOMS,
   type FurniManifestEntry,
   type RoomLayoutMessage,
@@ -16,6 +18,12 @@ export function loadFurniDefs(): Map<string, FurniManifestEntry> {
   const path = resolve(ROOT_DIR, 'client', 'public', 'assets', 'furni', 'manifest.json');
   const manifest = parseFurniManifest(JSON.parse(readFileSync(path, 'utf8')));
   return new Map(manifest.items.map((i) => [i.id, i]));
+}
+
+/** Manifesto do avatar (gerado pelo `assets:sync`): base da validação de visuais. */
+export function loadAvatarManifest(): AvatarManifest {
+  const path = resolve(ROOT_DIR, 'client', 'public', 'assets', 'avatar', 'manifest.json');
+  return parseAvatarManifest(JSON.parse(readFileSync(path, 'utf8')));
 }
 
 export class RoomRepository {

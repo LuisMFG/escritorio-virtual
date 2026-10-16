@@ -12,16 +12,19 @@ import {
   OFFICE_ROOM,
   OfficeState,
   parseHeightmap,
+  randomFigure,
   RECEPTION,
   tileHeight,
   type SessionResponse,
 } from '@office/shared';
 import { config } from '../src/config.js';
+import { loadAvatarManifest } from '../src/services/RoomRepository.js';
 
 const [baseName = 'Robô', countArg = '1'] = process.argv.slice(2);
 const count = Math.max(1, Math.min(9, Number(countArg) || 1));
 const endpoint = `http://localhost:${config.port}`;
 const map = parseHeightmap(RECEPTION.heightmap);
+const avatarManifest = loadAvatarManifest();
 
 function randomTile() {
   for (;;) {
@@ -38,7 +41,8 @@ async function startBot(name: string): Promise<void> {
     body: JSON.stringify({
       name,
       inviteCode: config.inviteCode,
-      figure: 'hd-180-2.ch-215-82.lg-285-64.sh-300-64.hr-893-45',
+      gender: 'M',
+      figure: randomFigure(avatarManifest, 'M'),
     }),
   });
   const session = (await res.json()) as SessionResponse & { message?: string };

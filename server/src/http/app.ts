@@ -8,9 +8,6 @@ import type { Services } from '../services/index.js';
 import { KeyedRateLimiter } from '../util/rateLimiter.js';
 import { createSession } from './session.js';
 
-/** Figure padrão quando a pessoa ainda não montou o avatar (editor completo na Fase 3). */
-export const DEFAULT_FIGURE = 'hd-180-1.ch-210-66.lg-270-82.sh-290-80.hr-100-61';
-
 /** Rotas HTTP: sessão, proxy de assets, healthcheck e (em produção) o cliente compilado. */
 export function configureApp(app: Application, cfg: Config, svc: Services): void {
   app.disable('x-powered-by');
@@ -27,7 +24,7 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
     }
     const result = createSession(req.body, {
       inviteCode: cfg.inviteCode,
-      defaultFigure: DEFAULT_FIGURE,
+      avatarManifest: svc.avatarManifest,
       users: svc.users,
       presence: svc.presence,
     });

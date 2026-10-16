@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { openDatabase } from '../db/client.js';
 import { PresenceRegistry } from '../services/PresenceRegistry.js';
+import { loadAvatarManifest } from '../services/RoomRepository.js';
 import { UserService } from '../services/UserService.js';
 import { createSession, type SessionDeps } from './session.js';
 
@@ -9,7 +10,7 @@ let deps: SessionDeps;
 beforeEach(() => {
   deps = {
     inviteCode: 'segredo',
-    defaultFigure: 'hd-180-1.ch-210-66.lg-270-82',
+    avatarManifest: loadAvatarManifest(),
     users: new UserService(openDatabase(':memory:')),
     presence: new PresenceRegistry(),
   };
@@ -22,7 +23,8 @@ describe('createSession', () => {
     if (!res.ok) return;
     expect(res.body.name).toBe('Ana');
     expect(res.body.token.length).toBeGreaterThan(20);
-    expect(res.body.figure).toBe(deps.defaultFigure);
+    expect(res.body.figure).toBe(deps.avatarManifest.defaults.M);
+    expect(res.body.gender).toBe('M');
     expect(deps.users.findByToken(res.body.token)?.id).toBe(res.body.userId);
   });
 
@@ -38,7 +40,12 @@ describe('createSession', () => {
     const first = createSession({ name: 'Ana', inviteCode: 'segredo' }, deps);
     if (!first.ok) throw new Error('esperava sucesso');
     const again = createSession(
-      { name: 'Ana Paula', token: first.body.token, figure: 'hd-600-1.ch-630-62.lg-695-62' },
+      {
+        name: 'Ana Paula',
+        token: first.body.token,
+        figure: 'hd-600-1.ch-630-73.lg-695-82',
+        gender: 'F',
+      },
       deps,
     );
     expect(again).toMatchObject({
@@ -46,7 +53,7 @@ describe('createSession', () => {
       body: {
         userId: first.body.userId,
         name: 'Ana Paula',
-        figure: 'hd-600-1.ch-630-62.lg-695-62',
+        figure: 'hd-600-1.ch-630-73.lg-695-82',
       },
     });
   });
@@ -86,5 +93,23 @@ describe('createSession', () => {
         status: 400,
       },
     );
+  });
+
+  it('valida o visual contra o manifesto e o gênero', () => {
+    const base = { name: 'Ana', inviteCode: 'segredo' };
+    expect(
+      createSession({ ...base, figure: 'hd-180-1.ch-210-66.lg-270-82', gender: 'F' }, deps),
+    ).toMatchObject({
+      status: 400,
+      body: { error: 'INVALID_FIGURE' },
+    });
+    expect(createSession({ ...base, figure: 'hd-180-1.ch-210-66' }, deps)).toMatchObject({
+      status: 400,
+    });
+    const f = createSession({ ...base, gender: 'F' }, deps);
+    expect(f).toMatchObject({
+      ok: true,
+      body: { gender: 'F', figure: deps.avatarManifest.defaults.F },
+    });
   });
 });

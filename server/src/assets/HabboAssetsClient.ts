@@ -1,4 +1,4 @@
-import { HABBOASSETS_API, habboApiHeaders } from '@office/shared';
+import { HABBOASSETS_API, HABBOASSETS_IMAGER, habboApiHeaders } from '@office/shared';
 import { TokenBucket } from '../util/rateLimiter.js';
 
 /** A Cloudflare da HabboAssets recusa User-Agents genéricos de script; nos identificamos. */
@@ -56,6 +56,13 @@ export class HabboAssetsClient {
     if (!contentType.startsWith('image/'))
       throw new UpstreamError(502, 'Resposta do imager não é imagem');
     return { body: Buffer.from(await res.arrayBuffer()), contentType };
+  }
+
+  /** GET de JSON no host do imager (ex. `/info/clothing/hh_human_hair`). */
+  async getImagerJson<T>(path: string): Promise<T> {
+    const headers = { 'User-Agent': USER_AGENT, Accept: 'application/json' };
+    const res = await this.request(`${HABBOASSETS_IMAGER}${path}`, this.rest, headers);
+    return (await res.json()) as T;
   }
 
   /** GET na API REST v2 (`path` relativo, ex. `/furniture/chair_norja`). */

@@ -27,7 +27,7 @@ export class UserService {
   }
 
   /** Cria um usuário novo com um token aleatório (devolvido só aqui, em texto puro). */
-  create(name: string, figure: string): { user: UserRow; token: string } {
+  create(name: string, figure: string, gender: 'M' | 'F' = 'M'): { user: UserRow; token: string } {
     const token = randomBytes(24).toString('base64url');
     const now = this.now();
     const user = this.db
@@ -36,6 +36,7 @@ export class UserService {
         id: randomUUID(),
         name,
         figure,
+        gender,
         sessionTokenHash: hashToken(token),
         createdAt: now,
         lastSeenAt: now,
@@ -45,7 +46,7 @@ export class UserService {
     return { user, token };
   }
 
-  update(id: string, changes: Partial<Pick<UserRow, 'name' | 'figure'>>): UserRow {
+  update(id: string, changes: Partial<Pick<UserRow, 'name' | 'figure' | 'gender'>>): UserRow {
     return this.db
       .update(users)
       .set({ ...changes, lastSeenAt: this.now() })

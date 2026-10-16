@@ -22,7 +22,8 @@
     "dev:server": "npm run dev -w server",
     "dev:client": "npm run dev -w client",
     "db:generate": "npm exec -w server -- drizzle-kit generate",
-    "bot": "npm run bot -w server --"
+    "bot": "npm run bot -w server --",
+    "assets:sync": "npm run assets:sync -w server --"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

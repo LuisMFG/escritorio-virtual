@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "tsx watch --clear-screen=false src/index.ts",
     "start": "tsx src/index.ts",
-    "bot": "tsx scripts/bot.ts"
+    "bot": "tsx scripts/bot.ts",
+    "assets:sync": "tsx scripts/assets-sync.ts"
   },
   "dependencies": {
     "@colyseus/core": "0.18.19",
