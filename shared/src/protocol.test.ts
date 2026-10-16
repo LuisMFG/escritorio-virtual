@@ -58,8 +58,10 @@ describe('payloads', () => {
   });
 
   it('join exige sala e token', () => {
-    expect(joinOptionsSchema.safeParse({ roomId: 'reception', token: 'abc' }).success).toBe(true);
-    expect(joinOptionsSchema.safeParse({ roomId: 'reception' }).success).toBe(false);
+    expect(joinOptionsSchema.safeParse({ officeRoomId: 'reception', token: 'abc' }).success).toBe(
+      true,
+    );
+    expect(joinOptionsSchema.safeParse({ officeRoomId: 'reception' }).success).toBe(false);
   });
 });
 

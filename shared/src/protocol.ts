@@ -4,7 +4,7 @@ import type { PlacedFurni } from './furni.js';
 import type { RoomDoor } from './rooms.js';
 import type { TilePoint } from './iso.js';
 
-/** Nome da sala Colyseus. Cada sala física é uma instância filtrada por `roomId`. */
+/** Nome da sala Colyseus. Cada sala física é uma instância filtrada por `officeRoomId`. */
 export const OFFICE_ROOM = 'office';
 
 /** Mensagens cliente → servidor. */
@@ -25,6 +25,8 @@ export const ServerMessage = {
   Error: 'error',
   /** Mensagem de chat nova na sala (`ChatMessage`). */
   Chat: 'chat.message',
+  /** Pisou numa porta: sair desta sala e entrar em `targetRoomId` com o ticket. */
+  RoomTransfer: 'room.transfer',
 } as const;
 
 export const ErrorCode = {
@@ -117,8 +119,14 @@ export interface ApiError {
 
 /** Opções enviadas no `joinOrCreate`. */
 export const joinOptionsSchema = z.object({
-  roomId: z.string().min(1).max(40),
+  /**
+   * Sala física (`reception`, `meeting`…). Não pode se chamar `roomId`: esse nome é o id
+   * interno de cada instância Colyseus e o `filterBy` passaria a comparar com ele.
+   */
+  officeRoomId: z.string().min(1).max(40),
   token: z.string().min(1).max(200),
+  /** Ticket de uso único recebido ao passar por uma porta (define onde nascer). */
+  ticket: z.string().max(100).optional(),
 });
 export type JoinOptions = z.infer<typeof joinOptionsSchema>;
 
@@ -153,12 +161,14 @@ export const CHAT_HISTORY_ON_JOIN = 50;
  * de linha num espaço só. O texto é sempre exibido como texto puro (nunca HTML).
  */
 export function normalizeChatText(text: string): string {
-  return text
-    .normalize('NFC')
-    // eslint-disable-next-line no-control-regex -- remover caracteres de controle é o objetivo
-    .replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+  return (
+    text
+      .normalize('NFC')
+      // eslint-disable-next-line no-control-regex -- remover caracteres de controle é o objetivo
+      .replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+  );
 }
 
 export const chatSchema = z.object({
@@ -185,6 +195,16 @@ export interface ChatMessage {
   text: string;
   /** Epoch em ms. */
   ts: number;
+}
+
+export interface RoomTransferMessage {
+  targetRoomId: string;
+  ticket: string;
+}
+
+/** `GET /api/presence`: quem está online em cada sala. */
+export interface PresenceResponse {
+  rooms: { roomId: string; name: string; people: { name: string }[] }[];
 }
 
 export interface ErrorMessage {
