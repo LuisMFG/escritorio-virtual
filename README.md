@@ -2,7 +2,7 @@
 
 Escritório virtual isométrico para amigos e colegas: avatares andando em salas no estilo Habbo, com movimento em tempo real e chat. Veja [SPEC.md](SPEC.md) (requisitos) e [PLAN.md](PLAN.md) (plano e decisões).
 
-> Em construção — **Fase 3** (editor de avatar com camadas, cores e visual salvo). O README completo, com deploy, entra na Fase 7.
+> Em construção — **Fase 4** (chat com balões e histórico por sala). O README completo, com deploy, entra na Fase 7.
 
 ## Rodar localmente
 
@@ -19,7 +19,7 @@ Isso sobe o servidor (http://localhost:2567) e o cliente (http://localhost:5173)
 Para testar com várias pessoas:
 
 - abra uma segunda janela **anônima** (cada navegador guarda o seu próprio token), ou
-- rode robôs que passeiam pela sala: `npm run bot` (ou `npm run bot -- Bia 3` para três robôs).
+- rode robôs que passeiam e conversam pela sala: `npm run bot` (ou `npm run bot -- Bia 3` para três robôs).
 
 Opções de URL do cliente:
 

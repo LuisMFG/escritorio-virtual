@@ -1,7 +1,7 @@
 # PLAN — Escritório virtual isométrico
 
 > Documento vivo. Atualizar sempre que o plano mudar (ver "Como trabalhar" no SPEC.md).
-> Status: **aprovado em 16/10/2026** — Fases 1 e 2 aprovadas; Fase 3 concluída (aguardando validação). Decisões registradas na §9.
+> Status: **aprovado em 16/10/2026** — Fases 1 a 3 aprovadas; Fase 4 concluída (aguardando validação). Decisões registradas na §9.
 
 ---
 
@@ -195,7 +195,8 @@ Layout estático (heightmap, portas, cores e, até a Fase 6, os móveis) é pedi
 |---|---|---|
 | `room.layout` (requisição) | — | responde com `{ roomId, name, heightmap, spawn, doors[], wallColor, floorColor, furni[] }` |
 | `move` | `{ x, y }` | rate limit 5/s; A* no servidor a partir da posição atual; destino bloqueado → tile livre mais próximo; sem caminho → `error INVALID_MOVE` |
-| `chat` | `{ text }` | 1–200 chars, trim, rate limit 3 msgs/5 s; texto tratado como texto puro |
+| `chat` | `{ text }` | normaliza (remove controle/invisíveis, junta espaços), 1–200 chars, rate limit 3 msgs/5 s; texto puro |
+| `chat.history` (requisição) | — | responde com as últimas 50 mensagens da sala |
 | `door.use` | `{ doorId }` | jogador precisa estar no tile da porta (também disparado automaticamente ao pisar) |
 | `furni.place` | `{ catalogId, x, y, rot, color? }` | modo editar; `placement.canPlace` |
 | `furni.move` | `{ furniId, x, y }` | idem; não pode haver alguém sentado |
@@ -209,8 +210,7 @@ Layout estático (heightmap, portas, cores e, até a Fase 6, os móveis) é pedi
 
 | Tipo | Payload |
 |---|---|
-| `chat.message` | `{ id, userId, name, text, ts }` |
-| `chat.history` | `{ messages: ChatMessage[] }` (últimas 50, no join) |
+| `chat.message` | `{ id, roomId, userId, sessionId, name, text, ts }` (broadcast só na sala) |
 | `room.transfer` | `{ targetRoomId, ticket }` — cliente sai e entra na outra sala com o ticket (spawn na porta de destino) |
 | `room.presence` | derivado do estado (`players`); lista de presentes de todas as salas via `GET /api/presence` (polling 10 s) |
 | `error` | `{ code: 'RATE_LIMIT'|'INVALID_MOVE'|'INVALID_PLACEMENT'|…, message }` |
@@ -317,7 +317,7 @@ screenToTile(sx, sy)  = { x: floor((sy/16 + sx/32) / 2), y: floor((sy/16 - sx/32
 
 **Como testar:** abrir o editor na entrada, trocar cabelo/roupa/cores e girar a prévia; entrar e ver o avatar; mudar o visual dentro do escritório e ver a outra aba atualizar; recarregar a página e o visual persistir; enviar uma figure adulterada via console (`room.send('avatar.update', {figure:'hr-99999-1'})`) e ver o erro; `npm test` cobre o parser/validador.
 
-### Fase 4 — Chat com balões e histórico
+### Fase 4 — Chat com balões e histórico ✅ implementada
 - Tabela `chat_messages` + `ChatService` (insere, poda para 200/sala, busca últimas 50).
 - Mensagem `chat` com zod, rate limit, broadcast só na sala; `chat.history` no join.
 - UI: campo de mensagem fixo embaixo (Enter envia), painel lateral recolhível com histórico (horário + nome), `textContent` sempre (nunca `innerHTML`).
@@ -400,4 +400,12 @@ screenToTile(sx, sy)  = { x: floor((sy/16 + sx/32) / 2), y: floor((sy/16 - sx/32
 - Visual novo na sala leva alguns segundos para aparecer para todos: são 8 renders novos (um por direção) passando pelo limite de requisições do servidor; depois ficam em cache.
 - Peças "Habbo Club" entram normalmente (aqui não há assinatura); só cores marcadas como selecionáveis aparecem.
 - Gênero salvo em `users.gender` e validado junto com a figure (peças `U` servem para os dois).
+
+### Notas da Fase 4
+- Histórico pedido por requisição (`chat.history`), como o layout, para não perder mensagens enviadas antes de o cliente registrar o handler.
+- `chat_messages` com índice `(room_id, id)`; a cada mensagem nova o servidor apaga as que passam de 200 na sala. O nome é gravado na hora (`name_snapshot`).
+- Texto normalizado no servidor (`normalizeChatText`): caracteres de controle, de largura zero e de direção (bidi) viram espaço; quebras de linha viram espaço. HTML não é removido: é mostrado literalmente (`textContent` no DOM e `Text` no Pixi).
+- Balões (`client/src/entities/ChatBubble.ts`): "Nome: mensagem" com rabicho, quebra em até 220 px, ficam no x de quem falou, sobem quando chega outro e somem em 7 s (máx. 10 na tela). O nome da própria pessoa sai em azul.
+- Painel "Conversa" recolhível (aberto por padrão em telas largas), com contador de novas quando fechado. Enter em qualquer lugar foca o campo; Esc sai.
+- O robô de teste (`npm run bot`) agora fala frases de vez em quando, para testar os balões sozinho.
 
