@@ -1,5 +1,6 @@
 /**
- * Robô para testar o tempo real sozinho: entra na Recepção e passeia por tiles aleatórios.
+ * Robô para testar o tempo real sozinho: entra na Recepção, passeia por tiles aleatórios
+ * e de vez em quando fala alguma coisa no chat.
  *
  *   npm run bot                 # um robô chamado "Robô"
  *   npm run bot -- Bia 3        # três robôs: "Bia 1", "Bia 2", "Bia 3"
@@ -25,6 +26,14 @@ const count = Math.max(1, Math.min(9, Number(countArg) || 1));
 const endpoint = `http://localhost:${config.port}`;
 const map = parseHeightmap(RECEPTION.heightmap);
 const avatarManifest = loadAvatarManifest();
+const PHRASES = [
+  'Bom dia, pessoal!',
+  'Alguém quer café?',
+  'Reunião em 5 minutos na sala de reunião.',
+  'Esse escritório ficou bonito, hein',
+  'Vou pegar uma água, já volto',
+  'Quem mexeu no meu grampeador?',
+];
 
 function randomTile() {
   for (;;) {
@@ -56,9 +65,13 @@ async function startBot(name: string): Promise<void> {
   );
   console.log(`[bot] ${name} entrou (${room.sessionId})`);
   room.onMessage('error', (e: { message: string }) => console.log(`[bot] ${name}: ${e.message}`));
+  room.onMessage('chat.message', () => undefined);
 
   const wander = () => {
     room.send(ClientMessage.Move, randomTile());
+    if (Math.random() < 0.35) {
+      room.send(ClientMessage.Chat, { text: PHRASES[Math.floor(Math.random() * PHRASES.length)]! });
+    }
     setTimeout(wander, 2500 + Math.random() * 4000);
   };
   setTimeout(wander, 1000);

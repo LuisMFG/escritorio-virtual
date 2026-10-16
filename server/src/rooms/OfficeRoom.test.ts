@@ -7,6 +7,7 @@ import {
   RECEPTION,
   ServerMessage,
   STEP_MS,
+  type ChatMessage,
   type ErrorMessage,
   type RoomLayoutMessage,
 } from '@office/shared';
@@ -134,5 +135,32 @@ describe('OfficeRoom', () => {
     const err = (await a.waitForMessage(ServerMessage.Error)) as ErrorMessage;
     expect(err.code).toBe('INVALID_FIGURE');
     expect(b.state.players.get(a.sessionId)!.figure).toBe(figure);
+  });
+
+  it('chat: só a mesma sala recebe, texto normalizado, histórico ao entrar e rate limit', async () => {
+    const a = await join(newUser('Ana').token);
+    const b = await join(newUser('Beto').token);
+    const received = b.waitForMessage(ServerMessage.Chat);
+    a.send(ClientMessage.Chat, { text: '  <b>oi</b>\n pessoal ' });
+    const msg = (await received) as ChatMessage;
+    expect(msg).toMatchObject({ name: 'Ana', text: '<b>oi</b> pessoal', sessionId: a.sessionId });
+
+    const c = await join(newUser('Caio').token);
+    const history = (await c.request(ClientMessage.GetChatHistory)) as ChatMessage[];
+    expect(history.at(-1)?.text).toBe('<b>oi</b> pessoal');
+
+    // Já gastou 1 de 3; mais 3 seguidas estouram o limite.
+    for (let i = 0; i < 3; i++) a.send(ClientMessage.Chat, { text: `spam ${i}` });
+    const err = (await a.waitForMessage(ServerMessage.Error)) as ErrorMessage;
+    expect(err.code).toBe('RATE_LIMIT');
+  });
+
+  it('chat vazio ou longo demais é ignorado', async () => {
+    const a = await join(newUser('Ana').token);
+    const before = svc.chat.recent(RECEPTION.id, 1000).length;
+    a.send(ClientMessage.Chat, { text: '   ' });
+    a.send(ClientMessage.Chat, { text: 'x'.repeat(500) });
+    await wait(200);
+    expect(svc.chat.recent(RECEPTION.id, 1000)).toHaveLength(before);
   });
 });

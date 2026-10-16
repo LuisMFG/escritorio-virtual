@@ -1,4 +1,4 @@
-import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
 export const users = sqliteTable('users', {
   id: text('id').primaryKey(),
@@ -26,5 +26,24 @@ export const rooms = sqliteTable('rooms', {
   wallColor: text('wall_color').notNull(),
 });
 
+export const chatMessages = sqliteTable(
+  'chat_messages',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    roomId: text('room_id')
+      .notNull()
+      .references(() => rooms.id),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id),
+    /** Nome na hora da mensagem (a pessoa pode mudar de nome depois). */
+    nameSnapshot: text('name_snapshot').notNull(),
+    text: text('text').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [index('chat_messages_room_id_idx').on(t.roomId, t.id)],
+);
+
 export type UserRow = typeof users.$inferSelect;
 export type RoomRow = typeof rooms.$inferSelect;
+export type ChatMessageRow = typeof chatMessages.$inferSelect;

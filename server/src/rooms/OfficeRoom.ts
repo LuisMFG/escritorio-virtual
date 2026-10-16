@@ -1,5 +1,6 @@
 import { Room, ServerError, validate, type Client, type Deferred } from '@colyseus/core';
 import {
+  chatSchema,
   ClientMessage,
   ERROR_MESSAGES,
   ErrorCode,
@@ -43,6 +44,8 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
   private movement!: MovementSystem;
   private readonly moveLimiter = new KeyedRateLimiter(5, 5);
   private readonly avatarLimiter = new KeyedRateLimiter(3, 0.5);
+  /** Chat: até 3 mensagens seguidas, recarregando 3 a cada 5 s. */
+  private readonly chatLimiter = new KeyedRateLimiter(3, 3 / 5);
   /** Reconexões pendentes por sessionId, para cancelar quando a pessoa volta numa aba nova. */
   private readonly pendingReconnects = new Map<string, Deferred<Client>>();
 
@@ -53,6 +56,10 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     // Pedido explícito evita a corrida de uma mensagem enviada no onJoin chegar antes
     // de o cliente registrar o handler.
     [ClientMessage.GetLayout]: () => this.layout,
+    [ClientMessage.GetChatHistory]: () => services().chat.recent(this.layout.roomId),
+    [ClientMessage.Chat]: validate(chatSchema, (client, msg) =>
+      this.handleChat(client as OfficeClient, msg),
+    ),
     [ClientMessage.UpdateAvatar]: validate(updateAvatarSchema, (client, msg) =>
       this.handleUpdateAvatar(client as OfficeClient, msg),
     ),
@@ -133,6 +140,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     this.movement.remove(client.sessionId);
     this.moveLimiter.delete(client.sessionId);
     this.avatarLimiter.delete(client.sessionId);
+    this.chatLimiter.delete(client.sessionId);
     services().presence.remove(client.sessionId);
     if (client.auth) services().users.touch(client.auth.id);
   }
@@ -144,6 +152,20 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       return this.sendError(client, ErrorCode.RateLimit);
     const res = this.movement.request(client.sessionId, player, msg);
     if (!res.ok) this.sendError(client, ErrorCode.InvalidMove);
+  }
+
+  private handleChat(client: OfficeClient, msg: { text: string }): void {
+    if (!client.auth || !this.state.players.has(client.sessionId)) return;
+    if (!this.chatLimiter.tryTake(client.sessionId))
+      return this.sendError(client, ErrorCode.RateLimit);
+    // Só quem está nesta sala recebe (cada sala física é uma instância separada).
+    const message = services().chat.add(
+      this.layout.roomId,
+      client.auth,
+      msg.text,
+      client.sessionId,
+    );
+    this.broadcast(ServerMessage.Chat, message);
   }
 
   private handleUpdateAvatar(client: OfficeClient, msg: UpdateAvatarMessage): void {
