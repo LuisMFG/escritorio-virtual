@@ -26,21 +26,43 @@ export function openDatabase(path: string): Db {
   return db;
 }
 
-/** Insere as salas definidas em `shared/rooms.ts` que ainda não existem no banco. */
+/**
+ * Sincroniza salas e portas com `shared/rooms.ts`. Enquanto não existe editor de salas
+ * (fora da v1), o código é a fonte da verdade do formato das salas; os móveis passam a
+ * viver no banco na Fase 6.
+ */
 function seedRooms(db: Db): void {
   for (const room of ROOMS) {
+    const values = {
+      name: room.name,
+      heightmap: room.heightmap,
+      spawnX: room.spawn.x,
+      spawnY: room.spawn.y,
+      spawnDir: room.spawn.dir,
+      floorColor: room.floorColor,
+      wallColor: room.wallColor,
+    };
     db.insert(schema.rooms)
-      .values({
-        id: room.id,
-        name: room.name,
-        heightmap: room.heightmap,
-        spawnX: room.spawn.x,
-        spawnY: room.spawn.y,
-        spawnDir: room.spawn.dir,
-        floorColor: room.floorColor,
-        wallColor: room.wallColor,
-      })
-      .onConflictDoNothing()
+      .values({ id: room.id, ...values })
+      .onConflictDoUpdate({ target: schema.rooms.id, set: values })
       .run();
   }
+  db.transaction((tx) => {
+    tx.delete(schema.roomDoors).run();
+    for (const room of ROOMS) {
+      for (const d of room.doors) {
+        tx.insert(schema.roomDoors)
+          .values({
+            roomId: room.id,
+            x: d.x,
+            y: d.y,
+            targetRoomId: d.targetRoomId,
+            targetX: d.targetX,
+            targetY: d.targetY,
+            targetDir: d.targetDir,
+          })
+          .run();
+      }
+    }
+  });
 }

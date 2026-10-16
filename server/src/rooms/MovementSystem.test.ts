@@ -120,4 +120,22 @@ describe('MovementSystem', () => {
     runUntilIdle(sys, movers);
     expect(m).toMatchObject({ x: 1, y: 0, action: 'idle' });
   });
+
+  it('onStepEnd pode parar o avatar no meio do caminho (porta)', () => {
+    const movers = new Map<string, Mover>([['a', mover(0, 2)]]);
+    const stops: string[] = [];
+    const sys = new MovementSystem(
+      () => new RoomGrid(map, [], new Map(), { seatsAsGoal: false }),
+      (_id, m) => {
+        stops.push(`${m.x},${m.y}`);
+        return m.x === 2;
+      },
+    );
+    sys.request('a', movers.get('a')!, { x: 4, y: 2 });
+    runUntilIdle(sys, movers);
+    const m = movers.get('a')!;
+    expect(m).toMatchObject({ x: 2, nextX: 2, action: 'idle' });
+    expect(m.nextY).toBe(m.y);
+    expect(stops).toHaveLength(2);
+  });
 });

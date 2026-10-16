@@ -4,15 +4,20 @@ import {
   ClientMessage,
   OFFICE_ROOM,
   OfficeState,
+  MEETING,
   RECEPTION,
   ServerMessage,
   STEP_MS,
   type ChatMessage,
+  type PresenceResponse,
+  type RoomTransferMessage,
   type ErrorMessage,
   type RoomLayoutMessage,
 } from '@office/shared';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import type { Config } from '../config.js';
 import { openDatabase } from '../db/client.js';
+import { configureApp } from '../http/app.js';
 import { createServices, setServices, type Services } from '../services/index.js';
 import { OfficeRoom } from './OfficeRoom.js';
 
@@ -23,7 +28,8 @@ beforeAll(async () => {
   svc = createServices(openDatabase(':memory:'));
   setServices(svc);
   const server = defineServer({
-    rooms: { [OFFICE_ROOM]: defineRoom(OfficeRoom).filterBy(['roomId']) },
+    rooms: { [OFFICE_ROOM]: defineRoom(OfficeRoom).filterBy(['officeRoomId']) },
+    express: (app) => configureApp(app, testConfig, svc),
     greet: false,
     gracefullyShutdown: false,
   });
@@ -37,10 +43,20 @@ function newUser(name: string) {
   return svc.users.create(name, 'hd-180-1.ch-210-66.lg-270-82');
 }
 
-async function join(token: string) {
+const testConfig: Config = {
+  port: 0,
+  inviteCode: 'segredo',
+  databasePath: ':memory:',
+  assetCacheDir: '/tmp/escritorio-teste-cache',
+  habboAssetsApiKey: undefined,
+  clientDistDir: '/nao-existe',
+  isProduction: false,
+};
+
+async function join(token: string, roomId = RECEPTION.id, ticket?: string) {
   const room = await colyseus.sdk.joinOrCreate(
     OFFICE_ROOM,
-    { roomId: RECEPTION.id, token },
+    { officeRoomId: roomId, token, ticket },
     OfficeState,
   );
   await room.waitForInitialState();
@@ -52,7 +68,7 @@ const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 describe('OfficeRoom', () => {
   it('recusa entrar sem token válido', async () => {
     await expect(
-      colyseus.sdk.joinOrCreate(OFFICE_ROOM, { roomId: RECEPTION.id, token: 'inventado' }),
+      colyseus.sdk.joinOrCreate(OFFICE_ROOM, { officeRoomId: RECEPTION.id, token: 'inventado' }),
     ).rejects.toThrow(/sessão/i);
   });
 
@@ -162,5 +178,65 @@ describe('OfficeRoom', () => {
     a.send(ClientMessage.Chat, { text: 'x'.repeat(500) });
     await wait(200);
     expect(svc.chat.recent(RECEPTION.id, 1000)).toHaveLength(before);
+  });
+
+  it(
+    'porta: pisar nela manda para a outra sala, que recebe a pessoa do lado de dentro',
+    { timeout: 20_000 },
+    async () => {
+      const ana = newUser('Ana');
+      const a = await join(ana.token);
+      const door = RECEPTION.doors.find((d) => d.targetRoomId === MEETING.id)!;
+      const transfer = a.waitForMessage(ServerMessage.RoomTransfer, 10_000);
+      a.send(ClientMessage.Move, { x: door.x, y: door.y });
+      const msg = (await transfer) as RoomTransferMessage;
+      expect(msg.targetRoomId).toBe(MEETING.id);
+
+      await a.leave();
+      const m = await join(ana.token, MEETING.id, msg.ticket);
+      expect(m.state.roomId).toBe(MEETING.id);
+      expect(m.state.players.get(m.sessionId)).toMatchObject({
+        x: door.targetX,
+        y: door.targetY,
+        dir: door.targetDir,
+      });
+      expect(svc.presence.list().find((e) => e.userId === ana.user.id)?.roomId).toBe(MEETING.id);
+
+      // O ticket é de uso único: entrar de novo com ele cai no ponto de entrada padrão.
+      await m.leave();
+      const again = await join(ana.token, MEETING.id, msg.ticket);
+      expect(again.state.players.get(again.sessionId)).toMatchObject({
+        x: MEETING.spawn.x,
+        y: MEETING.spawn.y,
+      });
+    },
+  );
+
+  it('chat de uma sala não chega na outra', async () => {
+    const a = await join(newUser('Ana').token);
+    const m = await join(newUser('Beto').token, MEETING.id);
+    let leaked = false;
+    m.onMessage(ServerMessage.Chat, () => (leaked = true));
+    const own = a.waitForMessage(ServerMessage.Chat);
+    a.send(ClientMessage.Chat, { text: 'só a recepção' });
+    await own;
+    await wait(200);
+    expect(leaked).toBe(false);
+  });
+
+  it('GET /api/presence lista as pessoas por sala e exige sessão', async () => {
+    const ana = newUser('Ana');
+    await join(ana.token);
+    await join(newUser('Beto').token, MEETING.id);
+    const base = `http://127.0.0.1:${colyseus.server['port']}`;
+    expect((await fetch(`${base}/api/presence`)).status).toBe(401);
+    const res = await fetch(`${base}/api/presence`, {
+      headers: { Authorization: `Bearer ${ana.token}` },
+    });
+    const body = (await res.json()) as PresenceResponse;
+    const byRoom = Object.fromEntries(
+      body.rooms.map((r) => [r.roomId, r.people.map((p) => p.name)]),
+    );
+    expect(byRoom).toEqual({ reception: ['Ana'], meeting: ['Beto'], pantry: [] });
   });
 });

@@ -11,7 +11,7 @@ setServices(services);
 
 const server = defineServer({
   rooms: {
-    [OFFICE_ROOM]: defineRoom(OfficeRoom).filterBy(['roomId']),
+    [OFFICE_ROOM]: defineRoom(OfficeRoom).filterBy(['officeRoomId']),
   },
   express: (app) => configureApp(app, config, services),
   greet: false,

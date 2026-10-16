@@ -60,7 +60,7 @@ async function startBot(name: string): Promise<void> {
   const client = new Client(endpoint);
   const room = await client.joinOrCreate(
     OFFICE_ROOM,
-    { roomId: RECEPTION.id, token: session.token },
+    { officeRoomId: RECEPTION.id, token: session.token },
     OfficeState,
   );
   console.log(`[bot] ${name} entrou (${room.sessionId})`);

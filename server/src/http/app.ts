@@ -6,6 +6,8 @@ import { HabboAssetsClient } from '../assets/HabboAssetsClient.js';
 import type { Config } from '../config.js';
 import type { Services } from '../services/index.js';
 import { KeyedRateLimiter } from '../util/rateLimiter.js';
+import { getBearerToken } from '@colyseus/core';
+import type { PresenceResponse } from '@office/shared';
 import { createSession } from './session.js';
 
 /** Rotas HTTP: sessão, proxy de assets, healthcheck e (em produção) o cliente compilado. */
@@ -32,6 +34,23 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
   });
 
   app.get('/healthz', (_req, res) => void res.json({ ok: true }));
+
+  // Quem está em cada sala (para a lista de pessoas). Só para quem tem sessão válida.
+  app.get('/api/presence', (req, res) => {
+    if (!svc.users.findByToken(getBearerToken(req.headers.authorization ?? ''))) {
+      return void res.status(401).json({ error: 'INVALID_SESSION', message: 'Sessão inválida.' });
+    }
+    const online = svc.presence.list();
+    const body: PresenceResponse = {
+      rooms: svc.rooms.list().map((r) => ({
+        roomId: r.id,
+        name: r.name,
+        people: online.filter((e) => e.roomId === r.id).map((e) => ({ name: e.name })),
+      })),
+    };
+    res.setHeader('Cache-Control', 'no-store');
+    res.json(body);
+  });
 
   const habbo = new HabboAssetsClient({ apiKey: cfg.habboAssetsApiKey });
   app.use('/hh', createAssetRouter(habbo, cfg.assetCacheDir));

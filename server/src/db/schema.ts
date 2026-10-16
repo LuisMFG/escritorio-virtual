@@ -26,6 +26,21 @@ export const rooms = sqliteTable('rooms', {
   wallColor: text('wall_color').notNull(),
 });
 
+export const roomDoors = sqliteTable('room_doors', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  roomId: text('room_id')
+    .notNull()
+    .references(() => rooms.id),
+  x: integer('x').notNull(),
+  y: integer('y').notNull(),
+  targetRoomId: text('target_room_id')
+    .notNull()
+    .references(() => rooms.id),
+  targetX: integer('target_x').notNull(),
+  targetY: integer('target_y').notNull(),
+  targetDir: integer('target_dir').notNull(),
+});
+
 export const chatMessages = sqliteTable(
   'chat_messages',
   {

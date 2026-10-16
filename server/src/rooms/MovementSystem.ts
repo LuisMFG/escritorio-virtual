@@ -34,8 +34,14 @@ export type MoveResult = { ok: true; dest: TilePoint } | { ok: false };
 export class MovementSystem {
   private readonly walks = new Map<string, Walk>();
 
-  /** @param gridFor grade da sala vista por um jogador (os outros avatares contam como ocupados). */
-  constructor(private readonly gridFor: (id: string) => PathGrid) {}
+  /**
+   * @param gridFor grade da sala vista por um jogador (os outros avatares contam como ocupados).
+   * @param onStepEnd chamado quando um passo termina; devolver `true` faz o avatar parar ali (ex.: porta).
+   */
+  constructor(
+    private readonly gridFor: (id: string) => PathGrid,
+    private readonly onStepEnd?: (id: string, m: Mover) => boolean | void,
+  ) {}
 
   request(id: string, m: Mover, goal: TilePoint): MoveResult {
     const grid = this.gridFor(id);
@@ -73,6 +79,11 @@ export class MovementSystem {
         m.x = m.nextX;
         m.y = m.nextY;
         m.z = this.gridFor(id).heightAt(m.x, m.y);
+        if (this.onStepEnd?.(id, m) === true) {
+          this.walks.delete(id);
+          m.action = 'idle';
+          break;
+        }
         this.startStep(id, m, walk);
       }
     }

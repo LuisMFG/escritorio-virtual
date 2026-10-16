@@ -18,12 +18,13 @@ import {
   type MoveMessage,
   type UpdateAvatarMessage,
   type RoomLayoutMessage,
+  type RoomTransferMessage,
   type TilePoint,
 } from '@office/shared';
 import type { UserRow } from '../db/schema.js';
 import { services } from '../services/index.js';
 import { KeyedRateLimiter } from '../util/rateLimiter.js';
-import { MovementSystem } from './MovementSystem.js';
+import { MovementSystem, type Mover } from './MovementSystem.js';
 
 const TICK_MS = 50;
 /** Segundos que um avatar desconectado espera por reconexão antes de sair da sala. */
@@ -65,12 +66,15 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     ),
   };
 
-  override onCreate(options: { roomId: string }): void {
-    const layout = services().rooms.getLayout(options.roomId);
-    if (!layout) throw new ServerError(404, `Sala inexistente: ${options.roomId}`);
+  override onCreate(options: { officeRoomId: string }): void {
+    const layout = services().rooms.getLayout(options.officeRoomId);
+    if (!layout) throw new ServerError(404, `Sala inexistente: ${options.officeRoomId}`);
     this.layout = layout;
     this.map = parseHeightmap(layout.heightmap);
-    this.movement = new MovementSystem((id) => this.gridFor(id));
+    this.movement = new MovementSystem(
+      (id) => this.gridFor(id),
+      (id, m) => this.onStepEnd(id, m),
+    );
     this.state = new OfficeState();
     this.state.roomId = layout.roomId;
     this.setSimulationInterval(
@@ -86,7 +90,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     return user;
   }
 
-  override onJoin(client: OfficeClient): void {
+  override onJoin(client: OfficeClient, options?: unknown): void {
     const user = client.auth;
     if (!user) throw new ServerError(401, ERROR_MESSAGES.INVALID_SESSION);
     // Recarregou a página ou abriu de novo: o avatar "fantasma" da conexão antiga sai já,
@@ -94,7 +98,14 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     for (const [sessionId, p] of this.state.players.entries()) {
       if (p.userId === user.id && p.away) this.pendingReconnects.get(sessionId)?.reject(false);
     }
-    const spawn = this.freeTileNear(this.layout.spawn);
+    // Veio por uma porta: nasce do lado de dentro da porta correspondente.
+    const parsed = joinOptionsSchema.safeParse(options);
+    const via = services().transfers.consume(
+      parsed.success ? parsed.data.ticket : undefined,
+      user.id,
+      this.layout.roomId,
+    );
+    const spawn = this.freeTileNear(via ?? this.layout.spawn);
     const player = new Player();
     Object.assign(player, {
       userId: user.id,
@@ -105,7 +116,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       nextX: spawn.x,
       nextY: spawn.y,
       z: this.gridFor(client.sessionId).heightAt(spawn.x, spawn.y),
-      dir: this.layout.spawn.dir,
+      dir: via?.dir ?? this.layout.spawn.dir,
       action: 'idle',
       away: false,
     });
@@ -143,6 +154,25 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     this.chatLimiter.delete(client.sessionId);
     services().presence.remove(client.sessionId);
     if (client.auth) services().users.touch(client.auth.id);
+  }
+
+  /** Terminou um passo: se foi numa porta, manda a pessoa para a sala de destino. */
+  private onStepEnd(sessionId: string, m: Mover): boolean {
+    const door = this.layout.doors.find((d) => d.x === m.x && d.y === m.y);
+    const client = door && this.clients.getById(sessionId);
+    if (!door || !client?.auth) return false;
+    const ticket = services().transfers.issue({
+      userId: client.auth.id,
+      roomId: door.targetRoomId,
+      x: door.targetX,
+      y: door.targetY,
+      dir: door.targetDir,
+    });
+    client.send(ServerMessage.RoomTransfer, {
+      targetRoomId: door.targetRoomId,
+      ticket,
+    } satisfies RoomTransferMessage);
+    return true;
   }
 
   private handleMove(client: OfficeClient, msg: MoveMessage): void {
@@ -212,7 +242,8 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
         for (let dx = -r; dx <= r; dx++) {
           if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
           const t = { x: origin.x + dx, y: origin.y + dy };
-          if (grid.isWalkable(t.x, t.y, true)) return t;
+          const isDoor = this.layout.doors.some((d) => d.x === t.x && d.y === t.y);
+          if (!isDoor && grid.isWalkable(t.x, t.y, true)) return t;
         }
       }
     }
