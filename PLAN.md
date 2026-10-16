@@ -1,7 +1,7 @@
 # PLAN — Escritório virtual isométrico
 
 > Documento vivo. Atualizar sempre que o plano mudar (ver "Como trabalhar" no SPEC.md).
-> Status: **aprovado em 16/10/2026** — Fase 1 em andamento. Decisões registradas na §9.
+> Status: **aprovado em 16/10/2026** — Fase 1 concluída (aguardando validação). Decisões registradas na §9.
 
 ---
 
@@ -290,7 +290,7 @@ screenToTile(sx, sy)  = { x: floor((sy/16 + sx/32) / 2), y: floor((sy/16 - sx/32
 
 ## 8. Fases detalhadas
 
-### Fase 1 — Sala única, avatar andando (sem rede), base de assets
+### Fase 1 — Sala única, avatar andando (sem rede), base de assets ✅ implementada
 - Monorepo: `package.json` com workspaces, `tsconfig.base.json`, ESLint + Prettier, Vitest configurado nos 3 pacotes, `.env.example`.
 - `shared/iso.ts`, `shared/grid.ts`, `shared/pathfinding.ts` + testes.
 - `shared/rooms.ts` com a Recepção (heightmap ~12×10, porta marcada mas inativa).
@@ -369,6 +369,15 @@ screenToTile(sx, sy)  = { x: floor((sy/16 + sx/32) / 2), y: floor((sy/16 - sx/32
 7. **Direitos dos assets.** Os gráficos são da Sulake/Habbo, espelhados pela HabboAssets ("não afiliada"). OK para uso pessoal e privado (atrás de código de convite); não recomendável deixar público/indexado.
 8. **Ordenação isométrica com móveis multi-tile** é a fonte clássica de bugs visuais; mitigada com caixas de footprint, sort topológico e testes de cenário.
 9. **Colyseus 0.16** tem API que muda entre versões; vamos fixar versões exatas no `package.json`.
+10. **Cloudflare na HabboAssets** (descoberto na Fase 1): requisições com User-Agent de script (ex. Python) recebem 403; `fetch` do Node 24 passa. O `HabboAssetsClient` vai enviar um User-Agent identificando o projeto.
+11. **Redirect 302 sem `revision`** (descoberto na Fase 1): o imager redireciona para a URL com a revisão fixada. Por isso o manifesto de mobis guarda `revision` de cada item.
+
+### Notas da Fase 1
+- Versões instaladas: Pixi 8.22, Vite 8.3, Vitest 5.0, TypeScript 6.0, zod 4.6, ESLint 10.
+- Âncoras dos mobis: medidas pelo pixel opaco mais baixo da PNG (cai no vértice de baixo do footprint); conferidas visualmente com `?debug=1`. Convenções confirmadas nos renders: direção do móvel = direção para onde ele "olha" (0 = −y, 2 = +x), e móveis 2×1 se estendem em x na rotação 0.
+- Pés do avatar no render 64×110: pixel (32, 104).
+- `shared/tsconfig.json` não inclui tipos do Node (código puro); os testes usam `shared/tsconfig.test.json`.
+- Fase 1 trata cadeiras como não-destino (`seatsAsGoal: false`) até existir "sentar" (Fase 6).
 
 ### Decisões tomadas (aprovadas em 16/10/2026)
 1. **Animação de caminhada:** render parado do imager + bob/balanço procedural na v1. Renderer de partes `.nitro` fica fora da v1 (a interface `AvatarRenderer` deixa a porta aberta).
