@@ -1,0 +1,78 @@
+{
+  "$comment": "Catálogo curado de móveis. anchors[dir] = pixel da PNG do imager que fica sobre o vértice de baixo do footprint (medido pelo pixel opaco mais baixo; recalibrar na Fase 6). width/depth valem para rot 0; rot 2/6 trocam os eixos.",
+  "version": 1,
+  "hotelId": 2,
+  "items": [
+    {
+      "id": "chair_norja",
+      "name": "Cadeira Norja",
+      "category": "cadeiras",
+      "width": 1,
+      "depth": 1,
+      "height": 1,
+      "canSit": true,
+      "sitHeight": 1,
+      "directions": [0, 2, 4, 6],
+      "revision": 61856,
+      "anchors": { "0": [25.5, 54], "2": [23.5, 60], "4": [26.5, 62], "6": [31.5, 56] }
+    },
+    {
+      "id": "couch_norja",
+      "name": "Sofá Norja",
+      "category": "sofás",
+      "width": 2,
+      "depth": 1,
+      "height": 1,
+      "canSit": true,
+      "sitHeight": 1,
+      "directions": [0, 2, 4, 6],
+      "revision": 61856,
+      "anchors": { "0": [61.5, 71], "2": [18.5, 81], "4": [61.5, 78], "6": [20.5, 72] }
+    },
+    {
+      "id": "table_norja_med",
+      "name": "Mesa Norja",
+      "category": "mesas",
+      "width": 2,
+      "depth": 2,
+      "height": 1,
+      "directions": [0],
+      "revision": 61856,
+      "anchors": { "0": [50, 79] }
+    },
+    {
+      "id": "plant_big_cactus",
+      "name": "Cacto Grande",
+      "category": "plantas",
+      "width": 1,
+      "depth": 1,
+      "height": 1,
+      "directions": [0],
+      "revision": 48082,
+      "anchors": { "0": [25, 108] }
+    },
+    {
+      "id": "shelves_norja",
+      "name": "Estante Norja",
+      "category": "estantes",
+      "width": 1,
+      "depth": 1,
+      "height": 2,
+      "directions": [0, 2],
+      "revision": 61856,
+      "anchors": { "0": [25.5, 112], "2": [25.5, 112] }
+    },
+    {
+      "id": "carpet_standard",
+      "name": "Tapete",
+      "category": "tapetes",
+      "width": 3,
+      "depth": 5,
+      "height": 0,
+      "canWalk": true,
+      "directions": [0, 2],
+      "revision": 48082,
+      "anchors": { "0": [94.5, 128], "2": [166.5, 128] }
+    }
+  ]
+}

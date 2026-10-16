@@ -6,3 +6,5 @@ export * from './pathfinding.js';
 export * from './depth.js';
 export * from './habboassets.js';
 export * from './rooms.js';
+export * from './manifests.js';
+export * from './figure.js';

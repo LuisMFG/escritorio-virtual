@@ -39,6 +39,8 @@ export function tileHeight(map: Heightmap, x: number, y: number): number | null 
 export interface RoomGridOptions {
   /** Tiles que não podem ser pisados (ex.: posição de outros avatares parados). */
   occupied?: readonly TilePoint[];
+  /** Permite usar assentos como destino (para sentar). Padrão: true. */
+  seatsAsGoal?: boolean;
 }
 
 /** Estado de cada tile, considerando o piso e os móveis posicionados. */
@@ -61,6 +63,7 @@ export class RoomGrid implements PathGrid {
   readonly height: number;
   private readonly tiles: TileInfo[];
   private readonly occupied = new Set<string>();
+  private readonly seatsAsGoal: boolean;
 
   constructor(
     readonly map: Heightmap,
@@ -95,6 +98,7 @@ export class RoomGrid implements PathGrid {
       }
     }
     for (const p of options.occupied ?? []) this.occupied.add(key(p.x, p.y));
+    this.seatsAsGoal = options.seatsAsGoal ?? true;
   }
 
   tile(x: number, y: number): TileInfo | undefined {
@@ -110,7 +114,7 @@ export class RoomGrid implements PathGrid {
   isWalkable(x: number, y: number, isGoal: boolean): boolean {
     const t = this.tile(x, y);
     if (!t || t.floor === null) return false;
-    if (t.blocked && !(isGoal && t.seat)) return false;
+    if (t.blocked && !(isGoal && t.seat && this.seatsAsGoal)) return false;
     if (isGoal && this.occupied.has(key(x, y))) return false;
     return true;
   }

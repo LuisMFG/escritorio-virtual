@@ -73,6 +73,15 @@ describe('RoomGrid', () => {
     expect(grid.isWalkable(2, 1, false)).toBe(false);
     expect(grid.isWalkable(2, 1, true)).toBe(true);
     expect(grid.tile(2, 1)?.seat?.id).toBe('c');
+    const noSeats = new RoomGrid(
+      map,
+      [{ id: 'c', defId: 'cadeira', x: 2, y: 1, z: 0, rot: 2 }],
+      defs,
+      {
+        seatsAsGoal: false,
+      },
+    );
+    expect(noSeats.isWalkable(2, 1, true)).toBe(false);
   });
 
   it('tapete não bloqueia', () => {

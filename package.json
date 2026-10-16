@@ -15,12 +15,13 @@
     "build": "npm run build -w client",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc -p shared --noEmit && tsc -p client --noEmit",
+    "typecheck": "tsc -p shared --noEmit && tsc -p shared/tsconfig.test.json --noEmit && tsc -p client --noEmit",
     "lint": "eslint .",
     "format": "prettier --write ."
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@types/node": "^26.6.5",
     "eslint": "^10.13.0",
     "prettier": "^3.9.10",
     "typescript": "^6.0.3",

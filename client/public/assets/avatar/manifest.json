@@ -1,0 +1,47 @@
+{
+  "$comment": "Manifesto do avatar. Na Fase 3 o script assets:sync preenche categories[].sets e as paletas completas a partir da HabboAssets API (hotel 2). As cores abaixo são aproximações usadas só pela arte provisória.",
+  "version": 1,
+  "hotelId": 2,
+  "imager": "https://www.habboassets.com/imaging/avatar.png",
+  "defaults": {
+    "M": "hd-180-1.ch-210-66.lg-270-82.sh-290-80.hr-100-61",
+    "F": "hd-600-1.ch-630-62.lg-695-62.sh-725-62.hr-515-33"
+  },
+  "palettes": {
+    "skin": {
+      "1": "#ffcb98",
+      "2": "#f4ac54",
+      "3": "#ffdbc1",
+      "4": "#ffb696",
+      "5": "#e2a65c",
+      "6": "#c58c55",
+      "7": "#a46c3a"
+    },
+    "hair": {
+      "31": "#d6b48a",
+      "32": "#ae7748",
+      "33": "#945c2f",
+      "34": "#7c4b2a",
+      "45": "#eecb6e",
+      "61": "#2d2d2d"
+    },
+    "clothes": {
+      "62": "#3b5fa0",
+      "64": "#e3e3e3",
+      "66": "#c43b3b",
+      "80": "#2d2d2d",
+      "82": "#4a5b74",
+      "110": "#ffffff"
+    }
+  },
+  "categories": [
+    { "type": "hd", "label": "Corpo", "palette": "skin", "required": true, "sets": [] },
+    { "type": "hr", "label": "Cabelo", "palette": "hair", "required": false, "sets": [] },
+    { "type": "ch", "label": "Blusa", "palette": "clothes", "required": true, "sets": [] },
+    { "type": "lg", "label": "Calça", "palette": "clothes", "required": true, "sets": [] },
+    { "type": "sh", "label": "Sapatos", "palette": "clothes", "required": false, "sets": [] },
+    { "type": "ha", "label": "Chapéu", "palette": "clothes", "required": false, "sets": [] },
+    { "type": "ea", "label": "Óculos", "palette": "clothes", "required": false, "sets": [] },
+    { "type": "cc", "label": "Casaco", "palette": "clothes", "required": false, "sets": [] }
+  ]
+}
