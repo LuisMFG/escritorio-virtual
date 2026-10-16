@@ -94,13 +94,22 @@ export class RoomScene {
     this.avatars.set(id, view);
     if (isLocal) this.localId = id;
     this.objects.addChild(view);
-    void this.deps.avatars.get(snapshot.figure).then((frames) => {
-      if (!view.destroyed) view.setFrames(frames);
-    });
+    this.loadFrames(view, snapshot.figure);
   }
 
   updateAvatar(id: string, snapshot: AvatarSnapshot): void {
-    this.avatars.get(id)?.applySnapshot(snapshot);
+    const view = this.avatars.get(id);
+    if (!view) return;
+    view.applySnapshot(snapshot);
+    if (view.figure !== snapshot.figure) this.loadFrames(view, snapshot.figure);
+  }
+
+  /** Busca (no cache por figure) as 8 texturas; ignora respostas de um visual já trocado. */
+  private loadFrames(view: AvatarView, figure: string): void {
+    view.figure = figure;
+    void this.deps.avatars.get(figure).then((frames) => {
+      if (!view.destroyed && view.figure === figure) view.setFrames(frames);
+    });
   }
 
   removeAvatar(id: string): void {

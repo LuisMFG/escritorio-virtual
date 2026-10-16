@@ -43,6 +43,8 @@ interface Step {
 export class AvatarView extends Container {
   tile: TilePoint;
   dir: number;
+  /** Figure das texturas atuais (para recarregar quando a pessoa troca de visual). */
+  figure: string;
   private frames: AvatarFrames | null = null;
   private readonly body = new Sprite();
   private readonly shadow = new Graphics();
@@ -62,6 +64,7 @@ export class AvatarView extends Container {
     this.label = `avatar:${avatarId}`;
     this.tile = { x: snapshot.x, y: snapshot.y };
     this.dir = snapshot.dir;
+    this.figure = snapshot.figure;
     this.shadow.ellipse(0, 0, 14, 6).fill({ color: 0x000000, alpha: 0.22 });
     this.nameTag = new Text({
       text: snapshot.name,

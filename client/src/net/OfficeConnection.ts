@@ -7,6 +7,7 @@ import {
   type ErrorMessage,
   type JoinOptions,
   type MoveMessage,
+  type UpdateAvatarMessage,
   type RoomLayoutMessage,
 } from '@office/shared';
 
@@ -56,6 +57,10 @@ export class OfficeConnection {
 
   move(msg: MoveMessage): void {
     this.room?.send(ClientMessage.Move, msg);
+  }
+
+  updateAvatar(msg: UpdateAvatarMessage): void {
+    this.room?.send(ClientMessage.UpdateAvatar, msg);
   }
 
   async leave(): Promise<void> {

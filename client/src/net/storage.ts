@@ -1,7 +1,10 @@
+import type { Gender } from '@office/shared';
+
 /** O que o navegador lembra entre visitas (nome, visual e token da sessão). */
 export interface StoredSession {
   name: string;
   figure?: string;
+  gender?: Gender;
   token?: string;
 }
 
@@ -29,5 +32,5 @@ export function saveSession(session: StoredSession): void {
 
 export function forgetToken(): void {
   const s = loadSession();
-  if (s) saveSession({ name: s.name, figure: s.figure });
+  if (s) saveSession({ name: s.name, figure: s.figure, gender: s.gender });
 }

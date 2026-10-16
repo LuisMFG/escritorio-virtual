@@ -1,7 +1,8 @@
-import { footprintSize, parseFigure, type AvatarManifest, type FurniDef } from '@office/shared';
-import { Graphics, Rectangle, type Renderer } from 'pixi.js';
+import { footprintSize, type AvatarManifest, type FurniDef } from '@office/shared';
+import { Graphics, Rectangle, type Container, type Renderer } from 'pixi.js';
 import type { Placeholder } from './AssetLoader.js';
-import { colorFromString, hexToNumber, shade } from './colors.js';
+import { colorFromString, shade } from './colors.js';
+import { buildLayeredAvatar } from './LayeredAvatar.js';
 
 const CATEGORY_COLORS: Record<string, number> = {
   cadeiras: 0xc9b88f,
@@ -67,44 +68,13 @@ export class PlaceholderFactory {
     });
   }
 
-  /** Avatar como boneco simples com as cores da figure string. Âncora = pés. */
+  /** Avatar em camadas tingidas com as cores da figure string. Âncora = pés. */
   avatar(figure: string, dir: number): Placeholder {
-    return this.bake(`avatar:${figure}:${dir}`, (g) => {
-      const colorOf = (type: string, palette: string, fallback: number) => {
-        const part = parseFigure(figure).find((p) => p.type === type);
-        if (!part) return fallback;
-        const hex = this.avatarManifest.palettes[palette]?.[String(part.colors[0])];
-        return hex ? hexToNumber(hex) : colorFromString(`${type}-${part.setId}-${part.colors[0]}`);
-      };
-      const skin = colorOf('hd', 'skin', 0xffcb98);
-      const shirt = colorOf('ch', 'clothes', 0x3b5fa0);
-      const pants = colorOf('lg', 'clothes', 0x4a5b74);
-      const shoes = colorOf('sh', 'clothes', 0x2d2d2d);
-      const hair = colorOf('hr', 'hair', 0x5a3a22);
-      const hasHair = parseFigure(figure).some((p) => p.type === 'hr');
-
-      // Para onde o avatar olha na tela: x = lado, y > 0 = de frente para a câmera.
-      const sx = Math.sign([1, 2, 1, 0, -1, -2, -1, 0][dir] ?? 0);
-      const facingCamera = dir >= 1 && dir <= 5;
-
-      g.rect(-7, -6, 6, 6).fill(shoes);
-      g.rect(1, -6, 6, 6).fill(shoes);
-      g.rect(-7, -26, 6, 21).fill(pants);
-      g.rect(1, -26, 6, 21).fill(shade(pants, 0.85));
-      g.roundRect(-10, -48, 20, 24, 3).fill(shirt);
-      g.rect(-13, -46, 4, 18).fill(shade(shirt, 0.85));
-      g.rect(9, -46, 4, 18).fill(shade(shirt, 0.85));
-      g.rect(-13, -29, 4, 4).fill(skin);
-      g.rect(9, -29, 4, 4).fill(skin);
-      g.circle(0, -58, 10).fill(skin);
-      if (hasHair) {
-        g.ellipse(-sx * 2, facingCamera ? -63 : -59, 11, facingCamera ? 6 : 10).fill(hair);
-      }
-      if (facingCamera) {
-        g.rect(sx * 3 - 4, -59, 2, 3).fill(0x222222);
-        g.rect(sx * 3 + 2, -59, 2, 3).fill(0x222222);
-      }
-    });
+    const key = `avatar:${figure}:${dir}`;
+    return (
+      this.cache.get(key) ??
+      this.bakeTarget(key, buildLayeredAvatar(figure, dir, this.avatarManifest))
+    );
   }
 
   private bake(key: string, draw: (g: Graphics) => void): Placeholder {
@@ -112,18 +82,23 @@ export class PlaceholderFactory {
     if (cached) return cached;
     const g = new Graphics();
     draw(g);
-    const b = g.getLocalBounds();
+    return this.bakeTarget(key, g);
+  }
+
+  /** Renderiza o contêiner numa textura recortada nos limites e guarda no cache. */
+  private bakeTarget(key: string, target: Container): Placeholder {
+    const b = target.getLocalBounds();
     const x = Math.floor(b.minX);
     const y = Math.floor(b.minY);
     const frame = new Rectangle(x, y, Math.ceil(b.maxX) - x, Math.ceil(b.maxY) - y);
     const texture = this.renderer.generateTexture({
-      target: g,
+      target,
       frame,
       resolution: 1,
       antialias: false,
     });
     texture.source.scaleMode = 'nearest';
-    g.destroy();
+    target.destroy({ children: true });
     const result = { texture, anchor: { x: -x, y: -y } };
     this.cache.set(key, result);
     return result;

@@ -16,8 +16,9 @@ import { PlaceholderFactory } from './assets/PlaceholderFactory.js';
 import { OFFLINE_ASSETS } from './config.js';
 import type { AvatarSnapshot } from './entities/AvatarView.js';
 import { isSessionError, OfficeConnection, type OfficeRoomClient } from './net/OfficeConnection.js';
-import { forgetToken } from './net/storage.js';
+import { forgetToken, loadSession, saveSession } from './net/storage.js';
 import { RoomScene, type SceneDeps } from './scene/RoomScene.js';
+import { openAvatarEditor } from './ui/avatarEditor.js';
 import { mountHud } from './ui/hud.js';
 import { showLogin } from './ui/login.js';
 import { Overlay } from './ui/overlay.js';
@@ -71,9 +72,32 @@ async function start(): Promise<void> {
     furniDefs: new Map<string, FurniManifestEntry>(furniManifest.items.map((i) => [i.id, i])),
   };
 
+  /** Prévia do editor quando o imager falha: o avatar provisório em camadas, como imagem. */
+  const fallbackPreview = (figure: string, dir: number) =>
+    app.renderer.extract.base64(placeholders.avatar(figure, dir).texture);
+
   let scene: RoomScene | undefined;
+  let connection: OfficeConnection | undefined;
+  let session: SessionResponse | undefined;
   const overlay = new Overlay();
-  const hud = mountHud({ getCamera: () => scene?.camera, loader });
+  const hud = mountHud({
+    getCamera: () => scene?.camera,
+    loader,
+    onEditAvatar: async () => {
+      if (!session || !connection) return;
+      const choice = await openAvatarEditor({
+        manifest: avatarManifest,
+        figure: session.figure,
+        gender: session.gender,
+        fallbackPreview,
+      });
+      if (!choice) return;
+      // O servidor valida e propaga pelo estado; erros chegam como aviso.
+      connection.updateAvatar(choice);
+      session = { ...session, ...choice };
+      saveSession({ ...(loadSession() ?? { name: session.name }), ...choice });
+    },
+  });
   hud.setRoomName(RECEPTION.name);
   app.ticker.add((ticker) => scene?.update(ticker.deltaMS));
 
@@ -113,28 +137,31 @@ async function start(): Promise<void> {
     });
   }
 
-  async function enter(session: SessionResponse): Promise<void> {
-    const connection: OfficeConnection = new OfficeConnection({
+  async function enter(current: SessionResponse): Promise<void> {
+    const conn: OfficeConnection = new OfficeConnection({
       status: (status, detail) => overlay.setStatus(status, detail),
       serverError: (err) => overlay.notify(err.message),
       sessionInvalid: () => {
         forgetToken();
         location.reload();
       },
-      joined: (room, layout) => void mountRoom(connection, room, layout),
+      joined: (room, layout) => void mountRoom(conn, room, layout),
     });
-    await connection.join(RECEPTION.id, session.token);
+    await conn.join(RECEPTION.id, current.token);
+    connection = conn;
+    session = current;
     // Saída "educada" ao fechar/recarregar: o servidor remove o avatar na hora.
-    window.addEventListener('pagehide', () => void connection.leave());
-    if (import.meta.env.DEV)
-      Object.assign(window, { __office: { app, connection, getScene: () => scene } });
+    window.addEventListener('pagehide', () => void conn.leave());
+    if (import.meta.env.DEV) {
+      Object.assign(window, { __office: { app, connection: conn, getScene: () => scene } });
+    }
   }
 
   let notice: string | undefined;
   for (;;) {
-    const session = await showLogin({ defaultFigure: avatarManifest.defaults.M, notice });
+    const result = await showLogin({ manifest: avatarManifest, fallbackPreview, notice });
     try {
-      await enter(session);
+      await enter(result);
       return;
     } catch (err) {
       overlay.setStatus('offline');

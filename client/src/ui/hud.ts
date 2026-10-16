@@ -6,7 +6,11 @@ export interface Hud {
 }
 
 /** Nome da sala, status dos assets e controles de zoom (que agem sobre a cena atual). */
-export function mountHud(opts: { getCamera: () => Camera | undefined; loader: AssetLoader }): Hud {
+export function mountHud(opts: {
+  getCamera: () => Camera | undefined;
+  loader: AssetLoader;
+  onEditAvatar: () => void;
+}): Hud {
   const card = document.createElement('header');
   card.className = 'hud-card';
   const title = document.createElement('h1');
@@ -28,7 +32,13 @@ export function mountHud(opts: { getCamera: () => Camera | undefined; loader: As
     button('⌖', 'Centralizar a sala', () => opts.getCamera()?.center()),
   );
 
-  document.body.append(card, status, zoom);
+  const avatarBtn = document.createElement('button');
+  avatarBtn.type = 'button';
+  avatarBtn.className = 'hud-avatar btn-secondary';
+  avatarBtn.textContent = 'Meu visual';
+  avatarBtn.addEventListener('click', opts.onEditAvatar);
+
+  document.body.append(card, status, zoom, avatarBtn);
   return {
     setRoomName(name) {
       title.textContent = name;
