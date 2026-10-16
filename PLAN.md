@@ -1,7 +1,7 @@
 # PLAN — Escritório virtual isométrico
 
 > Documento vivo. Atualizar sempre que o plano mudar (ver "Como trabalhar" no SPEC.md).
-> Status: **aprovado em 16/10/2026** — Fases 1 a 3 aprovadas; Fase 4 concluída (aguardando validação). Decisões registradas na §9.
+> Status: **aprovado em 16/10/2026** — Fases 1 a 4 aprovadas; Fase 5 concluída (aguardando validação). Decisões registradas na §9.
 
 ---
 
@@ -183,11 +183,12 @@ Layout estático (heightmap, portas, cores e, até a Fase 6, os móveis) é pedi
 |---|---|
 | `POST /api/session` | `{ name, inviteCode?, figure?, gender?, token? }` → `{ userId, token, name, figure, gender }` (cria ou reaproveita usuário; token salvo no localStorage; erro `NAME_IN_USE` se o nome estiver em uso por alguém online) |
 | `GET /api/catalog` | → lista do `furni_catalog` com URLs `/hh/...` |
+| `GET /api/presence` | (header `Authorization: Bearer token`) → `{ rooms: [{ roomId, name, people: [{ name }] }] }` |
 | `GET /hh/*` | proxy/cache de imagens do imager (`avatar.png`, `furniture/{c}.png`, `clothing/set/{id}.png`) |
 
 ### 5.2 Colyseus — join
 
-`client.joinOrCreate('office', { roomId: 'reception', token })` → `onAuth` valida o token e devolve o usuário; código de convite é checado só no `/api/session`. Cada sala física é uma instância Colyseus `office` com `filterBy(['roomId'])`.
+`client.joinOrCreate('office', { officeRoomId: 'reception', token, ticket? })` → `onAuth` valida o token e devolve o usuário; código de convite é checado só no `/api/session`. Cada sala física é uma instância Colyseus `office` com `filterBy(['officeRoomId'])` (a opção não pode se chamar `roomId`, que é o id interno da instância). `ticket` vem de uma porta e define onde nascer.
 
 ### 5.3 Mensagens cliente → servidor (todas validadas com zod)
 
@@ -212,7 +213,6 @@ Layout estático (heightmap, portas, cores e, até a Fase 6, os móveis) é pedi
 |---|---|
 | `chat.message` | `{ id, roomId, userId, sessionId, name, text, ts }` (broadcast só na sala) |
 | `room.transfer` | `{ targetRoomId, ticket }` — cliente sai e entra na outra sala com o ticket (spawn na porta de destino) |
-| `room.presence` | derivado do estado (`players`); lista de presentes de todas as salas via `GET /api/presence` (polling 10 s) |
 | `error` | `{ code: 'RATE_LIMIT'|'INVALID_MOVE'|'INVALID_PLACEMENT'|…, message }` |
 
 Movimento: o servidor roda um tick de 50 ms; cada passo dura 500 ms (2 tiles/s, diagonal igual — estilo Habbo). Ao iniciar um passo ele seta `nextX/nextY/dir/action='walk'`; ao terminar, `x/y`. O cliente enfileira cada `next` recebido e interpola em 500 ms (acelera 1,5× se acumular passos por atraso de rede; teleporta se a posição não for vizinha).
@@ -325,9 +325,9 @@ screenToTile(sx, sy)  = { x: floor((sy/16 + sx/32) / 2), y: floor((sy/16 - sx/32
 
 **Como testar:** duas abas na mesma sala trocam mensagens e veem balões sobre o avatar certo; histórico aparece ao recarregar; enviar `<img src=x onerror=alert(1)>` aparece como texto literal; mandar 10 mensagens seguidas → aviso de rate limit; `npm test` cobre rate limiter e sanitização/limites.
 
-### Fase 5 — Várias salas e portas
+### Fase 5 — Várias salas e portas ✅ implementada
 - Seed de Recepção, Sala de reunião e Copa com heightmaps e cores próprias + `room_doors`.
-- Instâncias `office` filtradas por `roomId`; pisar na porta → `room.transfer` com ticket de uso único → cliente troca de sala (fade) e nasce na porta de destino.
+- Instâncias `office` filtradas por `officeRoomId`; pisar na porta → `room.transfer` com ticket de uso único → cliente troca de sala (fade) e nasce na porta de destino.
 - Chat e presença isolados por sala; painel "Pessoas" com presentes de todas as salas (`GET /api/presence`) e da sala atual em destaque.
 - URL reflete a sala (`#/meeting`) para recarregar no lugar certo.
 
@@ -408,4 +408,14 @@ screenToTile(sx, sy)  = { x: floor((sy/16 + sx/32) / 2), y: floor((sy/16 - sx/32
 - Balões (`client/src/entities/ChatBubble.ts`): "Nome: mensagem" com rabicho, quebra em até 220 px, ficam no x de quem falou, sobem quando chega outro e somem em 7 s (máx. 10 na tela). O nome da própria pessoa sai em azul.
 - Painel "Conversa" recolhível (aberto por padrão em telas largas), com contador de novas quando fechado. Enter em qualquer lugar foca o campo; Esc sai.
 - O robô de teste (`npm run bot`) agora fala frases de vez em quando, para testar os balões sozinho.
+
+### Notas da Fase 5
+- **Bug encontrado pelos testes:** com `filterBy(['roomId'])` todo mundo caía na mesma instância, porque `roomId` também é o id interno de cada sala Colyseus. A opção de entrada virou `officeRoomId`.
+- Salas e portas continuam definidas em `shared/rooms.ts` (não há editor de salas na v1) e são sincronizadas no banco a cada boot: `rooms` por upsert e `room_doors` recriada. Os móveis passam para o banco na Fase 6.
+- A Recepção ganhou uma linha a mais no topo para a porta da Copa; os móveis desceram um tile.
+- Portas: tile do heightmap fora da parede, destacado em azul com "→ Destino" ao passar o mouse. Ao terminar um passo numa porta (`MovementSystem.onStepEnd`), o servidor emite um ticket de uso único (30 s) e manda `room.transfer`; o cliente sai com consentimento, escurece a tela e entra na outra sala com o ticket, nascendo do lado de dentro da porta de volta.
+- `shared/rooms.test.ts` valida cada sala: móveis dentro e sem sobreposição, portas alcançáveis a partir da entrada, destino livre e porta de volta existente.
+- Lista de pessoas: a sala atual ao vivo pelo estado; as outras por `GET /api/presence` a cada 10 s.
+- URL reflete a sala (`#/meeting`); recarregar entra direto nela.
+- Novo móvel: máquina de café (`sunsetcafe_c20_coffeemachine`), na Copa.
 

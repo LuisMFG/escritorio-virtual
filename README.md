@@ -2,7 +2,7 @@
 
 Escritório virtual isométrico para amigos e colegas: avatares andando em salas no estilo Habbo, com movimento em tempo real e chat. Veja [SPEC.md](SPEC.md) (requisitos) e [PLAN.md](PLAN.md) (plano e decisões).
 
-> Em construção — **Fase 4** (chat com balões e histórico por sala). O README completo, com deploy, entra na Fase 7.
+> Em construção — **Fase 5** (Recepção, Sala de reunião e Copa, ligadas por portas). O README completo, com deploy, entra na Fase 7.
 
 ## Rodar localmente
 
@@ -15,6 +15,8 @@ npm run dev
 ```
 
 Isso sobe o servidor (http://localhost:2567) e o cliente (http://localhost:5173). Abra o cliente, digite um nome e o código de convite (`INVITE_CODE` do `.env`; sem `.env`, o código de desenvolvimento é `convite`).
+
+Para ir a outra sala, clique numa porta (o tile escuro na parede, destacado em azul ao passar o mouse). Dá para abrir direto numa sala pela URL: `#/reception`, `#/meeting` ou `#/pantry`.
 
 Para testar com várias pessoas:
 
