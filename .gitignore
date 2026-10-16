@@ -1,0 +1,46 @@
+# Dependências
+node_modules/
+.pnp
+.pnp.js
+
+# Builds
+dist/
+build/
+out/
+*.tsbuildinfo
+.vite/
+coverage/
+
+# Ambiente
+.env
+.env.*
+!.env.example
+
+# Banco de dados local (SQLite)
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+data/
+
+# Cache de assets baixados da HabboAssets API
+.asset-cache/
+server/cache/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editores / SO
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+*.swp
+*.swo
