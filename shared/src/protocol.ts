@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import { genderSchema, type Gender } from './manifests.js';
-import type { PlacedFurni } from './furni.js';
 import type { RoomDoor } from './rooms.js';
 import type { TilePoint } from './iso.js';
 
@@ -18,6 +17,14 @@ export const ClientMessage = {
   Chat: 'chat',
   /** Requisição: responde com as últimas mensagens da sala (`ChatMessage[]`). */
   GetChatHistory: 'chat.history',
+  /** Modo decorar: `{ defId, x, y, rot }`. */
+  FurniPlace: 'furni.place',
+  /** Modo decorar: mover e/ou girar `{ furniId, x, y, rot }`. */
+  FurniMove: 'furni.move',
+  /** Modo decorar: `{ furniId }`. */
+  FurniRemove: 'furni.remove',
+  /** Clique num móvel fora do modo decorar (sentar): `{ furniId }`. */
+  Interact: 'interact',
 } as const;
 
 /** Mensagens servidor → cliente. */
@@ -37,6 +44,7 @@ export const ErrorCode = {
   InvalidMove: 'INVALID_MOVE',
   InvalidFigure: 'INVALID_FIGURE',
   InvalidChat: 'INVALID_CHAT',
+  InvalidPlacement: 'INVALID_PLACEMENT',
   RateLimit: 'RATE_LIMIT',
 } as const;
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];
@@ -50,6 +58,7 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
   INVALID_MOVE: 'Não dá para andar até lá.',
   INVALID_FIGURE: 'Esse visual não é válido.',
   INVALID_CHAT: 'Mensagem inválida.',
+  INVALID_PLACEMENT: 'Não dá para colocar o móvel aí.',
   RATE_LIMIT: 'Calma! Muitas ações em pouco tempo.',
 };
 
@@ -135,6 +144,21 @@ const tileCoord = z.number().int().min(0).max(255);
 export const moveSchema = z.object({ x: tileCoord, y: tileCoord });
 export type MoveMessage = z.infer<typeof moveSchema>;
 
+const furniId = z.string().min(1).max(40);
+const rotation = z.union([z.literal(0), z.literal(2), z.literal(4), z.literal(6)]);
+
+export const furniPlaceSchema = z.object({
+  defId: z.string().min(1).max(80),
+  x: tileCoord,
+  y: tileCoord,
+  rot: rotation,
+});
+export const furniMoveSchema = z.object({ furniId, x: tileCoord, y: tileCoord, rot: rotation });
+export const furniRefSchema = z.object({ furniId });
+export type FurniPlaceMessage = z.infer<typeof furniPlaceSchema>;
+export type FurniMoveMessage = z.infer<typeof furniMoveSchema>;
+export type FurniRefMessage = z.infer<typeof furniRefSchema>;
+
 export const updateAvatarSchema = z.object({ figure: figureSchema, gender: genderSchema });
 export type UpdateAvatarMessage = z.infer<typeof updateAvatarSchema>;
 
@@ -147,8 +171,6 @@ export interface RoomLayoutMessage {
   doors: RoomDoor[];
   floorColor: string;
   wallColor: string;
-  /** Até a Fase 6 os móveis são fixos e vêm aqui; depois passam para o estado sincronizado. */
-  furni: PlacedFurni[];
 }
 
 export const CHAT_MAX_LENGTH = 200;

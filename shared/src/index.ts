@@ -11,3 +11,4 @@ export * from './figure.js';
 export * from './protocol.js';
 export * from './state.js';
 export * from './avatar.js';
+export * from './placement.js';

@@ -1,5 +1,5 @@
 {
-  "$comment": "Catálogo curado de móveis. anchors[dir] = pixel da PNG do imager que fica sobre o vértice de baixo do footprint (medido pelo pixel opaco mais baixo; recalibrar na Fase 6). width/depth valem para rot 0; rot 2/6 trocam os eixos.",
+  "$comment": "Gerado por `npm run assets:sync`. Curadoria (nomes, categorias, tamanhos) em server/src/assets/furniCatalog.ts; anchors[dir] = pixel da PNG do imager sobre o vértice de baixo do footprint. width/depth valem para rot 0; rot 2/6 trocam os eixos.",
   "version": 1,
   "hotelId": 2,
   "items": [
@@ -11,14 +11,76 @@
       "depth": 1,
       "height": 1,
       "canSit": true,
-      "sitHeight": 1,
+      "canWalk": false,
+      "sitHeight": 0.5,
       "directions": [0, 2, 4, 6],
       "revision": 61856,
+      "source": "habboassets",
       "anchors": {
         "0": [25.5, 54],
         "2": [23.5, 60],
         "4": [26.5, 62],
         "6": [31.5, 56]
+      }
+    },
+    {
+      "id": "chair_silo",
+      "name": "Cadeira Silo",
+      "category": "cadeiras",
+      "width": 1,
+      "depth": 1,
+      "height": 1,
+      "canSit": true,
+      "canWalk": false,
+      "sitHeight": 0.5,
+      "directions": [0, 2, 4, 6],
+      "revision": 75469,
+      "source": "habboassets",
+      "anchors": {
+        "0": [25, 56],
+        "2": [27, 67],
+        "4": [28, 67],
+        "6": [27, 56]
+      }
+    },
+    {
+      "id": "chair_plasto",
+      "name": "Cadeira de Plástico",
+      "category": "cadeiras",
+      "width": 1,
+      "depth": 1,
+      "height": 1,
+      "canSit": true,
+      "canWalk": false,
+      "sitHeight": 0.5,
+      "directions": [0, 2, 4, 6],
+      "revision": 45508,
+      "source": "habboassets",
+      "anchors": {
+        "0": [23, 50],
+        "2": [23, 58],
+        "4": [23, 58],
+        "6": [23, 50]
+      }
+    },
+    {
+      "id": "exe_chair",
+      "name": "Cadeira Executiva",
+      "category": "cadeiras",
+      "width": 1,
+      "depth": 1,
+      "height": 1,
+      "canSit": true,
+      "canWalk": false,
+      "sitHeight": 0.5,
+      "directions": [0, 2, 4, 6],
+      "revision": 56746,
+      "source": "habboassets",
+      "anchors": {
+        "0": [41.5, 57],
+        "2": [31.5, 64],
+        "4": [41.5, 64],
+        "6": [31.5, 57]
       }
     },
     {
@@ -29,14 +91,76 @@
       "depth": 1,
       "height": 1,
       "canSit": true,
-      "sitHeight": 1,
+      "canWalk": false,
+      "sitHeight": 0.5,
       "directions": [0, 2, 4, 6],
       "revision": 61856,
+      "source": "habboassets",
       "anchors": {
         "0": [61.5, 71],
         "2": [18.5, 81],
         "4": [61.5, 78],
         "6": [20.5, 72]
+      }
+    },
+    {
+      "id": "sofa_silo",
+      "name": "Sofá Silo",
+      "category": "sofás",
+      "width": 2,
+      "depth": 1,
+      "height": 1,
+      "canSit": true,
+      "canWalk": false,
+      "sitHeight": 0.5,
+      "directions": [0, 2, 4, 6],
+      "revision": 56746,
+      "source": "habboassets",
+      "anchors": {
+        "0": [67, 76],
+        "2": [34, 86],
+        "4": [63, 86],
+        "6": [33, 76]
+      }
+    },
+    {
+      "id": "sofachair_silo",
+      "name": "Poltrona Silo",
+      "category": "sofás",
+      "width": 1,
+      "depth": 1,
+      "height": 1,
+      "canSit": true,
+      "canWalk": false,
+      "sitHeight": 0.5,
+      "directions": [0, 2, 4, 6],
+      "revision": 56746,
+      "source": "habboassets",
+      "anchors": {
+        "0": [38, 62],
+        "2": [36, 72],
+        "4": [36, 72],
+        "6": [36, 62]
+      }
+    },
+    {
+      "id": "exe_sofa",
+      "name": "Sofá Executivo",
+      "category": "sofás",
+      "width": 3,
+      "depth": 1,
+      "height": 1,
+      "canSit": true,
+      "canWalk": false,
+      "sitHeight": 0.5,
+      "directions": [0, 2, 4, 6],
+      "revision": 56746,
+      "source": "habboassets",
+      "anchors": {
+        "0": [103.5, 88],
+        "2": [31.5, 92],
+        "4": [103.5, 92],
+        "6": [31.5, 88]
       }
     },
     {
@@ -46,10 +170,68 @@
       "width": 2,
       "depth": 2,
       "height": 1,
+      "canSit": false,
+      "canWalk": false,
+      "sitHeight": 0,
       "directions": [0],
       "revision": 61856,
+      "source": "habboassets",
       "anchors": {
         "0": [50, 79]
+      }
+    },
+    {
+      "id": "table_silo_med",
+      "name": "Mesa Silo",
+      "category": "mesas",
+      "width": 2,
+      "depth": 2,
+      "height": 1,
+      "canSit": false,
+      "canWalk": false,
+      "sitHeight": 0,
+      "directions": [0],
+      "revision": 56746,
+      "source": "habboassets",
+      "anchors": {
+        "0": [51, 77]
+      }
+    },
+    {
+      "id": "table_plasto_square",
+      "name": "Mesinha de Plástico",
+      "category": "mesas",
+      "width": 1,
+      "depth": 1,
+      "height": 1,
+      "canSit": false,
+      "canWalk": false,
+      "sitHeight": 0,
+      "directions": [0],
+      "revision": 45508,
+      "source": "habboassets",
+      "anchors": {
+        "0": [23, 52]
+      }
+    },
+    {
+      "id": "exe_table",
+      "name": "Mesa Executiva",
+      "category": "mesas",
+      "width": 3,
+      "depth": 2,
+      "height": 1,
+      "canSit": false,
+      "canWalk": false,
+      "sitHeight": 0,
+      "directions": [0, 2, 4, 6],
+      "revision": 56746,
+      "source": "habboassets",
+      "anchors": {
+        "0": [94, 109],
+        "2": [49, 109],
+        "4": [94, 109],
+        "6": [49, 109]
       }
     },
     {
@@ -59,10 +241,82 @@
       "width": 1,
       "depth": 1,
       "height": 1,
+      "canSit": false,
+      "canWalk": false,
+      "sitHeight": 0,
       "directions": [0],
       "revision": 48082,
+      "source": "habboassets",
       "anchors": {
         "0": [25, 108]
+      }
+    },
+    {
+      "id": "plant_yukka",
+      "name": "Iuca",
+      "category": "plantas",
+      "width": 1,
+      "depth": 1,
+      "height": 1,
+      "canSit": false,
+      "canWalk": false,
+      "sitHeight": 0,
+      "directions": [0],
+      "revision": 48082,
+      "source": "habboassets",
+      "anchors": {
+        "0": [47, 156]
+      }
+    },
+    {
+      "id": "plant_pineapple",
+      "name": "Abacaxizeiro",
+      "category": "plantas",
+      "width": 1,
+      "depth": 1,
+      "height": 1,
+      "canSit": false,
+      "canWalk": false,
+      "sitHeight": 0,
+      "directions": [0],
+      "revision": 48082,
+      "source": "habboassets",
+      "anchors": {
+        "0": [25, 98]
+      }
+    },
+    {
+      "id": "plant_bonsai",
+      "name": "Bonsai",
+      "category": "plantas",
+      "width": 1,
+      "depth": 1,
+      "height": 1,
+      "canSit": false,
+      "canWalk": false,
+      "sitHeight": 0,
+      "directions": [0],
+      "revision": 48082,
+      "source": "habboassets",
+      "anchors": {
+        "0": [33, 70]
+      }
+    },
+    {
+      "id": "exe_plant",
+      "name": "Planta Executiva",
+      "category": "plantas",
+      "width": 1,
+      "depth": 1,
+      "height": 1,
+      "canSit": false,
+      "canWalk": false,
+      "sitHeight": 0,
+      "directions": [0],
+      "revision": 56746,
+      "source": "habboassets",
+      "anchors": {
+        "0": [46.5, 128]
       }
     },
     {
@@ -72,26 +326,128 @@
       "width": 1,
       "depth": 1,
       "height": 2,
+      "canSit": false,
+      "canWalk": false,
+      "sitHeight": 0,
       "directions": [0, 2],
       "revision": 61856,
+      "source": "habboassets",
       "anchors": {
-        "0": [25.5, 112],
-        "2": [25.5, 112]
+        "0": [31, 112],
+        "2": [19, 112]
       }
     },
     {
-      "id": "carpet_standard",
-      "name": "Tapete",
-      "category": "tapetes",
-      "width": 3,
-      "depth": 5,
-      "height": 0,
-      "canWalk": true,
-      "directions": [0, 2],
-      "revision": 48082,
+      "id": "shelves_silo",
+      "name": "Estante Silo",
+      "category": "estantes",
+      "width": 2,
+      "depth": 1,
+      "height": 2,
+      "canSit": false,
+      "canWalk": false,
+      "sitHeight": 0,
+      "directions": [0, 2, 4, 6],
+      "revision": 56746,
+      "source": "habboassets",
       "anchors": {
-        "0": [94.5, 128],
-        "2": [166.5, 128]
+        "0": [65, 133],
+        "2": [21, 133],
+        "4": [65, 133],
+        "6": [21, 133]
+      }
+    },
+    {
+      "id": "shelves_basic",
+      "name": "Estante Simples",
+      "category": "estantes",
+      "width": 2,
+      "depth": 1,
+      "height": 2,
+      "canSit": false,
+      "canWalk": false,
+      "sitHeight": 0,
+      "directions": [0, 2, 4, 6],
+      "revision": 48082,
+      "source": "habboassets",
+      "anchors": {
+        "0": [64.5, 125],
+        "2": [18.5, 122],
+        "4": [64.5, 122],
+        "6": [18.5, 124]
+      }
+    },
+    {
+      "id": "uni_c23_whiteboard",
+      "name": "Quadro Branco",
+      "category": "escritório",
+      "width": 1,
+      "depth": 1,
+      "height": 2,
+      "canSit": false,
+      "canWalk": false,
+      "sitHeight": 0,
+      "directions": [0, 2],
+      "revision": 69457,
+      "source": "habboassets",
+      "anchors": {
+        "0": [23.5, 122],
+        "2": [34.5, 122]
+      }
+    },
+    {
+      "id": "exe_globe",
+      "name": "Globo",
+      "category": "escritório",
+      "width": 1,
+      "depth": 1,
+      "height": 1,
+      "canSit": false,
+      "canWalk": false,
+      "sitHeight": 0,
+      "directions": [0],
+      "revision": 45512,
+      "source": "habboassets",
+      "anchors": {
+        "0": [42.5, 93]
+      }
+    },
+    {
+      "id": "lamp_basic",
+      "name": "Luminária",
+      "category": "escritório",
+      "width": 1,
+      "depth": 1,
+      "height": 1,
+      "canSit": false,
+      "canWalk": false,
+      "sitHeight": 0,
+      "directions": [0, 6],
+      "revision": 48082,
+      "source": "habboassets",
+      "anchors": {
+        "0": [29.5, 132],
+        "6": [28.5, 132]
+      }
+    },
+    {
+      "id": "divider_silo1",
+      "name": "Divisória Silo",
+      "category": "escritório",
+      "width": 1,
+      "depth": 1,
+      "height": 1,
+      "canSit": false,
+      "canWalk": false,
+      "sitHeight": 0,
+      "directions": [0, 2, 4, 6],
+      "revision": 56746,
+      "source": "habboassets",
+      "anchors": {
+        "0": [19.5, 50],
+        "2": [18.5, 54],
+        "4": [17.5, 49],
+        "6": [4.5, 54]
       }
     },
     {
@@ -101,11 +457,69 @@
       "width": 1,
       "depth": 1,
       "height": 1,
+      "canSit": false,
+      "canWalk": false,
+      "sitHeight": 0,
       "directions": [0, 2],
       "revision": 65801,
+      "source": "habboassets",
       "anchors": {
         "0": [22.5, 52],
         "2": [26.5, 52]
+      }
+    },
+    {
+      "id": "bardesk_polyfon",
+      "name": "Balcão",
+      "category": "cozinha",
+      "width": 2,
+      "depth": 1,
+      "height": 1,
+      "canSit": false,
+      "canWalk": false,
+      "sitHeight": 0,
+      "directions": [0, 2],
+      "revision": 48082,
+      "source": "habboassets",
+      "anchors": {
+        "0": [64.5, 74],
+        "2": [20.5, 74]
+      }
+    },
+    {
+      "id": "carpet_standard",
+      "name": "Tapete",
+      "category": "tapetes",
+      "width": 3,
+      "depth": 5,
+      "height": 0,
+      "canSit": false,
+      "canWalk": true,
+      "sitHeight": 0,
+      "directions": [0, 2],
+      "revision": 48082,
+      "source": "habboassets",
+      "anchors": {
+        "0": [94.5, 128],
+        "2": [166.5, 128]
+      }
+    },
+    {
+      "id": "carpet_soft",
+      "name": "Tapete Macio",
+      "category": "tapetes",
+      "width": 1,
+      "depth": 3,
+      "height": 0,
+      "canSit": false,
+      "canWalk": true,
+      "sitHeight": 0,
+      "directions": [0, 2],
+      "revision": 48082,
+      "source": "habboassets",
+      "anchors": {
+        "0": [38.5, 74],
+        "2": [93.5, 74]
       }
     }
   ]

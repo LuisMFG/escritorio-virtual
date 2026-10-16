@@ -28,11 +28,27 @@ export const Player = schema(
 );
 export type Player = SchemaType<typeof Player>;
 
+/** Móvel posicionado (persistido em `room_furni`). */
+export const Furni = schema(
+  {
+    id: t.string(),
+    defId: t.string(),
+    x: t.uint8(),
+    y: t.uint8(),
+    z: t.float32(),
+    rot: t.uint8(),
+  },
+  'Furni',
+);
+export type Furni = SchemaType<typeof Furni>;
+
 export const OfficeState = schema(
   {
     roomId: t.string(),
     /** Chave = sessionId do Colyseus. */
     players: t.map(Player),
+    /** Chave = id do móvel. */
+    furni: t.map(Furni),
   },
   'OfficeState',
 );
