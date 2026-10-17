@@ -17,6 +17,7 @@ Escritório virtual isométrico para amigos e colegas (até ~10 pessoas online):
 - **Pets**: adote um bichinho no Perfil (cachorro, gato, coelho ou pintinho). Ele segue você entre as salas, passeia quando você para e obedece `/senta`, `/deita` e `/vem` no chat.
 - **Conquistas**: 17 conquistas (conversar, decorar, explorar as salas, jogar, ir às reuniões…) com aviso ao desbloquear. No Perfil você escolhe até 3 emblemas para aparecer no seu cartão.
 - **Status do editor de código**: com a extensão do VS Code ou do Visual Studio, seu cartão mostra “💻 Codando em C# no Visual Studio” enquanto você programa. No Perfil você escolhe o que aparece (nada, só “Codando”, a linguagem ou também o projeto). Veja [Extensões dos editores](#extensões-dos-editores).
+- **Spotify**: conecte sua conta no Perfil e a música que você está ouvindo aparece no seu cartão (“🎵 Música – Artista”, com link). Dá para esconder sem desconectar. Precisa de um app do Spotify configurado; veja [Spotify](#spotify).
 - **Dia e noite** pelo horário de Brasília, com as luzes acesas brilhando à noite (`?hora=21` força a hora para testar), e **som ambiente** opcional por sala (🎵: escritório, cafeteria ou chuva, gerado no próprio navegador).
 - **Reações e respostas**: passe o mouse numa mensagem (sala ou privada) para reagir (👍 ❤️ 😂 😮 😢 🎉) ou responder citando; quem é respondido recebe aviso.
 - **Mensagens privadas**: botão **Mensagens** (ou "Mensagem" no cartão/Equipe) para conversar com qualquer pessoa, em qualquer sala ou offline (ela lê quando voltar). Contador de não lidas, "Visto" e notificações do navegador opcionais (🔔 no painel) para DMs e menções com a aba em segundo plano.
@@ -117,6 +118,18 @@ As duas extensões mandam ao escritório, a cada minuto enquanto você mexe no c
 4. **Extensões → Escritório: pausar ou retomar** e **Escritório: desconectar** fazem o resto.
 
 Fora do Windows, `dotnet build` só compila (confere o código) e não gera o `.vsix`.
+
+## Spotify
+
+1. Em <https://developer.spotify.com/dashboard>, crie um app (tipo *Web API*).
+2. Em **Redirect URIs**, cadastre o endereço de retorno:
+   - desenvolvimento: `http://127.0.0.1:2567/api/spotify/callback` (o Spotify não aceita `localhost`);
+   - produção: `https://SEU-DOMINIO/api/spotify/callback` (precisa de https).
+3. No `.env`: `SPOTIFY_CLIENT_ID` (o Client ID do app; o segredo não é usado), e se precisar `SPOTIFY_REDIRECT_URI` e `SPOTIFY_RETURN_URL` (em dev, `http://localhost:5173/`).
+4. Enquanto o app estiver em *Development mode*, o Spotify só deixa conectar quem você adicionar em **User Management** (até 25 pessoas, pelo e-mail da conta Spotify).
+5. Reinicie o servidor. No Perfil, cada pessoa clica em **Conectar Spotify**.
+
+O servidor consulta a música de quem está online a cada 20 segundos e guarda só o necessário para isso (o refresh token, com o escopo `user-read-currently-playing`).
 
 ## Assets: HabboAssets e arte própria
 

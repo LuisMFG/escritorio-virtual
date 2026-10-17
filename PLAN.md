@@ -160,6 +160,7 @@ user_visits     { userId, roomId: fk rooms (cascade) } pk(userId, roomId)
 users           … + badges: text (até 3 ids exibidos no cartão)
 users           … + codeShare: 'hidden'|'coding'|'language'|'project'   // Fase 20
 api_tokens      { id, userId, name, tokenHash (sha256, único), createdAt, lastUsedAt }
+spotify_links   { userId pk, refreshToken, accessToken, expiresAt, displayName, hidden, createdAt } // Fase 21
 dm_reactions    { messageId: fk direct_messages (cascade), userId, emoji } pk(os três)
 
 rooms          { id: text pk ('reception'|'meeting'|'pantry'), name: text,
@@ -736,9 +737,17 @@ Pedido em 17/10/2026: mostrar no escritório o que cada pessoa está fazendo for
 - **Perfil → 💻 Editores de código:** link para baixar a extensão do VS Code, escolha do que aparece, lista de tokens (último uso, revogar com confirmação) e criação (o token aparece uma vez, com botão Copiar).
 - Testado no navegador: gerar token, sinais no formato das duas extensões (enviados pela página com o token gerado), texto no cartão e na lista, troca de privacidade e revogação (sinal recusado com 401). A extensão do VS Code não foi instalada no seu VS Code; o `.vsix` está pronto para você instalar.
 
-### Fase 21 — Spotify
+### Fase 21 — Spotify ✅ implementada (falta o teste com um app real)
 - No Perfil, "Conectar Spotify" (OAuth com PKCE, escopo `user-read-currently-playing`). O servidor guarda o refresh token e consulta a música atual de quem está online a cada ~20–30 s.
 - Mostra "🎵 Ouvindo: Música – Artista" (com link para a música) no cartão e na lista de pessoas; esconde quando pausado. Botões para desconectar e para ocultar temporariamente.
 - **Pré-requisitos (seus):** criar um app no Spotify Developer Dashboard (Client ID no `.env`), cadastrar o endereço de retorno (https em produção; `http://127.0.0.1:…` em desenvolvimento) e, no modo de desenvolvimento do Spotify, adicionar o e-mail de cada pessoa que vai conectar (limite de ~25).
 
 **Como testar:** conectar a conta, tocar uma música e ver o cartão atualizar para os outros; pausar e a linha some; desconectar.
+
+**Notas da implementação:**
+- **OAuth com PKCE feito pelo servidor** (só o Client ID, sem segredo): `POST /api/spotify/connect` devolve o endereço de autorização (state e verifier guardados em memória por 10 min), o Spotify volta em `GET /api/spotify/callback`, o servidor troca o código pelos tokens e manda o navegador de volta para `SPOTIFY_RETURN_URL?spotify=ok|erro|cancelado`, onde aparece um aviso. Tokens em `spotify_links` (migration `0017`); o access token é renovado com o refresh token quando falta menos de 1 min (o Spotify pode girar o refresh token). Se a pessoa tirar a autorização no Spotify (`invalid_grant`), o vínculo é apagado.
+- **Consulta** (`SpotifyPoller`, a cada 20 s, uma pessoa por vez): só de quem está online, ligou a conta e não escondeu a música. `GET /me/player/currently-playing`: tocando = "🎵 Música – Artista" (podcast mostra o programa); pausado, nada tocando ou propaganda = some. Respeita o 429 (espera o `Retry-After`).
+- **Atividade com várias linhas:** código e música aparecem juntos (uma por linha) no cartão e na lista de pessoas. Na linha 🎵 do cartão, link para a música (`Player.activityUrl`, só links `open.spotify.com`).
+- **Perfil → 🎵 Spotify:** sem app configurado, explica o que falta. Com app: "Conectar Spotify", depois "Conectado como …", "Mostrar o que estou ouvindo" (esconder sem desconectar) e "Desconectar".
+- **Config:** `SPOTIFY_CLIENT_ID` (sem ele a integração fica desligada), `SPOTIFY_REDIRECT_URI` (padrão `http://127.0.0.1:2567/api/spotify/callback`; o Spotify não aceita `localhost`) e `SPOTIFY_RETURN_URL` (em dev, `http://localhost:5173/`).
+- **Testado:** troca de código com PKCE, renovação, pausado, conta desautorizada, consulta só de quem está online, esconder e o redirect de volta, tudo contra um Spotify falso nos testes automáticos. No navegador: o aviso de "não configurado", o botão levando à página real do Spotify (com um Client ID provisório, sem entrar na conta) e o aviso na volta. **Falta** o teste de ponta a ponta com um app real do Spotify: depende do Client ID do app que você criar.
