@@ -799,10 +799,17 @@ Escolhido em 17/10/2026, depois do roadmap v3. Ordem pensada assim: primeiro pro
 - **Teste de ponta a ponta** (`e2e/tests/avisos.spec.ts`): a diretora (`admin.e2e`) publica, o Beto online recebe a faixa ao vivo e o contador, "Li" some e não volta ao recarregar, o Caio, que cria a conta depois, vê ao entrar, e o admin vê "lido por 2". O teste pegou um erro na primeira versão: quem publicava também recebia a própria faixa.
 - No navegador: publicar um aviso urgente pelo painel (barra vermelha, "lido por 1", sem faixa para a autora). A faixa vista por outra pessoa foi conferida pela foto do teste de ponta a ponta.
 
-### Fase 25 — Enquetes no chat
+### Fase 25 — Enquetes no chat ✅ implementada
 - `/enquete Pergunta? | opção 1 | opção 2 …` (até 6 opções) ou botão no chat. Mensagem especial com botões; um voto por pessoa (dá para trocar), resultado ao vivo com barras. Quem criou encerra. Anônima ou com nomes (escolha ao criar).
 
 **Como testar:** criar enquete, votar de duas abas, trocar o voto, encerrar.
+
+**Notas da implementação:**
+- Enquete é uma mensagem do chat com `kind: 'poll'`, mais as tabelas `polls` (ligada à mensagem, apagada junto se ela sair do histórico) e `poll_votes` (um voto por pessoa; votar de novo troca), na migration `0019`.
+- Criar: `/enquete Pergunta? | a | b …` (o servidor reconhece no chat; vale o limite de 200 caracteres da mensagem) ou 😊 → **📊 Enquete** (formulário com até 6 opções e "Anônima"; mensagem `poll.create`). Votar (`poll.vote`) e encerrar (`poll.close`, só quem criou ou admin). Cada pessoa recebe a enquete com o próprio voto (`myVote`), tanto ao vivo (`poll.updated`) quanto no histórico ao entrar na sala.
+- Cartão no chat: opções com barra de porcentagem, "✓" no seu voto, nomes de quem votou ao passar o mouse (se não for anônima), "N voto(s) · com nomes/anônima/encerrada" e "Encerrar".
+- Testes: na sala (comando, votar, trocar, nomes, só quem criou encerra, voto depois de encerrar recusado, histórico com o voto, comando mal formado, anônima sem nomes) e de ponta a ponta (`e2e/tests/enquete.spec.ts`: comando, voto e troca vistos pela outra pessoa, nomes no "title", encerrar e botões desligados, anônima pelo menu).
+- No navegador: criar pelo menu com 3 opções, votar, recarregar e o voto continua marcado, encerrar. Ajuste visto no teste: no chat estreito o "Encerrar" quebrava em duas linhas; o rodapé ficou mais curto.
 
 ### Fase 26 — Elogios (kudos)
 - Botão "Elogiar" no cartão do avatar e na Equipe: escolhe um tipo (🙌 Ajudou muito, 💡 Boa ideia, 🚀 Entregou, 🤝 Parceria) e escreve uma frase. Vai para um mural na Recepção (móvel novo), avisa a pessoa e conta para conquistas novas ("Querido pela equipe", "Reconhece os colegas").
