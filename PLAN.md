@@ -457,3 +457,94 @@ Pedida depois de encerrar a v1 (o deploy na Oracle ficou para quando houver a VM
 - `scripts/setup-oracle.sh` (Docker, regras no iptables das imagens Ubuntu da Oracle, swap em VMs de pouca memória) e `scripts/deploy.sh` (rsync + `docker compose up -d --build`, sem enviar `.env`/`data`).
 - Guia: `docs/DEPLOY-ORACLE.md`. Testado localmente com `DOMAIN=localhost`: HTTPS, redirecionamento, CSP, API e WebSocket (WSS) pelo Caddy.
 
+
+---
+
+## 10. Roadmap v2 — escritório completo
+
+Pedido em 17/10/2026, depois da Fase 8: deixar o escritório "muito completo". Mesmo fluxo de sempre: uma fase por vez, cada uma testada e aprovada. A ordem segue as dependências — identidade e papéis vêm primeiro, porque quase tudo depois (DMs, moderação, agenda, conquistas) precisa saber quem é quem e o que cada um pode fazer.
+
+### Fase 9 — Contas com senha, cargos e perfil
+- **Contas:** nome de usuário único (login) + senha (hash `scrypt` do `node:crypto`, sem dependência nova). O código de convite continua sendo pedido só para **criar** a conta. Entrar em vários aparelhos: nova tabela `sessions` (um token por aparelho; "sair de todos os aparelhos" no perfil). Quem já tem conta pelo token do navegador entra normalmente e é convidado a definir usuário e senha.
+- **Cargos:** tabela `cargos { id, nome, cor, ordem }`, começando com **Diretor, Coordenador de TI, Coordenador de Transparência Ativa, Coordenador de Transparência Passiva, Desenvolvedor e DBA**. O cargo aparece numa etiqueta colorida embaixo do nome sobre o avatar, no cartão e na lista de pessoas (agrupável por cargo).
+- **Perfil:** bio curta (160 caracteres), cargo, aniversário (dia/mês, 🎂 no avatar e aviso para todos no dia) e "visto por último". Nova aba **Equipe** com todas as pessoas, online e offline.
+- Modelo: `users` ganha `username` (único), `passwordHash`, `role` ('admin'|'member'), `cargoId`, `bio` e `birthday`; `Player` no estado ganha `cargo` e `role`.
+
+**Como testar:** criar conta com convite, sair e entrar com usuário e senha em outra janela anônima (dois aparelhos); conta antiga define senha; cargo aparece sobre o avatar, no cartão e na lista; aba Equipe mostra quem está offline com "visto há X"; aniversário de hoje mostra 🎂.
+
+### Fase 10 — Administração e moderação
+- Papel **admin** (o primeiro vem do `.env`, `ADMIN_USERNAMES`; depois um admin promove outros).
+- Painel **Admin**: trocar o código de convite (vai para uma tabela `settings`; o `.env` vira só o valor inicial), gerenciar pessoas (cargo, papel, gerar senha temporária, desativar conta), gerenciar a lista de cargos.
+- Moderação: expulsar da sala ou do escritório, apagar mensagem do chat, travar a decoração por sala ("todos" ou "só admins").
+- Registro de ações (`audit_log`) visível para admins.
+
+**Como testar:** admin troca o convite e o antigo para de funcionar; dá cargo a alguém e todos veem na hora; trava a decoração da Recepção e um membro não consegue decorar; expulsa um robô; apaga uma mensagem e ela some para todos; o registro mostra cada ação.
+
+### Fase 11 — Mensagens privadas e notificações do sistema
+- **Canal global:** uma sala Colyseus `lobby` em que todo mundo fica conectado, independente da sala física. Leva DMs, avisos e presença em tempo real (substitui a consulta a cada 10 s do `/api/presence`).
+- **DMs:** tabela `direct_messages { id, from, to, texto, criadaEm, lidaEm }`; funciona entre salas e para quem está offline (lê quando voltar). Painel de conversas com contador de não lidas; "Mensagem" no cartão do avatar e na aba Equipe.
+- **Notificações do navegador** (botão para ativar, pede permissão uma vez): menção, DM e, depois, lembrete de reunião, quando a aba não está visível.
+
+**Como testar:** mandar DM para alguém em outra sala e para alguém offline; contador de não lidas; com a aba em segundo plano chega a notificação do sistema; a lista de pessoas das outras salas atualiza na hora.
+
+### Fase 12 — Reações e respostas
+- Reagir com emoji às mensagens do histórico (sala e DM): `chat_reactions { mensagem, pessoa, emoji }`, contagem ao lado da mensagem, clicar de novo tira.
+- Responder citando: `replyToId` nas mensagens; a resposta mostra um trecho da original, e clicar leva até ela. Quem é respondido recebe aviso como numa menção.
+
+**Como testar:** reagir e ver a contagem nas duas abas; tirar a reação; responder uma mensagem e clicar na citação.
+
+### Fase 13 — Criar e editar salas
+- Salas passam a ter o **banco como fonte da verdade** (`shared/rooms.ts` vira só a semente inicial).
+- Editor de sala: nome, tamanho e formato do piso (pintar/apagar tiles numa grade), cores de piso e parede, ponto de entrada e portas (escolher o tile e a sala de destino; a porta de volta é criada junto). Excluir sala vazia.
+- Quem pode: admins e quem eles liberarem (decisão abaixo). Limite de ~20 salas.
+
+**Como testar:** criar a sala "Sala do TI" em formato de L, ligar com uma porta à Recepção, entrar por ela e voltar; mudar as cores e todos veem; tentar desenhar uma sala sem caminho até a porta → bloqueado; reiniciar o servidor e tudo continua.
+
+### Fase 14 — Móveis interativos e ambiente
+- Móveis ganham `estado` sincronizado. Interações: abajur/luminária liga e desliga, cafeteira "serve" café (emote ☕), TV liga e desliga, **mural de recados** com post-its de texto que ficam salvos, porta-retrato.
+- +20 móveis no catálogo (escritório, TI: servidores/racks, monitores, quadro de avisos).
+- **Dia e noite:** a iluminação acompanha o horário de Brasília (manhã, tarde, noite); à noite as luminárias acesas brilham.
+- **Som ambiente** opcional por sala (loops livres CC0), com volume local.
+
+**Como testar:** ligar o abajur e a outra aba vê; deixar um recado no mural, recarregar e ele continua; forçar a hora (`?hora=21`) e ver a sala escura com as luzes acesas; ligar e desligar o som ambiente.
+
+### Fase 15 — Quadro branco
+- Móvel "quadro branco" (já na Sala de reunião). Clicar abre o quadro em tela cheia: traço livre, cores, espessura, borracha, texto, desfazer e limpar (limpar pede confirmação).
+- Traços em tempo real para quem estiver com o quadro aberto; salvo no banco (vários quadros, um por móvel). Miniatura do desenho aparece no próprio móvel na sala.
+
+**Como testar:** duas abas desenhando juntas; recarregar e o desenho continua; limpar; a miniatura na parede atualiza.
+
+### Fase 16 — Agenda de reuniões
+- Marcar reunião: título, sala, data/hora, duração e convidados (`meetings`, `meeting_attendees`). Painel **Agenda** com hoje e os próximos dias; aceitar/recusar.
+- Lembrete 5 min antes (aviso, notificação do sistema e DM automática) com o botão "Ir para a sala". Durante a reunião a porta da sala mostra "Em reunião: título".
+
+**Como testar:** marcar uma reunião para daqui a 6 minutos com um convidado; o lembrete chega para os dois; "Ir para a sala" leva até lá; a placa aparece na porta.
+
+### Fase 17 — Mini-jogos
+- **Jogo da velha** numa mesa de jogo: duas pessoas sentam, cada uma joga na sua vez; o resto da sala assiste. Placar salvo.
+- Comandos rápidos no chat: `/dado` (1–6) e `/moeda`, com resultado visível para todos (sorteado no servidor).
+
+**Como testar:** duas abas sentam na mesa e jogam até o fim; uma terceira assiste; `/dado` mostra o mesmo resultado para todos.
+
+### Fase 18 — Pets
+- Cada pessoa pode ter um bichinho (cachorro, gato…) com nome. Ele segue o dono, passeia sozinho quando o dono para e obedece comandos no chat (`/senta`, `/deita`, `/vem`).
+- Arte: tentar os pets da HabboAssets; se o imager não tiver render utilizável, arte própria CC0 (decisão na hora, com aviso).
+
+**Como testar:** adotar um pet, andar e ver ele seguir; dar comandos; a outra aba vê o pet.
+
+### Fase 19 — Conquistas
+- ~15 conquistas (primeira mensagem, primeiro móvel colocado, visitou todas as salas, 7 dias seguidos, ganhou no jogo da velha, participou de 5 reuniões…), com emblema e aviso ao desbloquear (`achievements`, `user_achievements`).
+- Emblemas aparecem no cartão e no perfil; a pessoa escolhe até 3 para exibir.
+
+**Como testar:** fazer as ações e ver os avisos; os emblemas aparecem no cartão para os outros.
+
+### Fora deste roadmap (por enquanto)
+Voz/vídeo por proximidade (WebRTC) — fica como possível fase extra no fim, porque é grande e pede servidor TURN para funcionar fora da rede local.
+
+### Decisões para aprovar antes da Fase 9
+1. **Contas:** usuário único + senha. Isso troca a decisão 4 da v1 (nomes livres): o **login** passa a ser único; o nome exibido continua livre.
+2. **Quem define o cargo:** só admins (ninguém se autodeclara "Diretor"). A pessoa vê o cargo, mas não muda.
+3. **Primeiro admin:** pelo `.env` (`ADMIN_USERNAMES=luis`). Sem a variável, a primeira conta criada vira admin.
+4. **Quem cria e edita salas:** admins e quem eles liberarem.
+5. **Canal global `lobby`** (Fase 11): uma segunda conexão Colyseus por pessoa, para DMs, avisos e presença em tempo real.
+6. **Arte de pets e emblemas:** HabboAssets primeiro; sem render utilizável, arte própria CC0 registrada no `ASSETS.md`.
