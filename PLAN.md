@@ -131,6 +131,12 @@ sessions       { tokenHash: text pk (SHA-256), userId: fk users (cascade),
 
 cargos         { id: int pk, name: text unique, color: text ('#rrggbb'), sort: int }
 
+settings       { key: text pk, value: text }      // Fase 10: 'invite_code'
+audit_log      { id: int pk, at: int, actorId: fk users, action: text,
+                 targetUserId: fk users null, details: text }
+users          … + disabled: bool                  // Fase 10
+rooms          … + decorLocked: bool               // Fase 10
+
 rooms          { id: text pk ('reception'|'meeting'|'pantry'), name: text,
                  heightmap: text,        // linhas tipo Habbo: 'x' = sem tile, '0'-'9' = altura
                  wallHeight: int, floorColor: text, wallColor: text,
@@ -196,6 +202,14 @@ Layout estático (heightmap, portas, cores e, até a Fase 6, os móveis) é pedi
 | `POST /api/logout` | (Bearer) `{ all? }` |
 | `GET /api/team` | (Bearer) → `{ members[], cargos[] }` |
 | `PUT /api/users/:id/cargo` | (Bearer, admin) `{ cargoId \| null }` |
+| `GET /api/admin` | (admin) → `{ inviteCode, rooms[], users[], cargos[] }` |
+| `GET /api/admin/audit` | (admin) → últimas 200 ações |
+| `PUT /api/admin/invite` | (admin) `{ inviteCode }` |
+| `PUT /api/admin/rooms/:id` | (admin) `{ decorLocked }` |
+| `PATCH /api/admin/users/:id` | (admin) `{ role?, cargoId?, disabled? }` |
+| `POST /api/admin/users/:id/password` | (admin) → `{ password }` (senha temporária, mostrada uma vez) |
+| `POST /api/admin/users/:id/kick` | (admin) `{ scope: 'room' \| 'office' }` |
+| `POST/PATCH/DELETE /api/admin/cargos[/:id]`, `PUT /api/admin/cargos/order` | (admin) cargos |
 
 `SessionResponse = { userId, token, username, name, figure, gender, role, cargo, bio, birthday }`. Entrada, cadastro e troca de senha: 10 tentativas/min por IP.
 | `GET /api/presence` | (header `Authorization: Bearer token`) → `{ rooms: [{ roomId, name, people: [{ name }] }] }` |
@@ -213,6 +227,7 @@ Layout estático (heightmap, portas, cores e, até a Fase 6, os móveis) é pedi
 | `move` | `{ x, y }` | rate limit 5/s; A* no servidor a partir da posição atual; destino bloqueado → tile livre mais próximo; sem caminho → `error INVALID_MOVE` |
 | `chat` | `{ text }` | normaliza (remove controle/invisíveis, junta espaços), 1–200 chars, rate limit 3 msgs/5 s; texto puro |
 | `chat.history` (requisição) | — | responde com as últimas 50 mensagens da sala |
+| `chat.delete` | `{ id }` | quem escreveu ou admin; apaga e faz broadcast `chat.deleted` |
 | `furni.place` | `{ defId, x, y, rot }` | rate limit 10 + 4/s; `canPlace` (shared); persiste em `room_furni` |
 | `furni.move` | `{ furniId, x, y, rot }` | mover e/ou girar; idem; recusado se alguém está sentado nele |
 | `furni.remove` | `{ furniId }` | idem |
@@ -228,6 +243,8 @@ Layout estático (heightmap, portas, cores e, até a Fase 6, os móveis) é pedi
 |---|---|
 | `chat.message` | `{ id, roomId, userId, sessionId, name, text, ts }` (broadcast só na sala) |
 | `emote.played` | `{ sessionId, emote }` — todos na sala tocam a animação |
+| `chat.deleted` | `{ id }` — some do histórico |
+| `moderation.kicked` | `{ scope, message }` — da sala (vem um `room.transfer` para a Recepção) ou do escritório (a conexão fecha) |
 | `room.transfer` | `{ targetRoomId, ticket }` — cliente sai e entra na outra sala com o ticket (spawn na porta de destino) |
 | `error` | `{ code: 'RATE_LIMIT'|'INVALID_MOVE'|'INVALID_PLACEMENT'|…, message }` |
 
@@ -500,13 +517,24 @@ Pedido em 17/10/2026, depois da Fase 8: deixar o escritório "muito completo". M
 - Botões do canto: **Perfil · Equipe · Decorar** ("Meu visual" foi para dentro do Perfil e do cartão).
 - Robô de teste agora usa conta própria (`bot.<nome>`, cria se não existir).
 
-### Fase 10 — Administração e moderação
+### Fase 10 — Administração e moderação ✅ implementada
 - Papel **admin** (o primeiro vem do `.env`, `ADMIN_USERNAMES`; depois um admin promove outros).
 - Painel **Admin**: trocar o código de convite (vai para uma tabela `settings`; o `.env` vira só o valor inicial), gerenciar pessoas (cargo, papel, gerar senha temporária, desativar conta), gerenciar a lista de cargos.
 - Moderação: expulsar da sala ou do escritório, apagar mensagem do chat, travar a decoração por sala ("todos" ou "só admins").
 - Registro de ações (`audit_log`) visível para admins.
 
 **Como testar:** admin troca o convite e o antigo para de funcionar; dá cargo a alguém e todos veem na hora; trava a decoração da Recepção e um membro não consegue decorar; expulsa um robô; apaga uma mensagem e ela some para todos; o registro mostra cada ação.
+
+**Notas da implementação:**
+- Migration `0006`: `settings`, `audit_log`, `users.disabled`, `rooms.decor_locked`.
+- O código de convite passa a ser lido de `settings` (o `INVITE_CODE` do `.env` vale até um admin trocar pelo painel).
+- Barramento `services.moderation` (`kick`, `room`): as rotas HTTP emitem e cada sala aberta aplica (tirar da sala = ticket para a Recepção; tirar do escritório = `client.leave(CONSENTED)`, sem prazo de reconexão, e as sessões da pessoa são apagadas — ela entra de novo com usuário e senha).
+- Desativar conta: apaga as sessões, tira do escritório e o login responde `ACCOUNT_DISABLED`. Ninguém desativa a si mesmo; o escritório nunca fica sem admin; quem está no `ADMIN_USERNAMES` não é rebaixado pelo painel.
+- Apagar mensagem: além do admin, **quem escreveu também pode** (pequena extensão do plano). Apagar mensagem de outra pessoa entra no registro com um trecho do texto.
+- Decoração travada: `OfficeState.decorLocked`; para membros o botão Decorar fica desabilitado e o servidor recusa com `DECOR_LOCKED`.
+- Painel **Admin** (botão só para admins) com abas Pessoas, Cargos, Convite e salas, Registro. Confirmações num diálogo do próprio app (`ui/confirm.ts`) em vez do `confirm()` do navegador. O cartão do avatar ganhou "Tirar da sala"/"Tirar do escritório" para admins.
+- Se um admin muda o seu papel, o botão Admin aparece/some na hora (pelo `Player.role` no estado).
+- Não verificado no navegador: a visão de um **membro** com a decoração travada (coberto pelo teste de integração) e a troca de convite pela tela (coberta pelos testes da rota).
 
 ### Fase 11 — Mensagens privadas e notificações do sistema
 - **Canal global:** uma sala Colyseus `lobby` em que todo mundo fica conectado, independente da sala física. Leva DMs, avisos e presença em tempo real (substitui a consulta a cada 10 s do `/api/presence`).

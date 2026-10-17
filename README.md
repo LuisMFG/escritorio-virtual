@@ -10,6 +10,7 @@ Escritório virtual isométrico para amigos e colegas (até ~10 pessoas online):
 - **Cargos** (Diretor, Coordenadores, Desenvolvedor, DBA…) aparecem sob o nome do avatar, na lista de pessoas e no cartão. Só administradores definem o cargo de alguém, pela aba **Equipe**.
 - **Perfil**: nome exibido, bio, aniversário (🎂 no avatar e aviso no dia), troca de senha e "sair de todos os aparelhos".
 - **Equipe**: todo mundo agrupado por cargo, com quem está online (e em que sala) e "visto por último" de quem não está.
+- **Admin** (só administradores): promover/rebaixar, cargos (criar, renomear, cor, ordem), senha temporária, desativar conta, tirar alguém da sala ou do escritório, trocar o código de convite, travar a decoração por sala e ver o registro de ações. Mensagens do chat podem ser apagadas por quem escreveu ou por um admin (🗑 no histórico).
 - Montar o visual do avatar (270 peças do Habbo Brasil, cores das paletas reais) ao criar a conta ou em **Perfil → Meu visual**.
 - Andar clicando no piso, com desvio de móveis e outras pessoas, sincronizado em tempo real.
 - Conversar: **Enter** abre o campo de mensagem; a fala aparece em balão sobre o avatar e fica no histórico **Conversa**. Há um som de mensagem opcional (🔔/🔕).
@@ -53,7 +54,7 @@ Opções de URL do cliente: `?offline=1` usa só a arte provisória gerada por c
 
 | Variável | Padrão | Para quê |
 |---|---|---|
-| `INVITE_CODE` | `convite` em dev; **obrigatória** em produção | Código pedido na entrada |
+| `INVITE_CODE` | `convite` em dev; **obrigatória** em produção | Código pedido para criar conta (valor inicial: depois um admin pode trocar pelo painel) |
 | `ADMIN_USERNAMES` | vazio | Usuários (login) sempre administradores, separados por vírgula. Vazio: a primeira conta criada vira admin |
 | `HABBOASSETS_API_KEY` | vazio | Token gratuito da HabboAssets (só no servidor), usado pelo `assets:sync` para ler dados de móveis |
 | `PORT` | `2567` | Porta HTTP/WebSocket |
