@@ -755,3 +755,61 @@ Pedido em 17/10/2026: mostrar no escritório o que cada pessoa está fazendo for
 - **Testado:** troca de código com PKCE, renovação, pausado, conta desautorizada, consulta só de quem está online, esconder e o redirect de volta, tudo contra um Spotify falso nos testes automáticos. **De ponta a ponta com o app real** (17/10/2026): conectar pelo Perfil (login e autorização no Spotify), a música tocando apareceu na lista de pessoas e no cartão com link para a faixa, esconder/mostrar funcionou na hora e, ao pausar no Spotify, a linha sumiu na consulta seguinte.
 - Ao voltar do Spotify, a primeira consulta é imediata; se a música começar depois, ela aparece na consulta seguinte (até 20 s).
 - Ajuste no teste: nome do Spotify que já termina em pontuação ("celo.") não ganha ponto dobrado em "Conectado como …".
+
+## 12. Roadmap v4 — equipe, dia a dia e produção
+
+Escolhido em 17/10/2026, depois do roadmap v3. Ordem pensada assim: primeiro proteger os dados e o código (backup e testes de ponta a ponta, que passam a cobrir todas as fases seguintes), depois o que é rápido e muito usado, e por fim o que é maior ou depende de sistemas de fora.
+
+### Fase 22 — Backup automático
+- Cópia diária do SQLite às 3h (API de backup do SQLite, segura com o servidor rodando), em `data/backups/`, guardando as últimas 7. Painel Admin: lista dos backups, "Fazer backup agora" e baixar.
+- README: como restaurar (parar, trocar o arquivo, subir) e como levar os backups para fora da VM.
+
+**Como testar:** "Fazer backup agora" cria o arquivo; o oitavo apaga o mais antigo; restaurar um backup numa cópia e o escritório sobe com os dados daquele momento.
+
+### Fase 23 — Testes de ponta a ponta (Playwright)
+- `npm run e2e` sobe servidor e cliente com um banco temporário e roda no Chromium os fluxos principais: cadastrar/entrar, andar, conversar (duas pessoas), trocar de sala, decorar, agenda, jogo da velha.
+- Daqui em diante, cada fase nova ganha o seu teste de ponta a ponta.
+
+**Como testar:** `npm run e2e` passa; quebrar algo de propósito (ex.: o chat) e o teste acusa.
+
+### Fase 24 — Avisos da diretoria
+- Admin publica um comunicado (título, texto, importância normal/urgente). Aparece como faixa para todo o escritório na hora (e para quem entrar depois, até a pessoa marcar "Li"). Histórico de avisos; urgente também vira notificação do sistema.
+
+**Como testar:** publicar um aviso com duas abas abertas; a outra recebe a faixa; "Li" some só para ela; quem entra depois ainda vê.
+
+### Fase 25 — Enquetes no chat
+- `/enquete Pergunta? | opção 1 | opção 2 …` (até 6 opções) ou botão no chat. Mensagem especial com botões; um voto por pessoa (dá para trocar), resultado ao vivo com barras. Quem criou encerra. Anônima ou com nomes (escolha ao criar).
+
+**Como testar:** criar enquete, votar de duas abas, trocar o voto, encerrar.
+
+### Fase 26 — Elogios (kudos)
+- Botão "Elogiar" no cartão do avatar e na Equipe: escolhe um tipo (🙌 Ajudou muito, 💡 Boa ideia, 🚀 Entregou, 🤝 Parceria) e escreve uma frase. Vai para um mural na Recepção (móvel novo), avisa a pessoa e conta para conquistas novas ("Querido pela equipe", "Reconhece os colegas").
+
+**Como testar:** elogiar alguém; aparece no mural e chega o aviso; as conquistas destravam.
+
+### Fase 27 — Modo foco (Pomodoro)
+- Timer de foco (25/5 por padrão, ajustável) no HUD. Durante o foco: status Ocupado, placa 🍅 com o tempo restante sobre o avatar e no cartão, e menções/DMs ficam sem som e sem notificação (chegam juntas no fim). Fim do ciclo: aviso e pausa.
+
+**Como testar:** iniciar foco; a outra aba vê 🍅; mandar DM durante o foco (sem som); no fim chega o resumo.
+
+### Fase 28 — Minimapa do escritório
+- Botão "🗺️ Mapa": todas as salas como cartões ligados pelas portas, com quem está em cada uma (e quem está em reunião). Clicar na sala vai até ela; clicar numa pessoa vai até a sala dela e anda até perto.
+
+**Como testar:** abrir o mapa, ver as pessoas por sala ao vivo, ir até alguém de outra sala.
+
+### Fase 29 — Anexos e busca no chat
+- Enviar imagens e arquivos no chat da sala e nas DMs (arrastar, colar print ou botão 📎), até 10 MB, guardados em `data/uploads/` e servidos só para quem está logado. Imagens com miniatura e visualização; links com prévia (título do site). Busca no histórico da sala e das conversas.
+
+**Como testar:** colar um print no chat, a outra aba vê a miniatura; mandar um PDF por DM; buscar uma palavra antiga.
+
+### Fase 30 — Jira (quadro de demandas)
+- Cada pessoa liga a conta do Jira no Perfil. O cartão mostra "📋 PROJ-123 · título" da demanda em andamento atribuída a ela (privacidade como a do editor). Painel na Sala do TI com as demandas da equipe por status, com link para o Jira.
+- Depende de qual Jira vocês usam (decisão abaixo).
+
+**Como testar:** mover uma demanda para "Em andamento" no Jira; em até 1 min aparece no cartão; o painel mostra as demandas da equipe.
+
+### Decisões para aprovar antes da Fase 22
+1. **Ordem:** a acima (backup → testes → avisos → enquetes → elogios → foco → mapa → anexos → Jira).
+2. **Anexos:** até 10 MB por arquivo; imagens, PDF, documentos do Office, texto e zip; guardados no disco do servidor (entram no backup).
+3. **Pomodoro:** 25 min de foco / 5 de pausa por padrão; durante o foco as notificações ficam seguradas e chegam no fim.
+4. **Jira:** Cloud (atlassian.net, cada pessoa usa e-mail + token de API) ou Server/Data Center da organização (cada pessoa usa um token pessoal)? E o endereço do Jira.
