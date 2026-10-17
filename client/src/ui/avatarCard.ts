@@ -1,5 +1,6 @@
 import { avatarImageUrl, formatBirthday, STATUS_LABELS, type Status } from '@office/shared';
 import { cargoPill } from './profile.js';
+import { showcaseRow } from './badges.js';
 
 export interface AvatarCardInfo {
   sessionId: string;
@@ -20,6 +21,8 @@ export interface AvatarCardInfo {
   viewerIsAdmin: boolean;
   /** A pessoa está fora da Recepção (dá para "tirar da sala"). */
   canKickFromRoom: boolean;
+  /** Emblemas de conquistas exibidos (ids separados por vírgula). */
+  badges: string;
 }
 
 export interface AvatarCardHandlers {
@@ -81,6 +84,8 @@ export class AvatarCard {
       p.append(cargoPill(info.cargo, info.cargoColor));
       extra.push(p);
     }
+    const badges = showcaseRow(info.badges);
+    if (badges) extra.push(badges);
     if (info.bio) {
       extra.push(
         Object.assign(document.createElement('p'), {

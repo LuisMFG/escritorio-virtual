@@ -6,6 +6,7 @@ import {
   parseAvatarManifest,
   parseFurniManifest,
   findRoom,
+  findAchievement,
   RECEPTION,
   type FurniManifestEntry,
   ROOMS,
@@ -42,6 +43,7 @@ import { mountHud } from './ui/hud.js';
 import { IdleWatcher } from './ui/idle.js';
 import { showClaim, showLogin } from './ui/login.js';
 import { openProfile } from './ui/profile.js';
+import { showAchievementToast } from './ui/badges.js';
 import { openTeam } from './ui/team.js';
 import { openAdmin } from './ui/admin.js';
 import { openRoomEditor } from './ui/roomEditor.js';
@@ -333,9 +335,10 @@ async function start(): Promise<void> {
       // Sem a lista, o cartão mostra só o que vem do estado da sala.
     }
   };
-  function showProfile(): void {
+  function showProfile(focusAchievements = false): void {
     if (!session) return;
     openProfile(session, {
+      focusAchievements,
       saved: (updated) => {
         session = updated;
         rememberSession(updated);
@@ -496,6 +499,7 @@ async function start(): Promise<void> {
                 userId: player.userId,
                 viewerIsAdmin: session?.role === 'admin',
                 canKickFromRoom: layout.roomId !== RECEPTION.id,
+                badges: player.badges,
               },
               at,
             );
@@ -688,6 +692,21 @@ async function start(): Promise<void> {
         showReminder(meeting, (id) => connection?.goTo(id));
         notifier.notify('Reunião em 5 minutos', `${meeting.title} · ${meeting.roomName}`, {
           tag: `reminder-${meeting.id}`,
+        });
+      },
+      achievement: ({ id }) => {
+        const def = findAchievement(id);
+        if (!def) return;
+        sound.mention();
+        // Perfil aberto: a lista de conquistas se atualiza sozinha.
+        window.dispatchEvent(new CustomEvent('achievement-unlocked', { detail: id }));
+        showAchievementToast(def, () => {
+          const open = document.querySelector('.profile-achievements');
+          if (open) open.scrollIntoView({ block: 'start' });
+          else showProfile(true);
+        });
+        notifier.notify('Conquista desbloqueada!', `${def.emoji} ${def.name}`, {
+          tag: `conquista-${id}`,
         });
       },
       ready: () => void messages.refresh(),

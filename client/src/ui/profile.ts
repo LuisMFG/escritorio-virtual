@@ -2,12 +2,15 @@ import { BIO_MAX, NAME_MAX, PASSWORD_MIN, type SessionResponse } from '@office/s
 import { api, ApiRequestError } from '../net/api.js';
 import { setAvatarPreview } from './login.js';
 import { mountPetSection } from './petSection.js';
+import { mountAchievements } from './achievementsSection.js';
 
 export interface ProfileHandlers {
   /** O servidor aceitou as mudanças (nome, bio, aniversário). */
   saved(session: SessionResponse): void;
   editAvatar(): void;
   logout(all: boolean): void;
+  /** Abre já rolado até as conquistas (vindo do aviso de conquista nova). */
+  focusAchievements?: boolean;
 }
 
 const MONTHS = [
@@ -58,6 +61,7 @@ export function openProfile(session: SessionResponse, on: ProfileHandlers): void
           <p class="login-error" role="alert" hidden></p>
           <button type="submit" class="btn-primary">Salvar perfil</button>
         </form>
+        <section class="profile-achievements" aria-label="Conquistas"></section>
         <section class="profile-pet" aria-label="Meu pet"></section>
         <details class="profile-password">
           <summary>Trocar senha</summary>
@@ -124,7 +128,7 @@ export function openProfile(session: SessionResponse, on: ProfileHandlers): void
   const updateCount = () => (count.textContent = `${bioInput.value.length}/${BIO_MAX}`);
   bioInput.addEventListener('input', updateCount);
   updateCount();
-  nameInput.focus();
+  if (!on.focusAchievements) nameInput.focus();
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -158,6 +162,10 @@ export function openProfile(session: SessionResponse, on: ProfileHandlers): void
   });
 
   mountPetSection($<HTMLElement>('.profile-pet'), session.token);
+  const achievementsBox = $<HTMLElement>('.profile-achievements');
+  void mountAchievements(achievementsBox, session.token).then(() => {
+    if (on.focusAchievements) achievementsBox.scrollIntoView({ block: 'start' });
+  });
 
   // Troca de senha.
   const pwForm = $<HTMLFormElement>('.profile-password form');

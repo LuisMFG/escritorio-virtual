@@ -14,6 +14,7 @@ import {
   type Meeting,
   type MeetingCreate,
   type PetInfo,
+  type AchievementsResponse,
   type RoomEdit,
   type RoomEditorData,
   type SessionResponse,
@@ -122,6 +123,12 @@ export const roomApi = {
 };
 
 /** Agenda de reuniões. */
+export const achievementApi = {
+  me: (token: string) => request<AchievementsResponse>('GET', '/api/achievements/me', { token }),
+  setShowcase: (token: string, ids: string[]) =>
+    request<{ showcase: string[] }>('PUT', '/api/achievements/showcase', { token, body: { ids } }),
+};
+
 export const petApi = {
   get: (token: string) => request<{ pet: PetInfo | null }>('GET', '/api/pets/me', { token }),
   save: (token: string, pet: PetInfo) =>
