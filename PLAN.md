@@ -200,13 +200,16 @@ Layout estático (heightmap, portas, cores e, até a Fase 6, os móveis) é pedi
 | `furni.remove` | `{ furniId }` | idem |
 | `interact` | `{ furniId }` | se `canSit`: anda até o assento livre mais perto e senta (`action='sit'`, `z = z do móvel + sitHeight`, dir = rot do móvel) |
 | `avatar.update` | `{ figure, gender }` | valida contra manifesto; persiste; atualiza `Player.figure` |
-| `typing` | `{ on: boolean }` | opcional, indicador "digitando…" |
+| `typing` | `{ on: boolean }` | rate limit 6 + 3/s (excesso é ignorado em silêncio); seta `Player.typing`; zera ao enviar chat ou cair |
+| `status.set` | `{ status: 'available'\|'busy'\|'away' }` | rate limit 5 + 1/s; seta `Player.status` |
+| `emote` | `{ emote: 'wave'\|'laugh'\|'thumbs'\|'heart'\|'coffee'\|'dance' }` | rate limit 3 + 0,5/s; broadcast `emote.played` |
 
 ### 5.4 Mensagens servidor → cliente
 
 | Tipo | Payload |
 |---|---|
 | `chat.message` | `{ id, roomId, userId, sessionId, name, text, ts }` (broadcast só na sala) |
+| `emote.played` | `{ sessionId, emote }` — todos na sala tocam a animação |
 | `room.transfer` | `{ targetRoomId, ticket }` — cliente sai e entra na outra sala com o ticket (spawn na porta de destino) |
 | `error` | `{ code: 'RATE_LIMIT'|'INVALID_MOVE'|'INVALID_PLACEMENT'|…, message }` |
 
@@ -345,6 +348,18 @@ screenToTile(sx, sy)  = { x: floor((sy/16 + sx/32) / 2), y: floor((sy/16 - sx/32
 - Revisão de segurança leve (headers, limites de payload, logs) e testes finais.
 
 **Como testar:** `docker build -t office . && docker run -p 2567:2567 -e INVITE_CODE=... -v $(pwd)/data:/app/data office` → abrir `http://localhost:2567` e repetir o roteiro das fases 2–6; seguir o README do zero numa pasta limpa; deploy de teste no provedor escolhido e acesso de dois dispositivos.
+
+### Fase 8 — Melhorias: emotes, status, cartão do avatar, digitando e menções ✅ implementada
+Pedida depois de encerrar a v1 (o deploy na Oracle ficou para quando houver a VM).
+- **Status:** `Player.status` (`available`/`busy`/`away`) sincronizado; seletor "Seu status" no painel de pessoas (salvo no navegador); bolinha vermelha/amarela na lista e sobre o avatar; vira "Ausente" sozinho após 5 min sem mexer mouse/teclado e volta ao mexer (se o escolhido não era "Ausente"). O antigo `away` continua significando "reconectando".
+- **Emotes:** botão 😊 ao lado do chat ou comandos `/acenar`, `/rir`, `/joinha`, `/coracao`, `/cafe`, `/dancar` (sem diferenciar acentos). Animação procedural no corpo (balanço, pulinho, giro na dança) + emoji subindo; andar interrompe a dança. Catálogo em `shared/social.ts`.
+- **Cartão do avatar:** nomes aparecem só ao passar o mouse; clicar num avatar abre um cartão (visual, nome, status, sala) com "Ir até" e "Mencionar" — ou "Meu visual" no próprio. Clique por pixel (`assets/hitTest.ts`, compartilhado com os móveis); avatar tem prioridade sobre cadeira e piso.
+- **Digitando:** "•••" animado sobre o avatar enquanto a pessoa escreve (some após 4 s sem teclar, ao enviar ou ao sair do campo).
+- **Menções:** `@` abre sugestões com quem está na sala (setas/Tab/Enter/clique); nomes com espaço e sem acento funcionam (`findMentions`, nome mais longo vence). Quem é mencionado vê o balão amarelo, a linha destacada no histórico, um aviso, um som próprio (se o som estiver ligado) e `(@n)` no título com a aba escondida.
+- Robô de teste agora também faz emotes e menciona quem está na sala.
+- Correção de passagem: o histórico do chat aberto não transborda mais a tela (Chrome embrulha o conteúdo do `<details>`).
+
+**Como testar:** duas abas (uma anônima) ou `npm run bot -- Caio`. Passar o mouse num avatar → nome; clicar → cartão; "Mencionar" preenche `@Nome`; digitar `@` → sugestões; mandar a mensagem → a outra aba vê balão amarelo, aviso e linha destacada. Na outra aba aparece "•••" enquanto se digita. Botão 😊 e `/dancar` → animação nas duas abas. Trocar "Seu status" para Ocupado → bolinha vermelha nas duas abas; recarregar → continua Ocupado. Deixar uma aba 5 min parada → "Ausente"; mexer o mouse → volta.
 
 ---
 

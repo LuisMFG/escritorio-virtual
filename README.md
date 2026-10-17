@@ -10,6 +10,10 @@ Escritório virtual isométrico para amigos e colegas (até ~10 pessoas online):
 - Montar o visual do avatar (270 peças do Habbo Brasil, cores das paletas reais) na entrada ou pelo botão **Meu visual**.
 - Andar clicando no piso, com desvio de móveis e outras pessoas, sincronizado em tempo real.
 - Conversar: **Enter** abre o campo de mensagem; a fala aparece em balão sobre o avatar e fica no histórico **Conversa**. Há um som de mensagem opcional (🔔/🔕).
+- Emotes: botão 😊 ao lado do chat ou comandos `/acenar`, `/rir`, `/joinha`, `/coracao`, `/cafe`, `/dancar`.
+- Status **Disponível**, **Ocupado** ou **Ausente** no painel de pessoas; fica **Ausente** sozinho após 5 minutos parado.
+- Passe o mouse num avatar para ver o nome; clique para abrir o cartão (status, sala, **Ir até**, **Mencionar**).
+- Menções: digite `@` para escolher alguém da sala; quem é mencionado recebe destaque, aviso e som. Um "•••" mostra quem está digitando.
 - Três salas: **Recepção**, **Sala de reunião** e **Copa**, ligadas por portas. Dá para abrir direto numa sala pela URL: `#/reception`, `#/meeting`, `#/pantry`.
 - Sentar: clique numa cadeira ou sofá.
 - Decorar: botão **Decorar** → escolha um móvel no catálogo e clique no piso. Clique num móvel para selecionar, arraste para mover, **R** gira, **Delete** remove, **Esc** cancela. Tudo fica salvo.
@@ -34,7 +38,7 @@ npm run dev
 
 Isso sobe o servidor (http://localhost:2567) e o cliente (http://localhost:5173). Abra o cliente e entre com um nome e o código de convite: o `INVITE_CODE` do `.env`, ou `convite` se não houver `.env`.
 
-Para testar com várias pessoas sozinho, abra uma janela **anônima** (cada navegador guarda o próprio acesso) ou rode robôs que passeiam e conversam na Recepção:
+Para testar com várias pessoas sozinho, abra uma janela **anônima** (cada navegador guarda o próprio acesso) ou rode robôs que passeiam, conversam, fazem emotes e mencionam quem está na Recepção:
 
 ```bash
 npm run bot -- Bia 3
