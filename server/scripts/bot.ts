@@ -1,6 +1,6 @@
 /**
  * Robô para testar o tempo real sozinho: entra na Recepção, passeia por tiles aleatórios
- * e de vez em quando fala alguma coisa no chat.
+ * e de vez em quando fala alguma coisa no chat, faz um emote ou menciona alguém da sala.
  *
  *   npm run bot                 # um robô chamado "Robô"
  *   npm run bot -- Bia 3        # três robôs: "Bia 1", "Bia 2", "Bia 3"
@@ -10,6 +10,7 @@
 import { Client } from '@colyseus/sdk';
 import {
   ClientMessage,
+  EMOTE_IDS,
   OFFICE_ROOM,
   OfficeState,
   parseHeightmap,
@@ -33,6 +34,12 @@ const PHRASES = [
   'Esse escritório ficou bonito, hein',
   'Vou pegar uma água, já volto',
   'Quem mexeu no meu grampeador?',
+];
+const MENTION_PHRASES = [
+  'tudo certo?',
+  'bora tomar um café?',
+  'viu meu e-mail?',
+  'valeu pela ajuda!',
 ];
 
 function randomTile() {
@@ -66,11 +73,26 @@ async function startBot(name: string): Promise<void> {
   console.log(`[bot] ${name} entrou (${room.sessionId})`);
   room.onMessage('error', (e: { message: string }) => console.log(`[bot] ${name}: ${e.message}`));
   room.onMessage('chat.message', () => undefined);
+  room.onMessage('emote.played', () => undefined);
+
+  /** Às vezes cita alguém que está na sala, para testar as menções. */
+  const phrase = () => {
+    const others = [...room.state.players.values()].map((p) => p.name).filter((n) => n !== name);
+    if (others.length > 0 && Math.random() < 0.4) {
+      const who = others[Math.floor(Math.random() * others.length)]!;
+      return `@${who}, ${MENTION_PHRASES[Math.floor(Math.random() * MENTION_PHRASES.length)]!}`;
+    }
+    return PHRASES[Math.floor(Math.random() * PHRASES.length)]!;
+  };
 
   const wander = () => {
     room.send(ClientMessage.Move, randomTile());
-    if (Math.random() < 0.35) {
-      room.send(ClientMessage.Chat, { text: PHRASES[Math.floor(Math.random() * PHRASES.length)]! });
+    if (Math.random() < 0.2) {
+      room.send(ClientMessage.Emote, {
+        emote: EMOTE_IDS[Math.floor(Math.random() * EMOTE_IDS.length)]!,
+      });
+    } else if (Math.random() < 0.35) {
+      room.send(ClientMessage.Chat, { text: phrase() });
     }
     setTimeout(wander, 2500 + Math.random() * 4000);
   };

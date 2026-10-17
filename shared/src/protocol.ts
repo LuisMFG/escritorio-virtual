@@ -25,6 +25,12 @@ export const ClientMessage = {
   FurniRemove: 'furni.remove',
   /** Clique num móvel fora do modo decorar (sentar): `{ furniId }`. */
   Interact: 'interact',
+  /** `{ status }`: Disponível / Ocupado / Ausente. */
+  SetStatus: 'status.set',
+  /** `{ on }`: começou/parou de digitar. */
+  Typing: 'typing',
+  /** `{ emote }`: acenar, rir, dançar… */
+  Emote: 'emote',
 } as const;
 
 /** Mensagens servidor → cliente. */
@@ -34,6 +40,8 @@ export const ServerMessage = {
   Chat: 'chat.message',
   /** Pisou numa porta: sair desta sala e entrar em `targetRoomId` com o ticket. */
   RoomTransfer: 'room.transfer',
+  /** Alguém tocou um emote (`EmoteMessage`). */
+  Emote: 'emote.played',
 } as const;
 
 export const ErrorCode = {

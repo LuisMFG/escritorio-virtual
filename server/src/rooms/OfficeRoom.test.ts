@@ -9,6 +9,7 @@ import {
   ServerMessage,
   STEP_MS,
   type ChatMessage,
+  type EmoteMessage,
   type Furni,
   type PresenceResponse,
   type RoomTransferMessage,
@@ -317,5 +318,39 @@ describe('OfficeRoom', () => {
         expect(a.state.players.get(a.sessionId)!.action).not.toBe('sit');
       },
     );
+  });
+
+  describe('status, digitando e emotes', () => {
+    it('status e digitando aparecem para todos; valores inválidos são ignorados', async () => {
+      const a = await join(newUser('Ana').token);
+      const b = await join(newUser('Beto').token);
+      expect(b.state.players.get(a.sessionId)).toMatchObject({
+        status: 'available',
+        typing: false,
+      });
+
+      a.send(ClientMessage.SetStatus, { status: 'busy' });
+      a.send(ClientMessage.Typing, { on: true });
+      await wait(200);
+      expect(b.state.players.get(a.sessionId)).toMatchObject({ status: 'busy', typing: true });
+
+      a.send(ClientMessage.SetStatus, { status: 'invisivel' });
+      a.send(ClientMessage.Chat, { text: 'oi' });
+      await wait(200);
+      // Mandar mensagem encerra o "digitando".
+      expect(b.state.players.get(a.sessionId)).toMatchObject({ status: 'busy', typing: false });
+    });
+
+    it('emote chega para a sala e tem limite de frequência', async () => {
+      const a = await join(newUser('Ana').token);
+      const b = await join(newUser('Beto').token);
+      const seen = b.waitForMessage(ServerMessage.Emote);
+      a.send(ClientMessage.Emote, { emote: 'wave' });
+      expect((await seen) as EmoteMessage).toEqual({ sessionId: a.sessionId, emote: 'wave' });
+
+      for (let i = 0; i < 3; i++) a.send(ClientMessage.Emote, { emote: 'dance' });
+      const err = (await a.waitForMessage(ServerMessage.Error)) as ErrorMessage;
+      expect(err.code).toBe('RATE_LIMIT');
+    });
   });
 });

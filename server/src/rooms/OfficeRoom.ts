@@ -2,6 +2,9 @@ import { Room, ServerError, validate, type Client, type Deferred } from '@colyse
 import {
   canPlace,
   chatSchema,
+  emoteSchema,
+  statusSchema,
+  typingSchema,
   ClientMessage,
   footprint,
   Furni,
@@ -20,6 +23,8 @@ import {
   Player,
   RoomGrid,
   ServerMessage,
+  type EmoteMessage,
+  type EmoteRequest,
   type ErrorMessage,
   type FurniMoveMessage,
   type FurniPlaceMessage,
@@ -58,6 +63,11 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
   private readonly avatarLimiter = new KeyedRateLimiter(3, 0.5);
   /** Chat: até 3 mensagens seguidas, recarregando 3 a cada 5 s. */
   private readonly chatLimiter = new KeyedRateLimiter(3, 3 / 5);
+  private readonly statusLimiter = new KeyedRateLimiter(5, 1);
+  /** "Digitando": eventos baratos, mas sem deixar virar flood. */
+  private readonly typingLimiter = new KeyedRateLimiter(6, 3);
+  /** Emotes: 3 seguidos, depois 1 a cada 2 s. */
+  private readonly emoteLimiter = new KeyedRateLimiter(3, 0.5);
   /** Decorar: rajada de 10 ações, recarregando 4 por segundo. */
   private readonly editLimiter = new KeyedRateLimiter(10, 4);
   /** Quem clicou numa cadeira e está andando até ela (sessionId → móvel e assento). */
@@ -87,6 +97,17 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     ),
     [ClientMessage.FurniRemove]: validate(furniRefSchema, (client, msg) =>
       this.handleRemove(client as OfficeClient, msg.furniId),
+    ),
+    [ClientMessage.SetStatus]: validate(statusSchema, (client, msg) => {
+      const player = this.state.players.get(client.sessionId);
+      if (player && this.statusLimiter.tryTake(client.sessionId)) player.status = msg.status;
+    }),
+    [ClientMessage.Typing]: validate(typingSchema, (client, msg) => {
+      const player = this.state.players.get(client.sessionId);
+      if (player && this.typingLimiter.tryTake(client.sessionId)) player.typing = msg.on;
+    }),
+    [ClientMessage.Emote]: validate(emoteSchema, (client, msg) =>
+      this.handleEmote(client as OfficeClient, msg),
     ),
     [ClientMessage.Interact]: validate(furniRefSchema, (client, msg) =>
       this.handleInteract(client as OfficeClient, msg.furniId),
@@ -147,6 +168,8 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       dir: via?.dir ?? this.layout.spawn.dir,
       action: 'idle',
       away: false,
+      status: 'available',
+      typing: false,
     });
     this.state.players.set(client.sessionId, player);
     services().presence.add({
@@ -163,7 +186,10 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
 
   override onDrop(client: OfficeClient): void {
     const player = this.state.players.get(client.sessionId);
-    if (player) player.away = true;
+    if (player) {
+      player.away = true;
+      player.typing = false;
+    }
     // Sem `await`: se o prazo vencer ou a reconexão for cancelada, o Colyseus chama onLeave.
     const reconnection = this.allowReconnection(client, RECONNECT_SECONDS);
     this.pendingReconnects.set(client.sessionId, reconnection);
@@ -184,6 +210,9 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     this.avatarLimiter.delete(client.sessionId);
     this.chatLimiter.delete(client.sessionId);
     this.editLimiter.delete(client.sessionId);
+    this.statusLimiter.delete(client.sessionId);
+    this.typingLimiter.delete(client.sessionId);
+    this.emoteLimiter.delete(client.sessionId);
     this.pendingSit.delete(client.sessionId);
     services().presence.remove(client.sessionId);
     if (client.auth) {
@@ -386,6 +415,19 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       client.sessionId,
     );
     this.broadcast(ServerMessage.Chat, message);
+    const player = this.state.players.get(client.sessionId);
+    if (player) player.typing = false;
+  }
+
+  /** Emote: só quem está na sala vê (efêmero, não fica no estado). */
+  private handleEmote(client: OfficeClient, msg: EmoteRequest): void {
+    if (!this.state.players.has(client.sessionId)) return;
+    if (!this.emoteLimiter.tryTake(client.sessionId))
+      return this.sendError(client, ErrorCode.RateLimit);
+    this.broadcast(ServerMessage.Emote, {
+      sessionId: client.sessionId,
+      emote: msg.emote,
+    } satisfies EmoteMessage);
   }
 
   private handleUpdateAvatar(client: OfficeClient, msg: UpdateAvatarMessage): void {

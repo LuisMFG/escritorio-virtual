@@ -23,6 +23,10 @@ export const Player = schema(
     action: t.string(),
     /** Desconectado e aguardando reconexão. */
     away: t.boolean(),
+    /** 'available' | 'busy' | 'away' (escolhido pela pessoa ou ausente automático). */
+    status: t.string(),
+    /** Está digitando no chat. */
+    typing: t.boolean(),
   },
   'Player',
 );
