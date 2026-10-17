@@ -128,6 +128,10 @@ export const PANTRY: RoomDefinition = {
     { id: 'p-chair-s', defId: 'chair_norja', x: 4, y: 6, z: 0, rot: 0 },
     { id: 'p-couch', defId: 'couch_norja', x: 1, y: 6, z: 0, rot: 2 },
     { id: 'p-cactus', defId: 'plant_big_cactus', x: 8, y: 1, z: 0, rot: 0 },
+    // Mesa de jogos (jogo da velha) com duas cadeiras, uma de cada lado.
+    { id: 'p-games', defId: 'table_plasto_round', x: 6, y: 2, z: 0, rot: 0 },
+    { id: 'p-games-w', defId: 'chair_plasto', x: 5, y: 2, z: 0, rot: 2 },
+    { id: 'p-games-e', defId: 'chair_plasto', x: 7, y: 2, z: 0, rot: 6 },
   ],
 };
 

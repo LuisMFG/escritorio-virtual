@@ -21,3 +21,4 @@ export * from './roomEdit.js';
 export * from './ambience.js';
 export * from './whiteboard.js';
 export * from './meetings.js';
+export * from './games.js';

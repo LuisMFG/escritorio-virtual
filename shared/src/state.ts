@@ -57,6 +57,36 @@ export const Furni = schema(
 );
 export type Furni = SchemaType<typeof Furni>;
 
+/**
+ * Partida de jogo da velha numa mesa de jogos (chave = id do móvel). Todo mundo na sala
+ * recebe o estado, então quem não joga assiste ao vivo.
+ */
+export const TttGame = schema(
+  {
+    /** Jogadores: sessão (avatar), conta e nome; vazio = lugar livre. */
+    xSession: t.string(),
+    xUser: t.string(),
+    xName: t.string(),
+    oSession: t.string(),
+    oUser: t.string(),
+    oName: t.string(),
+    /** 9 casas: `.`, `X` ou `O`. */
+    board: t.string(),
+    /** 'X' | 'O': de quem é a vez. */
+    turn: t.string(),
+    /** Quem começou esta partida (alterna na revanche). */
+    starter: t.string(),
+    /** 'waiting' (falta jogador) | 'playing' | 'ended' */
+    status: t.string(),
+    /** 'X' | 'O' | 'draw' quando termina; 'X' ou 'O' também quando alguém sai no meio. */
+    winner: t.string(),
+    /** Casas da linha vencedora, ex. `0,4,8`. */
+    line: t.string(),
+  },
+  'TttGame',
+);
+export type TttGame = SchemaType<typeof TttGame>;
+
 export const OfficeState = schema(
   {
     roomId: t.string(),
@@ -64,6 +94,8 @@ export const OfficeState = schema(
     players: t.map(Player),
     /** Chave = id do móvel. */
     furni: t.map(Furni),
+    /** Partidas de jogo da velha (chave = id da mesa). */
+    games: t.map(TttGame),
     /** Só admins decoram esta sala. */
     decorLocked: t.boolean(),
   },

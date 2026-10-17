@@ -30,9 +30,9 @@ export const furniManifestEntrySchema = z.object({
   /**
    * O que acontece ao clicar fora do modo decorar: `toggle` alterna os estados (luz, TV…),
    * `coffee` serve um café (emote), `board` abre o mural de recados, `whiteboard` abre o
-   * quadro branco.
+   * quadro branco, `tictactoe` abre o jogo da velha.
    */
-  interaction: z.enum(['toggle', 'coffee', 'board', 'whiteboard']).optional(),
+  interaction: z.enum(['toggle', 'coffee', 'board', 'whiteboard', 'tictactoe']).optional(),
   /** Emite luz quando ligado (estado > 0): brilha à noite. */
   light: z.boolean().default(false),
   /**

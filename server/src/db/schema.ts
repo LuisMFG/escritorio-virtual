@@ -156,6 +156,8 @@ export const chatMessages = sqliteTable(
     replyToId: integer('reply_to_id').references((): AnySQLiteColumn => chatMessages.id, {
       onDelete: 'set null',
     }),
+    /** 'text' | 'dice' | 'coin' | 'game' (resultados sorteados pelo servidor). */
+    kind: text('kind').notNull().default('text'),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   },
   (t) => [index('chat_messages_room_id_idx').on(t.roomId, t.id)],
@@ -289,6 +291,21 @@ export const meetingAttendees = sqliteTable(
     response: text('response').notNull().default('pending'),
   },
   (t) => [primaryKey({ columns: [t.meetingId, t.userId] })],
+);
+
+/** Placar por pessoa e jogo (vitórias, derrotas, empates). */
+export const gameScores = sqliteTable(
+  'game_scores',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id),
+    game: text('game').notNull(),
+    wins: integer('wins').notNull().default(0),
+    losses: integer('losses').notNull().default(0),
+    draws: integer('draws').notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.game] })],
 );
 
 export type UserRow = typeof users.$inferSelect;

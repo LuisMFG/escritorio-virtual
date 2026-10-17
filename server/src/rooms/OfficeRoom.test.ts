@@ -674,4 +674,96 @@ describe('OfficeRoom', () => {
       expect(svc.whiteboards.list(lamp.id)).toEqual([]);
     });
   });
+
+  describe('mini-jogos', () => {
+    it('/dado e /moeda são sorteados no servidor e chegam iguais para todos', async () => {
+      const a = await join(newUser('Ana').token);
+      const b = await join(newUser('Beto').token);
+      const seen = b.waitForMessage(ServerMessage.Chat);
+      a.send(ClientMessage.Chat, { text: '/Dado' });
+      const roll = (await seen) as ChatMessage;
+      expect(roll.kind).toBe('dice');
+      expect(roll.text).toMatch(/^🎲 tirou [1-6] no dado$/);
+      expect(svc.chat.recent(RECEPTION.id).at(-1)).toMatchObject({ kind: 'dice', text: roll.text });
+
+      const coin = b.waitForMessage(ServerMessage.Chat);
+      a.send(ClientMessage.Chat, { text: '/moeda' });
+      expect(((await coin) as ChatMessage).text).toMatch(/deu (cara|coroa)$/);
+
+      // Digitar o mesmo texto à mão não vira resultado "oficial".
+      const fake = b.waitForMessage(ServerMessage.Chat);
+      a.send(ClientMessage.Chat, { text: '🎲 tirou 6 no dado' });
+      expect(((await fake) as ChatMessage).kind).toBe('text');
+    });
+
+    it('jogo da velha: dois jogam, vitória vai para o placar e o chat', async () => {
+      const roomId = svc.rooms.create('Jogos', svc.furniDefs).id;
+      const table = svc.furni.add(
+        roomId,
+        { defId: 'table_plasto_round', x: 3, y: 3, z: 0, rot: 0 },
+        newUser('Dono').user.id,
+      );
+      const ana = newUser('Ana');
+      const beto = newUser('Beto');
+      const a = await join(ana.token, roomId);
+      const b = await join(beto.token, roomId);
+      const c = await join(newUser('Caio').token, roomId);
+
+      a.send(ClientMessage.TttJoin, { furniId: table.id });
+      await wait(100);
+      b.send(ClientMessage.TttJoin, { furniId: table.id });
+      await wait(150);
+      const game = () => c.state.games.get(table.id)!;
+      expect(game()).toMatchObject({ xName: 'Ana', oName: 'Beto', status: 'playing', turn: 'X' });
+
+      // Terceira pessoa não entra nem joga.
+      c.send(ClientMessage.TttJoin, { furniId: table.id });
+      expect(((await c.waitForMessage(ServerMessage.Error)) as ErrorMessage).message).toMatch(
+        /dois jogadores/,
+      );
+      // Fora da vez.
+      b.send(ClientMessage.TttMove, { furniId: table.id, cell: 0 });
+      expect(((await b.waitForMessage(ServerMessage.Error)) as ErrorMessage).message).toMatch(
+        /vez/,
+      );
+
+      const result = c.waitForMessage(ServerMessage.Chat);
+      for (const [who, cell] of [
+        [a, 0],
+        [b, 3],
+        [a, 1],
+        [b, 4],
+        [a, 2],
+      ] as const) {
+        who.send(ClientMessage.TttMove, { furniId: table.id, cell });
+        await wait(60);
+      }
+      expect(((await result) as ChatMessage).text).toBe('🏆 venceu Beto no jogo da velha');
+      await wait(100);
+      expect(game()).toMatchObject({ status: 'ended', winner: 'X', line: '0,1,2' });
+      expect(svc.games.of('tictactoe', [ana.user.id, beto.user.id])).toMatchObject([
+        { wins: 1, losses: 0 },
+        { wins: 0, losses: 1 },
+      ]);
+
+      // Revanche: quem era O começa.
+      b.send(ClientMessage.TttRematch, { furniId: table.id });
+      await wait(150);
+      expect(game()).toMatchObject({ status: 'playing', turn: 'O', board: '.........' });
+
+      // Sair no meio: o outro vence por desistência; sair da sala também libera o lugar.
+      const forfeit = c.waitForMessage(ServerMessage.Chat);
+      b.send(ClientMessage.TttLeave, { furniId: table.id });
+      expect(((await forfeit) as ChatMessage).text).toMatch(/desistência/);
+      await wait(100);
+      expect(game()).toMatchObject({ oSession: '', status: 'ended', winner: 'X' });
+      const scores = (await c.request(ClientMessage.TttScores, { furniId: table.id })) as {
+        top: { name: string; wins: number }[];
+      };
+      expect(scores.top[0]).toMatchObject({ name: 'Ana', wins: 2 });
+      await a.leave();
+      await wait(150);
+      expect(c.state.games.has(table.id)).toBe(false);
+    });
+  });
 });

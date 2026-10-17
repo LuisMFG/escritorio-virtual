@@ -1,6 +1,8 @@
 import {
   CHAT_HISTORY_ON_JOIN,
   CHAT_KEEP_PER_ROOM,
+  CHAT_KINDS,
+  type ChatKind,
   replyPreviewText,
   type ChatMessage,
   type Reaction,
@@ -29,6 +31,7 @@ export class ChatService {
     text: string,
     sessionId = '',
     replyToId?: number,
+    kind: ChatKind = 'text',
   ): ChatMessage {
     const reply = replyToId ? this.find(replyToId) : undefined;
     const row = this.db
@@ -38,6 +41,7 @@ export class ChatService {
         userId: user.id,
         nameSnapshot: user.name,
         text,
+        kind,
         replyToId: reply?.roomId === roomId ? reply.id : null,
         createdAt: this.now(),
       })
@@ -100,6 +104,7 @@ export class ChatService {
       sessionId,
       name: row.nameSnapshot,
       text: row.text,
+      kind: (CHAT_KINDS as readonly string[]).includes(row.kind) ? (row.kind as ChatKind) : 'text',
       ts: row.createdAt.getTime(),
       reactions: reactions.get(row.id) ?? [],
       replyTo: (row.replyToId && replies.get(row.replyToId)) || null,

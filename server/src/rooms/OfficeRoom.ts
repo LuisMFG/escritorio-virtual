@@ -1,6 +1,15 @@
+import { randomInt } from 'node:crypto';
 import { CloseCode, Room, ServerError, validate, type Client, type Deferred } from '@colyseus/core';
 import {
   canPlace,
+  parseQuickCommand,
+  quickCommandText,
+  TTT_GAME,
+  TTT_TOP,
+  tttMoveSchema,
+  tttRefSchema,
+  type ChatKind,
+  type TttScores,
   chatSchema,
   chatDeleteSchema,
   boardAddSchema,
@@ -40,6 +49,7 @@ import {
   parseHeightmap,
   Player,
   RoomGrid,
+  type TttGame,
   ServerMessage,
   type EmoteMessage,
   type FurniManifestEntry,
@@ -60,6 +70,7 @@ import type { UserRow } from '../db/schema.js';
 import { services, type ModerationEvents } from '../services/index.js';
 import { KeyedRateLimiter } from '../util/rateLimiter.js';
 import { MovementSystem, type Mover } from './MovementSystem.js';
+import * as ttt from './ticTacToe.js';
 
 const TICK_MS = 50;
 /** Segundos que um avatar desconectado espera por reconexão antes de sair da sala. */
@@ -97,6 +108,8 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
   /** Quadro branco: traços e desfazer (40 seguidos, 20/s) e rascunhos (40, 25/s). */
   private readonly wbLimiter = new KeyedRateLimiter(40, 20);
   private readonly draftLimiter = new KeyedRateLimiter(40, 25);
+  /** Jogo da velha: 10 ações seguidas, recarregando 4 por segundo. */
+  private readonly gameLimiter = new KeyedRateLimiter(10, 4);
   /** Decorar: rajada de 10 ações, recarregando 4 por segundo. */
   private readonly editLimiter = new KeyedRateLimiter(10, 4);
   /** Quem clicou numa cadeira e está andando até ela (sessionId → móvel e assento). */
@@ -225,6 +238,37 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       services().whiteboards.clear(msg.furniId);
       this.broadcast(ServerMessage.WbCleared, { furniId: msg.furniId });
     }),
+    [ClientMessage.TttJoin]: validate(tttRefSchema, (client, msg) =>
+      this.handleTttJoin(client as OfficeClient, msg.furniId),
+    ),
+    [ClientMessage.TttLeave]: validate(tttRefSchema, (client, msg) => {
+      if (!this.isGameTable(msg.furniId)) return;
+      this.leaveGame(msg.furniId, client.sessionId);
+    }),
+    [ClientMessage.TttMove]: validate(tttMoveSchema, (client, msg) => {
+      const c = client as OfficeClient;
+      const game = this.state.games.get(msg.furniId);
+      if (!game || !this.gameLimiter.tryTake(c.sessionId)) return;
+      const res = ttt.play(game, c.sessionId, msg.cell);
+      if (!res.ok) return this.sendError(c, ErrorCode.Forbidden, res.reason);
+      if (res.outcome) this.finishGame(game, res.outcome);
+    }),
+    [ClientMessage.TttRematch]: validate(tttRefSchema, (client, msg) => {
+      const c = client as OfficeClient;
+      const game = this.state.games.get(msg.furniId);
+      if (!game || !this.gameLimiter.tryTake(c.sessionId)) return;
+      const res = ttt.rematch(game, c.sessionId);
+      if (!res.ok) this.sendError(c, ErrorCode.Forbidden, res.reason);
+    }),
+    [ClientMessage.TttScores]: (client: Client, input: unknown): TttScores => {
+      const p = tttRefSchema.safeParse(input);
+      const game = p.success ? this.state.games.get(p.data.furniId) : undefined;
+      const ids = game ? [game.xUser, game.oUser].filter(Boolean) : [];
+      return {
+        top: services().games.top(TTT_GAME, TTT_TOP),
+        players: services().games.of(TTT_GAME, ids),
+      };
+    },
     [ClientMessage.ChatReact]: validate(reactSchema, (client, msg) =>
       this.handleReact(client as OfficeClient, msg.id, msg.emoji),
     ),
@@ -296,7 +340,11 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
         .furni.list(roomId)
         .map((f) => f.id),
     );
-    for (const id of [...this.state.furni.keys()]) if (!kept.has(id)) this.state.furni.delete(id);
+    for (const id of [...this.state.furni.keys()]) {
+      if (kept.has(id)) continue;
+      this.state.furni.delete(id);
+      this.state.games.delete(id);
+    }
     // Quem ficou fora do piso (ou numa porta) volta para perto da entrada.
     for (const [sessionId, p] of this.state.players.entries()) {
       const onDoor = layout.doors.some((d) => d.x === p.x && d.y === p.y);
@@ -433,8 +481,10 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     this.boardLimiter.delete(client.sessionId);
     this.wbLimiter.delete(client.sessionId);
     this.draftLimiter.delete(client.sessionId);
+    this.gameLimiter.delete(client.sessionId);
     this.pendingUse.delete(client.sessionId);
     this.pendingSit.delete(client.sessionId);
+    for (const furniId of [...this.state.games.keys()]) this.leaveGame(furniId, client.sessionId);
     services().presence.remove(client.sessionId);
     if (client.auth) {
       services().users.touch(client.auth.id);
@@ -548,8 +598,20 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     const walking = player.nextX !== player.x || player.nextY !== player.y;
     if (!walking && touches(fp, player)) return this.useFurni(client.sessionId, f.id);
 
+    const at = this.walkNextTo(client.sessionId, player, fp);
+    if (at) this.pendingUse.set(client.sessionId, { furniId: f.id, at });
+    else this.sendError(client, ErrorCode.InvalidMove, 'Não dá para chegar perto desse móvel.');
+  }
+
+  /** Anda até o tile livre encostado no footprint mais perto (devolve o destino ou `null`). */
+  private walkNextTo(
+    sessionId: string,
+    player: Player,
+    fp: { minX: number; minY: number; maxX: number; maxY: number },
+  ): TilePoint | null {
+    const walking = player.nextX !== player.x || player.nextY !== player.y;
     const from = walking ? { x: player.nextX, y: player.nextY } : player;
-    const grid = this.gridFor(client.sessionId);
+    const grid = this.gridFor(sessionId);
     const candidates: TilePoint[] = [];
     for (let y = fp.minY - 1; y <= fp.maxY + 1; y++) {
       for (let x = fp.minX - 1; x <= fp.maxX + 1; x++) {
@@ -564,14 +626,11 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
         Math.max(Math.abs(b.x - from.x), Math.abs(b.y - from.y)),
     );
     for (const at of candidates) {
-      const res = this.movement.request(client.sessionId, player, at);
-      if (res.ok && res.dest.x === at.x && res.dest.y === at.y) {
-        this.pendingUse.set(client.sessionId, { furniId: f.id, at });
-        return;
-      }
+      const res = this.movement.request(sessionId, player, at);
+      if (res.ok && res.dest.x === at.x && res.dest.y === at.y) return at;
     }
-    this.movement.remove(client.sessionId);
-    this.sendError(client, ErrorCode.InvalidMove, 'Não dá para chegar perto desse móvel.');
+    this.movement.remove(sessionId);
+    return null;
   }
 
   private useFurni(sessionId: string, furniId: string): void {
@@ -606,6 +665,98 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     player.action = 'sit';
     player.dir = f.rot;
     player.z = f.z + def.sitHeight;
+  }
+
+  // ---------- Jogo da velha ----------
+
+  private isGameTable(furniId: string): boolean {
+    const f = this.state.furni.get(furniId);
+    return Boolean(f && services().furniDefs.get(f.defId)?.interaction === 'tictactoe');
+  }
+
+  /** Pega um lugar na mesa e senta na cadeira livre encostada nela mais perto (se houver). */
+  private handleTttJoin(client: OfficeClient, furniId: string): void {
+    const player = this.state.players.get(client.sessionId);
+    if (!client.auth || !player || !this.isGameTable(furniId)) return;
+    if (!this.gameLimiter.tryTake(client.sessionId)) {
+      return this.sendError(client, ErrorCode.RateLimit);
+    }
+    for (const [id, g] of this.state.games.entries()) {
+      if (id !== furniId && ttt.markOf(g, client.sessionId)) {
+        return this.sendError(client, ErrorCode.Forbidden, 'Você já está em outra mesa.');
+      }
+    }
+    const game = this.state.games.get(furniId) ?? ttt.newGame();
+    const res = ttt.join(game, {
+      session: client.sessionId,
+      user: client.auth.id,
+      name: player.name,
+    });
+    if (!res.ok) return this.sendError(client, ErrorCode.Forbidden, res.reason);
+    if (!this.state.games.has(furniId)) this.state.games.set(furniId, game);
+    // Senta numa cadeira encostada na mesa; sem cadeira livre, fica em pé do lado.
+    const chair = this.chairNear(furniId, player, client.sessionId);
+    if (chair) return this.handleInteract(client, chair);
+    const table = this.state.furni.get(furniId)!;
+    const def = services().furniDefs.get(table.defId)!;
+    const fp = footprint(def, table.x, table.y, table.rot);
+    if (!touches(fp, player)) this.walkNextTo(client.sessionId, player, fp);
+  }
+
+  /** Cadeira encostada na mesa, com lugar livre, mais perto de quem vai sentar. */
+  private chairNear(tableId: string, from: TilePoint, sessionId: string): string | null {
+    const table = this.state.furni.get(tableId)!;
+    const tdef = services().furniDefs.get(table.defId)!;
+    const tfp = footprint(tdef, table.x, table.y, table.rot);
+    let best: { id: string; d: number } | null = null;
+    for (const f of this.state.furni.values()) {
+      const def = services().furniDefs.get(f.defId);
+      if (!def?.canSit) continue;
+      const seat = nearestSeatTile(def, toPlaced(f), from);
+      if (!touches(tfp, seat) || this.isTileTaken(seat, sessionId)) continue;
+      const d = Math.max(Math.abs(seat.x - from.x), Math.abs(seat.y - from.y));
+      if (!best || d < best.d) best = { id: f.id, d };
+    }
+    return best?.id ?? null;
+  }
+
+  /** Sai da mesa (botão ou saiu da sala). No meio da partida, o outro vence. */
+  private leaveGame(furniId: string, sessionId: string): void {
+    const game = this.state.games.get(furniId);
+    if (!game) return;
+    const res = ttt.leave(game, sessionId);
+    if (!res) return;
+    if (res.forfeitTo) {
+      services().games.recordWin(TTT_GAME, res.forfeitTo.user, res.left.user);
+      this.gameChat(res.forfeitTo, `🏆 venceu ${res.left.name} no jogo da velha (desistência)`);
+    }
+    if (ttt.isEmpty(game)) this.state.games.delete(furniId);
+  }
+
+  /** Partida terminou: placar e aviso no chat da sala. */
+  private finishGame(game: TttGame, outcome: ttt.TttOutcome): void {
+    const x = ttt.seatOf(game, 'X');
+    const o = ttt.seatOf(game, 'O');
+    if ('draw' in outcome) {
+      services().games.recordDraw(TTT_GAME, x.user, o.user);
+      this.gameChat(x, `🤝 empatou com ${o.name} no jogo da velha`);
+      return;
+    }
+    const [winner, loser] = outcome.winner === 'X' ? [x, o] : [o, x];
+    services().games.recordWin(TTT_GAME, winner.user, loser.user);
+    this.gameChat(winner, `🏆 venceu ${loser.name} no jogo da velha`);
+  }
+
+  private gameChat(seat: ttt.TttSeat, text: string): void {
+    const message = services().chat.add(
+      this.layout.roomId,
+      { id: seat.user, name: seat.name },
+      text,
+      seat.session,
+      undefined,
+      'game',
+    );
+    this.broadcast(ServerMessage.Chat, message);
   }
 
   // ---------- Decorar ----------
@@ -657,6 +808,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     }
     services().furni.remove(this.layout.roomId, furniId);
     this.state.furni.delete(furniId);
+    this.state.games.delete(furniId);
   }
 
   /** Qualquer pessoa na sala decora, a não ser que um admin trave a sala (Fase 10). */
@@ -716,13 +868,22 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     if (!client.auth || !this.state.players.has(client.sessionId)) return;
     if (!this.chatLimiter.tryTake(client.sessionId))
       return this.sendError(client, ErrorCode.RateLimit);
+    // `/dado` e `/moeda`: o servidor sorteia, para ninguém escolher o resultado.
+    const cmd = parseQuickCommand(msg.text);
+    let text = msg.text;
+    let kind: ChatKind = 'text';
+    if (cmd) {
+      text = quickCommandText(cmd, cmd === 'dice' ? randomInt(1, 7) : randomInt(0, 2));
+      kind = cmd;
+    }
     // Só quem está nesta sala recebe (cada sala física é uma instância separada).
     const message = services().chat.add(
       this.layout.roomId,
       client.auth,
-      msg.text,
+      text,
       client.sessionId,
-      msg.replyToId,
+      cmd ? undefined : msg.replyToId,
+      kind,
     );
     this.broadcast(ServerMessage.Chat, message);
     const player = this.state.players.get(client.sessionId);

@@ -4,6 +4,7 @@ import type { RoomDoor } from './rooms.js';
 import type { TilePoint } from './iso.js';
 import type { ReactionSummary, ReplyPreview } from './reactions.js';
 import type { Ambient } from './ambience.js';
+import type { ChatKind } from './games.js';
 
 /** Nome da sala Colyseus. Cada sala física é uma instância filtrada por `officeRoomId`. */
 export const OFFICE_ROOM = 'office';
@@ -53,6 +54,16 @@ export const ClientMessage = {
   WbUndo: 'wb.undo',
   /** `{ furniId }`: apaga o quadro todo. */
   WbClear: 'wb.clear',
+  /** `{ furniId }`: pega um lugar na mesa de jogo da velha (anda e senta ao lado). */
+  TttJoin: 'ttt.join',
+  /** `{ furniId }`: sai da mesa (no meio da partida, o outro vence). */
+  TttLeave: 'ttt.leave',
+  /** `{ furniId, cell }`: marca uma casa (0–8). */
+  TttMove: 'ttt.move',
+  /** `{ furniId }`: revanche depois de uma partida terminar. */
+  TttRematch: 'ttt.rematch',
+  /** Requisição `{ furniId }`: placar (`TttScores`). */
+  TttScores: 'ttt.scores',
 } as const;
 
 /** Mensagens servidor → cliente. */
@@ -265,6 +276,8 @@ export interface ChatMessage {
   sessionId: string;
   name: string;
   text: string;
+  /** `text` = escrita pela pessoa; `dice`/`coin`/`game` = gerada pelo servidor. */
+  kind: ChatKind;
   /** Epoch em ms. */
   ts: number;
   reactions: ReactionSummary[];
