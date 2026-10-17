@@ -34,6 +34,8 @@ export const Player = schema(
     role: t.string(),
     /** Faz aniversário hoje (fuso do escritório). */
     birthday: t.boolean(),
+    /** Pode criar e editar salas. */
+    canEditRooms: t.boolean(),
   },
   'Player',
 );

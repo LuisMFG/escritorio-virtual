@@ -116,6 +116,8 @@ export interface SessionResponse {
   cargo: CargoInfo | null;
   bio: string;
   birthday: string | null;
+  /** Pode criar e editar salas (admins sempre). */
+  canEditRooms: boolean;
 }
 
 /** Uma pessoa na aba Equipe. */

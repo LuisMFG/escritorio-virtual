@@ -53,6 +53,8 @@ export const ServerMessage = {
   ChatReactions: 'chat.reactions',
   /** Um admin tirou você da sala ou do escritório (`KickedMessage`). */
   Kicked: 'moderation.kicked',
+  /** A sala foi editada: o cliente pede o layout de novo e remonta a cena. */
+  LayoutChanged: 'room.layoutChanged',
 } as const;
 
 export const ErrorCode = {

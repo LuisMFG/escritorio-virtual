@@ -92,5 +92,12 @@ export const OnlinePerson = schema(
 );
 export type OnlinePerson = SchemaType<typeof OnlinePerson>;
 
-export const LobbyState = schema({ people: t.map(OnlinePerson) }, 'LobbyState');
+/** Sala na lista do lobby (para nomes, "outras salas" e o editor). */
+export const RoomEntry = schema({ id: t.string(), name: t.string(), sort: t.uint8() }, 'RoomEntry');
+export type RoomEntry = SchemaType<typeof RoomEntry>;
+
+export const LobbyState = schema(
+  { people: t.map(OnlinePerson), rooms: t.map(RoomEntry) },
+  'LobbyState',
+);
 export type LobbyState = SchemaType<typeof LobbyState>;

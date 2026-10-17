@@ -8,6 +8,7 @@ export const adminUserUpdateSchema = z
     role: z.enum(ROLES).optional(),
     disabled: z.boolean().optional(),
     cargoId: z.number().int().positive().nullable().optional(),
+    canEditRooms: z.boolean().optional(),
   })
   .refine((v) => Object.keys(v).length > 0, 'Nada para mudar.');
 export type AdminUserUpdate = z.input<typeof adminUserUpdateSchema>;
@@ -19,6 +20,7 @@ export const kickSchema = z.object({ scope: z.enum(KICK_SCOPES) });
 /** Pessoa no painel Admin. */
 export interface AdminUser extends TeamMember {
   disabled: boolean;
+  canEditRooms: boolean;
   /** Está no `ADMIN_USERNAMES`: o papel não muda pelo painel. */
   fixedAdmin: boolean;
 }
@@ -87,6 +89,10 @@ export const AUDIT_LABELS: Record<string, string> = {
   'user.enable': 'reativou a conta de',
   'user.password': 'gerou senha temporária para',
   'user.kick': 'tirou',
+  'user.rooms': 'mudou a permissão de editar salas de',
+  'room.create': 'criou a sala',
+  'room.update': 'editou a sala',
+  'room.delete': 'excluiu a sala',
   'cargo.create': 'criou o cargo',
   'cargo.update': 'editou o cargo',
   'cargo.delete': 'apagou o cargo',

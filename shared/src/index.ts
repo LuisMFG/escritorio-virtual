@@ -17,3 +17,4 @@ export * from './accounts.js';
 export * from './admin.js';
 export * from './dm.js';
 export * from './reactions.js';
+export * from './roomEdit.js';
