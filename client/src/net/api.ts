@@ -21,6 +21,8 @@ import {
   type ApiTokenCreated,
   type CodeShare,
   type SpotifyStatus,
+  type Announcement,
+  type AnnouncementCreate,
   type RoomEdit,
   type RoomEditorData,
   type SessionResponse,
@@ -143,6 +145,17 @@ export const roomApi = {
 };
 
 /** Agenda de reuniões. */
+export const announcementApi = {
+  list: (token: string) => request<Announcement[]>('GET', '/api/announcements', { token }),
+  unread: (token: string) => request<Announcement[]>('GET', '/api/announcements/unread', { token }),
+  create: (token: string, a: AnnouncementCreate) =>
+    request<Announcement>('POST', '/api/announcements', { token, body: a }),
+  read: (token: string, id: number) =>
+    request<Ok>('PUT', `/api/announcements/${id}/read`, { token, body: {} }),
+  remove: (token: string, id: number) =>
+    request<Ok>('DELETE', `/api/announcements/${id}`, { token }),
+};
+
 export const spotifyApi = {
   status: (token: string) => request<SpotifyStatus>('GET', '/api/spotify/status', { token }),
   connect: (token: string) => request<{ url: string }>('POST', '/api/spotify/connect', { token }),

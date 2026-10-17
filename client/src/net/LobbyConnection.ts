@@ -15,6 +15,8 @@ import {
   type MeetingNotice,
   AchievementMessage,
   type AchievementUnlocked,
+  AnnouncementMessage,
+  type AnnouncementNotice,
 } from '@office/shared';
 import { isSessionError, serverEndpoint } from './OfficeConnection.js';
 
@@ -40,6 +42,8 @@ interface LobbyHandlers {
   meetingInvite(n: MeetingNotice): void;
   meetingReminder(n: MeetingNotice): void;
   achievement(n: AchievementUnlocked): void;
+  announcement(n: AnnouncementNotice): void;
+  announcementRemoved(id: number): void;
   /** O canal global (re)conectou: hora de recarregar conversas e não lidas. */
   ready(): void;
 }
@@ -76,6 +80,10 @@ export class LobbyConnection {
     room.onMessage(MeetingMessage.Invited, (n: MeetingNotice) => this.on.meetingInvite(n));
     room.onMessage(MeetingMessage.Reminder, (n: MeetingNotice) => this.on.meetingReminder(n));
     room.onMessage(AchievementMessage.Unlocked, (n: AchievementUnlocked) => this.on.achievement(n));
+    room.onMessage(AnnouncementMessage.New, (n: AnnouncementNotice) => this.on.announcement(n));
+    room.onMessage(AnnouncementMessage.Removed, (n: { id: number }) =>
+      this.on.announcementRemoved(n.id),
+    );
     const cb = Callbacks.get(room);
     const emit = () => this.on.people(this.people());
     cb.onAdd('people', (person) => {

@@ -32,7 +32,7 @@ import { PlaceholderFactory } from './assets/PlaceholderFactory.js';
 import { DEBUG, HOUR_OVERRIDE, OFFLINE_ASSETS } from './config.js';
 import type { AvatarSnapshot } from './entities/AvatarView.js';
 import { isSessionError, OfficeConnection, type OfficeRoomClient } from './net/OfficeConnection.js';
-import { adminApi, api, ApiRequestError } from './net/api.js';
+import { adminApi, announcementApi, api, ApiRequestError } from './net/api.js';
 import { forgetToken, loadSession, rememberSession, saveSession } from './net/storage.js';
 import { RoomScene, type SceneDeps } from './scene/RoomScene.js';
 import { AvatarCard } from './ui/avatarCard.js';
@@ -45,6 +45,7 @@ import { showClaim, showLogin } from './ui/login.js';
 import { openProfile } from './ui/profile.js';
 import { showAchievementToast } from './ui/badges.js';
 import { exposeForTests } from './e2e.js';
+import { AnnouncementBanner, openAnnouncements } from './ui/announcements.js';
 import { openTeam } from './ui/team.js';
 import { openAdmin } from './ui/admin.js';
 import { openRoomEditor } from './ui/roomEditor.js';
@@ -226,6 +227,22 @@ async function start(): Promise<void> {
   /** Jogo da velha aberto (mesa de jogos). */
   let ttt: TicTacToeHandle | null = null;
   let agenda: AgendaHandle | null = null;
+  /** Avisos da diretoria: faixa com os não lidos e o painel com o histórico. */
+  let annPanel: ReturnType<typeof openAnnouncements> | null = null;
+  const annBanner = new AnnouncementBanner(
+    () => session?.token ?? '',
+    () => showAnnouncements(),
+    (n) => hud.setUnreadAnnouncements(n),
+  );
+  function showAnnouncements(): void {
+    if (!session) return;
+    annPanel?.close();
+    annPanel = openAnnouncements({
+      token: session.token,
+      isAdmin: session.role === 'admin',
+      onRead: (id) => annBanner.markedRead(id),
+    });
+  }
   const busyRooms = () =>
     new Map(roomList.flatMap((r) => (r.meeting ? [[r.id, r.meeting] as [string, string]] : [])));
   const updateThumb = (furniId: string) => {
@@ -283,6 +300,7 @@ async function start(): Promise<void> {
     onOpenTeam: () => showTeam(),
     onOpenAdmin: () => showAdmin(),
     onOpenMessages: () => messages.toggle(),
+    onOpenAnnouncements: () => showAnnouncements(),
     onOpenAgenda: () => {
       if (!session || !connection) return;
       const conn = connection;
@@ -730,7 +748,27 @@ async function start(): Promise<void> {
           tag: `conquista-${id}`,
         });
       },
-      ready: () => void messages.refresh(),
+      announcement: ({ announcement: a }) => {
+        annPanel?.refresh();
+        if (a.read) return;
+        annBanner.add(a);
+        sound.mention();
+        if (a.urgent) notifier.notify(`🚨 ${a.title}`, a.body, { tag: `aviso-${a.id}` });
+      },
+      announcementRemoved: (id) => {
+        annBanner.remove(id);
+        annPanel?.refresh();
+      },
+      ready: () => {
+        void messages.refresh();
+        // Avisos que a pessoa ainda não leu (inclusive os de antes de ela entrar).
+        if (session) {
+          void announcementApi
+            .unread(session.token)
+            .then((list) => annBanner.set(list))
+            .catch(() => undefined);
+        }
+      },
     });
     lobby = l;
     try {

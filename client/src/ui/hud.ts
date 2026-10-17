@@ -10,6 +10,8 @@ export interface Hud {
   refreshAmbient(): void;
   /** Contador de mensagens privadas não lidas no botão. */
   setUnreadDms(n: number): void;
+  /** Contador de avisos da diretoria não lidos. */
+  setUnreadAnnouncements(n: number): void;
   /** Mostra o "✎ Editar sala" (admins e quem pode editar salas). */
   setCanEditRooms(on: boolean): void;
   /** Mostra o botão Admin (só para admins). */
@@ -27,6 +29,7 @@ export function mountHud(opts: {
   onOpenAdmin: () => void;
   onOpenMessages: () => void;
   onOpenAgenda: () => void;
+  onOpenAnnouncements: () => void;
   onEditRoom: () => void;
   ambient: AmbientSound;
   onToggleDecor: () => void;
@@ -125,18 +128,28 @@ export function mountHud(opts: {
   dmBadge.className = 'dm-badge';
   dmBadge.hidden = true;
   dmBtn.append(dmBadge);
+  const annBtn = actionButton('hud-ann', '📢', 'Avisos', opts.onOpenAnnouncements);
+  const annBadge = document.createElement('span');
+  annBadge.className = 'dm-badge';
+  annBadge.hidden = true;
+  annBtn.append(annBadge);
   const adminBtn = actionButton('hud-admin', '🛡️', 'Admin', opts.onOpenAdmin);
   adminBtn.hidden = true;
 
   const actions = document.createElement('div');
   actions.className = 'hud-actions';
-  actions.append(profileBtn, teamBtn, dmBtn, agendaBtn, decorBtn, adminBtn);
+  actions.append(profileBtn, teamBtn, dmBtn, agendaBtn, annBtn, decorBtn, adminBtn);
   document.body.append(card, status, zoom, actions, panel);
   return {
     setUnreadDms(n) {
       dmBadge.hidden = n === 0;
       dmBadge.textContent = n > 99 ? '99+' : String(n);
       dmBtn.setAttribute('aria-label', n ? `Mensagens (${n} não lidas)` : 'Mensagens');
+    },
+    setUnreadAnnouncements(n) {
+      annBadge.hidden = n === 0;
+      annBadge.textContent = n > 99 ? '99+' : String(n);
+      annBtn.setAttribute('aria-label', n ? `Avisos (${n} não lidos)` : 'Avisos');
     },
     setCanEditRooms(on) {
       editRoomBtn.hidden = !on;
