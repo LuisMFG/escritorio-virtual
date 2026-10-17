@@ -812,4 +812,4 @@ Escolhido em 17/10/2026, depois do roadmap v3. Ordem pensada assim: primeiro pro
 1. **Ordem:** a acima (backup → testes → avisos → enquetes → elogios → foco → mapa → anexos → Jira).
 2. **Anexos:** até 10 MB por arquivo; imagens, PDF, documentos do Office, texto e zip; guardados no disco do servidor (entram no backup).
 3. **Pomodoro:** 25 min de foco / 5 de pausa por padrão; durante o foco as notificações ficam seguradas e chegam no fim.
-4. **Jira:** Cloud (atlassian.net, cada pessoa usa e-mail + token de API) ou Server/Data Center da organização (cada pessoa usa um token pessoal)? E o endereço do Jira.
+4. **Jira:** ✅ **Jira Cloud** (respondido em 17/10/2026). Cada pessoa conecta com o e-mail da Atlassian e um token de API (guardado criptografado no servidor). Falta o endereço (`suaempresa.atlassian.net`), que pode vir antes da Fase 30.
