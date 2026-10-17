@@ -56,6 +56,7 @@ const testConfig: Config = {
   isProduction: false,
   backupDir: '/tmp/escritorio-teste-backups',
   backupKeep: 7,
+  loginRateLimit: 10,
 };
 
 async function join(token: string, roomId = RECEPTION.id, ticket?: string) {
