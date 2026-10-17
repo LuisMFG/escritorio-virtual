@@ -253,6 +253,44 @@ export const whiteboardStrokes = sqliteTable(
   (t) => [index('whiteboard_strokes_furni_idx').on(t.furniId, t.id)],
 );
 
+/** Reuniões marcadas numa sala. */
+export const meetings = sqliteTable(
+  'meetings',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    title: text('title').notNull(),
+    description: text('description').notNull().default(''),
+    roomId: text('room_id')
+      .notNull()
+      .references(() => rooms.id, { onDelete: 'cascade' }),
+    startsAt: integer('starts_at', { mode: 'timestamp_ms' }).notNull(),
+    durationMin: integer('duration_min').notNull(),
+    createdBy: text('created_by')
+      .notNull()
+      .references(() => users.id),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    /** Quando o lembrete (5 min antes) foi enviado; null = ainda não. */
+    remindedAt: integer('reminded_at', { mode: 'timestamp_ms' }),
+  },
+  (t) => [index('meetings_starts_idx').on(t.startsAt)],
+);
+
+/** Convidados e a resposta de cada um. */
+export const meetingAttendees = sqliteTable(
+  'meeting_attendees',
+  {
+    meetingId: integer('meeting_id')
+      .notNull()
+      .references(() => meetings.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id),
+    /** 'pending' | 'yes' | 'no' */
+    response: text('response').notNull().default('pending'),
+  },
+  (t) => [primaryKey({ columns: [t.meetingId, t.userId] })],
+);
+
 export type UserRow = typeof users.$inferSelect;
 export type DirectMessageRow = typeof directMessages.$inferSelect;
 export type CargoRow = typeof cargos.$inferSelect;

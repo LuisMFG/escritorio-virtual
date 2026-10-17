@@ -1,10 +1,13 @@
 import { openDatabase } from '../db/client.js';
 import { createServices } from '../services/index.js';
-import type { RoomDeps } from './rooms.js';
+import type { MeetingDeps } from './meetings.js';
 import { register, type Caller } from './auth.js';
 
+/** Tudo que as rotas usam (os testes de cada área pegam a parte que precisam). */
+export type TestDeps = MeetingDeps;
+
 /** Dependências das rotas sobre um banco em memória (testes). */
-export function makeDeps(): RoomDeps {
+export function makeDeps(): MeetingDeps {
   const svc = createServices(openDatabase(':memory:'), { inviteCode: 'segredo' });
   return {
     inviteCode: () => svc.settings.inviteCode(),
@@ -18,6 +21,7 @@ export function makeDeps(): RoomDeps {
     moderation: svc.moderation,
     furni: svc.furni,
     furniDefs: svc.furniDefs,
+    meetings: svc.meetings,
   };
 }
 
@@ -28,13 +32,13 @@ export const conta = {
   name: ' Ana ',
 };
 
-export async function registered(deps: RoomDeps, extra: Partial<typeof conta> = {}) {
+export async function registered(deps: MeetingDeps, extra: Partial<typeof conta> = {}) {
   const res = await register({ ...conta, ...extra }, deps);
   if (!res.ok) throw new Error(res.body.message);
   return res.body;
 }
 
-export function callerOf(deps: RoomDeps, token: string): Caller {
+export function callerOf(deps: MeetingDeps, token: string): Caller {
   const user = deps.users.findByToken(token);
   if (!user) throw new Error('token inválido');
   return { user, token };

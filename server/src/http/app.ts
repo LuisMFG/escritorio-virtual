@@ -10,6 +10,7 @@ import { getBearerToken } from '@colyseus/core';
 import type { PresenceResponse } from '@office/shared';
 import * as admin from './admin.js';
 import * as roomRoutes from './rooms.js';
+import * as meetingRoutes from './meetings.js';
 import {
   changePassword,
   claim,
@@ -55,7 +56,7 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
   });
   app.use('/api', express.json({ limit: '16kb' }));
 
-  const auth: roomRoutes.RoomDeps = {
+  const auth: meetingRoutes.MeetingDeps = {
     inviteCode: () => svc.settings.inviteCode(),
     adminUsernames: cfg.adminUsernames,
     avatarManifest: svc.avatarManifest,
@@ -67,6 +68,7 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
     moderation: svc.moderation,
     furni: svc.furni,
     furniDefs: svc.furniDefs,
+    meetings: svc.meetings,
   };
   const send = <T>(res: Response, result: Result<T>) =>
     void res.status(result.status).json(result.body);
@@ -175,6 +177,26 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
     '/api/admin/cargos/:id',
     withCaller((c, req, res) => send(res, admin.updateCargo(c, Number(id(req)), req.body, auth))),
   );
+  // Agenda de reuniões.
+  app.get(
+    '/api/meetings',
+    withCaller((_c, req, res) => send(res, meetingRoutes.listMeetings(req.query, auth))),
+  );
+  app.post(
+    '/api/meetings',
+    withCaller((c, req, res) => send(res, meetingRoutes.createMeeting(c, req.body, auth))),
+  );
+  app.put(
+    '/api/meetings/:id/response',
+    withCaller((c, req, res) =>
+      send(res, meetingRoutes.respondMeeting(c, Number(id(req)), req.body, auth)),
+    ),
+  );
+  app.delete(
+    '/api/meetings/:id',
+    withCaller((c, req, res) => send(res, meetingRoutes.cancelMeeting(c, Number(id(req)), auth))),
+  );
+
   // Salas (admins e quem pode editar salas).
   app.get(
     '/api/rooms',

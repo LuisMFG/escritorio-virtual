@@ -54,6 +54,8 @@ export const roomCreateSchema = z.object({ name: roomNameSchema });
 export interface RoomSummary {
   id: string;
   name: string;
+  /** Reunião acontecendo agora (lista do lobby). */
+  meeting?: string;
 }
 
 /** O que o editor carrega para uma sala. */

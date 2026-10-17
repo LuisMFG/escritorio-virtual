@@ -104,6 +104,8 @@ async function startBot(name: string): Promise<void> {
   room.onMessage('chat.reactions', () => undefined);
   room.onMessage('board.changed', () => undefined);
   room.onMessage('room.layoutChanged', () => undefined);
+  for (const t of ['wb.stroke', 'wb.draft', 'wb.removed', 'wb.cleared'])
+    room.onMessage(t, () => undefined);
   room.onMessage('moderation.kicked', (m: { scope: string; message: string }) => {
     console.log(`[bot] ${name}: ${m.message}`);
     if (m.scope === 'office') process.exit(0);
@@ -136,6 +138,10 @@ async function startBot(name: string): Promise<void> {
   const lobby = await client.joinOrCreate(LOBBY_ROOM, { token: session.token }, LobbyState);
   lobby.onMessage(LobbyServerMessage.Error, () => undefined);
   lobby.onMessage(LobbyServerMessage.DmReadReceipt, () => undefined);
+  lobby.onMessage(LobbyServerMessage.DmReactions, () => undefined);
+  for (const t of ['meetings.changed', 'meeting.invited', 'meeting.reminder']) {
+    lobby.onMessage(t, () => undefined);
+  }
   lobby.onMessage(LobbyServerMessage.DmMessage, (m: DirectMessage) => {
     if (m.fromUserId === session.userId) return;
     setTimeout(() => lobby.send(LobbyClientMessage.DmRead, { withUserId: m.fromUserId }), 800);

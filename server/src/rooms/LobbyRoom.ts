@@ -12,6 +12,10 @@ import {
   LobbyState,
   OnlinePerson,
   RoomEntry,
+  MeetingMessage,
+  type DirectMessage,
+  type Meeting,
+  type MeetingNotice,
   type DmReadReceipt,
   type ErrorMessage,
 } from '@office/shared';
@@ -90,13 +94,41 @@ export class LobbyRoom extends Room<{ state: LobbyState; client: LobbyClient }> 
   /** Lista de salas (nomes e ordem) para todos. */
   private readonly syncRooms = (): void => {
     const list = services().rooms.list();
+    const busy = services().meetings.currentByRoom();
     const ids = new Set(list.map((r) => r.id));
     for (const id of [...this.state.rooms.keys()]) if (!ids.has(id)) this.state.rooms.delete(id);
     list.forEach((r, sort) => {
       const entry = this.state.rooms.get(r.id) ?? new RoomEntry();
-      Object.assign(entry, { id: r.id, name: r.name, sort });
+      Object.assign(entry, { id: r.id, name: r.name, sort, meeting: busy.get(r.id) ?? '' });
       if (!this.state.rooms.has(r.id)) this.state.rooms.set(r.id, entry);
     });
+  };
+
+  // ---------- Agenda ----------
+
+  private readonly onMeetingsChanged = (): void => {
+    this.broadcast(MeetingMessage.Changed, {});
+  };
+
+  private readonly onInvited = (meeting: Meeting, userIds: string[]): void => {
+    for (const id of userIds) {
+      for (const c of this.clientsOf(id))
+        c.send(MeetingMessage.Invited, { meeting } satisfies MeetingNotice);
+    }
+  };
+
+  private readonly onReminder = (meeting: Meeting): void => {
+    for (const a of meeting.attendees) {
+      if (a.response === 'no') continue;
+      for (const c of this.clientsOf(a.userId)) {
+        c.send(MeetingMessage.Reminder, { meeting } satisfies MeetingNotice);
+      }
+    }
+  };
+
+  private readonly onAutoDm = (msg: DirectMessage): void => {
+    const targets = new Set([...this.clientsOf(msg.fromUserId), ...this.clientsOf(msg.toUserId)]);
+    for (const c of targets) c.send(LobbyServerMessage.DmMessage, msg);
   };
 
   /** Tirado do escritório (ou conta desativada): o canal global também fecha. */
@@ -111,12 +143,24 @@ export class LobbyRoom extends Room<{ state: LobbyState; client: LobbyClient }> 
     this.syncRooms();
     services().presence.events.on('changed', this.syncPeople);
     services().moderation.on('rooms', this.syncRooms);
+    const ev = services().meetings.events;
+    ev.on('changed', this.onMeetingsChanged);
+    ev.on('invited', this.onInvited);
+    ev.on('reminder', this.onReminder);
+    ev.on('dm', this.onAutoDm);
+    ev.on('tick', this.syncRooms);
     services().moderation.on('kick', this.onKick);
   }
 
   override onDispose(): void {
     services().presence.events.off('changed', this.syncPeople);
     services().moderation.off('rooms', this.syncRooms);
+    const ev = services().meetings.events;
+    ev.off('changed', this.onMeetingsChanged);
+    ev.off('invited', this.onInvited);
+    ev.off('reminder', this.onReminder);
+    ev.off('dm', this.onAutoDm);
+    ev.off('tick', this.syncRooms);
     services().moderation.off('kick', this.onKick);
   }
 

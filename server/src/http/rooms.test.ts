@@ -1,10 +1,11 @@
 import { parseHeightmap, RECEPTION, type RoomEdit } from '@office/shared';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { updateUser } from './admin.js';
-import { createRoom, deleteRoom, getRoom, listRooms, updateRoom, type RoomDeps } from './rooms.js';
+import { createRoom, deleteRoom, getRoom, listRooms, updateRoom } from './rooms.js';
 import { callerOf, makeDeps, registered } from './testDeps.js';
+import type { TestDeps } from './testDeps.js';
 
-let deps: RoomDeps;
+let deps: TestDeps;
 let admin: Awaited<ReturnType<typeof registered>>;
 let beto: Awaited<ReturnType<typeof registered>>;
 const asAdmin = () => callerOf(deps, admin.token);

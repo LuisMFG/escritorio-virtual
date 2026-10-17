@@ -93,7 +93,16 @@ export const OnlinePerson = schema(
 export type OnlinePerson = SchemaType<typeof OnlinePerson>;
 
 /** Sala na lista do lobby (para nomes, "outras salas" e o editor). */
-export const RoomEntry = schema({ id: t.string(), name: t.string(), sort: t.uint8() }, 'RoomEntry');
+export const RoomEntry = schema(
+  {
+    id: t.string(),
+    name: t.string(),
+    sort: t.uint8(),
+    /** Título da reunião acontecendo agora na sala (vazio = livre). */
+    meeting: t.string(),
+  },
+  'RoomEntry',
+);
 export type RoomEntry = SchemaType<typeof RoomEntry>;
 
 export const LobbyState = schema(

@@ -13,11 +13,14 @@ import {
   type DmConversation,
   type DmReadReceipt,
   type ErrorMessage,
+  MeetingMessage,
+  type MeetingNotice,
 } from '@office/shared';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { openDatabase } from '../db/client.js';
 import { createServices, setServices, type Services } from '../services/index.js';
 import { LobbyRoom } from './LobbyRoom.js';
+import { MeetingScheduler } from '../services/MeetingScheduler.js';
 import { OfficeRoom } from './OfficeRoom.js';
 
 let colyseus: ColyseusTestServer;
@@ -152,6 +155,44 @@ describe('LobbyRoom', () => {
     await room.leave();
     await wait(150);
     expect(watcher.state.people.has(beto.user.id)).toBe(false);
+  });
+
+  it('agenda: convite e lembrete chegam ao vivo; a sala mostra a reunião em andamento', async () => {
+    const ana = newUser('Ana');
+    const beto = newUser('Beto');
+    const b = await lobby(beto.token);
+    const meeting = svc.meetings.create({
+      title: 'Kickoff',
+      description: '',
+      roomId: 'meeting',
+      startsAt: Date.now() + 3 * 60_000,
+      durationMin: 30,
+      createdBy: ana.user.id,
+      attendeeIds: [beto.user.id],
+    });
+    const invited = b.waitForMessage(MeetingMessage.Invited);
+    svc.meetings.events.emit('invited', meeting, [beto.user.id]);
+    expect(((await invited) as MeetingNotice).meeting.title).toBe('Kickoff');
+
+    const reminder = b.waitForMessage(MeetingMessage.Reminder);
+    const dm = b.waitForMessage(LobbyServerMessage.DmMessage);
+    new MeetingScheduler(svc.meetings, svc.dms).tick();
+    expect(((await reminder) as MeetingNotice).meeting.id).toBe(meeting.id);
+    expect(((await dm) as DirectMessage).text).toContain('Kickoff');
+
+    // Começando agora: a sala ganha a placa no próximo tick.
+    const now = svc.meetings.create({
+      title: 'Agora',
+      description: '',
+      roomId: 'pantry',
+      startsAt: Date.now() - 60_000,
+      durationMin: 30,
+      createdBy: ana.user.id,
+      attendeeIds: [],
+    });
+    svc.meetings.events.emit('tick');
+    await wait(150);
+    expect(b.state.rooms.get('pantry')?.meeting).toBe(now.title);
   });
 
   it('tirar do escritório fecha também o canal global', async () => {
