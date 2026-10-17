@@ -23,8 +23,10 @@ export interface AvatarCardInfo {
   canKickFromRoom: boolean;
   /** Emblemas de conquistas exibidos (ids separados por vírgula). */
   badges: string;
-  /** Atividade fora do escritório ("💻 Codando em C# no Visual Studio"). */
+  /** Atividade fora do escritório ("💻 Codando em C# no Visual Studio"); uma por linha. */
   activity: string;
+  /** Link da música (linha 🎵). */
+  activityUrl: string;
 }
 
 export interface AvatarCardHandlers {
@@ -86,13 +88,22 @@ export class AvatarCard {
       p.append(cargoPill(info.cargo, info.cargoColor));
       extra.push(p);
     }
-    if (info.activity) {
-      extra.push(
-        Object.assign(document.createElement('p'), {
-          className: 'card-activity',
-          textContent: info.activity,
-        }),
-      );
+    for (const line of info.activity.split('\n').filter(Boolean)) {
+      const p = Object.assign(document.createElement('p'), { className: 'card-activity' });
+      // A linha da música vira link para ela no Spotify.
+      if (line.startsWith('🎵') && /^https:\/\/open\.spotify\.com\//.test(info.activityUrl)) {
+        p.append(
+          Object.assign(document.createElement('a'), {
+            href: info.activityUrl,
+            target: '_blank',
+            rel: 'noopener noreferrer',
+            textContent: line,
+          }),
+        );
+      } else {
+        p.textContent = line;
+      }
+      extra.push(p);
     }
     const badges = showcaseRow(info.badges);
     if (badges) extra.push(badges);

@@ -150,6 +150,20 @@ async function start(): Promise<void> {
     connection?.setStatus(effectiveStatus());
     overlay.setOwnStatus(effectiveStatus());
   };
+  // Voltando da página do Spotify (?spotify=ok|erro|cancelado): avisa e limpa o endereço.
+  const spotifyResult = new URLSearchParams(location.search).get('spotify');
+  if (spotifyResult) {
+    history.replaceState(null, '', location.pathname + location.hash);
+    setTimeout(() => {
+      overlay.notify(
+        spotifyResult === 'ok'
+          ? '🎵 Spotify conectado! A música que você ouvir aparece no seu cartão.'
+          : spotifyResult === 'cancelado'
+            ? 'Conexão com o Spotify cancelada.'
+            : 'Não foi possível conectar o Spotify. Tente de novo.',
+      );
+    }, 1500);
+  }
   const overlay = new Overlay((status) => {
     manualStatus = status;
     saveStatus(status);
@@ -501,6 +515,7 @@ async function start(): Promise<void> {
                 canKickFromRoom: layout.roomId !== RECEPTION.id,
                 badges: player.badges,
                 activity: player.activity,
+                activityUrl: player.activityUrl,
               },
               at,
             );

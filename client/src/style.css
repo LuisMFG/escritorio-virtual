@@ -292,6 +292,7 @@ body {
 
 .person-activity {
   flex-basis: 100%;
+  white-space: pre-line;
   padding-left: 14px;
   margin-top: -4px;
   color: var(--muted);
@@ -3651,4 +3652,59 @@ button.reply-quote:hover {
 .token-value {
   font-family: ui-monospace, monospace;
   font-size: 12px;
+}
+
+/* ---------- Fase 21: Spotify ---------- */
+
+.card-activity a {
+  color: #8ee6a8;
+  text-decoration: none;
+}
+
+.card-activity a:hover {
+  text-decoration: underline;
+}
+
+.profile-spotify {
+  margin: 14px 0 6px;
+  padding-top: 12px;
+  border-top: 1px solid var(--card-border);
+}
+
+.profile-spotify h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+
+.spotify-intro {
+  margin: 0 0 10px;
+  font-size: 12px;
+}
+
+.btn-spotify {
+  padding: 9px 16px;
+  border: 0;
+  border-radius: 999px;
+  background: #1db954;
+  color: #0b0b0b;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn-spotify:hover {
+  background: #1ed760;
+}
+
+.btn-spotify:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.spotify-toggle {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-right: auto;
+  font-size: 13px;
 }

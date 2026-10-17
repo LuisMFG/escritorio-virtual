@@ -18,6 +18,7 @@ import {
   type ActivitySettings,
   type ApiTokenCreated,
   type CodeShare,
+  type SpotifyStatus,
   type RoomEdit,
   type RoomEditorData,
   type SessionResponse,
@@ -126,6 +127,14 @@ export const roomApi = {
 };
 
 /** Agenda de reuniões. */
+export const spotifyApi = {
+  status: (token: string) => request<SpotifyStatus>('GET', '/api/spotify/status', { token }),
+  connect: (token: string) => request<{ url: string }>('POST', '/api/spotify/connect', { token }),
+  setHidden: (token: string, hidden: boolean) =>
+    request<SpotifyStatus>('PUT', '/api/spotify/settings', { token, body: { hidden } }),
+  disconnect: (token: string) => request<SpotifyStatus>('DELETE', '/api/spotify', { token }),
+};
+
 export const activityApi = {
   settings: (token: string) =>
     request<ActivitySettings>('GET', '/api/activity/settings', { token }),
