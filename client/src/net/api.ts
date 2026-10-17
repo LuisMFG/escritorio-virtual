@@ -11,6 +11,8 @@ import {
   type PasswordChangeRequest,
   type ProfileUpdate,
   type RegisterRequest,
+  type RoomEdit,
+  type RoomEditorData,
   type SessionResponse,
   type TeamResponse,
 } from '@office/shared';
@@ -102,4 +104,16 @@ export const adminApi = {
     request<Ok>('DELETE', `/api/admin/cargos/${id}`, { token }),
   reorderCargos: (token: string, ids: number[]) =>
     request<Ok>('PUT', '/api/admin/cargos/order', { token, body: { ids } }),
+};
+
+const room = (id: string) => `/api/rooms/${encodeURIComponent(id)}`;
+
+/** Editor de salas (admins e quem pode editar salas). */
+export const roomApi = {
+  get: (token: string, id: string) => request<RoomEditorData>('GET', room(id), { token }),
+  create: (token: string, name: string) =>
+    request<{ id: string }>('POST', '/api/rooms', { token, body: { name } }),
+  update: (token: string, id: string, edit: RoomEdit) =>
+    request<{ removedFurni: number }>('PUT', room(id), { token, body: edit }),
+  remove: (token: string, id: string) => request<Ok>('DELETE', room(id), { token }),
 };

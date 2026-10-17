@@ -10,6 +10,7 @@ import {
   type ErrorMessage,
   type Reaction,
   type ReactionsUpdate,
+  type RoomSummary,
 } from '@office/shared';
 import { isSessionError, serverEndpoint } from './OfficeConnection.js';
 
@@ -27,6 +28,8 @@ interface LobbyHandlers {
   error(err: ErrorMessage): void;
   /** Quem está online mudou (entrou, saiu, trocou de sala ou de status). */
   people(list: OnlineInfo[]): void;
+  /** Lista de salas mudou (criada, renomeada, excluída). */
+  rooms(list: RoomSummary[]): void;
   /** O canal global (re)conectou: hora de recarregar conversas e não lidas. */
   ready(): void;
 }
@@ -66,6 +69,17 @@ export class LobbyConnection {
       emit();
     });
     cb.onRemove('people', emit);
+    const emitRooms = () =>
+      this.on.rooms(
+        [...room.state.rooms.values()]
+          .sort((a, b) => a.sort - b.sort)
+          .map((r) => ({ id: r.id, name: r.name })),
+      );
+    cb.onAdd('rooms', (entry) => {
+      cb.onChange(entry, emitRooms);
+      emitRooms();
+    });
+    cb.onRemove('rooms', emitRooms);
     room.onReconnect(() => this.on.ready());
     room.onLeave((code) => {
       if (this.leaving || code === CloseCode.CONSENTED) return;

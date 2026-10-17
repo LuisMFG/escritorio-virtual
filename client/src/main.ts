@@ -18,6 +18,7 @@ import {
   type SessionResponse,
   type Status,
   type TeamResponse,
+  type RoomSummary,
   STATUSES,
 } from '@office/shared';
 import { Application, TextureSource } from 'pixi.js';
@@ -40,6 +41,7 @@ import { showClaim, showLogin } from './ui/login.js';
 import { openProfile } from './ui/profile.js';
 import { openTeam } from './ui/team.js';
 import { openAdmin } from './ui/admin.js';
+import { openRoomEditor } from './ui/roomEditor.js';
 import { MessagesPanel } from './ui/messages.js';
 import { SystemNotifier } from './ui/notifications.js';
 import { LobbyConnection, type OnlineInfo } from './net/LobbyConnection.js';
@@ -49,7 +51,8 @@ import { Overlay } from './ui/overlay.js';
 
 /** Sala pedida na URL (`#/meeting`), para recarregar no mesmo lugar. */
 function roomFromHash(): string {
-  return findRoom(location.hash.replace(/^#\/?/, ''))?.id ?? RECEPTION.id;
+  const id = location.hash.replace(/^#\/?/, '');
+  return /^[a-z0-9-]{1,40}$/.test(id) ? id : RECEPTION.id;
 }
 
 async function fetchJson(url: string): Promise<unknown> {
@@ -173,6 +176,11 @@ async function start(): Promise<void> {
     messages.visibilityChanged();
   });
 
+  // Salas: começa com as iniciais e o canal global mantém a lista atualizada.
+  let roomList: RoomSummary[] = ROOMS.map((r) => ({ id: r.id, name: r.name }));
+  const roomName = (id: string) =>
+    roomList.find((r) => r.id === id)?.name ?? findRoom(id)?.name ?? id;
+
   const notifier = new SystemNotifier();
   let lobby: LobbyConnection | undefined;
   let online: OnlineInfo[] = [];
@@ -185,7 +193,7 @@ async function start(): Promise<void> {
       await loadTeam();
       return team?.members ?? [];
     },
-    roomName: (id) => findRoom(id)?.name ?? id,
+    roomName,
     notifier,
     unreadChanged: (n) => {
       unreadDms = n;
@@ -217,22 +225,39 @@ async function start(): Promise<void> {
     onOpenTeam: () => showTeam(),
     onOpenAdmin: () => showAdmin(),
     onOpenMessages: () => messages.toggle(),
+    onEditRoom: () => {
+      if (!session || !connection) return;
+      const conn = connection;
+      openRoomEditor({
+        token: session.token,
+        currentRoomId: conn.currentRoomId,
+        rooms: () => roomList,
+        goTo: (id) => conn.goTo(id),
+        notify: (m) => overlay.notify(m),
+      });
+    },
   });
   function showAdmin(): void {
     if (session?.role !== 'admin') return;
     openAdmin({
       token: session.token,
       userId: session.userId,
-      roomName: (id) => findRoom(id)?.name ?? id,
+      roomName,
     });
   }
   /** Papel mudou (um admin promoveu/rebaixou você): ajusta o que aparece. */
-  function applyRole(role: SessionResponse['role']): void {
-    if (session) session = { ...session, role };
+  function applyRole(
+    role: SessionResponse['role'],
+    canEditRooms = session?.canEditRooms ?? false,
+  ): void {
+    if (session) session = { ...session, role, canEditRooms };
     hud.setAdmin(role === 'admin');
+    hud.setCanEditRooms(role === 'admin' || canEditRooms);
     chat.setAdmin(role === 'admin');
     applyDecorLock();
   }
+  /** Assinaturas do estado da sala montada (desfeitas ao remontar a cena). */
+  let detachRoom: (() => void)[] = [];
   let decorLocked = false;
   function applyDecorLock(): void {
     const locked = decorLocked && session?.role !== 'admin';
@@ -266,7 +291,7 @@ async function start(): Promise<void> {
       token: session.token,
       userId: session.userId,
       isAdmin: session.role === 'admin',
-      roomName: (id) => findRoom(id)?.name ?? id,
+      roomName,
       loaded: (t) => (team = t),
       message: openDm,
     });
@@ -333,6 +358,8 @@ async function start(): Promise<void> {
     room: OfficeRoomClient,
     layout: RoomLayoutMessage,
   ): Promise<void> {
+    for (const off of detachRoom) off();
+    detachRoom = [];
     scene?.destroy();
     const s = new RoomScene(
       app,
@@ -417,38 +444,53 @@ async function start(): Promise<void> {
       );
     };
     const cb = Callbacks.get(room);
-    cb.onAdd('players', (player, id) => {
-      s.addAvatar(id, snapshot(player), id === room.sessionId);
-      if (player.birthday && !birthdaysSeen.has(player.userId)) {
-        birthdaysSeen.add(player.userId);
-        overlay.notify(
-          id === room.sessionId
-            ? 'Feliz aniversário! 🎂'
-            : `Hoje é aniversário de ${player.name}! 🎂`,
-        );
-      }
-      cb.onChange(player, () => {
-        s.updateAvatar(id, snapshot(player));
-        if (id === room.sessionId && session && player.role !== session.role) {
-          applyRole(player.role === 'admin' ? 'admin' : 'member');
+    const keep = (off: () => void) => detachRoom.push(off);
+    keep(
+      cb.onAdd('players', (player, id) => {
+        s.addAvatar(id, snapshot(player), id === room.sessionId);
+        if (player.birthday && !birthdaysSeen.has(player.userId)) {
+          birthdaysSeen.add(player.userId);
+          overlay.notify(
+            id === room.sessionId
+              ? 'Feliz aniversário! 🎂'
+              : `Hoje é aniversário de ${player.name}! 🎂`,
+          );
         }
+        keep(
+          cb.onChange(player, () => {
+            s.updateAvatar(id, snapshot(player));
+            const isMe = id === room.sessionId && session;
+            if (
+              isMe &&
+              (player.role !== session!.role || player.canEditRooms !== session!.canEditRooms)
+            ) {
+              applyRole(player.role === 'admin' ? 'admin' : 'member', player.canEditRooms);
+            }
+            refreshPeople();
+          }),
+        );
         refreshPeople();
-      });
-      refreshPeople();
-    });
-    cb.onRemove('players', (_player, id) => {
-      s.removeAvatar(id);
-      refreshPeople();
-    });
-    cb.onAdd('furni', (f, id) => {
-      s.setFurni(id, placed(f));
-      cb.onChange(f, () => s.setFurni(id, placed(f)));
-    });
-    cb.onRemove('furni', (_f, id) => s.removeFurni(id));
-    cb.listen('decorLocked', (locked) => {
-      decorLocked = locked;
-      applyDecorLock();
-    });
+      }),
+    );
+    keep(
+      cb.onRemove('players', (_player, id) => {
+        s.removeAvatar(id);
+        refreshPeople();
+      }),
+    );
+    keep(
+      cb.onAdd('furni', (f, id) => {
+        s.setFurni(id, placed(f));
+        keep(cb.onChange(f, () => s.setFurni(id, placed(f))));
+      }),
+    );
+    keep(cb.onRemove('furni', (_f, id) => s.removeFurni(id)));
+    keep(
+      cb.listen('decorLocked', (locked) => {
+        decorLocked = locked;
+        applyDecorLock();
+      }),
+    );
 
     const chatHistory = (await room.request(ClientMessage.GetChatHistory)) as ChatMessage[];
     if (scene === s) chat.setHistory(chatHistory, session?.userId ?? '');
@@ -458,7 +500,7 @@ async function start(): Promise<void> {
   function refreshOtherRooms(): void {
     if (!connection) return;
     overlay.setOtherRooms(
-      ROOMS.map((r) => ({
+      roomList.map((r) => ({
         roomId: r.id,
         name: r.name,
         people: online.filter((p) => p.roomId === r.id).map((p) => ({ name: p.name })),
@@ -487,6 +529,10 @@ async function start(): Promise<void> {
       people: (list) => {
         online = list;
         messages.setOnline(list);
+        refreshOtherRooms();
+      },
+      rooms: (list) => {
+        roomList = list;
         refreshOtherRooms();
       },
       ready: () => void messages.refresh(),
@@ -542,10 +588,11 @@ async function start(): Promise<void> {
       },
       transferStart: () => overlay.setFading(true),
       joined: (room, layout) => void mountRoom(conn, room, layout),
+      layoutChanged: (room, layout) => void mountRoom(conn, room, layout),
     });
     session = current;
     connection = conn;
-    applyRole(current.role);
+    applyRole(current.role, current.canEditRooms);
     await conn.join(roomFromHash(), current.token);
     void connectLobby(current.token);
     // Saída "educada" ao fechar/recarregar: o servidor remove o avatar na hora.

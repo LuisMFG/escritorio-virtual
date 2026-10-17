@@ -6,6 +6,8 @@ export interface Hud {
   setDecorating(on: boolean): void;
   /** Contador de mensagens privadas não lidas no botão. */
   setUnreadDms(n: number): void;
+  /** Mostra o "✎ Editar sala" (admins e quem pode editar salas). */
+  setCanEditRooms(on: boolean): void;
   /** Mostra o botão Admin (só para admins). */
   setAdmin(on: boolean): void;
   /** Sala com decoração travada para você: o botão fica desabilitado. */
@@ -20,6 +22,7 @@ export function mountHud(opts: {
   onOpenTeam: () => void;
   onOpenAdmin: () => void;
   onOpenMessages: () => void;
+  onEditRoom: () => void;
   onToggleDecor: () => void;
   /** Liga/desliga o som de mensagem; devolve o novo estado. */
   onToggleSound: () => boolean;
@@ -31,7 +34,13 @@ export function mountHud(opts: {
   const hint = document.createElement('p');
   hint.textContent =
     'Clique no piso para andar · Enter para conversar · arraste para mover a câmera.';
-  card.append(title, hint);
+  const editRoomBtn = document.createElement('button');
+  editRoomBtn.type = 'button';
+  editRoomBtn.className = 'btn-link hud-edit-room';
+  editRoomBtn.textContent = '✎ Editar sala';
+  editRoomBtn.hidden = true;
+  editRoomBtn.addEventListener('click', opts.onEditRoom);
+  card.append(title, hint, editRoomBtn);
 
   const status = document.createElement('div');
   status.className = 'hud-status';
@@ -103,6 +112,9 @@ export function mountHud(opts: {
       dmBadge.hidden = n === 0;
       dmBadge.textContent = n > 99 ? '99+' : String(n);
       dmBtn.setAttribute('aria-label', n ? `Mensagens (${n} não lidas)` : 'Mensagens');
+    },
+    setCanEditRooms(on) {
+      editRoomBtn.hidden = !on;
     },
     setAdmin(on) {
       adminBtn.hidden = !on;

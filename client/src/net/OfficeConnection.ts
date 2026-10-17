@@ -20,6 +20,7 @@ import {
   type UpdateAvatarMessage,
   type RoomLayoutMessage,
   type RoomTransferMessage,
+  RECEPTION,
 } from '@office/shared';
 
 export type ConnectionStatus = 'connecting' | 'online' | 'reconnecting' | 'offline';
@@ -44,6 +45,8 @@ interface Handlers {
   emote: (msg: EmoteMessage) => void;
   chatDeleted: (msg: ChatDeletedMessage) => void;
   chatReactions: (msg: ReactionsUpdate) => void;
+  /** A sala foi editada: pedir o layout de novo e remontar a cena. */
+  layoutChanged: (room: OfficeRoomClient, layout: RoomLayoutMessage) => void;
   /** Um admin tirou você (da sala: vem um transfer em seguida; do escritório: fim). */
   kicked: (msg: KickedMessage) => void;
   /** Vai trocar de sala por uma porta (hora de escurecer a tela). */
@@ -74,7 +77,14 @@ export class OfficeConnection {
     this.roomId = roomId;
     this.token = token;
     this.on.status('connecting');
-    await this.connectOnce();
+    try {
+      await this.connectOnce();
+    } catch (err) {
+      // Sala da URL não existe mais (excluída): vai para a Recepção.
+      if (isSessionError(err) || !isMissingRoom(err)) throw err;
+      this.roomId = RECEPTION.id;
+      await this.connectOnce();
+    }
   }
 
   /** Sala física atual (`reception`, `meeting`…). */
@@ -130,6 +140,12 @@ export class OfficeConnection {
     this.room?.send(ClientMessage.UpdateAvatar, msg);
   }
 
+  /** Vai direto para outra sala (sem porta), nascendo na entrada dela. */
+  goTo(roomId: string): void {
+    if (roomId === this.roomId) return;
+    void this.switchRoom({ targetRoomId: roomId, ticket: '' });
+  }
+
   async leave(): Promise<void> {
     this.leaving = true;
     await this.room?.leave(true);
@@ -153,6 +169,10 @@ export class OfficeConnection {
     room.onMessage(ServerMessage.ChatReactions, (msg: ReactionsUpdate) =>
       this.on.chatReactions(msg),
     );
+    room.onMessage(ServerMessage.LayoutChanged, async () => {
+      const layout = (await room.request(ClientMessage.GetLayout)) as RoomLayoutMessage;
+      if (this.room === room) this.on.layoutChanged(room, layout);
+    });
     room.onMessage(ServerMessage.Kicked, (msg: KickedMessage) => {
       // Do escritório: não tenta reconectar quando o servidor fechar a conexão.
       if (msg.scope === 'office') this.leaving = true;
@@ -187,7 +207,7 @@ export class OfficeConnection {
       // A sala antiga já pode ter caído; seguimos para a nova.
     }
     this.roomId = msg.targetRoomId;
-    this.ticket = msg.ticket;
+    this.ticket = msg.ticket || undefined;
     try {
       await this.connectOnce();
     } catch {
@@ -212,6 +232,7 @@ export class OfficeConnection {
         await this.connectOnce();
         break;
       } catch (err) {
+        if (isMissingRoom(err)) this.roomId = RECEPTION.id;
         if (isSessionError(err)) {
           this.on.status('offline');
           this.on.sessionInvalid();
@@ -221,6 +242,11 @@ export class OfficeConnection {
     }
     this.rejoining = false;
   }
+}
+
+/** A sala pedida não existe (foi excluída no editor). */
+function isMissingRoom(err: unknown): boolean {
+  return /sala inexistente/i.test((err as { message?: string }).message ?? '');
 }
 
 /** O servidor recusou o token (sessão apagada ou banco recriado). */

@@ -198,7 +198,24 @@ export function openAdmin(opts: AdminOptions): void {
         }),
       ),
     );
-    controls.append(role, cargo);
+    const rooms = document.createElement('label');
+    rooms.className = 'admin-check';
+    const roomsBox = Object.assign(document.createElement('input'), {
+      type: 'checkbox',
+      checked: u.role === 'admin' || u.canEditRooms,
+      disabled: u.role === 'admin' || !u.username,
+    });
+    if (u.role === 'admin') rooms.title = 'Admins sempre podem editar salas.';
+    roomsBox.addEventListener('change', () =>
+      act(
+        () => adminApi.updateUser(opts.token, u.userId, { canEditRooms: roomsBox.checked }),
+        roomsBox.checked
+          ? `${u.name} agora pode criar e editar salas.`
+          : `${u.name} não edita mais salas.`,
+      ),
+    );
+    rooms.append(roomsBox, ' Edita salas');
+    controls.append(role, cargo, rooms);
 
     const buttons = el('div', 'admin-buttons');
     if (u.username) {
