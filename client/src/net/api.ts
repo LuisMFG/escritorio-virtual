@@ -11,6 +11,8 @@ import {
   type PasswordChangeRequest,
   type ProfileUpdate,
   type RegisterRequest,
+  type Meeting,
+  type MeetingCreate,
   type RoomEdit,
   type RoomEditorData,
   type SessionResponse,
@@ -116,4 +118,14 @@ export const roomApi = {
   update: (token: string, id: string, edit: RoomEdit) =>
     request<{ removedFurni: number }>('PUT', room(id), { token, body: edit }),
   remove: (token: string, id: string) => request<Ok>('DELETE', room(id), { token }),
+};
+
+/** Agenda de reuniões. */
+export const meetingApi = {
+  list: (token: string) => request<Meeting[]>('GET', '/api/meetings', { token }),
+  create: (token: string, m: MeetingCreate) =>
+    request<Meeting>('POST', '/api/meetings', { token, body: m }),
+  respond: (token: string, id: number, response: 'yes' | 'no') =>
+    request<Meeting>('PUT', `/api/meetings/${id}/response`, { token, body: { response } }),
+  cancel: (token: string, id: number) => request<Ok>('DELETE', `/api/meetings/${id}`, { token }),
 };

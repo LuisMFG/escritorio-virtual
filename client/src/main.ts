@@ -49,6 +49,8 @@ import { AmbientSound } from './ui/ambient.js';
 import { openBoard } from './ui/board.js';
 import { openWhiteboard, type WhiteboardHandle } from './ui/whiteboard.js';
 import { renderThumbnail } from './ui/wbDraw.js';
+import { openAgenda, type AgendaHandle } from './ui/agenda.js';
+import { showReminder } from './ui/reminder.js';
 import { MessagesPanel } from './ui/messages.js';
 import { SystemNotifier } from './ui/notifications.js';
 import { LobbyConnection, type OnlineInfo } from './net/LobbyConnection.js';
@@ -72,9 +74,10 @@ function placed(f: Furni): PlacedFurni {
   return { id: f.id, defId: f.defId, x: f.x, y: f.y, z: f.z, rot: f.rot, state: f.state };
 }
 
-/** Luz do dia agora (ou na hora forçada por `?hora=`). */
+/** Luz do dia agora, no fuso de quem está olhando (ou na hora forçada por `?hora=`). */
 function currentLight() {
-  return dayLight(HOUR_OVERRIDE ?? officeHour());
+  const localZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  return dayLight(HOUR_OVERRIDE ?? officeHour(new Date(), localZone));
 }
 
 function snapshot(p: Player): AvatarSnapshot {
@@ -201,6 +204,9 @@ async function start(): Promise<void> {
   const wbStrokes = new Map<string, WbStroke[]>();
   const wbThumbs = new Map<string, HTMLCanvasElement>();
   let whiteboard: WhiteboardHandle | null = null;
+  let agenda: AgendaHandle | null = null;
+  const busyRooms = () =>
+    new Map(roomList.flatMap((r) => (r.meeting ? [[r.id, r.meeting] as [string, string]] : [])));
   const updateThumb = (furniId: string) => {
     const canvas = renderThumbnail(wbStrokes.get(furniId) ?? [], wbThumbs.get(furniId));
     wbThumbs.set(furniId, canvas);
@@ -256,6 +262,23 @@ async function start(): Promise<void> {
     onOpenTeam: () => showTeam(),
     onOpenAdmin: () => showAdmin(),
     onOpenMessages: () => messages.toggle(),
+    onOpenAgenda: () => {
+      if (!session || !connection) return;
+      const conn = connection;
+      agenda?.close();
+      agenda = openAgenda({
+        token: session.token,
+        userId: session.userId,
+        isAdmin: session.role === 'admin',
+        rooms: () => roomList,
+        loadTeam: async () => {
+          await loadTeam();
+          return team?.members ?? [];
+        },
+        goTo: (id) => conn.goTo(id),
+        currentRoomId: conn.currentRoomId,
+      });
+    },
     ambient,
     onEditRoom: () => {
       if (!session || !connection) return;
@@ -482,6 +505,7 @@ async function start(): Promise<void> {
     await s.load();
     if (scene !== s) return;
     s.setDayLight(currentLight());
+    s.setBusyRooms(busyRooms());
     ambient.setAmbient(layout.ambient);
     hud.refreshAmbient();
     overlay.setFading(false);
@@ -573,7 +597,7 @@ async function start(): Promise<void> {
     overlay.setOtherRooms(
       roomList.map((r) => ({
         roomId: r.id,
-        name: r.name,
+        name: r.meeting ? `${r.name} · 🔴 em reunião` : r.name,
         people: online.filter((p) => p.roomId === r.id).map((p) => ({ name: p.name })),
       })),
       connection.currentRoomId,
@@ -605,6 +629,28 @@ async function start(): Promise<void> {
       rooms: (list) => {
         roomList = list;
         refreshOtherRooms();
+        scene?.setBusyRooms(busyRooms());
+      },
+      meetingsChanged: () => agenda?.refresh(),
+      meetingInvite: ({ meeting }) => {
+        const when = new Date(meeting.startsAt).toLocaleString('pt-BR', {
+          weekday: 'short',
+          day: '2-digit',
+          month: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+        const text = `${meeting.createdByName} convidou você para “${meeting.title}” (${when}).`;
+        sound.mention();
+        overlay.notify(text);
+        notifier.notify('Convite de reunião', text, { tag: `meeting-${meeting.id}` });
+      },
+      meetingReminder: ({ meeting }) => {
+        sound.mention();
+        showReminder(meeting, (id) => connection?.goTo(id));
+        notifier.notify('Reunião em 5 minutos', `${meeting.title} · ${meeting.roomName}`, {
+          tag: `reminder-${meeting.id}`,
+        });
       },
       ready: () => void messages.refresh(),
     });
@@ -704,7 +750,8 @@ async function start(): Promise<void> {
   }
 
   let notice = takeNotice();
-  let result = notice ? undefined : await resumeSession();
+  let result = notice ? undefined : await resumeSession((d) => overlay.setStatus('connecting', d));
+  let attempts = 0;
   for (;;) {
     result ??= await showLogin({ manifest: avatarManifest, fallbackPreview, notice });
     // Conta antiga (só o token deste navegador): escolhe usuário e senha antes de entrar.
@@ -713,30 +760,57 @@ async function start(): Promise<void> {
       await enter(result);
       return;
     } catch (err) {
-      overlay.setStatus('offline');
-      result = undefined;
       if (isSessionError(err)) {
+        overlay.setStatus('offline');
         forgetToken();
+        result = undefined;
         notice = 'Sua sessão expirou. Entre novamente.';
+      } else if (attempts < RETRY_DELAYS_MS.length) {
+        // Servidor reiniciando (ex.: deploy): tenta de novo sem pedir a senha.
+        const delay = RETRY_DELAYS_MS[attempts++]!;
+        overlay.setStatus(
+          'reconnecting',
+          `Servidor indisponível. Tentando de novo em ${delay / 1000}s…`,
+        );
+        await new Promise((r) => setTimeout(r, delay));
       } else {
+        overlay.setStatus('offline');
+        result = undefined;
+        attempts = 0;
         notice = `Não foi possível entrar na sala: ${(err as Error).message}`;
       }
     }
   }
 }
 
-/** Token salvo de outra visita: entra direto, sem tela de entrada. */
-async function resumeSession(): Promise<SessionResponse | undefined> {
+/** Esperas entre tentativas quando o servidor não responde (reinício, deploy). */
+const RETRY_DELAYS_MS = [1000, 2000, 4000, 8000, 15000];
+
+/**
+ * Token salvo de outra visita: entra direto, sem tela de entrada. Se o servidor não responder
+ * (reiniciando), espera e tenta de novo antes de desistir.
+ */
+async function resumeSession(
+  status: (detail: string) => void,
+): Promise<SessionResponse | undefined> {
   const token = loadSession()?.token;
   if (!token) return undefined;
-  try {
-    const session = await api.me(token);
-    rememberSession(session);
-    return session;
-  } catch (err) {
-    // Só esquece o token se o servidor disse que ele não vale (não por falta de rede).
-    if (err instanceof ApiRequestError && err.status === 401) forgetToken();
-    return undefined;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const session = await api.me(token);
+      rememberSession(session);
+      return session;
+    } catch (err) {
+      // Só esquece o token se o servidor disse que ele não vale (não por falta de rede).
+      if (err instanceof ApiRequestError && err.status === 401) {
+        forgetToken();
+        return undefined;
+      }
+      if (attempt >= RETRY_DELAYS_MS.length) return undefined;
+      const delay = RETRY_DELAYS_MS[attempt]!;
+      status(`Servidor indisponível. Tentando de novo em ${delay / 1000}s…`);
+      await new Promise((r) => setTimeout(r, delay));
+    }
   }
 }
 

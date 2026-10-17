@@ -26,6 +26,7 @@ export function mountHud(opts: {
   onOpenTeam: () => void;
   onOpenAdmin: () => void;
   onOpenMessages: () => void;
+  onOpenAgenda: () => void;
   onEditRoom: () => void;
   ambient: AmbientSound;
   onToggleDecor: () => void;
@@ -114,45 +115,22 @@ export function mountHud(opts: {
   });
   zoom.prepend(ambientBtn);
 
-  const profileBtn = document.createElement('button');
-  profileBtn.type = 'button';
-  profileBtn.className = 'hud-avatar btn-secondary';
-  profileBtn.textContent = 'Perfil';
-  profileBtn.addEventListener('click', opts.onOpenProfile);
-
-  const teamBtn = document.createElement('button');
-  teamBtn.type = 'button';
-  teamBtn.className = 'hud-team btn-secondary';
-  teamBtn.textContent = 'Equipe';
-  teamBtn.addEventListener('click', opts.onOpenTeam);
-
-  const decorBtn = document.createElement('button');
-  decorBtn.type = 'button';
-  decorBtn.className = 'hud-decor btn-secondary';
-  decorBtn.textContent = 'Decorar';
+  const profileBtn = actionButton('hud-avatar', '👤', 'Perfil', opts.onOpenProfile);
+  const teamBtn = actionButton('hud-team', '👥', 'Equipe', opts.onOpenTeam);
+  const agendaBtn = actionButton('hud-agenda', '📅', 'Agenda', opts.onOpenAgenda);
+  const decorBtn = actionButton('hud-decor', '🪑', 'Decorar', opts.onToggleDecor);
   decorBtn.setAttribute('aria-pressed', 'false');
-  decorBtn.addEventListener('click', opts.onToggleDecor);
-
-  const dmBtn = document.createElement('button');
-  dmBtn.type = 'button';
-  dmBtn.className = 'hud-dm btn-secondary';
-  dmBtn.textContent = 'Mensagens';
+  const dmBtn = actionButton('hud-dm', '✉️', 'Mensagens', opts.onOpenMessages);
   const dmBadge = document.createElement('span');
   dmBadge.className = 'dm-badge';
   dmBadge.hidden = true;
   dmBtn.append(dmBadge);
-  dmBtn.addEventListener('click', opts.onOpenMessages);
-
-  const adminBtn = document.createElement('button');
-  adminBtn.type = 'button';
-  adminBtn.className = 'hud-admin btn-secondary';
-  adminBtn.textContent = 'Admin';
+  const adminBtn = actionButton('hud-admin', '🛡️', 'Admin', opts.onOpenAdmin);
   adminBtn.hidden = true;
-  adminBtn.addEventListener('click', opts.onOpenAdmin);
 
   const actions = document.createElement('div');
   actions.className = 'hud-actions';
-  actions.append(profileBtn, teamBtn, dmBtn, decorBtn, adminBtn);
+  actions.append(profileBtn, teamBtn, dmBtn, agendaBtn, decorBtn, adminBtn);
   document.body.append(card, status, zoom, actions, panel);
   return {
     setUnreadDms(n) {
@@ -171,7 +149,7 @@ export function mountHud(opts: {
       decorBtn.title = locked ? 'Um admin travou a decoração desta sala.' : '';
     },
     setDecorating(on) {
-      decorBtn.textContent = on ? 'Concluir decoração' : 'Decorar';
+      setLabel(decorBtn, on ? 'Concluir decoração' : 'Decorar');
       decorBtn.setAttribute('aria-pressed', String(on));
     },
     refreshAmbient() {
@@ -205,4 +183,31 @@ function button(label: string, title: string, onClick: () => void): HTMLButtonEl
   b.setAttribute('aria-label', title);
   b.addEventListener('click', onClick);
   return b;
+}
+
+/** Botão do canto: ícone + texto (em telas pequenas só o ícone aparece). */
+function actionButton(
+  className: string,
+  icon: string,
+  label: string,
+  onClick: () => void,
+): HTMLButtonElement {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = `${className} btn-secondary hud-action`;
+  b.append(
+    Object.assign(document.createElement('span'), { className: 'ico', textContent: icon }),
+    Object.assign(document.createElement('span'), { className: 'lbl', textContent: label }),
+  );
+  b.querySelector('.ico')!.setAttribute('aria-hidden', 'true');
+  b.title = label;
+  b.setAttribute('aria-label', label);
+  b.addEventListener('click', onClick);
+  return b;
+}
+
+function setLabel(b: HTMLButtonElement, label: string): void {
+  b.querySelector('.lbl')!.textContent = label;
+  b.title = label;
+  b.setAttribute('aria-label', label);
 }

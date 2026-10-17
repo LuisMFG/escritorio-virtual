@@ -75,6 +75,8 @@ export class RoomScene implements DecorHost {
   /** Brilho das luzes acesas (soma por cima da sombra da noite). */
   private readonly glows = new Container({ label: 'glows' });
   private darkness = 0;
+  /** Salas com reunião acontecendo agora (placa na porta). */
+  private busyRooms = new Map<string, string>();
   private readonly doorLabel = new Text({
     text: '',
     resolution: 2,
@@ -164,6 +166,11 @@ export class RoomScene implements DecorHost {
     }
     this.onFurniChanged();
     this.drawGlows();
+  }
+
+  /** Reuniões em andamento por sala (a placa aparece ao passar o mouse na porta). */
+  setBusyRooms(busy: Map<string, string>): void {
+    this.busyRooms = busy;
   }
 
   /** Miniatura do quadro branco no móvel. */
@@ -504,7 +511,8 @@ export class RoomScene implements DecorHost {
     if (door) {
       // Porta: contorno azul e para onde ela leva.
       this.hover.poly(pts, true).stroke({ width: 2, color: 0x7aa7ff, alpha: 0.95 });
-      this.doorLabel.text = `→ ${door.targetName ?? door.targetRoomId}`;
+      const busy = this.busyRooms.get(door.targetRoomId);
+      this.doorLabel.text = `→ ${door.targetName ?? door.targetRoomId}${busy ? `\n🔴 Em reunião: ${busy}` : ''}`;
       this.doorLabel.position.set(pts[0]!, pts[1]! - 6);
       return;
     }

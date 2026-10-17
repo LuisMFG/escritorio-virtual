@@ -11,6 +11,8 @@ import {
   type Reaction,
   type ReactionsUpdate,
   type RoomSummary,
+  MeetingMessage,
+  type MeetingNotice,
 } from '@office/shared';
 import { isSessionError, serverEndpoint } from './OfficeConnection.js';
 
@@ -28,8 +30,11 @@ interface LobbyHandlers {
   error(err: ErrorMessage): void;
   /** Quem está online mudou (entrou, saiu, trocou de sala ou de status). */
   people(list: OnlineInfo[]): void;
-  /** Lista de salas mudou (criada, renomeada, excluída). */
+  /** Lista de salas mudou (criada, renomeada, excluída, reunião começou/acabou). */
   rooms(list: RoomSummary[]): void;
+  meetingsChanged(): void;
+  meetingInvite(n: MeetingNotice): void;
+  meetingReminder(n: MeetingNotice): void;
   /** O canal global (re)conectou: hora de recarregar conversas e não lidas. */
   ready(): void;
 }
@@ -62,6 +67,9 @@ export class LobbyConnection {
     room.onMessage(LobbyServerMessage.DmReadReceipt, (r: DmReadReceipt) => this.on.receipt(r));
     room.onMessage(LobbyServerMessage.Error, (e: ErrorMessage) => this.on.error(e));
     room.onMessage(LobbyServerMessage.DmReactions, (u: ReactionsUpdate) => this.on.reactions(u));
+    room.onMessage(MeetingMessage.Changed, () => this.on.meetingsChanged());
+    room.onMessage(MeetingMessage.Invited, (n: MeetingNotice) => this.on.meetingInvite(n));
+    room.onMessage(MeetingMessage.Reminder, (n: MeetingNotice) => this.on.meetingReminder(n));
     const cb = Callbacks.get(room);
     const emit = () => this.on.people(this.people());
     cb.onAdd('people', (person) => {
@@ -73,7 +81,7 @@ export class LobbyConnection {
       this.on.rooms(
         [...room.state.rooms.values()]
           .sort((a, b) => a.sort - b.sort)
-          .map((r) => ({ id: r.id, name: r.name })),
+          .map((r) => ({ id: r.id, name: r.name, meeting: r.meeting || undefined })),
       );
     cb.onAdd('rooms', (entry) => {
       cb.onChange(entry, emitRooms);
