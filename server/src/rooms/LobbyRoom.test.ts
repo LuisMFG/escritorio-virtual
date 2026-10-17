@@ -88,6 +88,26 @@ describe('LobbyRoom', () => {
     expect(svc.dms.unreadCount(beto.user.id)).toBe(0);
   });
 
+  it('reação numa DM chega para os dois lados', async () => {
+    const ana = newUser('Ana');
+    const beto = newUser('Beto');
+    const a = await lobby(ana.token);
+    const b = await lobby(beto.token);
+    const got = b.waitForMessage(LobbyServerMessage.DmMessage);
+    a.send(LobbyClientMessage.DmSend, { toUserId: beto.user.id, text: 'bora?' });
+    const msg = (await got) as DirectMessage;
+    const update = a.waitForMessage(LobbyServerMessage.DmReactions);
+    b.send(LobbyClientMessage.DmReact, { id: msg.id, emoji: '🎉' });
+    expect(await update).toEqual({
+      id: msg.id,
+      reactions: [{ emoji: '🎉', users: [{ userId: beto.user.id, name: 'Beto' }] }],
+    });
+
+    const reply = a.waitForMessage(LobbyServerMessage.DmMessage);
+    b.send(LobbyClientMessage.DmSend, { toUserId: ana.user.id, text: 'bora!', replyToId: msg.id });
+    expect(((await reply) as DirectMessage).replyTo).toMatchObject({ id: msg.id, name: 'Ana' });
+  });
+
   it('não manda para si mesmo nem para quem não existe', async () => {
     const ana = newUser('Ana');
     const a = await lobby(ana.token);

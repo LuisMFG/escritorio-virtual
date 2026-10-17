@@ -57,6 +57,13 @@
       "when": 1792252492924,
       "tag": "0007_mensagens_privadas",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1792253150380,
+      "tag": "0008_reacoes_respostas",
+      "breakpoints": true
     }
   ]
 }

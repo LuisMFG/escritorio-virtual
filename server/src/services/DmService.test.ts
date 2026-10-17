@@ -55,4 +55,16 @@ describe('DmService', () => {
     expect(dms.unreadCount(beto)).toBe(1);
     expect(dms.markRead(ana, beto)).toBeNull();
   });
+
+  it('reações e respostas só dentro da conversa', () => {
+    const m = dms.send(ana, beto, 'pode revisar?');
+    expect(dms.react(m.id, caio, '👍')).toBeNull();
+    expect(dms.react(m.id, beto, '👍')?.reactions).toEqual([
+      { emoji: '👍', users: [{ userId: beto, name: 'Beto' }] },
+    ]);
+    const reply = dms.send(beto, ana, 'claro', m.id);
+    expect(reply.replyTo).toMatchObject({ id: m.id, name: 'Ana', text: 'pode revisar?' });
+    expect(dms.send(caio, ana, 'intrometido', m.id).replyTo).toBeNull();
+    expect(dms.history(ana, beto).map((x) => x.reactions.length)).toEqual([1, 0]);
+  });
 });

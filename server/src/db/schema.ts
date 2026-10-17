@@ -1,4 +1,12 @@
-import { index, integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import {
+  index,
+  integer,
+  primaryKey,
+  real,
+  sqliteTable,
+  text,
+  type AnySQLiteColumn,
+} from 'drizzle-orm/sqlite-core';
 
 /** Cargos da equipe (Diretor, Coordenador de TI…). Só admins atribuem. */
 export const cargos = sqliteTable('cargos', {
@@ -136,6 +144,10 @@ export const chatMessages = sqliteTable(
     /** Nome na hora da mensagem (a pessoa pode mudar de nome depois). */
     nameSnapshot: text('name_snapshot').notNull(),
     text: text('text').notNull(),
+    /** Resposta a outra mensagem da sala (some se a original for apagada). */
+    replyToId: integer('reply_to_id').references((): AnySQLiteColumn => chatMessages.id, {
+      onDelete: 'set null',
+    }),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   },
   (t) => [index('chat_messages_room_id_idx').on(t.roomId, t.id)],
@@ -153,6 +165,9 @@ export const directMessages = sqliteTable(
       .notNull()
       .references(() => users.id),
     text: text('text').notNull(),
+    replyToId: integer('reply_to_id').references((): AnySQLiteColumn => directMessages.id, {
+      onDelete: 'set null',
+    }),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
     /** Quando quem recebeu abriu a conversa (null = não lida). */
     readAt: integer('read_at', { mode: 'timestamp_ms' }),
@@ -161,6 +176,36 @@ export const directMessages = sqliteTable(
     index('dm_to_unread_idx').on(t.toUserId, t.readAt),
     index('dm_pair_idx').on(t.fromUserId, t.toUserId, t.id),
   ],
+);
+
+/** Reações (emoji) nas mensagens da sala: uma por pessoa e emoji. */
+export const chatReactions = sqliteTable(
+  'chat_reactions',
+  {
+    messageId: integer('message_id')
+      .notNull()
+      .references(() => chatMessages.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id),
+    emoji: text('emoji').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.messageId, t.userId, t.emoji] })],
+);
+
+/** Reações nas mensagens privadas. */
+export const dmReactions = sqliteTable(
+  'dm_reactions',
+  {
+    messageId: integer('message_id')
+      .notNull()
+      .references(() => directMessages.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id),
+    emoji: text('emoji').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.messageId, t.userId, t.emoji] })],
 );
 
 export type UserRow = typeof users.$inferSelect;

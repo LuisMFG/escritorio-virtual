@@ -3,6 +3,9 @@ import {
   canPlace,
   chatSchema,
   chatDeleteSchema,
+  reactSchema,
+  type ReactionsUpdate,
+  type ReactRequest,
   RECEPTION,
   type ChatDeletedMessage,
   type KickedMessage,
@@ -72,6 +75,8 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
   private readonly typingLimiter = new KeyedRateLimiter(6, 3);
   /** Emotes: 3 seguidos, depois 1 a cada 2 s. */
   private readonly emoteLimiter = new KeyedRateLimiter(3, 0.5);
+  /** Reações: 10 seguidas, recarregando 3 por segundo. */
+  private readonly reactLimiter = new KeyedRateLimiter(10, 3);
   /** Decorar: rajada de 10 ações, recarregando 4 por segundo. */
   private readonly editLimiter = new KeyedRateLimiter(10, 4);
   /** Quem clicou numa cadeira e está andando até ela (sessionId → móvel e assento). */
@@ -115,6 +120,9 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     }),
     [ClientMessage.Emote]: validate(emoteSchema, (client, msg) =>
       this.handleEmote(client as OfficeClient, msg),
+    ),
+    [ClientMessage.ChatReact]: validate(reactSchema, (client, msg) =>
+      this.handleReact(client as OfficeClient, msg.id, msg.emoji),
     ),
     [ClientMessage.ChatDelete]: validate(chatDeleteSchema, (client, msg) =>
       this.handleChatDelete(client as OfficeClient, msg.id),
@@ -280,6 +288,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     this.statusLimiter.delete(client.sessionId);
     this.typingLimiter.delete(client.sessionId);
     this.emoteLimiter.delete(client.sessionId);
+    this.reactLimiter.delete(client.sessionId);
     this.pendingSit.delete(client.sessionId);
     services().presence.remove(client.sessionId);
     if (client.auth) {
@@ -474,7 +483,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     };
   }
 
-  private handleChat(client: OfficeClient, msg: { text: string }): void {
+  private handleChat(client: OfficeClient, msg: { text: string; replyToId?: number }): void {
     if (!client.auth || !this.state.players.has(client.sessionId)) return;
     if (!this.chatLimiter.tryTake(client.sessionId))
       return this.sendError(client, ErrorCode.RateLimit);
@@ -484,6 +493,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       client.auth,
       msg.text,
       client.sessionId,
+      msg.replyToId,
     );
     this.broadcast(ServerMessage.Chat, message);
     const player = this.state.players.get(client.sessionId);
@@ -491,6 +501,18 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
   }
 
   /** Apagar mensagem: quem escreveu ou um admin. Some do histórico de todos na sala. */
+  /** Põe/tira reação numa mensagem desta sala; todos na sala veem a contagem nova. */
+  private handleReact(client: OfficeClient, id: number, emoji: ReactRequest['emoji']): void {
+    const user = client.auth;
+    const msg = services().chat.find(id);
+    if (!user || !msg || msg.roomId !== this.layout.roomId) return;
+    if (!this.reactLimiter.tryTake(client.sessionId)) {
+      return this.sendError(client, ErrorCode.RateLimit);
+    }
+    const reactions = services().chat.react(id, user.id, emoji);
+    this.broadcast(ServerMessage.ChatReactions, { id, reactions } satisfies ReactionsUpdate);
+  }
+
   private handleChatDelete(client: OfficeClient, id: number): void {
     const user = client.auth;
     const msg = services().chat.find(id);

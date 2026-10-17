@@ -8,8 +8,10 @@ function setup() {
   const db = openDatabase(':memory:');
   let t = 1_000;
   const chat = new ChatService(db, () => new Date(t++));
-  const ana = new UserService(db).create('Ana', 'hd-180-1.ch-210-66.lg-270-82').user;
-  return { chat, ana };
+  const users = new UserService(db);
+  const ana = users.create('Ana', 'hd-180-1.ch-210-66.lg-270-82').user;
+  const beto = users.create('Beto', 'hd-180-1.ch-210-66.lg-270-82').user;
+  return { chat, ana, beto };
 }
 
 describe('ChatService', () => {
@@ -44,5 +46,41 @@ describe('ChatService', () => {
     const all = chat.recent('reception', 1000);
     expect(all).toHaveLength(CHAT_KEEP_PER_ROOM);
     expect(all[0]!.text).toBe('msg 31');
+  });
+
+  it('reações: põe, conta por emoji com nomes e tira no segundo clique', () => {
+    const { chat, ana, beto } = setup();
+    const msg = chat.add('reception', ana, 'café?');
+    chat.react(msg.id, beto.id, '👍');
+    chat.react(msg.id, ana.id, '❤️');
+    expect(chat.react(msg.id, ana.id, '👍')).toEqual([
+      {
+        emoji: '👍',
+        users: [
+          { userId: beto.id, name: 'Beto' },
+          { userId: ana.id, name: 'Ana' },
+        ],
+      },
+      { emoji: '❤️', users: [{ userId: ana.id, name: 'Ana' }] },
+    ]);
+    expect(chat.react(msg.id, beto.id, '👍')[0]!.users).toHaveLength(1);
+    expect(chat.recent('reception')[0]!.reactions).toHaveLength(2);
+  });
+
+  it('respostas: trecho da original; outra sala não vale; apagar a original tira a citação', () => {
+    const { chat, ana, beto } = setup();
+    const original = chat.add('reception', ana, 'quem vai na reunião?');
+    const reply = chat.add('reception', beto, 'eu vou', '', original.id);
+    expect(reply.replyTo).toEqual({
+      id: original.id,
+      userId: ana.id,
+      name: 'Ana',
+      text: 'quem vai na reunião?',
+    });
+    expect(chat.add('meeting', beto, 'de outra sala', '', original.id).replyTo).toBeNull();
+
+    chat.react(original.id, beto.id, '🎉');
+    chat.remove(original.id);
+    expect(chat.recent('reception').map((m) => [m.text, m.replyTo])).toEqual([['eu vou', null]]);
   });
 });

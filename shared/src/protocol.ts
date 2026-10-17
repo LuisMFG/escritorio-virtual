@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { genderSchema } from './manifests.js';
 import type { RoomDoor } from './rooms.js';
 import type { TilePoint } from './iso.js';
+import type { ReactionSummary, ReplyPreview } from './reactions.js';
 
 /** Nome da sala Colyseus. Cada sala física é uma instância filtrada por `officeRoomId`. */
 export const OFFICE_ROOM = 'office';
@@ -33,6 +34,8 @@ export const ClientMessage = {
   Emote: 'emote',
   /** `{ id }`: apagar mensagem do chat (admin ou quem escreveu). */
   ChatDelete: 'chat.delete',
+  /** `{ id, emoji }`: põe ou tira uma reação. */
+  ChatReact: 'chat.react',
 } as const;
 
 /** Mensagens servidor → cliente. */
@@ -46,6 +49,8 @@ export const ServerMessage = {
   Emote: 'emote.played',
   /** Mensagem apagada (`ChatDeletedMessage`): some do histórico de todos. */
   ChatDeleted: 'chat.deleted',
+  /** Reações de uma mensagem mudaram (`ReactionsUpdate`). */
+  ChatReactions: 'chat.reactions',
   /** Um admin tirou você da sala ou do escritório (`KickedMessage`). */
   Kicked: 'moderation.kicked',
 } as const;
@@ -216,6 +221,8 @@ export const chatSchema = z.object({
         .min(1, 'Mensagem vazia.')
         .max(CHAT_MAX_LENGTH, `A mensagem pode ter no máximo ${CHAT_MAX_LENGTH} caracteres.`),
     ),
+  /** Resposta a outra mensagem (da mesma sala ou conversa). */
+  replyToId: z.number().int().positive().optional(),
 });
 export type ChatInput = z.input<typeof chatSchema>;
 
@@ -229,6 +236,8 @@ export interface ChatMessage {
   text: string;
   /** Epoch em ms. */
   ts: number;
+  reactions: ReactionSummary[];
+  replyTo: ReplyPreview | null;
 }
 
 export interface RoomTransferMessage {

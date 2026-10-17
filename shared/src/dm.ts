@@ -1,6 +1,7 @@
 import { schema, t, type SchemaType } from '@colyseus/schema';
 import { z } from 'zod';
 import { chatSchema } from './protocol.js';
+import type { ReactionSummary, ReplyPreview } from './reactions.js';
 
 /**
  * Canal global: uma sala Colyseus `lobby` em que todo mundo fica conectado, em qualquer
@@ -17,6 +18,8 @@ export const LobbyClientMessage = {
   DmHistory: 'dm.history',
   /** `{ withUserId }`: abri a conversa (marca como lidas). */
   DmRead: 'dm.read',
+  /** `{ id, emoji }`: põe ou tira uma reação. */
+  DmReact: 'dm.react',
 } as const;
 
 export const LobbyServerMessage = {
@@ -24,6 +27,8 @@ export const LobbyServerMessage = {
   DmMessage: 'dm.message',
   /** `DmReadReceipt`: alguém leu as mensagens de uma conversa. */
   DmReadReceipt: 'dm.readReceipt',
+  /** Reações de uma DM mudaram (`ReactionsUpdate`). */
+  DmReactions: 'dm.reactions',
   Error: 'error',
 } as const;
 
@@ -49,6 +54,8 @@ export interface DirectMessage {
   ts: number;
   /** Epoch ms ou `null` (não lida). */
   readAt: number | null;
+  reactions: ReactionSummary[];
+  replyTo: ReplyPreview | null;
 }
 
 export interface DmConversation {

@@ -1,7 +1,16 @@
-import { CHAT_HISTORY_ON_JOIN, CHAT_KEEP_PER_ROOM, type ChatMessage } from '@office/shared';
-import { and, desc, eq, lt } from 'drizzle-orm';
+import {
+  CHAT_HISTORY_ON_JOIN,
+  CHAT_KEEP_PER_ROOM,
+  replyPreviewText,
+  type ChatMessage,
+  type Reaction,
+  type ReactionSummary,
+  type ReplyPreview,
+} from '@office/shared';
+import { and, desc, eq, inArray, lt } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
-import { chatMessages, type ChatMessageRow, type UserRow } from '../db/schema.js';
+import { chatMessages, chatReactions, type ChatMessageRow, type UserRow } from '../db/schema.js';
+import { summarizeReactions, toggleReaction } from './reactions.js';
 
 /** Histórico de chat por sala no SQLite (guarda só as últimas `CHAT_KEEP_PER_ROOM`). */
 export class ChatService {
@@ -10,20 +19,32 @@ export class ChatService {
     private readonly now: () => Date = () => new Date(),
   ) {}
 
-  /** Grava a mensagem (texto já validado/normalizado) e apaga as mais antigas da sala. */
+  /**
+   * Grava a mensagem (texto já validado/normalizado) e apaga as mais antigas da sala.
+   * `replyToId` só vale se a mensagem respondida for da mesma sala.
+   */
   add(
     roomId: string,
     user: Pick<UserRow, 'id' | 'name'>,
     text: string,
     sessionId = '',
+    replyToId?: number,
   ): ChatMessage {
+    const reply = replyToId ? this.find(replyToId) : undefined;
     const row = this.db
       .insert(chatMessages)
-      .values({ roomId, userId: user.id, nameSnapshot: user.name, text, createdAt: this.now() })
+      .values({
+        roomId,
+        userId: user.id,
+        nameSnapshot: user.name,
+        text,
+        replyToId: reply?.roomId === roomId ? reply.id : null,
+        createdAt: this.now(),
+      })
       .returning()
       .get();
     this.prune(roomId);
-    return toMessage(row, sessionId);
+    return this.withExtras([row], sessionId)[0]!;
   }
 
   find(id: number): ChatMessageRow | undefined {
@@ -36,15 +57,53 @@ export class ChatService {
 
   /** Últimas mensagens da sala, da mais antiga para a mais nova. */
   recent(roomId: string, limit = CHAT_HISTORY_ON_JOIN): ChatMessage[] {
-    return this.db
+    const rows = this.db
       .select()
       .from(chatMessages)
       .where(eq(chatMessages.roomId, roomId))
       .orderBy(desc(chatMessages.id))
       .limit(limit)
       .all()
-      .reverse()
-      .map((row) => toMessage(row, ''));
+      .reverse();
+    return this.withExtras(rows, '');
+  }
+
+  react(messageId: number, userId: string, emoji: Reaction): ReactionSummary[] {
+    return toggleReaction(this.db, chatReactions, messageId, userId, emoji);
+  }
+
+  /** Junta reações e o trecho da mensagem respondida. */
+  private withExtras(rows: ChatMessageRow[], sessionId: string): ChatMessage[] {
+    const reactions = summarizeReactions(
+      this.db,
+      chatReactions,
+      rows.map((r) => r.id),
+    );
+    const replyIds = rows.flatMap((r) => (r.replyToId ? [r.replyToId] : []));
+    const replies = new Map<number, ReplyPreview>(
+      replyIds.length === 0
+        ? []
+        : this.db
+            .select()
+            .from(chatMessages)
+            .where(inArray(chatMessages.id, replyIds))
+            .all()
+            .map((r) => [
+              r.id,
+              { id: r.id, userId: r.userId, name: r.nameSnapshot, text: replyPreviewText(r.text) },
+            ]),
+    );
+    return rows.map((row) => ({
+      id: row.id,
+      roomId: row.roomId,
+      userId: row.userId,
+      sessionId,
+      name: row.nameSnapshot,
+      text: row.text,
+      ts: row.createdAt.getTime(),
+      reactions: reactions.get(row.id) ?? [],
+      replyTo: (row.replyToId && replies.get(row.replyToId)) || null,
+    }));
   }
 
   private prune(roomId: string): void {
@@ -63,16 +122,4 @@ export class ChatService {
         .run();
     }
   }
-}
-
-function toMessage(row: ChatMessageRow, sessionId: string): ChatMessage {
-  return {
-    id: row.id,
-    roomId: row.roomId,
-    userId: row.userId,
-    sessionId,
-    name: row.nameSnapshot,
-    text: row.text,
-    ts: row.createdAt.getTime(),
-  };
 }

@@ -3,6 +3,8 @@ import {
   dmHistorySchema,
   dmReadSchema,
   dmSendSchema,
+  reactSchema,
+  type ReactionsUpdate,
   ERROR_MESSAGES,
   ErrorCode,
   LobbyClientMessage,
@@ -32,11 +34,27 @@ export class LobbyRoom extends Room<{ state: LobbyState; client: LobbyClient }> 
 
   /** DMs: 5 seguidas, depois 1 por segundo. */
   private readonly dmLimiter = new KeyedRateLimiter(5, 1);
+  private readonly reactLimiter = new KeyedRateLimiter(10, 3);
 
   override messages = {
     [LobbyClientMessage.DmSend]: validate(dmSendSchema, (client, msg) =>
-      this.handleSend(client as LobbyClient, msg.toUserId, msg.text),
+      this.handleSend(client as LobbyClient, msg.toUserId, msg.text, msg.replyToId),
     ),
+    [LobbyClientMessage.DmReact]: validate(reactSchema, (client, msg) => {
+      const me = (client as LobbyClient).auth;
+      if (!me) return;
+      if (!this.reactLimiter.tryTake(client.sessionId)) {
+        return this.sendError(client as LobbyClient, ErrorCode.RateLimit);
+      }
+      const res = services().dms.react(msg.id, me.id, msg.emoji);
+      if (!res) return;
+      const update: ReactionsUpdate = { id: msg.id, reactions: res.reactions };
+      const targets = new Set([
+        ...this.clientsOf(res.message.fromUserId),
+        ...this.clientsOf(res.message.toUserId),
+      ]);
+      for (const c of targets) c.send(LobbyServerMessage.DmReactions, update);
+    }),
     [LobbyClientMessage.DmConversations]: (client: Client) => {
       const me = (client as LobbyClient).auth;
       return me ? services().dms.conversations(me.id) : [];
@@ -99,6 +117,7 @@ export class LobbyRoom extends Room<{ state: LobbyState; client: LobbyClient }> 
 
   override onLeave(client: LobbyClient): void {
     this.dmLimiter.delete(client.sessionId);
+    this.reactLimiter.delete(client.sessionId);
   }
 
   /** Todas as conexões (abas/aparelhos) de uma pessoa. */
@@ -106,7 +125,12 @@ export class LobbyRoom extends Room<{ state: LobbyState; client: LobbyClient }> 
     return this.clients.filter((c) => c.auth?.id === userId);
   }
 
-  private handleSend(client: LobbyClient, toUserId: string, text: string): void {
+  private handleSend(
+    client: LobbyClient,
+    toUserId: string,
+    text: string,
+    replyToId?: number,
+  ): void {
     const from = client.auth;
     if (!from) return;
     if (!this.dmLimiter.tryTake(client.sessionId))
@@ -119,7 +143,7 @@ export class LobbyRoom extends Room<{ state: LobbyState; client: LobbyClient }> 
         'Não dá para mandar mensagem para essa pessoa.',
       );
     }
-    const message = services().dms.send(from.id, to.id, text);
+    const message = services().dms.send(from.id, to.id, text, replyToId);
     const targets = new Set([...this.clientsOf(from.id), ...this.clientsOf(to.id)]);
     for (const c of targets) c.send(LobbyServerMessage.DmMessage, message);
   }

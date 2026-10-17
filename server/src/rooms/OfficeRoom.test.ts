@@ -468,4 +468,38 @@ describe('OfficeRoom', () => {
       expect(svc.audit.list(1)[0]).toMatchObject({ action: 'chat.delete', targetName: 'Beto' });
     });
   });
+
+  describe('reações e respostas', () => {
+    it('reação vai para todos na sala; resposta traz o trecho da original', async () => {
+      const a = await join(newUser('Ana').token);
+      const b = await join(newUser('Beto').token);
+      a.send(ClientMessage.Chat, { text: 'alguém tem café?' });
+      const original = (await b.waitForMessage(ServerMessage.Chat)) as ChatMessage;
+      expect(original).toMatchObject({ reactions: [], replyTo: null });
+
+      const update = a.waitForMessage(ServerMessage.ChatReactions);
+      b.send(ClientMessage.ChatReact, { id: original.id, emoji: '😂' });
+      expect(await update).toMatchObject({
+        id: original.id,
+        reactions: [{ emoji: '😂', users: [{ name: 'Beto' }] }],
+      });
+
+      const reply = a.waitForMessage(ServerMessage.Chat);
+      b.send(ClientMessage.Chat, { text: 'tenho!', replyToId: original.id });
+      expect(((await reply) as ChatMessage).replyTo).toMatchObject({
+        id: original.id,
+        name: 'Ana',
+        text: 'alguém tem café?',
+      });
+    });
+
+    it('emoji fora da lista é ignorado', async () => {
+      const a = await join(newUser('Ana').token);
+      a.send(ClientMessage.Chat, { text: 'oi' });
+      const msg = (await a.waitForMessage(ServerMessage.Chat)) as ChatMessage;
+      a.send(ClientMessage.ChatReact, { id: msg.id, emoji: '💩' });
+      await wait(150);
+      expect(svc.chat.recent(RECEPTION.id).at(-1)!.reactions).toEqual([]);
+    });
+  });
 });
