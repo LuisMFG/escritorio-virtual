@@ -158,6 +158,8 @@ user_achievements { userId, achievementId, unlockedAt } pk(userId, achievementId
 user_stats      { userId, key, value } pk(userId, key)   // contadores das conquistas
 user_visits     { userId, roomId: fk rooms (cascade) } pk(userId, roomId)
 users           … + badges: text (até 3 ids exibidos no cartão)
+users           … + codeShare: 'hidden'|'coding'|'language'|'project'   // Fase 20
+api_tokens      { id, userId, name, tokenHash (sha256, único), createdAt, lastUsedAt }
 dm_reactions    { messageId: fk direct_messages (cascade), userId, emoji } pk(os três)
 
 rooms          { id: text pk ('reception'|'meeting'|'pantry'), name: text,
@@ -712,3 +714,31 @@ Voz/vídeo por proximidade (WebRTC) — fica como possível fase extra no fim, p
 4. **Quem cria e edita salas:** admins e quem eles liberarem.
 5. **Canal global `lobby`** (Fase 11): uma segunda conexão Colyseus por pessoa, para DMs, avisos e presença em tempo real.
 6. **Arte de pets e emblemas:** HabboAssets primeiro; sem render utilizável, arte própria CC0 registrada no `ASSETS.md`.
+
+## 11. Roadmap v3 — integrações (status de atividade)
+
+Pedido em 17/10/2026: mostrar no escritório o que cada pessoa está fazendo fora dele, começando por VS Code e Spotify (depois, também o Visual Studio “roxinho” 2026). Os dois alimentam uma linha de **atividade** no cartão do avatar e na lista de pessoas ("💻 Codando em TypeScript · portal", "🎵 Ouvindo: Música – Artista"). Cada pessoa controla o que aparece. Ordem: VS Code primeiro (só depende de nós), Spotify depois (depende de um app no Spotify Developer Dashboard).
+
+### Fase 20 — VS Code e Visual Studio ✅ implementada
+- **Token pessoal** criado no Perfil (mostrado uma vez; dá para revogar), guardado só como hash (`api_tokens`). Serve só para mandar atividade, não para entrar no escritório.
+- **Extensão do VS Code** (pasta `vscode-extension/`, instalada por `.vsix`, sem publicar no marketplace): comando "Escritório: conectar" pede o endereço do servidor e o token (guardado no SecretStorage do VS Code). Manda um sinal a cada minuto enquanto a pessoa digita ou navega no código (linguagem e nome do projeto). Fica ociosa depois de 5 min parada e avisa ao fechar. Item na barra de status mostra se está conectada.
+- **Servidor:** `POST /api/activity/vscode` com o token. A atividade vale por 3 min sem sinal e vai para o estado da sala (`Player.activity`) e para a lista de pessoas.
+- **Privacidade no Perfil:** não mostrar, só "Codando", linguagem, ou linguagem e projeto.
+
+**Como testar:** gerar o token no Perfil, conectar a extensão, abrir um arquivo e digitar: o cartão mostra "💻 Codando em …" para os outros; parar 5 min (ou fechar o VS Code) e a linha some; trocar a privacidade e ver o texto mudar; revogar o token e os sinais passam a ser recusados.
+
+**Notas da implementação:**
+- **Visual Studio entrou junto** (pedido no meio da fase). O servidor ficou genérico: `POST /api/activity/editor` com `editor: 'vscode' | 'visualstudio'`, e o texto diz o editor: "💻 Codando em C# no Visual Studio · PortalTransparencia".
+- **Servidor:** tokens `esc_…` em `api_tokens` (migration `0016`, só o SHA-256, até 5 por pessoa, `lastUsedAt` regravado no máximo a cada 5 min). A atividade fica só em memória (`ActivityService`), vale 3 min sem sinal (varredura a cada 30 s) e vai para `Player.activity` (cartão) e `OnlinePerson.activity` (lista de pessoas, inclusive de outras salas). Limite de 20 sinais por minuto por token. A sessão do navegador não serve como token, e vice-versa.
+- **Extensão do VS Code** (`vscode-extension/`, TypeScript + esbuild, `.vsix` de ~5 KB gerado por `npm run vscode:package` em `client/public/downloads/`, versionado e servido pelo escritório para download). Regras de quando mandar sinal em `tracker.ts` (testado). Conta como atividade digitar, trocar de arquivo, mover o cursor e voltar para a janela (só com a janela em foco). Token no SecretStorage. Item na barra de status: conectado / pausado / erro (token revogado pede para conectar de novo).
+- **Extensão do Visual Studio** (`visualstudio-extension/`, C#, modelo novo VisualStudio.Extensibility 17.14, roda fora do processo do VS, compatível com o VS 2022 17.14+ e o 2026). Ouve abrir e editar arquivos de código, descobre a linguagem pela extensão do arquivo e o projeto pelo `.sln`/`.slnx`/`.csproj` mais próximo. Mesmas regras de sinal. Comandos no menu Extensões: conectar (pede endereço e token), pausar ou retomar, desconectar. O token fica criptografado com DPAPI.
+- **Limite do ambiente:** o `.vsix` do Visual Studio só pode ser gerado no Windows (o empacotador da Microsoft é um `.exe`). Aqui no Mac o projeto **compila sem erros nem avisos** (`dotnet build`), mas a extensão **não foi executada** dentro do Visual Studio. Falta testar no Windows.
+- **Perfil → 💻 Editores de código:** link para baixar a extensão do VS Code, escolha do que aparece, lista de tokens (último uso, revogar com confirmação) e criação (o token aparece uma vez, com botão Copiar).
+- Testado no navegador: gerar token, sinais no formato das duas extensões (enviados pela página com o token gerado), texto no cartão e na lista, troca de privacidade e revogação (sinal recusado com 401). A extensão do VS Code não foi instalada no seu VS Code; o `.vsix` está pronto para você instalar.
+
+### Fase 21 — Spotify
+- No Perfil, "Conectar Spotify" (OAuth com PKCE, escopo `user-read-currently-playing`). O servidor guarda o refresh token e consulta a música atual de quem está online a cada ~20–30 s.
+- Mostra "🎵 Ouvindo: Música – Artista" (com link para a música) no cartão e na lista de pessoas; esconde quando pausado. Botões para desconectar e para ocultar temporariamente.
+- **Pré-requisitos (seus):** criar um app no Spotify Developer Dashboard (Client ID no `.env`), cadastrar o endereço de retorno (https em produção; `http://127.0.0.1:…` em desenvolvimento) e, no modo de desenvolvimento do Spotify, adicionar o e-mail de cada pessoa que vai conectar (limite de ~25).
+
+**Como testar:** conectar a conta, tocar uma música e ver o cartão atualizar para os outros; pausar e a linha some; desconectar.

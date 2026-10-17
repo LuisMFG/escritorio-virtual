@@ -16,6 +16,7 @@ Escritório virtual isométrico para amigos e colegas (até ~10 pessoas online):
 - **Mini-jogos**: jogo da velha na Mesa de Jogos da Copa (duas pessoas sentam e jogam, o resto da sala assiste, com placar) e `/dado` e `/moeda` no chat, sorteados pelo servidor.
 - **Pets**: adote um bichinho no Perfil (cachorro, gato, coelho ou pintinho). Ele segue você entre as salas, passeia quando você para e obedece `/senta`, `/deita` e `/vem` no chat.
 - **Conquistas**: 17 conquistas (conversar, decorar, explorar as salas, jogar, ir às reuniões…) com aviso ao desbloquear. No Perfil você escolhe até 3 emblemas para aparecer no seu cartão.
+- **Status do editor de código**: com a extensão do VS Code ou do Visual Studio, seu cartão mostra “💻 Codando em C# no Visual Studio” enquanto você programa. No Perfil você escolhe o que aparece (nada, só “Codando”, a linguagem ou também o projeto). Veja [Extensões dos editores](#extensões-dos-editores).
 - **Dia e noite** pelo horário de Brasília, com as luzes acesas brilhando à noite (`?hora=21` força a hora para testar), e **som ambiente** opcional por sala (🎵: escritório, cafeteria ou chuva, gerado no próprio navegador).
 - **Reações e respostas**: passe o mouse numa mensagem (sala ou privada) para reagir (👍 ❤️ 😂 😮 😢 🎉) ou responder citando; quem é respondido recebe aviso.
 - **Mensagens privadas**: botão **Mensagens** (ou "Mensagem" no cartão/Equipe) para conversar com qualquer pessoa, em qualquer sala ou offline (ela lê quando voltar). Contador de não lidas, "Visto" e notificações do navegador opcionais (🔔 no painel) para DMs e menções com a aba em segundo plano.
@@ -84,6 +85,7 @@ Opções de URL do cliente: `?offline=1` usa só a arte provisória gerada por c
 | `npm run bot` | Robôs de teste |
 | `npm run assets:sync` | Regera os manifestos de roupas e móveis a partir da HabboAssets |
 | `npm run db:generate` | Gera migration SQL após mudar `server/src/db/schema.ts` |
+| `npm run vscode:package` | Gera a extensão do VS Code em `client/public/downloads/escritorio-atividade.vsix` |
 
 ## Estrutura
 
@@ -93,8 +95,28 @@ shared/   código comum: coordenadas isométricas, A*, ordenação de profundida
 server/   Express + Colyseus no mesmo processo; SQLite (better-sqlite3 + Drizzle);
           proxy de imagens com cache; scripts (assets:sync, bot)
 client/   Vite + PixiJS (cena isométrica) e HTML/CSS (entrada, editor, chat, catálogo)
+vscode-extension/        extensão do VS Code (TypeScript, empacotada em .vsix)
+visualstudio-extension/  extensão do Visual Studio 2022/2026 (C#, VisualStudio.Extensibility)
 data/     banco e cache de imagens (fora do git)
 ```
+
+## Extensões dos editores
+
+As duas extensões mandam ao escritório, a cada minuto enquanto você mexe no código, a linguagem e o nome do projeto (ou da solução). Depois de 5 minutos parado, ou ao pausar/fechar, a atividade some. O token é pessoal (gerado em **Perfil → 💻 Editores de código**), só serve para mandar atividade e pode ser revogado a qualquer momento.
+
+**VS Code**
+1. Baixe a extensão pelo link no Perfil (ou `client/public/downloads/escritorio-atividade.vsix`).
+2. No VS Code: Extensões → menu “…” → **Instalar do VSIX…** (ou `code --install-extension escritorio-atividade.vsix`).
+3. Paleta de comandos → **Escritório: conectar** → endereço do escritório e o token. O token fica no armazenamento seguro do VS Code.
+4. O item “Escritório” na barra de status mostra se está conectado; clique para pausar/retomar.
+
+**Visual Studio 2022 (17.14+) / 2026**
+1. Gere o `.vsix` **no Windows** (o empacotador da Microsoft só roda lá): abra `visualstudio-extension/EscritorioAtividade/EscritorioAtividade.csproj` no Visual Studio, ou rode `dotnet build -c Release` nessa pasta. O arquivo sai em `bin/Release/net8.0-windows8.0/`.
+2. Dê dois cliques no `.vsix` para instalar e reabra o Visual Studio.
+3. Menu **Extensões → Escritório: conectar** → endereço e token. O token fica criptografado para o seu usuário do Windows (DPAPI), em `%APPDATA%\EscritorioVirtual\atividade.json`.
+4. **Extensões → Escritório: pausar ou retomar** e **Escritório: desconectar** fazem o resto.
+
+Fora do Windows, `dotnet build` só compila (confere o código) e não gera o `.vsix`.
 
 ## Assets: HabboAssets e arte própria
 
