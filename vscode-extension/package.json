@@ -1,0 +1,54 @@
+{
+  "name": "escritorio-virtual-atividade",
+  "displayName": "Escritório Virtual — Atividade",
+  "description": "Mostra no Escritório Virtual quando você está programando (linguagem e projeto, conforme a privacidade escolhida no seu Perfil).",
+  "version": "0.1.0",
+  "publisher": "escritorio-virtual",
+  "private": true,
+  "license": "UNLICENSED",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "escritorio.connect",
+        "title": "Escritório: conectar"
+      },
+      {
+        "command": "escritorio.disconnect",
+        "title": "Escritório: desconectar"
+      },
+      {
+        "command": "escritorio.togglePause",
+        "title": "Escritório: pausar ou retomar"
+      }
+    ],
+    "configuration": {
+      "title": "Escritório Virtual",
+      "properties": {
+        "escritorio.serverUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Endereço do Escritório Virtual (ex.: https://escritorio.exemplo.gov.br). O token fica guardado com segurança pelo VS Code, não aqui."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "esbuild src/extension.ts --bundle --platform=node --format=cjs --target=node20 --external:vscode --outfile=dist/extension.js",
+    "package": "npm run build && vsce package --no-dependencies --allow-missing-repository --skip-license -o ../client/public/downloads/escritorio-atividade.vsix"
+  },
+  "devDependencies": {
+    "@types/vscode": "1.90.0",
+    "@vscode/vsce": "^4.0.0",
+    "esbuild": "^0.28.2"
+  }
+}

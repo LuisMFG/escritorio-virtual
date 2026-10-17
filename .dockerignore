@@ -8,3 +8,5 @@ data
 !.env.example
 *.log
 .claude
+visualstudio-extension/**/bin
+visualstudio-extension/**/obj

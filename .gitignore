@@ -44,3 +44,7 @@ Thumbs.db
 !.vscode/settings.json
 *.swp
 *.swo
+
+# Extensões empacotadas (a do VS Code fica versionada para download no escritório)
+*.vsix
+!client/public/downloads/*.vsix

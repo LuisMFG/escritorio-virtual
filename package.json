@@ -6,7 +6,8 @@
   "workspaces": [
     "shared",
     "client",
-    "server"
+    "server",
+    "vscode-extension"
   ],
   "engines": {
     "node": ">=22"
@@ -16,7 +17,7 @@
     "build": "npm run build -w client",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc -p shared --noEmit && tsc -p shared/tsconfig.test.json --noEmit && tsc -p client --noEmit && tsc -p server --noEmit",
+    "typecheck": "tsc -p shared --noEmit && tsc -p shared/tsconfig.test.json --noEmit && tsc -p client --noEmit && tsc -p server --noEmit && tsc -p vscode-extension --noEmit",
     "lint": "eslint .",
     "format": "prettier --write .",
     "dev:server": "npm run dev -w server",
@@ -24,7 +25,8 @@
     "db:generate": "npm exec -w server -- drizzle-kit generate",
     "bot": "npm run bot -w server --",
     "assets:sync": "npm run assets:sync -w server --",
-    "start": "NODE_ENV=production npm run start -w server"
+    "start": "NODE_ENV=production npm run start -w server",
+    "vscode:package": "npm run package -w vscode-extension"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
