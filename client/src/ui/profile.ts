@@ -1,6 +1,7 @@
 import { BIO_MAX, NAME_MAX, PASSWORD_MIN, type SessionResponse } from '@office/shared';
 import { api, ApiRequestError } from '../net/api.js';
 import { setAvatarPreview } from './login.js';
+import { mountPetSection } from './petSection.js';
 
 export interface ProfileHandlers {
   /** O servidor aceitou as mudanças (nome, bio, aniversário). */
@@ -57,6 +58,7 @@ export function openProfile(session: SessionResponse, on: ProfileHandlers): void
           <p class="login-error" role="alert" hidden></p>
           <button type="submit" class="btn-primary">Salvar perfil</button>
         </form>
+        <section class="profile-pet" aria-label="Meu pet"></section>
         <details class="profile-password">
           <summary>Trocar senha</summary>
           <form novalidate>
@@ -154,6 +156,8 @@ export function openProfile(session: SessionResponse, on: ProfileHandlers): void
       button.disabled = false;
     }
   });
+
+  mountPetSection($<HTMLElement>('.profile-pet'), session.token);
 
   // Troca de senha.
   const pwForm = $<HTMLFormElement>('.profile-password form');

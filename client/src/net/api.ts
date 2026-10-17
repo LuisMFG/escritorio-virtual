@@ -13,6 +13,7 @@ import {
   type RegisterRequest,
   type Meeting,
   type MeetingCreate,
+  type PetInfo,
   type RoomEdit,
   type RoomEditorData,
   type SessionResponse,
@@ -121,6 +122,13 @@ export const roomApi = {
 };
 
 /** Agenda de reuniões. */
+export const petApi = {
+  get: (token: string) => request<{ pet: PetInfo | null }>('GET', '/api/pets/me', { token }),
+  save: (token: string, pet: PetInfo) =>
+    request<PetInfo>('PUT', '/api/pets/me', { token, body: pet }),
+  release: (token: string) => request<Ok>('DELETE', '/api/pets/me', { token }),
+};
+
 export const meetingApi = {
   list: (token: string) => request<Meeting[]>('GET', '/api/meetings', { token }),
   create: (token: string, m: MeetingCreate) =>

@@ -48,6 +48,7 @@ import { openRoomEditor } from './ui/roomEditor.js';
 import { AmbientSound } from './ui/ambient.js';
 import { openBoard } from './ui/board.js';
 import { openWhiteboard, type WhiteboardHandle } from './ui/whiteboard.js';
+import type { PetSnapshot } from './entities/PetView.js';
 import { openTicTacToe, type TicTacToeHandle, type TttView } from './ui/ticTacToe.js';
 import { renderThumbnail } from './ui/wbDraw.js';
 import { openAgenda, type AgendaHandle } from './ui/agenda.js';
@@ -609,6 +610,14 @@ async function start(): Promise<void> {
       }),
     );
     keep(cb.onRemove('games', (_g, id) => syncGame(id, null)));
+    // Pets de quem está na sala.
+    keep(
+      cb.onAdd('pets', (pet, id) => {
+        s.setPet(id, pet.toJSON() as PetSnapshot);
+        keep(cb.onChange(pet, () => s.setPet(id, pet.toJSON() as PetSnapshot)));
+      }),
+    );
+    keep(cb.onRemove('pets', (_p, id) => s.removePet(id)));
     keep(
       cb.listen('decorLocked', (locked) => {
         decorLocked = locked;

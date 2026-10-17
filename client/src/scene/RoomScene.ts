@@ -25,6 +25,7 @@ import { DEBUG } from '../config.js';
 import { AvatarView, type AvatarSnapshot } from '../entities/AvatarView.js';
 import { ChatBubble } from '../entities/ChatBubble.js';
 import { FurniView } from '../entities/FurniView.js';
+import { PetView, type PetSnapshot } from '../entities/PetView.js';
 import { Camera } from './Camera.js';
 import { DecorMode, type DecorActions, type DecorHost, type DecorListener } from './DecorMode.js';
 import { drawRoom } from './RoomRenderer.js';
@@ -94,6 +95,8 @@ export class RoomScene implements DecorHost {
   });
   private readonly furni = new Map<string, FurniView>();
   private readonly avatars = new Map<string, AvatarView>();
+  private readonly pets = new Map<string, PetView>();
+  private hoveredPet: PetView | null = null;
   private depthKey = '';
   private targetFade = 0;
   private localId: string | null = null;
@@ -346,6 +349,24 @@ export class RoomScene implements DecorHost {
     );
   }
 
+  // ---------- Pets ----------
+
+  setPet(id: string, snapshot: PetSnapshot): void {
+    const view = this.pets.get(id);
+    if (view) return view.applySnapshot(snapshot);
+    const pet = new PetView(id, snapshot, (x, y) => this.grid.heightAt(x, y));
+    this.pets.set(id, pet);
+    this.objects.addChild(pet);
+  }
+
+  removePet(id: string): void {
+    const view = this.pets.get(id);
+    if (!view) return;
+    if (this.hoveredPet === view) this.hoveredPet = null;
+    this.pets.delete(id);
+    view.destroy({ children: true });
+  }
+
   removeAvatar(id: string): void {
     const view = this.avatars.get(id);
     if (!view) return;
@@ -376,6 +397,7 @@ export class RoomScene implements DecorHost {
 
   update(dtMs: number): void {
     for (const a of this.avatars.values()) a.update(dtMs);
+    for (const p of this.pets.values()) p.update(dtMs);
     for (const b of [...this.bubbles.children] as ChatBubble[]) {
       b.update(dtMs);
       if (b.expired) b.destroy({ children: true });
@@ -401,6 +423,7 @@ export class RoomScene implements DecorHost {
   private sortDepth(): void {
     const boxes: DepthBox[] = [...this.furni.values()].map((f) => f.depthBox);
     for (const a of this.avatars.values()) boxes.push(a.depthBox);
+    for (const p of this.pets.values()) boxes.push(p.depthBox);
     const key = boxes
       .map((b) => `${b.id}:${b.minX},${b.minY},${b.maxX},${b.maxY},${b.z}`)
       .join('|');
@@ -409,6 +432,7 @@ export class RoomScene implements DecorHost {
 
     const views = new Map<string, Container>([...this.furni].map(([id, f]) => [id, f]));
     for (const [id, a] of this.avatars) views.set(id, a);
+    for (const p of this.pets.values()) views.set(p.label, p);
     depthOrder(boxes).forEach((id, i) => {
       const v = views.get(id);
       if (v) v.zIndex = i;
@@ -506,6 +530,16 @@ export class RoomScene implements DecorHost {
       this.hoveredAvatar?.setNameVisible(false);
       avatar?.setNameVisible(true);
       this.hoveredAvatar = avatar;
+    }
+    // Pet sob o ponteiro: mostra o nome e de quem é.
+    const pet =
+      avatar || this.decor.active
+        ? null
+        : ([...this.pets.values()].find((p) => p.hitTest(e.global)) ?? null);
+    if (pet !== this.hoveredPet) {
+      this.hoveredPet?.setNameVisible(false);
+      pet?.setNameVisible(true);
+      this.hoveredPet = pet;
     }
     // Mãozinha em pessoas e em móveis que dá para usar.
     const usable = !avatar && !this.decor.active && this.usableAt(e.global);

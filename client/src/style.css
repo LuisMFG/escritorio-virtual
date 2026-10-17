@@ -3289,3 +3289,115 @@ button.reply-quote:hover {
   gap: 8px;
   padding: 2px 0;
 }
+
+/* ---------- Fase 18: pets ---------- */
+
+.profile-pet {
+  margin: 14px 0 6px;
+  padding-top: 12px;
+  border-top: 1px solid var(--card-border);
+}
+
+.profile-pet h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+
+.profile-pet canvas {
+  image-rendering: pixelated;
+}
+
+.pet-card,
+.pet-form-top {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.pet-card p {
+  margin: 2px 0 0;
+}
+
+.pet-hint {
+  font-size: 12px;
+}
+
+.pet-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.pet-card canvas,
+.pet-preview canvas {
+  width: 72px;
+  height: auto;
+}
+
+.pet-option canvas {
+  width: 100%;
+  max-width: 44px;
+  height: auto;
+}
+
+.pet-preview {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 84px;
+  height: 72px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.pet-fields {
+  display: grid;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.pet-species {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+}
+
+.pet-option {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 4px 2px;
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.pet-option[aria-checked='true'] {
+  border-color: var(--ok);
+  color: var(--text);
+  background: rgba(111, 207, 151, 0.12);
+}
+
+.pet-colors {
+  display: flex;
+  gap: 8px;
+}
+
+.pet-swatch {
+  width: 24px;
+  height: 24px;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.pet-swatch[aria-checked='true'] {
+  border-color: var(--text);
+  box-shadow: 0 0 0 2px var(--ok);
+}
