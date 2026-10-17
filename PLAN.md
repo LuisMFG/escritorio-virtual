@@ -140,6 +140,11 @@ rooms          … + decorLocked: bool               // Fase 10
 direct_messages { id: int pk, fromUserId: fk users, toUserId: fk users, text: text,
                   createdAt: int, readAt: int null }   // Fase 11; até 1000 por conversa
 
+chat_messages   … + replyToId: fk chat_messages null (on delete set null)    // Fase 12
+direct_messages … + replyToId: fk direct_messages null (on delete set null)  // Fase 12
+chat_reactions  { messageId: fk chat_messages (cascade), userId, emoji } pk(os três)
+dm_reactions    { messageId: fk direct_messages (cascade), userId, emoji } pk(os três)
+
 rooms          { id: text pk ('reception'|'meeting'|'pantry'), name: text,
                  heightmap: text,        // linhas tipo Habbo: 'x' = sem tile, '0'-'9' = altura
                  wallHeight: int, floorColor: text, wallColor: text,
@@ -557,11 +562,19 @@ Pedido em 17/10/2026, depois da Fase 8: deixar o escritório "muito completo". M
 - Robô de teste responde a DMs (e marca como lidas).
 - Não verificado no navegador: o pedido de permissão e a notificação do sistema em si (dependem do diálogo nativo do navegador).
 
-### Fase 12 — Reações e respostas
+### Fase 12 — Reações e respostas ✅ implementada
 - Reagir com emoji às mensagens do histórico (sala e DM): `chat_reactions { mensagem, pessoa, emoji }`, contagem ao lado da mensagem, clicar de novo tira.
 - Responder citando: `replyToId` nas mensagens; a resposta mostra um trecho da original, e clicar leva até ela. Quem é respondido recebe aviso como numa menção.
 
 **Como testar:** reagir e ver a contagem nas duas abas; tirar a reação; responder uma mensagem e clicar na citação.
+
+**Notas da implementação:**
+- Migration `0008`: tabelas `chat_reactions` e `dm_reactions` e coluna `reply_to_id` nas duas tabelas de mensagens. O drizzle-kit não escreve o `ON DELETE SET NULL` em `ALTER TABLE ADD`; foi acrescentado à mão no SQL.
+- Reações numa lista fechada (`REACTIONS`: 👍 ❤️ 😂 😮 😢 🎉); o servidor recusa outras. Clicar de novo tira a sua. Limite de 10 seguidas, recarregando 3/s.
+- Mensagens (sala e DM) passam a trazer `reactions` (emoji + quem, com nomes) e `replyTo` (id, autor e trecho de até 120 caracteres). Mudanças chegam por `chat.reactions` (sala) e `dm.reactions` (só as duas pessoas).
+- Responder: ↩ na mensagem mostra a faixa "Respondendo a…" (Esc ou ✕ cancela); a resposta só vale para mensagem da mesma sala/conversa. Se a original for apagada (moderação ou limite de histórico), a citação some. Clicar na citação rola até a original e pisca.
+- Quem é respondido é avisado como numa menção (destaque, aviso "X respondeu você", som e notificação do navegador).
+- Ações por mensagem ao passar o mouse: ↩ responder, 😊 reagir, 🗑 apagar (no chat da sala; a lixeira da Fase 10 virou uma dessas ações).
 
 ### Fase 13 — Criar e editar salas
 - Salas passam a ter o **banco como fonte da verdade** (`shared/rooms.ts` vira só a semente inicial).
