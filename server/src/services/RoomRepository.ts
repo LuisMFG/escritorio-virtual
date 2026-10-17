@@ -29,8 +29,27 @@ export class RoomRepository {
   constructor(private readonly db: Db) {}
 
   /** Salas na ordem do seed (Recepção primeiro). */
-  list(): { id: string; name: string }[] {
-    return this.db.select({ id: rooms.id, name: rooms.name }).from(rooms).all();
+  list(): { id: string; name: string; decorLocked: boolean }[] {
+    return this.db
+      .select({ id: rooms.id, name: rooms.name, decorLocked: rooms.decorLocked })
+      .from(rooms)
+      .all();
+  }
+
+  isDecorLocked(roomId: string): boolean {
+    return Boolean(
+      this.db.select({ v: rooms.decorLocked }).from(rooms).where(eq(rooms.id, roomId)).get()?.v,
+    );
+  }
+
+  /** Devolve `false` se a sala não existe. */
+  setDecorLocked(roomId: string, locked: boolean): boolean {
+    const res = this.db
+      .update(rooms)
+      .set({ decorLocked: locked })
+      .where(eq(rooms.id, roomId))
+      .run();
+    return res.changes > 0;
   }
 
   /** Layout completo da sala: dados e portas do banco + móveis fixos de `shared/rooms.ts`. */

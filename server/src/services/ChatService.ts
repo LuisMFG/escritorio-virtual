@@ -26,6 +26,14 @@ export class ChatService {
     return toMessage(row, sessionId);
   }
 
+  find(id: number): ChatMessageRow | undefined {
+    return this.db.select().from(chatMessages).where(eq(chatMessages.id, id)).get();
+  }
+
+  remove(id: number): void {
+    this.db.delete(chatMessages).where(eq(chatMessages.id, id)).run();
+  }
+
   /** Últimas mensagens da sala, da mais antiga para a mais nova. */
   recent(roomId: string, limit = CHAT_HISTORY_ON_JOIN): ChatMessage[] {
     return this.db

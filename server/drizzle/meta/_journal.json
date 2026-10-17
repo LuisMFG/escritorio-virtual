@@ -43,6 +43,13 @@
       "when": 1792250553184,
       "tag": "0005_sem_token_em_users",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1792251539226,
+      "tag": "0006_admin_moderacao",
+      "breakpoints": true
     }
   ]
 }

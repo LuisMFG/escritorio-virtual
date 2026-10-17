@@ -7,7 +7,7 @@ import {
   type Role,
   type SessionResponse,
 } from '@office/shared';
-import { and, asc, eq, isNotNull, ne } from 'drizzle-orm';
+import { and, asc, desc, eq, isNotNull, ne } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import { cargos, sessions, users, type UserRow } from '../db/schema.js';
 
@@ -45,6 +45,7 @@ type UserChanges = Partial<
     | 'cargoId'
     | 'bio'
     | 'birthday'
+    | 'disabled'
   >
 >;
 
@@ -67,7 +68,7 @@ export class UserService {
       .select({ user: users })
       .from(sessions)
       .innerJoin(users, eq(sessions.userId, users.id))
-      .where(eq(sessions.tokenHash, hashToken(token)))
+      .where(and(eq(sessions.tokenHash, hashToken(token)), eq(users.disabled, false)))
       .get();
     return row?.user;
   }
@@ -159,6 +160,15 @@ export class UserService {
     return this.db.select().from(users).orderBy(asc(users.name)).all();
   }
 
+  /** Admins ativos com login (para não deixar o escritório sem nenhum). */
+  countAdmins(): number {
+    return this.db
+      .select({ id: users.id })
+      .from(users)
+      .where(and(eq(users.role, 'admin'), eq(users.disabled, false), isNotNull(users.username)))
+      .all().length;
+  }
+
   hasAdmin(): boolean {
     return Boolean(
       this.db
@@ -188,6 +198,45 @@ export class UserService {
       .from(cargos)
       .orderBy(asc(cargos.sort), asc(cargos.id))
       .all();
+  }
+
+  createCargo(name: string, color: string): CargoInfo {
+    const last = this.db
+      .select({ sort: cargos.sort })
+      .from(cargos)
+      .orderBy(desc(cargos.sort))
+      .get();
+    return this.db
+      .insert(cargos)
+      .values({ name, color, sort: (last?.sort ?? -1) + 1 })
+      .returning({ id: cargos.id, name: cargos.name, color: cargos.color })
+      .get();
+  }
+
+  updateCargo(id: number, changes: { name?: string; color?: string }): void {
+    this.db.update(cargos).set(changes).where(eq(cargos.id, id)).run();
+    this.emitCargoHolders(id);
+  }
+
+  /** Apaga o cargo; quem o tinha fica sem cargo. */
+  deleteCargo(id: number): void {
+    const holders = this.db.select().from(users).where(eq(users.cargoId, id)).all();
+    this.db.update(users).set({ cargoId: null }).where(eq(users.cargoId, id)).run();
+    this.db.delete(cargos).where(eq(cargos.id, id)).run();
+    for (const u of holders) this.events.emit('updated', { ...u, cargoId: null });
+  }
+
+  reorderCargos(ids: number[]): void {
+    this.db.transaction((tx) => {
+      ids.forEach((id, i) => tx.update(cargos).set({ sort: i }).where(eq(cargos.id, id)).run());
+    });
+  }
+
+  /** Cargo renomeado/recolorido: os avatares de quem o tem mudam na hora. */
+  private emitCargoHolders(cargoId: number): void {
+    for (const u of this.db.select().from(users).where(eq(users.cargoId, cargoId)).all()) {
+      this.events.emit('updated', u);
+    }
   }
 
   cargoOf(user: UserRow): CargoInfo | null {

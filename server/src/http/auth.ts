@@ -1,6 +1,5 @@
 import { timingSafeEqual } from 'node:crypto';
 import {
-  cargoAssignSchema,
   claimSchema,
   ERROR_MESSAGES,
   ErrorCode,
@@ -25,7 +24,8 @@ export type Result<T> =
   { ok: true; status: 200; body: T } | { ok: false; status: HttpStatus; body: ApiError };
 
 export interface AuthDeps {
-  inviteCode: string;
+  /** Código atual (o painel Admin pode trocar; o `.env` é o inicial). */
+  inviteCode: () => string;
   /** `ADMIN_USERNAMES`: quem é admin sempre. Vazio = a primeira conta vira admin. */
   adminUsernames: readonly string[];
   avatarManifest: AvatarManifest;
@@ -85,7 +85,7 @@ export async function register(input: unknown, deps: AuthDeps): Promise<Result<S
   const p = parse(registerSchema, input);
   if ('error' in p) return p.error;
   const { inviteCode, username, password, name } = p.data;
-  if (!safeEqual(inviteCode.trim(), deps.inviteCode)) return fail(401, ErrorCode.InvalidInvite);
+  if (!safeEqual(inviteCode.trim(), deps.inviteCode())) return fail(401, ErrorCode.InvalidInvite);
   if (deps.users.findByUsername(username)) return fail(409, ErrorCode.UsernameTaken);
   const taken = nameTaken(name, undefined, deps);
   if (taken) return taken;
@@ -117,6 +117,7 @@ export async function login(input: unknown, deps: AuthDeps): Promise<Result<Sess
   // Confere mesmo sem usuário, para o tempo de resposta não revelar quem existe.
   const valid = await verifyPassword(p.data.password, user?.passwordHash ?? DUMMY_HASH);
   if (!user || !valid) return fail(401, ErrorCode.InvalidCredentials);
+  if (user.disabled) return fail(403, ErrorCode.AccountDisabled);
   const role = roleFor(user.username!, user, deps);
   const current = role === user.role ? user : deps.users.update(user.id, { role });
   return ok(deps.users.toSession(current, deps.users.createSession(user.id)));
@@ -209,23 +210,4 @@ export function team(deps: AuthDeps): Result<TeamResponse> {
       roomId: online.get(u.id) ?? null,
     })),
   });
-}
-
-/** Admin define (ou tira) o cargo de alguém. */
-export function assignCargo(
-  caller: Caller,
-  userId: string,
-  input: unknown,
-  deps: AuthDeps,
-): Result<{ ok: true }> {
-  if (caller.user.role !== 'admin') return fail(403, ErrorCode.Forbidden);
-  const p = parse(cargoAssignSchema, input);
-  if ('error' in p) return p.error;
-  if (!deps.users.findById(userId)) return fail(404, ErrorCode.NotFound);
-  const { cargoId } = p.data;
-  if (cargoId !== null && !deps.users.listCargos().some((c) => c.id === cargoId)) {
-    return fail(404, ErrorCode.NotFound, { message: 'Cargo inexistente.' });
-  }
-  deps.users.update(userId, { cargoId });
-  return ok({ ok: true as const });
 }

@@ -60,6 +60,8 @@ export const OfficeState = schema(
     players: t.map(Player),
     /** Chave = id do móvel. */
     furni: t.map(Furni),
+    /** Só admins decoram esta sala. */
+    decorLocked: t.boolean(),
   },
   'OfficeState',
 );

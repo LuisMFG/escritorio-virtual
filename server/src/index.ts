@@ -6,7 +6,9 @@ import { configureApp } from './http/app.js';
 import { OfficeRoom } from './rooms/OfficeRoom.js';
 import { createServices, setServices } from './services/index.js';
 
-const services = createServices(openDatabase(config.databasePath));
+const services = createServices(openDatabase(config.databasePath), {
+  inviteCode: config.inviteCode,
+});
 setServices(services);
 
 const server = defineServer({

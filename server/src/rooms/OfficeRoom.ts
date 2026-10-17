@@ -1,7 +1,11 @@
-import { Room, ServerError, validate, type Client, type Deferred } from '@colyseus/core';
+import { CloseCode, Room, ServerError, validate, type Client, type Deferred } from '@colyseus/core';
 import {
   canPlace,
   chatSchema,
+  chatDeleteSchema,
+  RECEPTION,
+  type ChatDeletedMessage,
+  type KickedMessage,
   emoteSchema,
   statusSchema,
   typingSchema,
@@ -38,7 +42,7 @@ import {
   type TilePoint,
 } from '@office/shared';
 import type { UserRow } from '../db/schema.js';
-import { services } from '../services/index.js';
+import { services, type ModerationEvents } from '../services/index.js';
 import { KeyedRateLimiter } from '../util/rateLimiter.js';
 import { MovementSystem, type Mover } from './MovementSystem.js';
 
@@ -109,6 +113,9 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     [ClientMessage.Emote]: validate(emoteSchema, (client, msg) =>
       this.handleEmote(client as OfficeClient, msg),
     ),
+    [ClientMessage.ChatDelete]: validate(chatDeleteSchema, (client, msg) =>
+      this.handleChatDelete(client as OfficeClient, msg.id),
+    ),
     [ClientMessage.Interact]: validate(furniRefSchema, (client, msg) =>
       this.handleInteract(client as OfficeClient, msg.furniId),
     ),
@@ -124,6 +131,43 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     services().presence.rename(user.id, user.name);
   };
 
+  /** Admin tirou alguém: da sala (vai para a Recepção) ou do escritório (desconecta). */
+  private readonly onKick = ({ userId, scope, roomId, byName }: ModerationEvents['kick'][0]) => {
+    if (scope === 'room' && roomId !== this.layout.roomId) return;
+    for (const client of this.clients) {
+      if (client.auth?.id !== userId) continue;
+      if (scope === 'room') {
+        const spawn = services().rooms.getLayout(RECEPTION.id)!.spawn;
+        const ticket = services().transfers.issue({ userId, roomId: RECEPTION.id, ...spawn });
+        client.send(ServerMessage.Kicked, {
+          scope,
+          message: `${byName} tirou você da sala.`,
+        } satisfies KickedMessage);
+        client.send(ServerMessage.RoomTransfer, {
+          targetRoomId: RECEPTION.id,
+          ticket,
+        } satisfies RoomTransferMessage);
+      } else {
+        client.send(ServerMessage.Kicked, {
+          scope,
+          message: `${byName} tirou você do escritório.`,
+        } satisfies KickedMessage);
+        // Saída consentida: vai direto para onLeave, sem esperar reconexão.
+        client.leave(CloseCode.CONSENTED);
+      }
+    }
+    // Avatares "fantasma" (reconectando) dessa pessoa também saem.
+    if (scope === 'office') {
+      for (const [sessionId, p] of this.state.players.entries()) {
+        if (p.userId === userId && p.away) this.pendingReconnects.get(sessionId)?.reject(false);
+      }
+    }
+  };
+
+  private readonly onRoomSettings = ({ roomId, decorLocked }: ModerationEvents['room'][0]) => {
+    if (roomId === this.layout.roomId) this.state.decorLocked = decorLocked;
+  };
+
   override onCreate(options: { officeRoomId: string }): void {
     const layout = services().rooms.getLayout(options.officeRoomId);
     if (!layout) throw new ServerError(404, `Sala inexistente: ${options.officeRoomId}`);
@@ -135,16 +179,21 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     );
     this.state = new OfficeState();
     this.state.roomId = layout.roomId;
+    this.state.decorLocked = services().rooms.isDecorLocked(layout.roomId);
     for (const f of services().furni.list(layout.roomId)) this.state.furni.set(f.id, toFurni(f));
     this.setSimulationInterval(
       (dt) => this.movement.tick(dt, this.state.players.entries()),
       TICK_MS,
     );
     services().users.events.on('updated', this.onUserUpdated);
+    services().moderation.on('kick', this.onKick);
+    services().moderation.on('room', this.onRoomSettings);
   }
 
   override onDispose(): void {
     services().users.events.off('updated', this.onUserUpdated);
+    services().moderation.off('kick', this.onKick);
+    services().moderation.off('room', this.onRoomSettings);
   }
 
   override onAuth(_client: Client, options: unknown): UserRow {
@@ -369,9 +418,13 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     this.state.furni.delete(furniId);
   }
 
-  /** Qualquer pessoa na sala pode decorar (decisão da v1); só limitamos a frequência. */
+  /** Qualquer pessoa na sala decora, a não ser que um admin trave a sala (Fase 10). */
   private canEdit(client: OfficeClient): boolean {
     if (!this.state.players.has(client.sessionId)) return false;
+    if (this.state.decorLocked && client.auth?.role !== 'admin') {
+      this.sendError(client, ErrorCode.DecorLocked);
+      return false;
+    }
     if (!this.editLimiter.tryTake(client.sessionId)) {
       this.sendError(client, ErrorCode.RateLimit);
       return false;
@@ -432,6 +485,21 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     this.broadcast(ServerMessage.Chat, message);
     const player = this.state.players.get(client.sessionId);
     if (player) player.typing = false;
+  }
+
+  /** Apagar mensagem: quem escreveu ou um admin. Some do histórico de todos na sala. */
+  private handleChatDelete(client: OfficeClient, id: number): void {
+    const user = client.auth;
+    const msg = services().chat.find(id);
+    if (!user || !msg || msg.roomId !== this.layout.roomId) return;
+    const own = msg.userId === user.id;
+    if (!own && user.role !== 'admin') return this.sendError(client, ErrorCode.Forbidden);
+    services().chat.remove(id);
+    this.broadcast(ServerMessage.ChatDeleted, { id } satisfies ChatDeletedMessage);
+    if (!own) {
+      const preview = msg.text.length > 60 ? `${msg.text.slice(0, 60)}…` : msg.text;
+      services().audit.log(user.id, 'chat.delete', msg.userId, `“${preview}”`);
+    }
   }
 
   /** Emote: só quem está na sala vê (efêmero, não fica no estado). */

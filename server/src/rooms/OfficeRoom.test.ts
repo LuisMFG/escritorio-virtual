@@ -388,4 +388,84 @@ describe('OfficeRoom', () => {
       expect(anon.status).toBe(401);
     });
   });
+
+  describe('moderação', () => {
+    const adminUser = (name: string) => {
+      const u = newUser(name);
+      svc.users.update(u.user.id, { role: 'admin' });
+      return u;
+    };
+
+    it('tirar da sala manda para a Recepção com aviso', async () => {
+      const beto = newUser('Beto');
+      const b = await join(beto.token, MEETING.id);
+      const kicked = b.waitForMessage(ServerMessage.Kicked);
+      const transfer = b.waitForMessage(ServerMessage.RoomTransfer);
+      svc.moderation.emit('kick', {
+        userId: beto.user.id,
+        scope: 'room',
+        roomId: MEETING.id,
+        byName: 'Ana',
+      });
+      expect(await kicked).toEqual({ scope: 'room', message: 'Ana tirou você da sala.' });
+      expect(((await transfer) as RoomTransferMessage).targetRoomId).toBe(RECEPTION.id);
+    });
+
+    it('tirar do escritório desconecta todas as conexões da pessoa', async () => {
+      const beto = newUser('Beto');
+      const b = await join(beto.token);
+      const left = new Promise<number>((resolve) => b.onLeave((code) => resolve(code)));
+      const kicked = b.waitForMessage(ServerMessage.Kicked);
+      svc.moderation.emit('kick', { userId: beto.user.id, scope: 'office', byName: 'Ana' });
+      expect(((await kicked) as { scope: string }).scope).toBe('office');
+      await left;
+      await wait(100);
+      expect(svc.presence.list().some((e) => e.userId === beto.user.id)).toBe(false);
+    });
+
+    it('decoração travada: membro recebe aviso, admin continua decorando', async () => {
+      const ana = adminUser('Ana');
+      const a = await join(ana.token, MEETING.id);
+      const b = await join(newUser('Beto').token, MEETING.id);
+      svc.rooms.setDecorLocked(MEETING.id, true);
+      svc.moderation.emit('room', { roomId: MEETING.id, decorLocked: true });
+      await wait(100);
+      expect(b.state.decorLocked).toBe(true);
+
+      const place = { defId: 'plant_yukka', x: 1, y: 1, rot: 0 };
+      b.send(ClientMessage.FurniPlace, place);
+      const err = (await b.waitForMessage(ServerMessage.Error)) as ErrorMessage;
+      expect(err.code).toBe('DECOR_LOCKED');
+
+      // O admin pode (se o lugar não servir, o erro é outro, nunca DECOR_LOCKED).
+      const adminErrors: string[] = [];
+      a.onMessage(ServerMessage.Error, (e: ErrorMessage) => adminErrors.push(e.code));
+      a.send(ClientMessage.FurniPlace, place);
+      await wait(150);
+      expect(adminErrors).not.toContain('DECOR_LOCKED');
+      svc.rooms.setDecorLocked(MEETING.id, false);
+    });
+
+    it('apagar mensagem: quem escreveu ou admin; some para todos', async () => {
+      const ana = adminUser('Ana');
+      const a = await join(ana.token);
+      const b = await join(newUser('Beto').token);
+      const c = await join(newUser('Caio').token);
+
+      b.send(ClientMessage.Chat, { text: 'mensagem do Beto' });
+      const msg = (await a.waitForMessage(ServerMessage.Chat)) as ChatMessage;
+
+      // Caio (membro) não apaga a mensagem do Beto.
+      c.send(ClientMessage.ChatDelete, { id: msg.id });
+      expect(((await c.waitForMessage(ServerMessage.Error)) as ErrorMessage).code).toBe(
+        'FORBIDDEN',
+      );
+
+      const deleted = b.waitForMessage(ServerMessage.ChatDeleted);
+      a.send(ClientMessage.ChatDelete, { id: msg.id });
+      expect(await deleted).toEqual({ id: msg.id });
+      expect(svc.chat.find(msg.id)).toBeUndefined();
+      expect(svc.audit.list(1)[0]).toMatchObject({ action: 'chat.delete', targetName: 'Beto' });
+    });
+  });
 });

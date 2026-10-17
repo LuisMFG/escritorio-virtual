@@ -1,10 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { openDatabase } from '../db/client.js';
-import { PresenceRegistry } from '../services/PresenceRegistry.js';
-import { loadAvatarManifest } from '../services/RoomRepository.js';
-import { UserService } from '../services/UserService.js';
+import { assignCargo, type AdminDeps } from './admin.js';
 import {
-  assignCargo,
   changePassword,
   claim,
   login,
@@ -13,37 +9,18 @@ import {
   register,
   team,
   updateProfile,
-  type AuthDeps,
   type Caller,
 } from './auth.js';
+import { callerOf, conta, makeDeps, registered as registeredWith } from './testDeps.js';
 
-let deps: AuthDeps;
+let deps: AdminDeps;
 
 beforeEach(() => {
-  const users = new UserService(openDatabase(':memory:'));
-  users.seedCargos();
-  deps = {
-    inviteCode: 'segredo',
-    adminUsernames: [],
-    avatarManifest: loadAvatarManifest(),
-    users,
-    presence: new PresenceRegistry(),
-  };
+  deps = makeDeps();
 });
 
-const conta = { inviteCode: 'segredo', username: 'Ana', password: 'senha-boa-1', name: ' Ana ' };
-
-async function registered(extra: Partial<typeof conta> = {}) {
-  const res = await register({ ...conta, ...extra }, deps);
-  if (!res.ok) throw new Error(res.body.message);
-  return res.body;
-}
-
-function caller(token: string): Caller {
-  const user = deps.users.findByToken(token);
-  if (!user) throw new Error('token inválido');
-  return { user, token };
-}
+const registered = (extra: Partial<typeof conta> = {}) => registeredWith(deps, extra);
+const caller = (token: string): Caller => callerOf(deps, token);
 
 describe('cadastro', () => {
   it('cria conta com convite certo; usuário minúsculo e visual padrão', async () => {

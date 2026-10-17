@@ -8,8 +8,8 @@ import type { Services } from '../services/index.js';
 import { KeyedRateLimiter } from '../util/rateLimiter.js';
 import { getBearerToken } from '@colyseus/core';
 import type { PresenceResponse } from '@office/shared';
+import * as admin from './admin.js';
 import {
-  assignCargo,
   changePassword,
   claim,
   login,
@@ -18,7 +18,6 @@ import {
   register,
   team,
   updateProfile,
-  type AuthDeps,
   type Caller,
   type Result,
 } from './auth.js';
@@ -55,12 +54,16 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
   });
   app.use('/api', express.json({ limit: '16kb' }));
 
-  const auth: AuthDeps = {
-    inviteCode: cfg.inviteCode,
+  const auth: admin.AdminDeps = {
+    inviteCode: () => svc.settings.inviteCode(),
     adminUsernames: cfg.adminUsernames,
     avatarManifest: svc.avatarManifest,
     users: svc.users,
     presence: svc.presence,
+    audit: svc.audit,
+    settings: svc.settings,
+    rooms: svc.rooms,
+    moderation: svc.moderation,
   };
   const send = <T>(res: Response, result: Result<T>) =>
     void res.status(result.status).json(result.body);
@@ -122,7 +125,56 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
   );
   app.put(
     '/api/users/:id/cargo',
-    withCaller((c, req, res) => send(res, assignCargo(c, String(req.params.id), req.body, auth))),
+    withCaller((c, req, res) =>
+      send(res, admin.assignCargo(c, String(req.params.id), req.body, auth)),
+    ),
+  );
+
+  // Painel Admin (cada função confere se quem chama é admin).
+  const id = (req: Request) => String(req.params.id);
+  app.get(
+    '/api/admin',
+    withCaller((c, _req, res) => send(res, admin.overview(c, auth))),
+  );
+  app.get(
+    '/api/admin/audit',
+    withCaller((c, _req, res) => send(res, admin.auditList(c, auth))),
+  );
+  app.put(
+    '/api/admin/invite',
+    withCaller((c, req, res) => send(res, admin.setInvite(c, req.body, auth))),
+  );
+  app.put(
+    '/api/admin/rooms/:id',
+    withCaller((c, req, res) => send(res, admin.setRoom(c, id(req), req.body, auth))),
+  );
+  app.patch(
+    '/api/admin/users/:id',
+    withCaller((c, req, res) => send(res, admin.updateUser(c, id(req), req.body, auth))),
+  );
+  app.post(
+    '/api/admin/users/:id/password',
+    withCaller(async (c, req, res) => send(res, await admin.resetPassword(c, id(req), auth))),
+  );
+  app.post(
+    '/api/admin/users/:id/kick',
+    withCaller((c, req, res) => send(res, admin.kick(c, id(req), req.body, auth))),
+  );
+  app.post(
+    '/api/admin/cargos',
+    withCaller((c, req, res) => send(res, admin.createCargo(c, req.body, auth))),
+  );
+  app.put(
+    '/api/admin/cargos/order',
+    withCaller((c, req, res) => send(res, admin.reorderCargos(c, req.body, auth))),
+  );
+  app.patch(
+    '/api/admin/cargos/:id',
+    withCaller((c, req, res) => send(res, admin.updateCargo(c, Number(id(req)), req.body, auth))),
+  );
+  app.delete(
+    '/api/admin/cargos/:id',
+    withCaller((c, req, res) => send(res, admin.deleteCargo(c, Number(id(req)), auth))),
   );
 
   app.get('/healthz', (_req, res) => void res.json({ ok: true }));

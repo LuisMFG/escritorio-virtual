@@ -25,6 +25,8 @@ export const users = sqliteTable('users', {
   bio: text('bio').notNull().default(''),
   /** Aniversário `MM-DD` (sem ano). */
   birthday: text('birthday'),
+  /** Conta desativada por um admin: não entra mais (sessões apagadas). */
+  disabled: integer('disabled', { mode: 'boolean' }).notNull().default(false),
   figure: text('figure').notNull(),
   gender: text('gender', { enum: ['M', 'F'] })
     .notNull()
@@ -59,7 +61,33 @@ export const rooms = sqliteTable('rooms', {
   wallColor: text('wall_color').notNull(),
   /** Já recebeu os móveis iniciais? (Para não repor móveis que alguém removeu.) */
   furniSeeded: integer('furni_seeded', { mode: 'boolean' }).notNull().default(false),
+  /** Só admins decoram esta sala. */
+  decorLocked: integer('decor_locked', { mode: 'boolean' }).notNull().default(false),
 });
+
+/** Configurações editáveis pelo painel Admin (ex.: código de convite). */
+export const settings = sqliteTable('settings', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+});
+
+/** Registro das ações de administração e moderação. */
+export const auditLog = sqliteTable(
+  'audit_log',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    at: integer('at', { mode: 'timestamp_ms' }).notNull(),
+    actorId: text('actor_id')
+      .notNull()
+      .references(() => users.id),
+    /** Ex.: `invite.change`, `user.role`, `chat.delete`. */
+    action: text('action').notNull(),
+    targetUserId: text('target_user_id').references(() => users.id),
+    /** Texto curto legível (PT-BR), ex.: "Cargo: DBA". */
+    details: text('details').notNull().default(''),
+  },
+  (t) => [index('audit_log_at_idx').on(t.at)],
+);
 
 export const roomFurni = sqliteTable(
   'room_furni',

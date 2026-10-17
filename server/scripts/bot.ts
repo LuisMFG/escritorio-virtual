@@ -94,6 +94,12 @@ async function startBot(name: string): Promise<void> {
   room.onMessage('error', (e: { message: string }) => console.log(`[bot] ${name}: ${e.message}`));
   room.onMessage('chat.message', () => undefined);
   room.onMessage('emote.played', () => undefined);
+  room.onMessage('room.transfer', () => undefined);
+  room.onMessage('chat.deleted', () => undefined);
+  room.onMessage('moderation.kicked', (m: { scope: string; message: string }) => {
+    console.log(`[bot] ${name}: ${m.message}`);
+    if (m.scope === 'office') process.exit(0);
+  });
 
   /** Às vezes cita alguém que está na sala, para testar as menções. */
   const phrase = () => {

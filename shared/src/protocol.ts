@@ -31,6 +31,8 @@ export const ClientMessage = {
   Typing: 'typing',
   /** `{ emote }`: acenar, rir, dançar… */
   Emote: 'emote',
+  /** `{ id }`: apagar mensagem do chat (admin ou quem escreveu). */
+  ChatDelete: 'chat.delete',
 } as const;
 
 /** Mensagens servidor → cliente. */
@@ -42,6 +44,10 @@ export const ServerMessage = {
   RoomTransfer: 'room.transfer',
   /** Alguém tocou um emote (`EmoteMessage`). */
   Emote: 'emote.played',
+  /** Mensagem apagada (`ChatDeletedMessage`): some do histórico de todos. */
+  ChatDeleted: 'chat.deleted',
+  /** Um admin tirou você da sala ou do escritório (`KickedMessage`). */
+  Kicked: 'moderation.kicked',
 } as const;
 
 export const ErrorCode = {
@@ -60,6 +66,8 @@ export const ErrorCode = {
   WrongPassword: 'WRONG_PASSWORD',
   Forbidden: 'FORBIDDEN',
   NotFound: 'NOT_FOUND',
+  AccountDisabled: 'ACCOUNT_DISABLED',
+  DecorLocked: 'DECOR_LOCKED',
 } as const;
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];
 
@@ -80,6 +88,8 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
   WRONG_PASSWORD: 'A senha atual não confere.',
   FORBIDDEN: 'Só administradores podem fazer isso.',
   NOT_FOUND: 'Não encontrado.',
+  ACCOUNT_DISABLED: 'Esta conta foi desativada por um administrador.',
+  DECOR_LOCKED: 'A decoração desta sala está travada por um administrador.',
 };
 
 export const NAME_MIN = 2;
