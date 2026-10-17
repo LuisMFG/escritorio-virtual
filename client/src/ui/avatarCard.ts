@@ -23,6 +23,8 @@ export interface AvatarCardInfo {
   canKickFromRoom: boolean;
   /** Emblemas de conquistas exibidos (ids separados por vírgula). */
   badges: string;
+  /** Atividade fora do escritório ("💻 Codando em C# no Visual Studio"). */
+  activity: string;
 }
 
 export interface AvatarCardHandlers {
@@ -83,6 +85,14 @@ export class AvatarCard {
       const p = document.createElement('p');
       p.append(cargoPill(info.cargo, info.cargoColor));
       extra.push(p);
+    }
+    if (info.activity) {
+      extra.push(
+        Object.assign(document.createElement('p'), {
+          className: 'card-activity',
+          textContent: info.activity,
+        }),
+      );
     }
     const badges = showcaseRow(info.badges);
     if (badges) extra.push(badges);

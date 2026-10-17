@@ -15,6 +15,9 @@ import {
   type MeetingCreate,
   type PetInfo,
   type AchievementsResponse,
+  type ActivitySettings,
+  type ApiTokenCreated,
+  type CodeShare,
   type RoomEdit,
   type RoomEditorData,
   type SessionResponse,
@@ -123,6 +126,20 @@ export const roomApi = {
 };
 
 /** Agenda de reuniões. */
+export const activityApi = {
+  settings: (token: string) =>
+    request<ActivitySettings>('GET', '/api/activity/settings', { token }),
+  setCodeShare: (token: string, codeShare: CodeShare) =>
+    request<{ codeShare: CodeShare }>('PUT', '/api/activity/settings', {
+      token,
+      body: { codeShare },
+    }),
+  createToken: (token: string, name: string) =>
+    request<ApiTokenCreated>('POST', '/api/activity/tokens', { token, body: { name } }),
+  revokeToken: (token: string, id: number) =>
+    request<Ok>('DELETE', `/api/activity/tokens/${id}`, { token }),
+};
+
 export const achievementApi = {
   me: (token: string) => request<AchievementsResponse>('GET', '/api/achievements/me', { token }),
   setShowcase: (token: string, ids: string[]) =>

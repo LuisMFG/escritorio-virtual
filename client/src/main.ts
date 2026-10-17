@@ -500,6 +500,7 @@ async function start(): Promise<void> {
                 viewerIsAdmin: session?.role === 'admin',
                 canKickFromRoom: layout.roomId !== RECEPTION.id,
                 badges: player.badges,
+                activity: player.activity,
               },
               at,
             );
@@ -549,6 +550,7 @@ async function start(): Promise<void> {
           cargo: p.cargo,
           cargoColor: p.cargoColor,
           birthday: p.birthday,
+          activity: p.activity,
         })),
       );
       chat.setPeople(
@@ -640,7 +642,9 @@ async function start(): Promise<void> {
       roomList.map((r) => ({
         roomId: r.id,
         name: r.meeting ? `${r.name} · 🔴 em reunião` : r.name,
-        people: online.filter((p) => p.roomId === r.id).map((p) => ({ name: p.name })),
+        people: online
+          .filter((p) => p.roomId === r.id)
+          .map((p) => ({ name: p.name, activity: p.activity })),
       })),
       connection.currentRoomId,
     );

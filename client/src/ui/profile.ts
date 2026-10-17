@@ -2,6 +2,7 @@ import { BIO_MAX, NAME_MAX, PASSWORD_MIN, type SessionResponse } from '@office/s
 import { api, ApiRequestError } from '../net/api.js';
 import { setAvatarPreview } from './login.js';
 import { mountPetSection } from './petSection.js';
+import { mountCodeSection } from './codeSection.js';
 import { mountAchievements } from './achievementsSection.js';
 
 export interface ProfileHandlers {
@@ -63,6 +64,7 @@ export function openProfile(session: SessionResponse, on: ProfileHandlers): void
         </form>
         <section class="profile-achievements" aria-label="Conquistas"></section>
         <section class="profile-pet" aria-label="Meu pet"></section>
+        <section class="profile-code" aria-label="Editores de código"></section>
         <details class="profile-password">
           <summary>Trocar senha</summary>
           <form novalidate>
@@ -162,6 +164,7 @@ export function openProfile(session: SessionResponse, on: ProfileHandlers): void
   });
 
   mountPetSection($<HTMLElement>('.profile-pet'), session.token);
+  mountCodeSection($<HTMLElement>('.profile-code'), session.token);
   const achievementsBox = $<HTMLElement>('.profile-achievements');
   void mountAchievements(achievementsBox, session.token).then(() => {
     if (on.focusAchievements) achievementsBox.scrollIntoView({ block: 'start' });

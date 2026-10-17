@@ -11,12 +11,21 @@ export interface PersonEntry {
   cargo: string;
   cargoColor: string;
   birthday: boolean;
+  activity: string;
 }
 
 export interface OtherRoom {
   roomId: string;
   name: string;
-  people: { name: string }[];
+  people: { name: string; activity?: string }[];
+}
+
+/** Linha pequena com a atividade fora do escritório ("💻 Codando em C#…"). */
+function activityLine(text: string): HTMLElement {
+  return Object.assign(document.createElement('small'), {
+    className: 'person-activity',
+    textContent: text,
+  });
 }
 
 function tag(text: string): HTMLSpanElement {
@@ -122,6 +131,7 @@ export class Overlay {
         li.classList.add('away');
         li.append(tag('reconectando'));
       }
+      if (p.activity) li.append(activityLine(p.activity));
       return li;
     });
     const nodes: HTMLElement[] = [...section(`${this.roomName || 'Nesta sala'} · aqui`, hereItems)];
@@ -131,6 +141,7 @@ export class Overlay {
         const li = document.createElement('li');
         li.classList.add('elsewhere');
         li.textContent = p.name;
+        if (p.activity) li.append(activityLine(p.activity));
         return li;
       });
       nodes.push(...section(room.name, items));

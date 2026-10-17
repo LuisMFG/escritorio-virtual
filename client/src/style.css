@@ -285,8 +285,17 @@ body {
 
 .people-list li {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
+}
+
+.person-activity {
+  flex-basis: 100%;
+  padding-left: 14px;
+  margin-top: -4px;
+  color: var(--muted);
+  font-size: 11px;
 }
 
 .people-list li::before {
@@ -3547,4 +3556,99 @@ button.reply-quote:hover {
   .achievement-toast {
     animation: none;
   }
+}
+
+/* ---------- Fase 20: editores de código ---------- */
+
+.card-activity {
+  margin: 4px 0;
+  font-size: 12px;
+  color: #c9dbff;
+}
+
+.profile-code {
+  margin: 14px 0 6px;
+  padding-top: 12px;
+  border-top: 1px solid var(--card-border);
+}
+
+.profile-code h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+
+.code-intro {
+  margin: 0 0 10px;
+  font-size: 12px;
+}
+
+.code-intro a {
+  color: #9cc0ff;
+}
+
+.code-share select {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #3a3f4d;
+  background: #15171d;
+  color: var(--text);
+  font: inherit;
+}
+
+.token-list {
+  display: grid;
+  gap: 4px;
+  margin: 10px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.token-list li {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 13px;
+}
+
+.token-list li small {
+  margin-right: auto;
+}
+
+.token-form {
+  display: flex;
+  gap: 8px;
+}
+
+.token-form input,
+.token-value {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #3a3f4d;
+  background: #15171d;
+  color: var(--text);
+  font: inherit;
+}
+
+.token-fresh {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px 8px;
+  align-items: center;
+  margin: 10px 0;
+  padding: 10px;
+  border: 1px solid rgba(111, 207, 151, 0.5);
+  border-radius: 10px;
+  background: rgba(111, 207, 151, 0.08);
+  font-size: 12px;
+}
+
+.token-fresh strong {
+  grid-column: 1 / -1;
+}
+
+.token-value {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
 }

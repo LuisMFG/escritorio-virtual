@@ -23,6 +23,8 @@ export interface OnlineInfo {
   name: string;
   roomId: string;
   status: string;
+  /** Atividade fora do escritório (VS Code, Visual Studio…). */
+  activity: string;
 }
 
 interface LobbyHandlers {
@@ -106,6 +108,7 @@ export class LobbyConnection {
       name: p.name,
       roomId: p.roomId,
       status: p.status,
+      activity: p.activity,
     }));
   }
 
