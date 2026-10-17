@@ -136,6 +136,8 @@ audit_log      { id: int pk, at: int, actorId: fk users, action: text,
                  targetUserId: fk users null, details: text }
 users          … + disabled: bool                  // Fase 10
 rooms          … + decorLocked: bool               // Fase 10
+rooms          … + sort: int                        // Fase 13 (ordem nas listas)
+users          … + canEditRooms: bool               // Fase 13
 
 direct_messages { id: int pk, fromUserId: fk users, toUserId: fk users, text: text,
                   createdAt: int, readAt: int null }   // Fase 11; até 1000 por conversa
@@ -218,6 +220,8 @@ Layout estático (heightmap, portas, cores e, até a Fase 6, os móveis) é pedi
 | `POST /api/admin/users/:id/password` | (admin) → `{ password }` (senha temporária, mostrada uma vez) |
 | `POST /api/admin/users/:id/kick` | (admin) `{ scope: 'room' \| 'office' }` |
 | `POST/PATCH/DELETE /api/admin/cargos[/:id]`, `PUT /api/admin/cargos/order` | (admin) cargos |
+| `GET /api/rooms` | (sessão) → `[{ id, name }]` |
+| `GET/PUT/DELETE /api/rooms/:id`, `POST /api/rooms` | (admin ou `canEditRooms`) editor de salas |
 
 `SessionResponse = { userId, token, username, name, figure, gender, role, cargo, bio, birthday }`. Entrada, cadastro e troca de senha: 10 tentativas/min por IP.
 | `GET /api/presence` | (header `Authorization: Bearer token`) → `{ rooms: [{ roomId, name, people: [{ name }] }] }` |
@@ -576,12 +580,22 @@ Pedido em 17/10/2026, depois da Fase 8: deixar o escritório "muito completo". M
 - Quem é respondido é avisado como numa menção (destaque, aviso "X respondeu você", som e notificação do navegador).
 - Ações por mensagem ao passar o mouse: ↩ responder, 😊 reagir, 🗑 apagar (no chat da sala; a lixeira da Fase 10 virou uma dessas ações).
 
-### Fase 13 — Criar e editar salas
+### Fase 13 — Criar e editar salas ✅ implementada
 - Salas passam a ter o **banco como fonte da verdade** (`shared/rooms.ts` vira só a semente inicial).
 - Editor de sala: nome, tamanho e formato do piso (pintar/apagar tiles numa grade), cores de piso e parede, ponto de entrada e portas (escolher o tile e a sala de destino; a porta de volta é criada junto). Excluir sala vazia.
 - Quem pode: admins e quem eles liberarem (decisão abaixo). Limite de ~20 salas.
 
 **Como testar:** criar a sala "Sala do TI" em formato de L, ligar com uma porta à Recepção, entrar por ela e voltar; mudar as cores e todos veem; tentar desenhar uma sala sem caminho até a porta → bloqueado; reiniciar o servidor e tudo continua.
+
+**Notas da implementação:**
+- **Banco é a fonte da verdade:** a semente de `shared/rooms.ts` entra uma vez (`settings.rooms_seeded`). Bancos antigos recebem uma última sincronização, e os móveis da Sala de reunião e da Copa descem uma linha junto com a sala.
+- **Regra de forma** (`shared/roomEdit.ts`): grade de 4×4 a 24×24; **a linha 0 e a coluna 0 são só para portas** (é onde a parede é desenhada). Por isso a Sala de reunião e a Copa ganharam uma linha vazia em cima. O piso pode ter qualquer formato conectado (L, U…), com pelo menos 6 tiles, entrada no piso e todas as portas alcançáveis. Até 6 portas por sala e 20 salas.
+- **Portas guardam só o destino**; o tile de chegada é calculado na hora (`getLayout`): logo dentro da porta de volta, ou a entrada da outra sala se não houver porta de volta. Criar uma porta para outra sala cria a porta de volta lá, no lugar livre mais perto da entrada (`findDoorSpot`); se não houver lugar, a porta é de mão única.
+- **Ao salvar**, móveis que não cabem mais saem (o editor avisa quantos), mas se um móvel que fica bloquear o caminho até uma porta a edição é recusada. A instância aberta recarrega (`moderation.layout`), quem ficou fora do piso volta para perto da entrada, e os clientes recebem `room.layoutChanged` e remontam a cena. O lobby mantém a lista de salas ao vivo (`LobbyState.rooms`).
+- Excluir sala: não a Recepção, só vazia; leva móveis, conversa e as portas que levavam até ela. URL de sala excluída cai na Recepção.
+- Permissão: admins sempre; outras pessoas pela caixa "Edita salas" no painel Admin (`users.can_edit_rooms`, `Player.canEditRooms` ao vivo).
+- Editor (`ui/roomEditor.ts`): seletor de sala, "+ Nova sala" (8×6 com porta para a Recepção), nome, cores, tamanho, ferramentas Piso/Apagar/Entrada/Porta (clicar ou arrastar), lista de portas com destino, validação ao vivo, "Ir para a sala" (vai direto, sem porta) e excluir.
+- Alturas (degraus) não entram no editor por enquanto: o piso editado é todo na altura 0.
 
 ### Fase 14 — Móveis interativos e ambiente
 - Móveis ganham `estado` sincronizado. Interações: abajur/luminária liga e desliga, cafeteira "serve" café (emote ☕), TV liga e desliga, **mural de recados** com post-its de texto que ficam salvos, porta-retrato.

@@ -20,7 +20,7 @@ Escritório virtual isométrico para amigos e colegas (até ~10 pessoas online):
 - Status **Disponível**, **Ocupado** ou **Ausente** no painel de pessoas; fica **Ausente** sozinho após 5 minutos parado.
 - Passe o mouse num avatar para ver o nome; clique para abrir o cartão (status, sala, **Ir até**, **Mencionar**).
 - Menções: digite `@` para escolher alguém da sala; quem é mencionado recebe destaque, aviso e som. Um "•••" mostra quem está digitando.
-- Três salas: **Recepção**, **Sala de reunião** e **Copa**, ligadas por portas. Dá para abrir direto numa sala pela URL: `#/reception`, `#/meeting`, `#/pantry`.
+- Salas ligadas por portas: começa com **Recepção**, **Sala de reunião** e **Copa**; dá para abrir direto numa sala pela URL (`#/meeting`). Admins (e quem eles liberarem) criam e editam salas em **✎ Editar sala**: nome, cores, formato do piso (inclusive em L), entrada e portas — a porta de volta aparece sozinha na outra sala.
 - Sentar: clique numa cadeira ou sofá.
 - Decorar: botão **Decorar** → escolha um móvel no catálogo e clique no piso. Clique num móvel para selecionar, arraste para mover, **R** gira, **Delete** remove, **Esc** cancela. Tudo fica salvo.
 
