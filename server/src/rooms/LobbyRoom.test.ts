@@ -1,0 +1,144 @@
+import { defineRoom, defineServer } from '@colyseus/core';
+import { ColyseusTestServer } from '@colyseus/testing';
+import {
+  LOBBY_ROOM,
+  LobbyClientMessage,
+  LobbyServerMessage,
+  LobbyState,
+  OFFICE_ROOM,
+  OfficeState,
+  RECEPTION,
+  ClientMessage,
+  type DirectMessage,
+  type DmConversation,
+  type DmReadReceipt,
+  type ErrorMessage,
+} from '@office/shared';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { openDatabase } from '../db/client.js';
+import { createServices, setServices, type Services } from '../services/index.js';
+import { LobbyRoom } from './LobbyRoom.js';
+import { OfficeRoom } from './OfficeRoom.js';
+
+let colyseus: ColyseusTestServer;
+let svc: Services;
+
+beforeAll(async () => {
+  svc = createServices(openDatabase(':memory:'));
+  setServices(svc);
+  const server = defineServer({
+    rooms: {
+      [OFFICE_ROOM]: defineRoom(OfficeRoom).filterBy(['officeRoomId']),
+      [LOBBY_ROOM]: defineRoom(LobbyRoom),
+    },
+    greet: false,
+    gracefullyShutdown: false,
+  });
+  // Porta própria: o OfficeRoom.test usa a 2568 e os arquivos rodam em paralelo. (O `boot()`
+  // do @colyseus/testing ignora a porta quando recebe um Server pronto.)
+  await server.listen(2569);
+  colyseus = new ColyseusTestServer(server);
+});
+afterEach(async () => colyseus.cleanup());
+afterAll(async () => colyseus.shutdown());
+
+const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const newUser = (name: string) => svc.users.create(name, 'hd-180-1.ch-210-66.lg-270-82');
+
+async function lobby(token: string) {
+  const room = await colyseus.sdk.joinOrCreate(LOBBY_ROOM, { token }, LobbyState);
+  await room.waitForInitialState();
+  return room;
+}
+
+describe('LobbyRoom', () => {
+  it('recusa token inválido', async () => {
+    await expect(colyseus.sdk.joinOrCreate(LOBBY_ROOM, { token: 'x' })).rejects.toThrow(/sessão/i);
+  });
+
+  it('DM chega para quem recebe e para as outras abas de quem mandou', async () => {
+    const ana = newUser('Ana');
+    const beto = newUser('Beto');
+    const a1 = await lobby(ana.token);
+    const a2 = await lobby(ana.token);
+    const b = await lobby(beto.token);
+
+    const atBeto = b.waitForMessage(LobbyServerMessage.DmMessage);
+    const atOtherTab = a2.waitForMessage(LobbyServerMessage.DmMessage);
+    a1.send(LobbyClientMessage.DmSend, { toUserId: beto.user.id, text: '  oi   Beto ' });
+    const msg = (await atBeto) as DirectMessage;
+    expect(msg).toMatchObject({ fromUserId: ana.user.id, toUserId: beto.user.id, text: 'oi Beto' });
+    expect(((await atOtherTab) as DirectMessage).id).toBe(msg.id);
+
+    const convs = (await b.request(LobbyClientMessage.DmConversations)) as DmConversation[];
+    expect(convs).toMatchObject([{ userId: ana.user.id, name: 'Ana', unread: 1 }]);
+    const history = (await b.request(LobbyClientMessage.DmHistory, {
+      withUserId: ana.user.id,
+    })) as DirectMessage[];
+    expect(history.map((m) => m.text)).toEqual(['oi Beto']);
+
+    // Beto abre a conversa: Ana recebe o "visto".
+    const receipt = a1.waitForMessage(LobbyServerMessage.DmReadReceipt);
+    b.send(LobbyClientMessage.DmRead, { withUserId: ana.user.id });
+    expect((await receipt) as DmReadReceipt).toEqual({
+      readerId: beto.user.id,
+      writerId: ana.user.id,
+      upToId: msg.id,
+    });
+    expect(svc.dms.unreadCount(beto.user.id)).toBe(0);
+  });
+
+  it('não manda para si mesmo nem para quem não existe', async () => {
+    const ana = newUser('Ana');
+    const a = await lobby(ana.token);
+    a.send(LobbyClientMessage.DmSend, { toUserId: ana.user.id, text: 'eu' });
+    expect(((await a.waitForMessage(LobbyServerMessage.Error)) as ErrorMessage).code).toBe(
+      'NOT_FOUND',
+    );
+  });
+
+  it('DM para quem está offline fica guardada', async () => {
+    const ana = newUser('Ana');
+    const beto = newUser('Beto');
+    const a = await lobby(ana.token);
+    a.send(LobbyClientMessage.DmSend, { toUserId: beto.user.id, text: 'quando voltar, me chama' });
+    await wait(150);
+    const b = await lobby(beto.token);
+    const convs = (await b.request(LobbyClientMessage.DmConversations)) as DmConversation[];
+    expect(convs[0]).toMatchObject({ lastText: 'quando voltar, me chama', unread: 1 });
+  });
+
+  it('presença ao vivo: entrar numa sala, mudar status e sair aparecem no lobby', async () => {
+    const ana = newUser('Ana');
+    const beto = newUser('Beto');
+    const watcher = await lobby(ana.token);
+
+    const room = await colyseus.sdk.joinOrCreate(
+      OFFICE_ROOM,
+      { officeRoomId: RECEPTION.id, token: beto.token },
+      OfficeState,
+    );
+    await wait(150);
+    expect(watcher.state.people.get(beto.user.id)).toMatchObject({
+      name: 'Beto',
+      roomId: RECEPTION.id,
+      status: 'available',
+    });
+
+    room.send(ClientMessage.SetStatus, { status: 'busy' });
+    await wait(150);
+    expect(watcher.state.people.get(beto.user.id)?.status).toBe('busy');
+
+    await room.leave();
+    await wait(150);
+    expect(watcher.state.people.has(beto.user.id)).toBe(false);
+  });
+
+  it('tirar do escritório fecha também o canal global', async () => {
+    const beto = newUser('Beto');
+    const b = await lobby(beto.token);
+    const left = new Promise((resolve) => b.onLeave(resolve));
+    svc.moderation.emit('kick', { userId: beto.user.id, scope: 'office', byName: 'Ana' });
+    await left;
+  });
+});

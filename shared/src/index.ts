@@ -15,3 +15,4 @@ export * from './placement.js';
 export * from './social.js';
 export * from './accounts.js';
 export * from './admin.js';
+export * from './dm.js';

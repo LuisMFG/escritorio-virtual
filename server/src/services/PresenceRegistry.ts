@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events';
 import { nameKey, NAME_MAX } from '@office/shared';
 
 export interface OnlineEntry {
@@ -5,6 +6,8 @@ export interface OnlineEntry {
   userId: string;
   name: string;
   roomId: string;
+  /** 'available' | 'busy' | 'away' (padrão: disponível). */
+  status?: string;
 }
 
 /**
@@ -13,18 +16,33 @@ export interface OnlineEntry {
  */
 export class PresenceRegistry {
   private readonly bySession = new Map<string, OnlineEntry>();
+  /** `changed`: alguém entrou, saiu, trocou de sala, de nome ou de status (o lobby repassa). */
+  readonly events = new EventEmitter<{ changed: [] }>();
+
+  constructor() {
+    this.events.setMaxListeners(100);
+  }
 
   add(entry: OnlineEntry): void {
     this.bySession.set(entry.sessionId, entry);
+    this.events.emit('changed');
   }
 
   remove(sessionId: string): void {
-    this.bySession.delete(sessionId);
+    if (this.bySession.delete(sessionId)) this.events.emit('changed');
   }
 
   /** A pessoa mudou o nome exibido: vale para todas as conexões dela. */
   rename(userId: string, name: string): void {
     for (const e of this.bySession.values()) if (e.userId === userId) e.name = name;
+    this.events.emit('changed');
+  }
+
+  setStatus(sessionId: string, status: string): void {
+    const e = this.bySession.get(sessionId);
+    if (!e || e.status === status) return;
+    e.status = status;
+    this.events.emit('changed');
   }
 
   list(): OnlineEntry[] {

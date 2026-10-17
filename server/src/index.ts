@@ -1,8 +1,9 @@
 import { defineRoom, defineServer } from '@colyseus/core';
-import { OFFICE_ROOM } from '@office/shared';
+import { LOBBY_ROOM, OFFICE_ROOM } from '@office/shared';
 import { config } from './config.js';
 import { openDatabase } from './db/client.js';
 import { configureApp } from './http/app.js';
+import { LobbyRoom } from './rooms/LobbyRoom.js';
 import { OfficeRoom } from './rooms/OfficeRoom.js';
 import { createServices, setServices } from './services/index.js';
 
@@ -14,6 +15,7 @@ setServices(services);
 const server = defineServer({
   rooms: {
     [OFFICE_ROOM]: defineRoom(OfficeRoom).filterBy(['officeRoomId']),
+    [LOBBY_ROOM]: defineRoom(LobbyRoom),
   },
   express: (app) => configureApp(app, config, services),
   greet: false,

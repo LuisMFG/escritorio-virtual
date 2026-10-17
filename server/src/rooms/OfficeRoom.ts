@@ -104,7 +104,10 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     ),
     [ClientMessage.SetStatus]: validate(statusSchema, (client, msg) => {
       const player = this.state.players.get(client.sessionId);
-      if (player && this.statusLimiter.tryTake(client.sessionId)) player.status = msg.status;
+      if (player && this.statusLimiter.tryTake(client.sessionId)) {
+        player.status = msg.status;
+        services().presence.setStatus(client.sessionId, msg.status);
+      }
     }),
     [ClientMessage.Typing]: validate(typingSchema, (client, msg) => {
       const player = this.state.players.get(client.sessionId);

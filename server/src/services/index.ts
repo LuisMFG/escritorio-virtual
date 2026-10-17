@@ -6,6 +6,7 @@ import { PresenceRegistry } from './PresenceRegistry.js';
 import { TransferRegistry } from './TransferRegistry.js';
 import { loadAvatarManifest, loadFurniDefs, RoomRepository } from './RoomRepository.js';
 import { UserService } from './UserService.js';
+import { DmService } from './DmService.js';
 import { AuditService } from './AuditService.js';
 import { SettingsService } from './SettingsService.js';
 import { EventEmitter } from 'node:events';
@@ -25,6 +26,7 @@ export interface Services {
   presence: PresenceRegistry;
   rooms: RoomRepository;
   chat: ChatService;
+  dms: DmService;
   furni: FurniService;
   transfers: TransferRegistry;
   settings: SettingsService;
@@ -45,6 +47,7 @@ export function createServices(db: Db, defaults = { inviteCode: 'convite' }): Se
     presence: new PresenceRegistry(),
     rooms: new RoomRepository(db),
     chat: new ChatService(db),
+    dms: new DmService(db),
     furni: new FurniService(db),
     transfers: new TransferRegistry(),
     settings: new SettingsService(db, defaults),

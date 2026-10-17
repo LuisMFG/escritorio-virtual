@@ -50,6 +50,13 @@
       "when": 1792251539226,
       "tag": "0006_admin_moderacao",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1792252492924,
+      "tag": "0007_mensagens_privadas",
+      "breakpoints": true
     }
   ]
 }

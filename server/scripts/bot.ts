@@ -11,6 +11,11 @@
 import { Client } from '@colyseus/sdk';
 import {
   ClientMessage,
+  LOBBY_ROOM,
+  LobbyClientMessage,
+  LobbyServerMessage,
+  LobbyState,
+  type DirectMessage,
   EMOTE_IDS,
   OFFICE_ROOM,
   OfficeState,
@@ -123,6 +128,23 @@ async function startBot(name: string): Promise<void> {
     setTimeout(wander, 2500 + Math.random() * 4000);
   };
   setTimeout(wander, 1000);
+
+  // Mensagens privadas: o robô responde a quem escrever para ele.
+  const lobby = await client.joinOrCreate(LOBBY_ROOM, { token: session.token }, LobbyState);
+  lobby.onMessage(LobbyServerMessage.Error, () => undefined);
+  lobby.onMessage(LobbyServerMessage.DmReadReceipt, () => undefined);
+  lobby.onMessage(LobbyServerMessage.DmMessage, (m: DirectMessage) => {
+    if (m.fromUserId === session.userId) return;
+    setTimeout(() => lobby.send(LobbyClientMessage.DmRead, { withUserId: m.fromUserId }), 800);
+    setTimeout(
+      () =>
+        lobby.send(LobbyClientMessage.DmSend, {
+          toUserId: m.fromUserId,
+          text: `Oi! Sou o robô ${name}. Você disse: “${m.text.slice(0, 80)}”`,
+        }),
+      1800,
+    );
+  });
   process.on('SIGINT', () => void room.leave().then(() => process.exit(0)));
 }
 

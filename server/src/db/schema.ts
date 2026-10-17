@@ -141,7 +141,30 @@ export const chatMessages = sqliteTable(
   (t) => [index('chat_messages_room_id_idx').on(t.roomId, t.id)],
 );
 
+/** Mensagens privadas (DMs) entre duas pessoas; funcionam entre salas e para quem está offline. */
+export const directMessages = sqliteTable(
+  'direct_messages',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    fromUserId: text('from_user_id')
+      .notNull()
+      .references(() => users.id),
+    toUserId: text('to_user_id')
+      .notNull()
+      .references(() => users.id),
+    text: text('text').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    /** Quando quem recebeu abriu a conversa (null = não lida). */
+    readAt: integer('read_at', { mode: 'timestamp_ms' }),
+  },
+  (t) => [
+    index('dm_to_unread_idx').on(t.toUserId, t.readAt),
+    index('dm_pair_idx').on(t.fromUserId, t.toUserId, t.id),
+  ],
+);
+
 export type UserRow = typeof users.$inferSelect;
+export type DirectMessageRow = typeof directMessages.$inferSelect;
 export type CargoRow = typeof cargos.$inferSelect;
 export type RoomRow = typeof rooms.$inferSelect;
 export type ChatMessageRow = typeof chatMessages.$inferSelect;
