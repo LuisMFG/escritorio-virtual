@@ -1,0 +1,50 @@
+import { defineConfig, devices } from '@playwright/test';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+/**
+ * Testes de ponta a ponta: o servidor sobe em modo produção (servindo o client/dist) numa
+ * porta própria, com banco e backups temporários, sem atrapalhar o `npm run dev`.
+ */
+const PORT = 2600;
+const data = mkdtempSync(join(tmpdir(), 'escritorio-e2e-'));
+
+export default defineConfig({
+  testDir: './tests',
+  // Um servidor e um banco para todos: cada teste usa contas próprias, mas em sequência.
+  workers: 1,
+  fullyParallel: false,
+  timeout: 60_000,
+  expect: { timeout: 10_000 },
+  retries: process.env.CI ? 1 : 0,
+  reporter: [['list'], ['html', { open: 'never', outputFolder: '../e2e-report' }]],
+  outputDir: '../e2e-results',
+  use: {
+    ...devices['Desktop Chrome'],
+    baseURL: `http://localhost:${PORT}`,
+    viewport: { width: 1280, height: 800 },
+    trace: 'retain-on-failure',
+    screenshot: 'only-on-failure',
+  },
+  webServer: {
+    command: 'npx tsx server/src/index.ts',
+    cwd: '..',
+    url: `http://localhost:${PORT}/healthz`,
+    reuseExistingServer: false,
+    timeout: 60_000,
+    stdout: 'ignore',
+    stderr: 'pipe',
+    env: {
+      NODE_ENV: 'production',
+      PORT: String(PORT),
+      INVITE_CODE: 'convite-e2e',
+      DATABASE_PATH: join(data, 'e2e.db'),
+      BACKUP_DIR: join(data, 'backups'),
+      ASSET_CACHE_DIR: join(data, 'cache'),
+      LOGIN_RATE_LIMIT: '1000',
+      SPOTIFY_CLIENT_ID: '',
+      ADMIN_USERNAMES: 'admin.e2e',
+    },
+  },
+});

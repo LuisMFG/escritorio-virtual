@@ -17,7 +17,7 @@
     "build": "npm run build -w client",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc -p shared --noEmit && tsc -p shared/tsconfig.test.json --noEmit && tsc -p client --noEmit && tsc -p server --noEmit && tsc -p vscode-extension --noEmit",
+    "typecheck": "tsc -p shared --noEmit && tsc -p shared/tsconfig.test.json --noEmit && tsc -p client --noEmit && tsc -p server --noEmit && tsc -p vscode-extension --noEmit && tsc -p e2e --noEmit",
     "lint": "eslint .",
     "format": "prettier --write .",
     "dev:server": "npm run dev -w server",
@@ -26,10 +26,12 @@
     "bot": "npm run bot -w server --",
     "assets:sync": "npm run assets:sync -w server --",
     "start": "NODE_ENV=production npm run start -w server",
-    "vscode:package": "npm run package -w vscode-extension"
+    "vscode:package": "npm run package -w vscode-extension",
+    "e2e": "npm run build && playwright test -c e2e/playwright.config.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.64.1",
     "@types/node": "^26.6.5",
     "concurrently": "^10.0.6",
     "eslint": "^10.13.0",

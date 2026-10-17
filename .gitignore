@@ -48,3 +48,7 @@ Thumbs.db
 # Extensões empacotadas (a do VS Code fica versionada para download no escritório)
 *.vsix
 !client/public/downloads/*.vsix
+
+# Testes de ponta a ponta (Playwright)
+e2e-report/
+e2e-results/
