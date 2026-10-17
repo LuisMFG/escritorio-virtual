@@ -148,6 +148,7 @@ chat_reactions  { messageId: fk chat_messages (cascade), userId, emoji } pk(os t
 room_furni      … + state: int                        // Fase 14
 rooms           … + ambient: 'none'|'office'|'cafe'|'rain' // Fase 14
 board_notes     { id, furniId: fk room_furni (cascade), userId, text, color, createdAt }
+whiteboard_strokes { id, furniId: fk room_furni (cascade), userId, data: json, createdAt } // Fase 15
 dm_reactions    { messageId: fk direct_messages (cascade), userId, emoji } pk(os três)
 
 rooms          { id: text pk ('reception'|'meeting'|'pantry'), name: text,
@@ -618,11 +619,19 @@ Pedido em 17/10/2026, depois da Fase 8: deixar o escritório "muito completo". M
 - O porta-retrato previsto no plano ficou de fora (não achei um classname com render utilizável).
 - Correção no banco de desenvolvimento: a primeira versão da migration `0010` colocou `ambient` na tabela errada e foi refeita; o banco local foi ajustado à mão (bancos novos ou de produção só veem a versão certa).
 
-### Fase 15 — Quadro branco
+### Fase 15 — Quadro branco ✅ implementada
 - Móvel "quadro branco" (já na Sala de reunião). Clicar abre o quadro em tela cheia: traço livre, cores, espessura, borracha, texto, desfazer e limpar (limpar pede confirmação).
 - Traços em tempo real para quem estiver com o quadro aberto; salvo no banco (vários quadros, um por móvel). Miniatura do desenho aparece no próprio móvel na sala.
 
 **Como testar:** duas abas desenhando juntas; recarregar e o desenho continua; limpar; a miniatura na parede atualiza.
+
+**Notas da implementação:**
+- Móvel: o `uni_c23_whiteboard` do Habbo (um cavalete 1×1) ganhou `interaction: 'whiteboard'` e a calibração `surface` (três cantos do papel em cada direção, medidos nos pixels claros da PNG). Entrou na semente da Sala de reunião (bancos novos); em bancos existentes, é só colocar pelo Decorar.
+- Espaço fixo de 1200×900 (4:3) para o desenho sair igual em qualquer tela. Traços em `whiteboard_strokes` (migration `0011`), um por linha, em JSON: pincel/borracha (lista de pontos, até 400 por traço — o cliente divide traços maiores, para cada mensagem ficar bem abaixo do limite de 4 KB) ou texto (até 80 caracteres). Até 3000 traços por quadro.
+- Tempo real: enquanto alguém desenha, o cliente manda `wb.draft` a cada 80 ms com os pontos novos (repassado só aos outros); ao soltar, `wb.stroke` grava e vai para todos, apagando a prévia. `wb.undo` desfaz o **último traço da própria pessoa**; `wb.clear` (com confirmação) limpa para todos.
+- Janela em tela cheia com pincel, borracha, texto, 6 cores, 3 espessuras, desfazer (também Ctrl+Z) e limpar. Duas camadas de canvas: traços salvos e "ao vivo" (meu traço e os rascunhos dos outros), para não redesenhar tudo a cada movimento.
+- Miniatura: o cliente carrega os traços de cada quadro da sala ao entrar, desenha uma miniatura 240×180 e a encaixa no papel do móvel com uma transformação afim (`FurniView.setSurfaceCanvas`), atualizando a cada traço.
+- `@colyseus/core`: `maxMessagesPerSecond` da sala subiu de 30 para 40 por causa dos rascunhos.
 
 ### Fase 16 — Agenda de reuniões
 - Marcar reunião: título, sala, data/hora, duração e convidados (`meetings`, `meeting_attendees`). Painel **Agenda** com hoje e os próximos dias; aceitar/recusar.

@@ -11,6 +11,7 @@ Escritório virtual isométrico para amigos e colegas (até ~10 pessoas online):
 - **Perfil**: nome exibido, bio, aniversário (🎂 no avatar e aviso no dia), troca de senha e "sair de todos os aparelhos".
 - **Equipe**: todo mundo agrupado por cargo, com quem está online (e em que sala) e "visto por último" de quem não está.
 - **Móveis interativos**: clique numa luminária, TV, computador, ventilador ou cofre para ligar/desligar (o avatar vai até lá); a máquina de café serve um ☕; o **Mural de Recados** guarda post-its coloridos para o pessoal.
+- **Quadro branco**: clique no cavalete da Sala de reunião para desenhar junto com quem estiver na sala (pincel, borracha, texto, cores, desfazer). O desenho fica salvo e aparece em miniatura no próprio móvel.
 - **Dia e noite** pelo horário de Brasília, com as luzes acesas brilhando à noite (`?hora=21` força a hora para testar), e **som ambiente** opcional por sala (🎵: escritório, cafeteria ou chuva, gerado no próprio navegador).
 - **Reações e respostas**: passe o mouse numa mensagem (sala ou privada) para reagir (👍 ❤️ 😂 😮 😢 🎉) ou responder citando; quem é respondido recebe aviso.
 - **Mensagens privadas**: botão **Mensagens** (ou "Mensagem" no cartão/Equipe) para conversar com qualquer pessoa, em qualquer sala ou offline (ela lê quando voltar). Contador de não lidas, "Visto" e notificações do navegador opcionais (🔔 no painel) para DMs e menções com a aba em segundo plano.
