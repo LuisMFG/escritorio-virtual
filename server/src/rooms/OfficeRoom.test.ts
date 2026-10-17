@@ -858,4 +858,82 @@ describe('OfficeRoom', () => {
       expect(b.state.players.get(a.sessionId)!.activity).toBe('');
     });
   });
+
+  describe('enquetes', () => {
+    it('cria por comando, vota, troca o voto, só quem criou encerra', async () => {
+      const a = await join(newUser('Ana').token);
+      const b = await join(newUser('Beto').token);
+      const created = b.waitForMessage(ServerMessage.Chat);
+      a.send(ClientMessage.Chat, {
+        text: '/enquete Almoço onde? | Restaurante | Marmita | Delivery',
+      });
+      const msg = (await created) as ChatMessage;
+      expect(msg.kind).toBe('poll');
+      expect(msg.poll).toMatchObject({ question: 'Almoço onde?', total: 0, myVote: null });
+      const pollId = msg.poll!.id;
+
+      const seenByAna = a.waitForMessage(ServerMessage.PollUpdated);
+      const ownFirst = b.waitForMessage(ServerMessage.PollUpdated);
+      b.send(ClientMessage.PollVote, { pollId, option: 1 });
+      expect(await seenByAna).toMatchObject({
+        poll: {
+          total: 1,
+          myVote: null,
+          options: [{ votes: 0 }, { votes: 1, voters: ['Beto'] }, { votes: 0 }],
+        },
+      });
+      expect(await ownFirst).toMatchObject({ poll: { myVote: 1 } });
+      const changed = b.waitForMessage(ServerMessage.PollUpdated);
+      b.send(ClientMessage.PollVote, { pollId, option: 2 });
+      expect(await changed).toMatchObject({ poll: { total: 1, myVote: 2 } });
+
+      b.send(ClientMessage.PollClose, { pollId });
+      expect(((await b.waitForMessage(ServerMessage.Error)) as ErrorMessage).message).toMatch(
+        /quem criou/,
+      );
+      const closed = b.waitForMessage(ServerMessage.PollUpdated);
+      a.send(ClientMessage.PollClose, { pollId });
+      expect(await closed).toMatchObject({ poll: { closed: true } });
+      b.send(ClientMessage.PollVote, { pollId, option: 0 });
+      expect(((await b.waitForMessage(ServerMessage.Error)) as ErrorMessage).message).toMatch(
+        /encerrada/,
+      );
+
+      // Histórico traz a enquete com o voto de quem pediu.
+      const history = (await b.request(ClientMessage.GetChatHistory)) as ChatMessage[];
+      expect(history.find((m) => m.kind === 'poll')?.poll).toMatchObject({
+        myVote: 2,
+        closed: true,
+      });
+
+      // Comando mal formado avisa.
+      a.send(ClientMessage.Chat, { text: '/enquete só pergunta' });
+      expect(((await a.waitForMessage(ServerMessage.Error)) as ErrorMessage).message).toMatch(
+        /Use: \/enquete/,
+      );
+    });
+
+    it('anônima não mostra nomes', async () => {
+      const a = await join(newUser('Ana').token);
+      const b = await join(newUser('Beto').token);
+      const created = b.waitForMessage(ServerMessage.Chat);
+      a.send(ClientMessage.PollCreate, {
+        question: 'Nota da sprint?',
+        options: ['Boa', 'Ruim'],
+        anonymous: true,
+      });
+      const pollId = ((await created) as ChatMessage).poll!.id;
+      const seen = a.waitForMessage(ServerMessage.PollUpdated);
+      b.send(ClientMessage.PollVote, { pollId, option: 0 });
+      expect(await seen).toMatchObject({
+        poll: {
+          anonymous: true,
+          options: [
+            { votes: 1, voters: [] },
+            { votes: 0, voters: [] },
+          ],
+        },
+      });
+    });
+  });
 });

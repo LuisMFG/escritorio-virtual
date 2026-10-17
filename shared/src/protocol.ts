@@ -5,6 +5,7 @@ import type { TilePoint } from './iso.js';
 import type { ReactionSummary, ReplyPreview } from './reactions.js';
 import type { Ambient } from './ambience.js';
 import type { ChatKind } from './games.js';
+import type { PollView } from './polls.js';
 
 /** Nome da sala Colyseus. Cada sala física é uma instância filtrada por `officeRoomId`. */
 export const OFFICE_ROOM = 'office';
@@ -64,6 +65,12 @@ export const ClientMessage = {
   TttRematch: 'ttt.rematch',
   /** Requisição `{ furniId }`: placar (`TttScores`). */
   TttScores: 'ttt.scores',
+  /** `{ question, options, anonymous }`: cria uma enquete no chat da sala. */
+  PollCreate: 'poll.create',
+  /** `{ pollId, option }`: vota (ou troca o voto). */
+  PollVote: 'poll.vote',
+  /** `{ pollId }`: encerra (quem criou ou admin). */
+  PollClose: 'poll.close',
 } as const;
 
 /** Mensagens servidor → cliente. */
@@ -93,6 +100,8 @@ export const ServerMessage = {
   WbRemoved: 'wb.removed',
   /** `{ furniId }`: quadro limpo. */
   WbCleared: 'wb.cleared',
+  /** Votos ou estado de uma enquete mudaram (`PollUpdated`). */
+  PollUpdated: 'poll.updated',
 } as const;
 
 export const ErrorCode = {
@@ -282,6 +291,8 @@ export interface ChatMessage {
   ts: number;
   reactions: ReactionSummary[];
   replyTo: ReplyPreview | null;
+  /** Mensagem do tipo `poll`: a enquete (com o voto de quem recebe). */
+  poll?: PollView;
 }
 
 export interface RoomTransferMessage {

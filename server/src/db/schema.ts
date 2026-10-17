@@ -426,6 +426,40 @@ export const announcementReads = sqliteTable(
   (t) => [primaryKey({ columns: [t.announcementId, t.userId] })],
 );
 
+/** Enquetes do chat (Fase 25): ligadas à mensagem (some junto se ela sair do histórico). */
+export const polls = sqliteTable('polls', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  messageId: integer('message_id')
+    .notNull()
+    .unique()
+    .references(() => chatMessages.id, { onDelete: 'cascade' }),
+  roomId: text('room_id').notNull(),
+  question: text('question').notNull(),
+  /** JSON: lista de textos das opções. */
+  options: text('options').notNull(),
+  anonymous: integer('anonymous', { mode: 'boolean' }).notNull().default(false),
+  createdBy: text('created_by')
+    .notNull()
+    .references(() => users.id),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  closedAt: integer('closed_at', { mode: 'timestamp_ms' }),
+});
+
+export const pollVotes = sqliteTable(
+  'poll_votes',
+  {
+    pollId: integer('poll_id')
+      .notNull()
+      .references(() => polls.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id),
+    option: integer('option').notNull(),
+    votedAt: integer('voted_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.pollId, t.userId] })],
+);
+
 export type UserRow = typeof users.$inferSelect;
 export type DirectMessageRow = typeof directMessages.$inferSelect;
 export type CargoRow = typeof cargos.$inferSelect;

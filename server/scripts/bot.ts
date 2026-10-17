@@ -98,6 +98,7 @@ async function startBot(name: string): Promise<void> {
   console.log(`[bot] ${name} entrou (${room.sessionId})`);
   room.onMessage('error', (e: { message: string }) => console.log(`[bot] ${name}: ${e.message}`));
   room.onMessage('chat.message', () => undefined);
+  room.onMessage('poll.updated', () => undefined);
   room.onMessage('emote.played', () => undefined);
   room.onMessage('room.transfer', () => undefined);
   room.onMessage('chat.deleted', () => undefined);

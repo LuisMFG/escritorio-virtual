@@ -4,7 +4,7 @@ import { nameKey } from './protocol.js';
 // ---------- Comandos rápidos do chat ----------
 
 /** Tipo da mensagem de chat: texto comum ou resultado gerado pelo servidor. */
-export const CHAT_KINDS = ['text', 'dice', 'coin', 'game'] as const;
+export const CHAT_KINDS = ['text', 'dice', 'coin', 'game', 'poll'] as const;
 export type ChatKind = (typeof CHAT_KINDS)[number];
 
 export type QuickCommand = 'dice' | 'coin';

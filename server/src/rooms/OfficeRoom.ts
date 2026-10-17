@@ -2,6 +2,13 @@ import { randomInt } from 'node:crypto';
 import { CloseCode, Room, ServerError, validate, type Client, type Deferred } from '@colyseus/core';
 import {
   canPlace,
+  parsePollCommand,
+  pollCreateSchema,
+  pollRefSchema,
+  pollVoteSchema,
+  type ChatMessage,
+  type PollCreate,
+  type PollUpdated,
   parsePetCommand,
   petCommandText,
   type PetInfo,
@@ -131,7 +138,11 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     // Pedido explícito evita a corrida de uma mensagem enviada no onJoin chegar antes
     // de o cliente registrar o handler.
     [ClientMessage.GetLayout]: () => this.layout,
-    [ClientMessage.GetChatHistory]: () => services().chat.recent(this.layout.roomId),
+    [ClientMessage.GetChatHistory]: (client: Client) =>
+      this.withPolls(
+        services().chat.recent(this.layout.roomId),
+        (client as OfficeClient).auth?.id ?? '',
+      ),
     [ClientMessage.Chat]: validate(chatSchema, (client, msg) =>
       this.handleChat(client as OfficeClient, msg),
     ),
@@ -244,6 +255,28 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       if (!c.auth || !this.isWhiteboard(msg.furniId)) return;
       services().whiteboards.clear(msg.furniId);
       this.broadcast(ServerMessage.WbCleared, { furniId: msg.furniId });
+    }),
+    [ClientMessage.PollCreate]: validate(pollCreateSchema, (client, msg) =>
+      this.createPoll(client as OfficeClient, msg),
+    ),
+    [ClientMessage.PollVote]: validate(pollVoteSchema, (client, msg) => {
+      const c = client as OfficeClient;
+      const poll = services().polls.find(msg.pollId);
+      if (!c.auth || !poll || poll.roomId !== this.layout.roomId) return;
+      if (!this.reactLimiter.tryTake(c.sessionId)) return this.sendError(c, ErrorCode.RateLimit);
+      const problem = services().polls.vote(msg.pollId, c.auth.id, msg.option);
+      if (problem) return this.sendError(c, ErrorCode.Forbidden, problem);
+      this.broadcastPoll(msg.pollId);
+    }),
+    [ClientMessage.PollClose]: validate(pollRefSchema, (client, msg) => {
+      const c = client as OfficeClient;
+      const poll = services().polls.find(msg.pollId);
+      if (!c.auth || !poll || poll.roomId !== this.layout.roomId) return;
+      if (poll.createdBy !== c.auth.id && c.auth.role !== 'admin') {
+        return this.sendError(c, ErrorCode.Forbidden, 'Só quem criou (ou um admin) encerra.');
+      }
+      services().polls.close(msg.pollId);
+      this.broadcastPoll(msg.pollId);
     }),
     [ClientMessage.TttJoin]: validate(tttRefSchema, (client, msg) =>
       this.handleTttJoin(client as OfficeClient, msg.furniId),
@@ -731,6 +764,46 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     player.z = f.z + def.sitHeight;
   }
 
+  // ---------- Enquetes ----------
+
+  /** Cria a enquete como mensagem do chat (cada pessoa recebe com o próprio voto). */
+  private createPoll(client: OfficeClient, data: Required<PollCreate>, limit = true): void {
+    if (!client.auth || !this.state.players.has(client.sessionId)) return;
+    if (limit && !this.chatLimiter.tryTake(client.sessionId)) {
+      return this.sendError(client, ErrorCode.RateLimit);
+    }
+    const message = services().chat.add(
+      this.layout.roomId,
+      client.auth,
+      `📊 Enquete: ${data.question}`,
+      client.sessionId,
+      undefined,
+      'poll',
+    );
+    const poll = services().polls.create(message.id, this.layout.roomId, client.auth.id, data);
+    for (const c of this.clients) {
+      c.send(ServerMessage.Chat, {
+        ...message,
+        poll: services().polls.view(poll.id, c.auth?.id ?? '') ?? undefined,
+      } satisfies ChatMessage);
+    }
+    services().achievements.bump(client.auth.id, 'chat');
+  }
+
+  private broadcastPoll(pollId: number): void {
+    for (const c of this.clients) {
+      const poll = services().polls.view(pollId, c.auth?.id ?? '');
+      if (poll) c.send(ServerMessage.PollUpdated, { poll } satisfies PollUpdated);
+    }
+  }
+
+  /** Junta as enquetes às mensagens do histórico (com o voto de quem pediu). */
+  private withPolls(messages: ChatMessage[], viewerId: string): ChatMessage[] {
+    const ids = messages.filter((m) => m.kind === 'poll').map((m) => m.id);
+    const views = services().polls.forMessages(ids, viewerId);
+    return messages.map((m) => (views.has(m.id) ? { ...m, poll: views.get(m.id) } : m));
+  }
+
   // ---------- Jogo da velha ----------
 
   private isGameTable(furniId: string): boolean {
@@ -935,6 +1008,16 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     if (!client.auth || !this.state.players.has(client.sessionId)) return;
     if (!this.chatLimiter.tryTake(client.sessionId))
       return this.sendError(client, ErrorCode.RateLimit);
+    // `/enquete Pergunta? | opção 1 | opção 2`: vira enquete (o limite de mensagens já foi gasto).
+    const poll = parsePollCommand(msg.text);
+    if (poll) {
+      if ('error' in poll) return this.sendError(client, ErrorCode.InvalidChat, poll.error);
+      const parsed = pollCreateSchema.safeParse(poll);
+      if (!parsed.success) {
+        return this.sendError(client, ErrorCode.InvalidChat, parsed.error.issues[0]?.message);
+      }
+      return this.createPoll(client, parsed.data, false);
+    }
     // `/senta`, `/deita`, `/vem`: comando para o próprio pet (aparece no chat como fala do dono).
     const petCmd = parsePetCommand(msg.text);
     let text = msg.text;

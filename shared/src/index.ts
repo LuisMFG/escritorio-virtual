@@ -26,3 +26,4 @@ export * from './pets.js';
 export * from './achievements.js';
 export * from './activity.js';
 export * from './announcements.js';
+export * from './polls.js';
