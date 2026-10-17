@@ -8,6 +8,8 @@ import {
   type DmConversation,
   type DmReadReceipt,
   type ErrorMessage,
+  type Reaction,
+  type ReactionsUpdate,
 } from '@office/shared';
 import { isSessionError, serverEndpoint } from './OfficeConnection.js';
 
@@ -21,6 +23,7 @@ export interface OnlineInfo {
 interface LobbyHandlers {
   dm(msg: DirectMessage): void;
   receipt(r: DmReadReceipt): void;
+  reactions(update: ReactionsUpdate): void;
   error(err: ErrorMessage): void;
   /** Quem está online mudou (entrou, saiu, trocou de sala ou de status). */
   people(list: OnlineInfo[]): void;
@@ -55,6 +58,7 @@ export class LobbyConnection {
     room.onMessage(LobbyServerMessage.DmMessage, (m: DirectMessage) => this.on.dm(m));
     room.onMessage(LobbyServerMessage.DmReadReceipt, (r: DmReadReceipt) => this.on.receipt(r));
     room.onMessage(LobbyServerMessage.Error, (e: ErrorMessage) => this.on.error(e));
+    room.onMessage(LobbyServerMessage.DmReactions, (u: ReactionsUpdate) => this.on.reactions(u));
     const cb = Callbacks.get(room);
     const emit = () => this.on.people(this.people());
     cb.onAdd('people', (person) => {
@@ -79,8 +83,12 @@ export class LobbyConnection {
     }));
   }
 
-  send(toUserId: string, text: string): void {
-    this.room?.send(LobbyClientMessage.DmSend, { toUserId, text });
+  send(toUserId: string, text: string, replyToId?: number): void {
+    this.room?.send(LobbyClientMessage.DmSend, { toUserId, text, replyToId });
+  }
+
+  react(id: number, emoji: Reaction): void {
+    this.room?.send(LobbyClientMessage.DmReact, { id, emoji });
   }
 
   markRead(withUserId: string): void {

@@ -1573,37 +1573,6 @@ mark.mention {
   gap: 8px;
 }
 
-/* Lixeira no histórico do chat */
-.chat-log li {
-  position: relative;
-}
-
-.chat-delete {
-  margin-left: 4px;
-  padding: 0 4px;
-  border: 0;
-  border-radius: 4px;
-  background: none;
-  font-size: 11px;
-  opacity: 0;
-  cursor: pointer;
-}
-
-.chat-log li:hover .chat-delete,
-.chat-delete:focus-visible {
-  opacity: 0.8;
-}
-
-.chat-delete:hover {
-  background: rgba(224, 85, 85, 0.25);
-}
-
-@media (hover: none) {
-  .chat-delete {
-    opacity: 0.6;
-  }
-}
-
 /* Painel Admin */
 .admin .sheet-head {
   flex-wrap: wrap;
@@ -2134,4 +2103,258 @@ body.dm-open .hud-status {
     right: 16px;
     width: auto;
   }
+}
+
+/* ---------- Fase 12: reações e respostas ---------- */
+
+/* Ações ao passar o mouse (responder, reagir, apagar) */
+.msg-actions {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: 4px;
+  vertical-align: middle;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+
+.chat-log li:hover .msg-actions,
+.dm-msg:hover .msg-actions,
+.msg-actions:focus-within {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .msg-actions {
+    opacity: 0.7;
+  }
+}
+
+.msg-action {
+  padding: 0 4px;
+  border: 0;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  color: inherit;
+  font-size: 11px;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+.msg-action:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.msg-action.danger:hover {
+  background: rgba(224, 85, 85, 0.35);
+}
+
+/* Fichas de reação */
+.reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 3px;
+}
+
+.reactions[hidden] {
+  display: none;
+}
+
+.reaction-chip {
+  padding: 0 7px;
+  border: 1px solid #3a3f4d;
+  border-radius: 999px;
+  background: #22252f;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  line-height: 20px;
+  cursor: pointer;
+}
+
+.reaction-chip:hover {
+  border-color: #5a6275;
+}
+
+.reaction-chip.mine {
+  border-color: #7aa7ff;
+  background: rgba(122, 167, 255, 0.18);
+}
+
+.reaction-picker {
+  position: fixed;
+  z-index: 50;
+  display: flex;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 999px;
+  border: 1px solid var(--card-border);
+  background: #262a35;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.reaction-picker button {
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.reaction-picker button:hover,
+.reaction-picker button:focus-visible {
+  background: #3a3f4d;
+  transform: scale(1.15);
+}
+
+/* Citação da mensagem respondida */
+.reply-quote {
+  display: block;
+  width: 100%;
+  margin: 0 0 3px;
+  padding: 2px 8px;
+  border: 0;
+  border-left: 3px solid #7aa7ff;
+  border-radius: 4px;
+  background: rgba(122, 167, 255, 0.1);
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+button.reply-quote {
+  cursor: pointer;
+}
+
+button.reply-quote:hover {
+  background: rgba(122, 167, 255, 0.18);
+}
+
+.reply-quote strong {
+  color: #9dbaff;
+}
+
+.dm-msg.mine .reply-quote {
+  border-left-color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.dm-msg.mine .reply-quote strong {
+  color: white;
+}
+
+/* Faixa "Respondendo a…" */
+.reply-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px 5px 10px;
+  border-left: 3px solid #7aa7ff;
+  border-radius: 8px;
+  background: #262a35;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.reply-bar[hidden] {
+  display: none;
+}
+
+.reply-bar > span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reply-bar strong {
+  color: var(--text);
+}
+
+.reply-cancel {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.reply-cancel:hover {
+  background: #3a3f4d;
+  color: var(--text);
+}
+
+/* No chat da sala, a faixa fica logo acima do campo. */
+.chat-bar > .reply-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 6px);
+  border: 1px solid var(--card-border);
+  border-left: 3px solid #7aa7ff;
+}
+
+/* Pisca a mensagem ao clicar na citação. */
+@keyframes msg-flash {
+  0%,
+  60% {
+    background: rgba(242, 201, 76, 0.35);
+  }
+  100% {
+    background: transparent;
+  }
+}
+
+.chat-log li.flash,
+.dm-row.flash .dm-msg {
+  animation: msg-flash 1.4s ease-out;
+}
+
+/* DMs: linha com balão + reações */
+.dm-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.dm-row.mine {
+  align-items: flex-end;
+}
+
+.dm-row .dm-msg {
+  position: relative;
+  align-self: auto;
+}
+
+/* Espaço para as ações que aparecem em cima do balão. */
+.dm-messages {
+  padding-top: 14px;
+  gap: 10px;
+}
+
+.dm-msg .msg-actions {
+  position: absolute;
+  top: -12px;
+  right: 6px;
+  margin: 0;
+  padding: 2px;
+  border-radius: 8px;
+  background: #1f222b;
+  border: 1px solid var(--card-border);
+}
+
+.dm-msg.mine .msg-actions {
+  right: auto;
+  left: 6px;
 }

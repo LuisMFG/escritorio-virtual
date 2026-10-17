@@ -6,12 +6,21 @@ import {
   type DirectMessage,
   type DmConversation,
   type DmReadReceipt,
+  replyPreviewText,
+  type ReactionSummary,
   type Status,
   type TeamMember,
 } from '@office/shared';
 import type { LobbyConnection, OnlineInfo } from '../net/LobbyConnection.js';
 import { setAvatarPreview } from './login.js';
 import { NOTIFY_LABELS, type SystemNotifier } from './notifications.js';
+import {
+  flashMessage,
+  openReactionPicker,
+  reactionChips,
+  ReplyBar,
+  replyQuote,
+} from './reactions.js';
 
 export interface MessagesDeps {
   userId: string;
@@ -54,6 +63,7 @@ export class MessagesPanel {
   private hasOlder = false;
   private chatList: HTMLOListElement | null = null;
   private draft = new Map<string, string>();
+  private replyBar = new ReplyBar();
 
   constructor(private readonly deps: MessagesDeps) {
     this.root.className = 'dm-panel';
@@ -354,14 +364,22 @@ export class MessagesPanel {
       e.preventDefault();
       const text = input.value.trim();
       if (!text) return;
-      this.deps.lobby()?.send(userId, text);
+      this.deps.lobby()?.send(userId, text, this.replyBar.current?.id);
+      this.replyBar.set(null);
       input.value = '';
       this.draft.delete(userId);
     });
     // Teclas aqui não vão para a cena (Enter não abre o chat da sala, etc.).
-    input.addEventListener('keydown', (e) => e.stopPropagation());
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && this.replyBar.current) {
+        e.preventDefault();
+        this.replyBar.set(null);
+      }
+      e.stopPropagation();
+    });
 
-    this.body.replaceChildren(subtitle, list, form);
+    this.replyBar = new ReplyBar(() => input.focus());
+    this.body.replaceChildren(subtitle, list, this.replyBar.el, form);
     this.renderChatSubtitle();
     this.renderSeen();
     list.scrollTop = list.scrollHeight;
@@ -385,13 +403,70 @@ export class MessagesPanel {
     const list = this.chatList;
     if (!list) return;
     list.querySelector('.dm-empty')?.remove();
-    const li = document.createElement('li');
-    li.className = m.fromUserId === this.deps.userId ? 'dm-msg mine' : 'dm-msg';
-    li.dataset.id = String(m.id);
-    li.append(span('dm-text', m.text), span('dm-time', when(m.ts)));
-    list.append(li);
+    const mine = m.fromUserId === this.deps.userId;
+    // Linha = balão + reações embaixo dele.
+    const row = document.createElement('li');
+    row.className = mine ? 'dm-row mine' : 'dm-row';
+    row.dataset.id = String(m.id);
+    const bubble = document.createElement('div');
+    bubble.className = mine ? 'dm-msg mine' : 'dm-msg';
+    if (m.replyTo) {
+      const target = m.replyTo.id;
+      bubble.append(
+        replyQuote(m.replyTo, () => flashMessage(list.querySelector(`li[data-id="${target}"]`))),
+      );
+    }
+    bubble.append(span('dm-text', m.text), span('dm-time', when(m.ts)), this.msgActions(m));
+    row.append(bubble, this.chips(m.id, m.reactions));
+    list.append(row);
     if (scroll) list.scrollTop = list.scrollHeight;
     this.renderSeen();
+  }
+
+  /** Reações de uma DM mudaram. */
+  updateReactions(id: number, reactions: ReactionSummary[]): void {
+    const msg = this.messages.find((m) => m.id === id);
+    if (msg) msg.reactions = reactions;
+    const list = this.chatList;
+    if (!list) return;
+    const stick = list.scrollHeight - list.scrollTop - list.clientHeight < 40;
+    list.querySelector(`li[data-id="${id}"] .reactions`)?.replaceWith(this.chips(id, reactions));
+    if (stick) list.scrollTop = list.scrollHeight;
+  }
+
+  private chips(id: number, reactions: readonly ReactionSummary[]): HTMLDivElement {
+    return reactionChips(reactions, this.deps.userId, (emoji) =>
+      this.deps.lobby()?.react(id, emoji),
+    );
+  }
+
+  private msgActions(m: DirectMessage): HTMLSpanElement {
+    const box = span('msg-actions', '');
+    const name =
+      m.fromUserId === this.deps.userId ? 'Você' : this.view.kind === 'chat' ? this.view.name : '';
+    const reply = Object.assign(document.createElement('button'), {
+      type: 'button',
+      className: 'msg-action',
+      textContent: '↩',
+      title: 'Responder',
+    });
+    reply.setAttribute('aria-label', 'Responder');
+    reply.addEventListener('click', () => {
+      this.replyBar.set({ id: m.id, userId: m.fromUserId, name, text: replyPreviewText(m.text) });
+      this.body.querySelector<HTMLInputElement>('.dm-form input')?.focus();
+    });
+    const react = Object.assign(document.createElement('button'), {
+      type: 'button',
+      className: 'msg-action',
+      textContent: '😊',
+      title: 'Reagir',
+    });
+    react.setAttribute('aria-label', 'Reagir');
+    react.addEventListener('click', () =>
+      openReactionPicker(react, (emoji) => this.deps.lobby()?.react(m.id, emoji)),
+    );
+    box.append(reply, react);
+    return box;
   }
 
   /** "Visto" embaixo da minha última mensagem lida. */

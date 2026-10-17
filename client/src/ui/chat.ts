@@ -1,4 +1,3 @@
-import { confirmDialog } from './confirm.js';
 import {
   CHAT_MAX_LENGTH,
   EMOTE_IDS,
@@ -8,9 +7,20 @@ import {
   normalizeChatText,
   parseEmoteCommand,
   TYPING_IDLE_MS,
+  replyPreviewText,
   type ChatMessage,
   type EmoteId,
+  type Reaction,
+  type ReactionSummary,
 } from '@office/shared';
+import { confirmDialog } from './confirm.js';
+import {
+  flashMessage,
+  openReactionPicker,
+  reactionChips,
+  ReplyBar,
+  replyQuote,
+} from './reactions.js';
 
 const timeFormat = new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' });
 /** Distância (px) do fim da lista dentro da qual o histórico continua rolando sozinho. */
@@ -20,7 +30,9 @@ const TYPING_REFRESH_MS = 3000;
 const MAX_SUGGESTIONS = 5;
 
 export interface ChatHandlers {
-  send(text: string): void;
+  send(text: string, replyToId?: number): void;
+  /** Põe/tira reação numa mensagem. */
+  react(id: number, emoji: Reaction): void;
   emote(id: EmoteId): void;
   typing(on: boolean): void;
   /** Apagar a mensagem (o servidor confere se pode). */
@@ -51,6 +63,7 @@ export class ChatPanel {
   private typingSentAt = 0;
   private typingTimer = 0;
   private suggestionIndex = 0;
+  private readonly replyBar = new ReplyBar(() => this.input.focus());
 
   constructor(private readonly on: ChatHandlers) {
     this.form.className = 'chat-bar';
@@ -100,7 +113,14 @@ export class ChatPanel {
     send.type = 'submit';
     send.className = 'btn-primary';
     send.textContent = 'Enviar';
-    this.form.append(this.emoteBtn, this.input, send, this.emoteMenu, this.suggestions);
+    this.form.append(
+      this.replyBar.el,
+      this.emoteBtn,
+      this.input,
+      send,
+      this.emoteMenu,
+      this.suggestions,
+    );
 
     this.history.className = 'chat-history';
     this.history.open = window.innerWidth > 900;
@@ -141,6 +161,22 @@ export class ChatPanel {
     this.isAdmin = on;
   }
 
+  /** Reações de uma mensagem mudaram. */
+  updateReactions(id: number, reactions: ReactionSummary[]): void {
+    const stick =
+      this.log.scrollHeight - this.log.scrollTop - this.log.clientHeight < STICKY_SCROLL_PX;
+    const li = this.log.querySelector(`li[data-id="${id}"]`);
+    li?.querySelector('.reactions')?.replaceWith(this.chips(id, reactions));
+    // Reação na última mensagem não pode ficar escondida embaixo da lista.
+    if (stick) this.scrollToEnd();
+  }
+
+  /** Responder a uma mensagem: mostra a faixa e foca o campo. */
+  replyTo(m: ChatMessage): void {
+    this.replyBar.set({ id: m.id, userId: m.userId, name: m.name, text: replyPreviewText(m.text) });
+    this.input.focus();
+  }
+
   /** Mensagem apagada no servidor: some do histórico. */
   removeMessage(id: number): void {
     this.log.querySelector(`li[data-id="${id}"]`)?.remove();
@@ -177,7 +213,8 @@ export class ChatPanel {
       if (!text) return;
       const emote = parseEmoteCommand(text);
       if (emote) this.on.emote(emote);
-      else this.on.send(text);
+      else this.on.send(text, this.replyBar.current?.id);
+      this.replyBar.set(null);
       this.input.value = '';
       this.hideSuggestions();
       this.setTyping(false);
@@ -207,6 +244,10 @@ export class ChatPanel {
           this.hideSuggestions();
           return;
         }
+      }
+      if (e.key === 'Escape' && this.replyBar.current) {
+        this.replyBar.set(null);
+        return;
       }
       if (e.key === 'Escape') this.input.blur();
     });
@@ -333,23 +374,49 @@ export class ChatPanel {
   private item(m: ChatMessage): HTMLLIElement {
     const li = document.createElement('li');
     if (m.userId === this.localUserId) li.classList.add('mine');
-    if (m.userId !== this.localUserId && this.mentionsMe(m.text)) li.classList.add('mentioned');
+    const forMe =
+      m.userId !== this.localUserId &&
+      (this.mentionsMe(m.text) || m.replyTo?.userId === this.localUserId);
+    if (forMe) li.classList.add('mentioned');
+    li.dataset.id = String(m.id);
+    if (m.replyTo) {
+      const target = m.replyTo.id;
+      li.append(
+        replyQuote(m.replyTo, () =>
+          flashMessage(this.log.querySelector(`li[data-id="${target}"]`)),
+        ),
+      );
+    }
     const time = document.createElement('time');
     time.dateTime = new Date(m.ts).toISOString();
     time.textContent = timeFormat.format(m.ts);
     const name = document.createElement('strong');
     name.textContent = m.name;
-    li.dataset.id = String(m.id);
-    li.append(time, ' ', name, ' ', this.textWithMentions(m.text));
-    if (this.isAdmin || m.userId === this.localUserId) {
-      const del = Object.assign(document.createElement('button'), {
+    li.append(time, ' ', name, ' ', this.textWithMentions(m.text), this.actions(m));
+    li.append(this.chips(m.id, m.reactions));
+    return li;
+  }
+
+  /** Botões que aparecem ao passar o mouse: responder, reagir e (se pode) apagar. */
+  private actions(m: ChatMessage): HTMLSpanElement {
+    const box = Object.assign(document.createElement('span'), { className: 'msg-actions' });
+    const button = (text: string, label: string, onClick: (b: HTMLButtonElement) => void) => {
+      const b = Object.assign(document.createElement('button'), {
         type: 'button',
-        className: 'chat-delete',
-        textContent: '🗑',
-        title: 'Apagar mensagem',
+        className: 'msg-action',
+        textContent: text,
+        title: label,
       });
-      del.setAttribute('aria-label', `Apagar mensagem de ${m.name}`);
-      del.addEventListener('click', async () => {
+      b.setAttribute('aria-label', `${label} (mensagem de ${m.name})`);
+      b.addEventListener('click', () => onClick(b));
+      return b;
+    };
+    box.append(
+      button('↩', 'Responder', () => this.replyTo(m)),
+      button('😊', 'Reagir', (b) => openReactionPicker(b, (emoji) => this.on.react(m.id, emoji))),
+    );
+    if (this.isAdmin || m.userId === this.localUserId) {
+      const del = button('🗑', 'Apagar', async () => {
         const who = m.userId === this.localUserId ? 'sua mensagem' : `a mensagem de ${m.name}`;
         const yes = await confirmDialog(`Apagar ${who} para todos?`, {
           confirmLabel: 'Apagar',
@@ -357,9 +424,14 @@ export class ChatPanel {
         });
         if (yes) this.on.remove(m.id);
       });
-      li.append(del);
+      del.classList.add('danger');
+      box.append(del);
     }
-    return li;
+    return box;
+  }
+
+  private chips(id: number, reactions: readonly ReactionSummary[]): HTMLDivElement {
+    return reactionChips(reactions, this.localUserId, (emoji) => this.on.react(id, emoji));
   }
 
   /** Texto com as menções em destaque (só nós de texto e <mark>, nada de HTML do usuário). */

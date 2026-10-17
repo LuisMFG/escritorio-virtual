@@ -149,7 +149,8 @@ async function start(): Promise<void> {
 
   const sound = new ChatSound();
   const chat = new ChatPanel({
-    send: (text) => connection?.say(text),
+    send: (text, replyToId) => connection?.say(text, replyToId),
+    react: (id, emoji) => connection?.react(id, emoji),
     emote: (id) => connection?.emote(id),
     typing: (on) => connection?.typing(on),
     remove: (id) => connection?.deleteChat(id),
@@ -481,6 +482,7 @@ async function start(): Promise<void> {
         });
       },
       receipt: (r) => messages.receipt(r),
+      reactions: (u) => messages.updateReactions(u.id, u.reactions),
       error: (e) => overlay.notify(e.message),
       people: (list) => {
         online = list;
@@ -504,11 +506,13 @@ async function start(): Promise<void> {
       chat: (msg) => {
         chat.add(msg);
         const fromOther = msg.userId !== session?.userId;
-        const mentioned = fromOther && chat.mentionsMe(msg.text);
+        const repliedToMe = fromOther && msg.replyTo?.userId === session?.userId;
+        const mentioned = fromOther && (chat.mentionsMe(msg.text) || repliedToMe);
         if (mentioned) {
+          const what = repliedToMe ? 'respondeu você' : 'mencionou você';
           sound.mention();
-          overlay.notify(`${msg.name} mencionou você`);
-          notifier.notify(`${msg.name} mencionou você`, msg.text, { tag: 'mencao' });
+          overlay.notify(`${msg.name} ${what}`);
+          notifier.notify(`${msg.name} ${what}`, msg.text, { tag: 'mencao' });
           if (document.visibilityState === 'hidden') {
             unseenMentions++;
             updateTitle();
@@ -520,6 +524,7 @@ async function start(): Promise<void> {
       },
       emote: (msg) => scene?.playEmote(msg.sessionId, msg.emote),
       chatDeleted: (msg) => chat.removeMessage(msg.id),
+      chatReactions: (msg) => chat.updateReactions(msg.id, msg.reactions),
       kicked: (msg) => {
         if (msg.scope === 'room') return overlay.notify(msg.message);
         // Do escritório: volta para a entrada com o aviso.
