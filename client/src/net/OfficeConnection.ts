@@ -5,6 +5,8 @@ import {
   OfficeState,
   ServerMessage,
   type ChatMessage,
+  type ChatDeletedMessage,
+  type KickedMessage,
   type EmoteId,
   type EmoteMessage,
   type Status,
@@ -38,6 +40,9 @@ interface Handlers {
   serverError: (err: ErrorMessage) => void;
   chat: (msg: ChatMessage) => void;
   emote: (msg: EmoteMessage) => void;
+  chatDeleted: (msg: ChatDeletedMessage) => void;
+  /** Um admin tirou você (da sala: vem um transfer em seguida; do escritório: fim). */
+  kicked: (msg: KickedMessage) => void;
   /** Vai trocar de sala por uma porta (hora de escurecer a tela). */
   transferStart: (targetRoomId: string) => void;
   /** Sessão recusada pelo servidor: voltar para a tela de entrada. */
@@ -106,6 +111,10 @@ export class OfficeConnection {
     this.room?.send(ClientMessage.Emote, { emote });
   }
 
+  deleteChat(id: number): void {
+    this.room?.send(ClientMessage.ChatDelete, { id });
+  }
+
   say(text: string): void {
     this.room?.send(ClientMessage.Chat, { text });
   }
@@ -131,6 +140,14 @@ export class OfficeConnection {
     room.onMessage(ServerMessage.Error, (err: ErrorMessage) => this.on.serverError(err));
     room.onMessage(ServerMessage.Chat, (msg: ChatMessage) => this.on.chat(msg));
     room.onMessage(ServerMessage.Emote, (msg: EmoteMessage) => this.on.emote(msg));
+    room.onMessage(ServerMessage.ChatDeleted, (msg: ChatDeletedMessage) =>
+      this.on.chatDeleted(msg),
+    );
+    room.onMessage(ServerMessage.Kicked, (msg: KickedMessage) => {
+      // Do escritório: não tenta reconectar quando o servidor fechar a conexão.
+      if (msg.scope === 'office') this.leaving = true;
+      this.on.kicked(msg);
+    });
     room.onMessage(
       ServerMessage.RoomTransfer,
       (msg: RoomTransferMessage) => void this.switchRoom(msg),

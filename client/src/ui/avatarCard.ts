@@ -15,6 +15,11 @@ export interface AvatarCardInfo {
   /** `MM-DD` (da aba Equipe, quando já carregada). */
   birthday: string | null;
   birthdayToday: boolean;
+  userId: string;
+  /** Quem vê o cartão é admin (mostra as ações de moderação). */
+  viewerIsAdmin: boolean;
+  /** A pessoa está fora da Recepção (dá para "tirar da sala"). */
+  canKickFromRoom: boolean;
 }
 
 export interface AvatarCardHandlers {
@@ -22,6 +27,7 @@ export interface AvatarCardHandlers {
   mention(name: string): void;
   editAvatar(): void;
   openProfile(): void;
+  kick(userId: string, name: string, scope: 'room' | 'office'): void;
 }
 
 /** Cartão que aparece ao clicar num avatar: nome, status, sala e ações rápidas. */
@@ -115,10 +121,24 @@ export class AvatarCard {
         this.button('Mencionar', () => this.on.mention(info.name)),
       );
     }
+    let modRow: HTMLDivElement | null = null;
+    if (!info.isLocal && info.viewerIsAdmin) {
+      modRow = document.createElement('div');
+      modRow.className = 'card-actions card-mod';
+      if (info.canKickFromRoom) {
+        modRow.append(
+          this.button('Tirar da sala', () => this.on.kick(info.userId, info.name, 'room')),
+        );
+      }
+      modRow.append(
+        this.button('Tirar do escritório', () => this.on.kick(info.userId, info.name, 'office')),
+      );
+    }
 
     const text = document.createElement('div');
     text.className = 'card-text';
     text.append(name, ...extra, status, room, actions);
+    if (modRow) text.append(modRow);
     this.root.replaceChildren(img, text);
     this.root.hidden = false;
 

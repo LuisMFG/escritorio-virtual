@@ -27,7 +27,7 @@ import { PlaceholderFactory } from './assets/PlaceholderFactory.js';
 import { DEBUG, OFFLINE_ASSETS } from './config.js';
 import type { AvatarSnapshot } from './entities/AvatarView.js';
 import { isSessionError, OfficeConnection, type OfficeRoomClient } from './net/OfficeConnection.js';
-import { api, ApiRequestError } from './net/api.js';
+import { adminApi, api, ApiRequestError } from './net/api.js';
 import { forgetToken, loadSession, rememberSession, saveSession } from './net/storage.js';
 import { RoomScene, type SceneDeps } from './scene/RoomScene.js';
 import { AvatarCard } from './ui/avatarCard.js';
@@ -39,6 +39,8 @@ import { IdleWatcher } from './ui/idle.js';
 import { showClaim, showLogin } from './ui/login.js';
 import { openProfile } from './ui/profile.js';
 import { openTeam } from './ui/team.js';
+import { openAdmin } from './ui/admin.js';
+import { confirmDialog } from './ui/confirm.js';
 import { ChatSound } from './ui/sound.js';
 import { Overlay } from './ui/overlay.js';
 
@@ -150,6 +152,7 @@ async function start(): Promise<void> {
     send: (text) => connection?.say(text),
     emote: (id) => connection?.emote(id),
     typing: (on) => connection?.typing(on),
+    remove: (id) => connection?.deleteChat(id),
   });
 
   // Menções com a aba escondida: contador no título até voltar.
@@ -182,7 +185,29 @@ async function start(): Promise<void> {
     soundOn: sound.enabled,
     onOpenProfile: () => showProfile(),
     onOpenTeam: () => showTeam(),
+    onOpenAdmin: () => showAdmin(),
   });
+  function showAdmin(): void {
+    if (session?.role !== 'admin') return;
+    openAdmin({
+      token: session.token,
+      userId: session.userId,
+      roomName: (id) => findRoom(id)?.name ?? id,
+    });
+  }
+  /** Papel mudou (um admin promoveu/rebaixou você): ajusta o que aparece. */
+  function applyRole(role: SessionResponse['role']): void {
+    if (session) session = { ...session, role };
+    hud.setAdmin(role === 'admin');
+    chat.setAdmin(role === 'admin');
+    applyDecorLock();
+  }
+  let decorLocked = false;
+  function applyDecorLock(): void {
+    const locked = decorLocked && session?.role !== 'admin';
+    hud.setDecorLocked(locked);
+    if (locked && decorating) setDecorating(false);
+  }
   /** Última lista da Equipe (bio e aniversário no cartão do avatar). */
   let team: TeamResponse | undefined;
   const loadTeam = async () => {
@@ -245,6 +270,24 @@ async function start(): Promise<void> {
     mention: (name) => chat.insertMention(name),
     editAvatar: () => void editAvatar(),
     openProfile: () => showProfile(),
+    kick: async (userId, name, scope) => {
+      if (!session) return;
+      if (scope === 'office') {
+        const yes = await confirmDialog(
+          `Tirar ${name} do escritório? A pessoa precisará entrar de novo com usuário e senha.`,
+          { confirmLabel: 'Tirar', danger: true },
+        );
+        if (!yes) return;
+      }
+      try {
+        await adminApi.kick(session.token, userId, scope);
+        overlay.notify(
+          scope === 'room' ? `${name} foi para a Recepção.` : `${name} saiu do escritório.`,
+        );
+      } catch (err) {
+        overlay.notify((err as Error).message);
+      }
+    },
   });
   /** Avisos de aniversário: uma vez por pessoa por visita. */
   const birthdaysSeen = new Set<string>();
@@ -284,6 +327,9 @@ async function start(): Promise<void> {
                 bio: member?.bio ?? '',
                 birthday: member?.birthday ?? null,
                 birthdayToday: player.birthday,
+                userId: player.userId,
+                viewerIsAdmin: session?.role === 'admin',
+                canKickFromRoom: layout.roomId !== RECEPTION.id,
               },
               at,
             );
@@ -348,6 +394,9 @@ async function start(): Promise<void> {
       }
       cb.onChange(player, () => {
         s.updateAvatar(id, snapshot(player));
+        if (id === room.sessionId && session && player.role !== session.role) {
+          applyRole(player.role === 'admin' ? 'admin' : 'member');
+        }
         refreshPeople();
       });
       refreshPeople();
@@ -361,6 +410,10 @@ async function start(): Promise<void> {
       cb.onChange(f, () => s.setFurni(id, placed(f)));
     });
     cb.onRemove('furni', (_f, id) => s.removeFurni(id));
+    cb.listen('decorLocked', (locked) => {
+      decorLocked = locked;
+      applyDecorLock();
+    });
 
     const chatHistory = (await room.request(ClientMessage.GetChatHistory)) as ChatMessage[];
     if (scene === s) chat.setHistory(chatHistory, session?.userId ?? '');
@@ -403,6 +456,18 @@ async function start(): Promise<void> {
         scene?.say(msg.sessionId, msg.name, msg.text, mentioned);
       },
       emote: (msg) => scene?.playEmote(msg.sessionId, msg.emote),
+      chatDeleted: (msg) => chat.removeMessage(msg.id),
+      kicked: (msg) => {
+        if (msg.scope === 'room') return overlay.notify(msg.message);
+        // Do escritório: volta para a entrada com o aviso.
+        forgetToken();
+        try {
+          sessionStorage.setItem(NOTICE_KEY, msg.message);
+        } catch {
+          // sem armazenamento: só recarrega
+        }
+        location.reload();
+      },
       sessionInvalid: () => {
         forgetToken();
         location.reload();
@@ -412,6 +477,7 @@ async function start(): Promise<void> {
     });
     session = current;
     connection = conn;
+    applyRole(current.role);
     await conn.join(roomFromHash(), current.token);
     // Saída "educada" ao fechar/recarregar: o servidor remove o avatar na hora.
     window.addEventListener('pagehide', () => void conn.leave());
@@ -420,8 +486,8 @@ async function start(): Promise<void> {
     }
   }
 
-  let notice: string | undefined;
-  let result = await resumeSession();
+  let notice = takeNotice();
+  let result = notice ? undefined : await resumeSession();
   for (;;) {
     result ??= await showLogin({ manifest: avatarManifest, fallbackPreview, notice });
     // Conta antiga (só o token deste navegador): escolhe usuário e senha antes de entrar.
@@ -466,6 +532,18 @@ start().catch((err: unknown) => {
 });
 
 const STATUS_KEY = 'escritorio.status';
+/** Aviso para a próxima tela de entrada (ex.: "Ana tirou você do escritório."). */
+const NOTICE_KEY = 'escritorio.aviso';
+
+function takeNotice(): string | undefined {
+  try {
+    const notice = sessionStorage.getItem(NOTICE_KEY) ?? undefined;
+    sessionStorage.removeItem(NOTICE_KEY);
+    return notice;
+  } catch {
+    return undefined;
+  }
+}
 
 function loadStatus(): Status {
   try {

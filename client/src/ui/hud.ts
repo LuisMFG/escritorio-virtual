@@ -4,6 +4,10 @@ import type { Camera } from '../scene/Camera.js';
 export interface Hud {
   setRoomName(name: string): void;
   setDecorating(on: boolean): void;
+  /** Mostra o botão Admin (só para admins). */
+  setAdmin(on: boolean): void;
+  /** Sala com decoração travada para você: o botão fica desabilitado. */
+  setDecorLocked(locked: boolean): void;
 }
 
 /** Nome da sala, status dos assets e controles de zoom (que agem sobre a cena atual). */
@@ -12,6 +16,7 @@ export function mountHud(opts: {
   loader: AssetLoader;
   onOpenProfile: () => void;
   onOpenTeam: () => void;
+  onOpenAdmin: () => void;
   onToggleDecor: () => void;
   /** Liga/desliga o som de mensagem; devolve o novo estado. */
   onToggleSound: () => boolean;
@@ -69,11 +74,25 @@ export function mountHud(opts: {
   decorBtn.setAttribute('aria-pressed', 'false');
   decorBtn.addEventListener('click', opts.onToggleDecor);
 
+  const adminBtn = document.createElement('button');
+  adminBtn.type = 'button';
+  adminBtn.className = 'hud-admin btn-secondary';
+  adminBtn.textContent = 'Admin';
+  adminBtn.hidden = true;
+  adminBtn.addEventListener('click', opts.onOpenAdmin);
+
   const actions = document.createElement('div');
   actions.className = 'hud-actions';
-  actions.append(profileBtn, teamBtn, decorBtn);
+  actions.append(profileBtn, teamBtn, decorBtn, adminBtn);
   document.body.append(card, status, zoom, actions);
   return {
+    setAdmin(on) {
+      adminBtn.hidden = !on;
+    },
+    setDecorLocked(locked) {
+      decorBtn.disabled = locked;
+      decorBtn.title = locked ? 'Um admin travou a decoração desta sala.' : '';
+    },
     setDecorating(on) {
       decorBtn.textContent = on ? 'Concluir decoração' : 'Decorar';
       decorBtn.setAttribute('aria-pressed', String(on));

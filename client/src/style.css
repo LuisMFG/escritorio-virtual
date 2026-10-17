@@ -1522,3 +1522,315 @@ mark.mention {
     width: 100%;
   }
 }
+
+/* ---------- Fase 10: admin e moderação ---------- */
+
+.btn-small {
+  padding: 5px 9px;
+  font-size: 12px;
+}
+
+.btn-danger {
+  background: #d9534f;
+}
+
+.btn-danger:hover {
+  background: #e4645f;
+}
+
+.hud-actions button[hidden] {
+  display: none;
+}
+
+.hud-decor:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.hud-admin {
+  border-color: #8b6cff;
+}
+
+/* Confirmação */
+.confirm-backdrop {
+  z-index: 40;
+}
+
+.confirm-box {
+  width: min(380px, 100%);
+  padding: 18px;
+  gap: 16px;
+}
+
+.confirm-box p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* Lixeira no histórico do chat */
+.chat-log li {
+  position: relative;
+}
+
+.chat-delete {
+  margin-left: 4px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  font-size: 11px;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.chat-log li:hover .chat-delete,
+.chat-delete:focus-visible {
+  opacity: 0.8;
+}
+
+.chat-delete:hover {
+  background: rgba(224, 85, 85, 0.25);
+}
+
+@media (hover: none) {
+  .chat-delete {
+    opacity: 0.6;
+  }
+}
+
+/* Painel Admin */
+.admin .sheet-head {
+  flex-wrap: wrap;
+}
+
+/* Altura fixa: trocar de aba ou aparecer um aviso não faz a janela pular. */
+.admin {
+  height: min(680px, calc(100vh - 32px));
+}
+
+.admin-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 9px;
+  background: #15171d;
+  overflow-x: auto;
+}
+
+.admin-tabs button {
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.admin-tabs button[aria-selected='true'] {
+  background: #2c3140;
+  color: var(--text);
+}
+
+.admin-flash {
+  margin: 0;
+  padding: 8px 16px;
+  background: rgba(111, 207, 151, 0.15);
+  color: #b6f0cd;
+  font-size: 13px;
+}
+
+.admin-flash.error {
+  background: rgba(224, 85, 85, 0.15);
+  color: #ffb4b4;
+}
+
+.admin-body > p {
+  margin: 0;
+}
+
+.admin-person {
+  flex-wrap: wrap;
+}
+
+.admin-person.disabled {
+  opacity: 0.55;
+}
+
+.admin-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  flex-basis: 100%;
+  padding-left: 56px;
+}
+
+.admin-controls select,
+.cargo-row input:not([type='color']),
+.cargo-new input:not([type='color']),
+.invite-form input {
+  padding: 6px 8px;
+  border-radius: 7px;
+  border: 1px solid #3a3f4d;
+  background: #15171d;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+
+.admin-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.temp-password {
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid #8b6cff;
+  background: rgba(139, 108, 255, 0.12);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.temp-password p {
+  margin: 0;
+}
+
+.temp-password code {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  user-select: all;
+}
+
+.cargo-list,
+.room-locks,
+.audit-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cargo-row,
+.cargo-new {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 9px;
+  background: #252935;
+}
+
+.cargo-row input[type='color'],
+.cargo-new input[type='color'] {
+  flex: none;
+  width: 34px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.cargo-row input:not([type='color']),
+.cargo-new input:not([type='color']) {
+  flex: 1;
+  min-width: 0;
+}
+
+.cargo-row .cargo-pill {
+  max-width: 150px;
+}
+
+.cargo-new {
+  background: none;
+  padding: 6px 0;
+}
+
+.admin-section {
+  margin: 4px 0 0;
+  font-size: 14px;
+}
+
+.invite-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.invite-form input {
+  flex: 1;
+  min-width: 160px;
+  font-family: ui-monospace, monospace;
+}
+
+.room-locks label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  background: #252935;
+  cursor: pointer;
+}
+
+.audit-list li {
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: #252935;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.audit-list time {
+  font-variant-numeric: tabular-nums;
+}
+
+.avatar-card .card-mod {
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px solid var(--card-border);
+}
+
+.avatar-card .card-mod button {
+  font-size: 12px;
+  padding: 5px 8px;
+}
+
+@media (max-width: 600px) {
+  .admin-controls {
+    padding-left: 0;
+  }
+
+  .cargo-row .cargo-pill {
+    display: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .chat-bar {
+    left: 380px;
+  }
+}
+
+@media (max-width: 600px) {
+  .chat-bar {
+    left: 16px;
+  }
+}

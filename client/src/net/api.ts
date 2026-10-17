@@ -1,7 +1,12 @@
 import {
   ERROR_MESSAGES,
   type ApiError,
+  type AdminOverview,
+  type AdminUserUpdate,
+  type AuditEntry,
   type ClaimRequest,
+  type KickScope,
+  type TempPasswordResponse,
   type LoginRequest,
   type PasswordChangeRequest,
   type ProfileUpdate,
@@ -67,4 +72,34 @@ export const api = {
       token,
       body: { cargoId },
     }),
+};
+
+type Ok = { ok: true };
+const user = (id: string) => `/api/admin/users/${encodeURIComponent(id)}`;
+
+/** Painel Admin (o servidor recusa com 403 quem não é admin). */
+export const adminApi = {
+  overview: (token: string) => request<AdminOverview>('GET', '/api/admin', { token }),
+  audit: (token: string) => request<AuditEntry[]>('GET', '/api/admin/audit', { token }),
+  setInvite: (token: string, inviteCode: string) =>
+    request<Ok>('PUT', '/api/admin/invite', { token, body: { inviteCode } }),
+  setRoom: (token: string, roomId: string, decorLocked: boolean) =>
+    request<Ok>('PUT', `/api/admin/rooms/${encodeURIComponent(roomId)}`, {
+      token,
+      body: { decorLocked },
+    }),
+  updateUser: (token: string, userId: string, changes: AdminUserUpdate) =>
+    request<Ok>('PATCH', user(userId), { token, body: changes }),
+  resetPassword: (token: string, userId: string) =>
+    request<TempPasswordResponse>('POST', `${user(userId)}/password`, { token, body: {} }),
+  kick: (token: string, userId: string, scope: KickScope) =>
+    request<Ok>('POST', `${user(userId)}/kick`, { token, body: { scope } }),
+  createCargo: (token: string, name: string, color: string) =>
+    request<Ok>('POST', '/api/admin/cargos', { token, body: { name, color } }),
+  updateCargo: (token: string, id: number, changes: { name?: string; color?: string }) =>
+    request<Ok>('PATCH', `/api/admin/cargos/${id}`, { token, body: changes }),
+  deleteCargo: (token: string, id: number) =>
+    request<Ok>('DELETE', `/api/admin/cargos/${id}`, { token }),
+  reorderCargos: (token: string, ids: number[]) =>
+    request<Ok>('PUT', '/api/admin/cargos/order', { token, body: { ids } }),
 };

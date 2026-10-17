@@ -1,3 +1,4 @@
+import { confirmDialog } from './confirm.js';
 import {
   CHAT_MAX_LENGTH,
   EMOTE_IDS,
@@ -22,6 +23,8 @@ export interface ChatHandlers {
   send(text: string): void;
   emote(id: EmoteId): void;
   typing(on: boolean): void;
+  /** Apagar a mensagem (o servidor confere se pode). */
+  remove(id: number): void;
 }
 
 /**
@@ -39,6 +42,8 @@ export class ChatPanel {
   private readonly log = document.createElement('ol');
   private readonly empty = document.createElement('p');
   private localUserId = '';
+  /** Admin apaga qualquer mensagem; os outros, só as próprias. */
+  private isAdmin = false;
   private localName = '';
   private names: string[] = [];
   private unread = 0;
@@ -130,6 +135,16 @@ export class ChatPanel {
     this.unread = 0;
     this.renderSummary();
     this.scrollToEnd();
+  }
+
+  setAdmin(on: boolean): void {
+    this.isAdmin = on;
+  }
+
+  /** Mensagem apagada no servidor: some do histórico. */
+  removeMessage(id: number): void {
+    this.log.querySelector(`li[data-id="${id}"]`)?.remove();
+    this.empty.hidden = this.log.children.length > 0;
   }
 
   add(message: ChatMessage): void {
@@ -324,7 +339,26 @@ export class ChatPanel {
     time.textContent = timeFormat.format(m.ts);
     const name = document.createElement('strong');
     name.textContent = m.name;
+    li.dataset.id = String(m.id);
     li.append(time, ' ', name, ' ', this.textWithMentions(m.text));
+    if (this.isAdmin || m.userId === this.localUserId) {
+      const del = Object.assign(document.createElement('button'), {
+        type: 'button',
+        className: 'chat-delete',
+        textContent: '🗑',
+        title: 'Apagar mensagem',
+      });
+      del.setAttribute('aria-label', `Apagar mensagem de ${m.name}`);
+      del.addEventListener('click', async () => {
+        const who = m.userId === this.localUserId ? 'sua mensagem' : `a mensagem de ${m.name}`;
+        const yes = await confirmDialog(`Apagar ${who} para todos?`, {
+          confirmLabel: 'Apagar',
+          danger: true,
+        });
+        if (yes) this.on.remove(m.id);
+      });
+      li.append(del);
+    }
     return li;
   }
 
