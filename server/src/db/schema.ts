@@ -235,6 +235,24 @@ export const boardNotes = sqliteTable(
   (t) => [index('board_notes_furni_idx').on(t.furniId)],
 );
 
+/** Traços dos quadros brancos (um registro por traço). Somem junto com o móvel. */
+export const whiteboardStrokes = sqliteTable(
+  'whiteboard_strokes',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    furniId: text('furni_id')
+      .notNull()
+      .references(() => roomFurni.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id),
+    /** JSON do traço (`WbStrokeInput`: pincel, borracha ou texto). */
+    data: text('data', { mode: 'json' }).notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [index('whiteboard_strokes_furni_idx').on(t.furniId, t.id)],
+);
+
 export type UserRow = typeof users.$inferSelect;
 export type DirectMessageRow = typeof directMessages.$inferSelect;
 export type CargoRow = typeof cargos.$inferSelect;

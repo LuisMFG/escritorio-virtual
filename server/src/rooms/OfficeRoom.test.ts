@@ -601,4 +601,77 @@ describe('OfficeRoom', () => {
       expect(svc.boards.notes(board.id)).toEqual([]);
     });
   });
+
+  describe('quadro branco', () => {
+    async function boardRoom() {
+      const roomId = svc.rooms.create('Quadro', svc.furniDefs).id;
+      const owner = newUser('Dono').user.id;
+      const wb = svc.furni.add(
+        roomId,
+        { defId: 'uni_c23_whiteboard', x: 3, y: 2, z: 0, rot: 0 },
+        owner,
+      );
+      return { roomId, wb };
+    }
+    const pen = { tool: 'pen', color: '#1f2937', width: 3, points: [10, 10, 50, 60, 90, 80] };
+
+    it('traço é salvo e vai para todos; rascunho só para os outros', async () => {
+      const { roomId, wb } = await boardRoom();
+      const a = await join(newUser('Ana').token, roomId);
+      const b = await join(newUser('Beto').token, roomId);
+
+      const draft = b.waitForMessage(ServerMessage.WbDraft);
+      const aDrafts: unknown[] = [];
+      a.onMessage(ServerMessage.WbDraft, (m) => aDrafts.push(m));
+      a.send(ClientMessage.WbDraft, {
+        furniId: wb.id,
+        draftId: 'd1',
+        tool: 'pen',
+        color: '#1f2937',
+        width: 3,
+        points: [10, 10, 50, 60],
+      });
+      expect(await draft).toMatchObject({ draftId: 'd1', sessionId: a.sessionId });
+
+      const stroke = b.waitForMessage(ServerMessage.WbStroke);
+      a.send(ClientMessage.WbStroke, { furniId: wb.id, stroke: pen, draftId: 'd1' });
+      expect(await stroke).toMatchObject({ furniId: wb.id, draftId: 'd1', stroke: pen });
+      expect(aDrafts).toEqual([]);
+      const loaded = (await b.request(ClientMessage.WbLoad, { furniId: wb.id })) as unknown[];
+      expect(loaded).toHaveLength(1);
+    });
+
+    it('desfazer tira só o último traço seu; limpar apaga tudo', async () => {
+      const { roomId, wb } = await boardRoom();
+      const a = await join(newUser('Ana').token, roomId);
+      const b = await join(newUser('Beto').token, roomId);
+      a.send(ClientMessage.WbStroke, { furniId: wb.id, stroke: pen });
+      await wait(80);
+      b.send(ClientMessage.WbStroke, { furniId: wb.id, stroke: { ...pen, color: '#dc2626' } });
+      await wait(150);
+
+      const removed = b.waitForMessage(ServerMessage.WbRemoved);
+      a.send(ClientMessage.WbUndo, { furniId: wb.id });
+      expect(((await removed) as { ids: number[] }).ids).toHaveLength(1);
+      expect(svc.whiteboards.list(wb.id).map((s) => s.color)).toEqual(['#dc2626']);
+
+      const cleared = a.waitForMessage(ServerMessage.WbCleared);
+      b.send(ClientMessage.WbClear, { furniId: wb.id });
+      expect(await cleared).toEqual({ furniId: wb.id });
+      expect(svc.whiteboards.list(wb.id)).toEqual([]);
+    });
+
+    it('não desenha em móvel que não é quadro', async () => {
+      const { roomId } = await boardRoom();
+      const lamp = svc.furni.add(
+        roomId,
+        { defId: 'lamp_basic', x: 6, y: 5, z: 0, rot: 0 },
+        newUser('Dono2').user.id,
+      );
+      const a = await join(newUser('Ana').token, roomId);
+      a.send(ClientMessage.WbStroke, { furniId: lamp.id, stroke: pen });
+      await wait(150);
+      expect(svc.whiteboards.list(lamp.id)).toEqual([]);
+    });
+  });
 });

@@ -8,6 +8,7 @@ import { loadAvatarManifest, loadFurniDefs, RoomRepository } from './RoomReposit
 import { UserService } from './UserService.js';
 import { DmService } from './DmService.js';
 import { BoardService } from './BoardService.js';
+import { WhiteboardService } from './WhiteboardService.js';
 import { AuditService } from './AuditService.js';
 import { SettingsService } from './SettingsService.js';
 import { EventEmitter } from 'node:events';
@@ -33,6 +34,7 @@ export interface Services {
   chat: ChatService;
   dms: DmService;
   boards: BoardService;
+  whiteboards: WhiteboardService;
   furni: FurniService;
   transfers: TransferRegistry;
   settings: SettingsService;
@@ -55,6 +57,7 @@ export function createServices(db: Db, defaults = { inviteCode: 'convite' }): Se
     chat: new ChatService(db),
     dms: new DmService(db),
     boards: new BoardService(db),
+    whiteboards: new WhiteboardService(db),
     furni: new FurniService(db),
     transfers: new TransferRegistry(),
     settings: new SettingsService(db, defaults),

@@ -43,6 +43,16 @@ export const ClientMessage = {
   BoardAdd: 'board.add',
   /** `{ noteId }`: tira um recado (quem escreveu ou admin). */
   BoardRemove: 'board.remove',
+  /** Requisição `{ furniId }`: traços do quadro branco (`WbStroke[]`). */
+  WbLoad: 'wb.load',
+  /** `{ furniId, stroke }`: traço terminado. */
+  WbStroke: 'wb.stroke',
+  /** Traço em andamento (só repassado aos outros). */
+  WbDraft: 'wb.draft',
+  /** `{ furniId }`: desfaz o último traço seu. */
+  WbUndo: 'wb.undo',
+  /** `{ furniId }`: apaga o quadro todo. */
+  WbClear: 'wb.clear',
 } as const;
 
 /** Mensagens servidor → cliente. */
@@ -64,6 +74,14 @@ export const ServerMessage = {
   LayoutChanged: 'room.layoutChanged',
   /** `{ furniId }`: os recados de um mural mudaram. */
   BoardChanged: 'board.changed',
+  /** Traço novo num quadro (`WbStrokeMessage`). */
+  WbStroke: 'wb.stroke',
+  /** Traço em andamento de alguém (`WbDraft`). */
+  WbDraft: 'wb.draft',
+  /** Traços apagados (desfazer) (`WbRemovedMessage`). */
+  WbRemoved: 'wb.removed',
+  /** `{ furniId }`: quadro limpo. */
+  WbCleared: 'wb.cleared',
 } as const;
 
 export const ErrorCode = {

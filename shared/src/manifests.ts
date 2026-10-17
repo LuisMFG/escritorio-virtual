@@ -29,11 +29,17 @@ export const furniManifestEntrySchema = z.object({
   stateAnchors: z.record(z.string().regex(/^[0-7]:\d+$/), anchor).default({}),
   /**
    * O que acontece ao clicar fora do modo decorar: `toggle` alterna os estados (luz, TV…),
-   * `coffee` serve um café (emote), `board` abre o mural de recados.
+   * `coffee` serve um café (emote), `board` abre o mural de recados, `whiteboard` abre o
+   * quadro branco.
    */
-  interaction: z.enum(['toggle', 'coffee', 'board']).optional(),
+  interaction: z.enum(['toggle', 'coffee', 'board', 'whiteboard']).optional(),
   /** Emite luz quando ligado (estado > 0): brilha à noite. */
   light: z.boolean().default(false),
+  /**
+   * Superfície onde aparece a miniatura do desenho (quadro branco): cantos superior esquerdo,
+   * superior direito e inferior esquerdo, em pixels da PNG de cada direção.
+   */
+  surface: z.record(z.string().regex(/^[0-7]$/), z.tuple([anchor, anchor, anchor])).optional(),
 });
 
 export const furniManifestSchema = z.object({

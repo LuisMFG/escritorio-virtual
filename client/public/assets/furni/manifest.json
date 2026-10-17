@@ -456,7 +456,20 @@
       },
       "states": [0, 1, 2],
       "stateAnchors": {},
-      "light": false
+      "interaction": "whiteboard",
+      "light": false,
+      "surface": {
+        "0": [
+          [6, 15],
+          [29, 4],
+          [28, 70]
+        ],
+        "2": [
+          [29, 4],
+          [52, 15],
+          [7, 59]
+        ]
+      }
     },
     {
       "id": "noticeboard",

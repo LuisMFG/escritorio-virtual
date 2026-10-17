@@ -7,6 +7,13 @@ import {
   boardRefSchema,
   boardRemoveSchema,
   NOTES_PER_BOARD,
+  WB_MAX_STROKES,
+  wbDraftSchema,
+  wbRefSchema,
+  wbStrokeSchema,
+  type WbDraft,
+  type WbRemovedMessage,
+  type WbStrokeMessage,
   reactSchema,
   type ReactionsUpdate,
   type ReactRequest,
@@ -66,7 +73,8 @@ type OfficeClient = Client<{ auth: UserRow }>;
 export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient }> {
   override maxClients = 30;
   /** Proteção geral contra flood; limites específicos por ação ficam nos handlers. */
-  override maxMessagesPerSecond = 30;
+  /** Desenhar no quadro manda ~12 rascunhos/s; o resto cabe com folga. */
+  override maxMessagesPerSecond = 40;
 
   private layout!: RoomLayoutMessage;
   private map!: Heightmap;
@@ -86,6 +94,9 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
   private readonly useLimiter = new KeyedRateLimiter(6, 2);
   /** Recados: 5 seguidos, depois 1 a cada 5 s. */
   private readonly boardLimiter = new KeyedRateLimiter(5, 0.2);
+  /** Quadro branco: traços e desfazer (40 seguidos, 20/s) e rascunhos (40, 25/s). */
+  private readonly wbLimiter = new KeyedRateLimiter(40, 20);
+  private readonly draftLimiter = new KeyedRateLimiter(40, 25);
   /** Decorar: rajada de 10 ações, recarregando 4 por segundo. */
   private readonly editLimiter = new KeyedRateLimiter(10, 4);
   /** Quem clicou numa cadeira e está andando até ela (sessionId → móvel e assento). */
@@ -161,6 +172,58 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       }
       services().boards.remove(note.id);
       this.broadcast(ServerMessage.BoardChanged, { furniId: note.furniId });
+    }),
+    [ClientMessage.WbLoad]: (client: Client, input: unknown) => {
+      const p = wbRefSchema.safeParse(input);
+      return p.success && this.isWhiteboard(p.data.furniId)
+        ? services().whiteboards.list(p.data.furniId)
+        : [];
+    },
+    [ClientMessage.WbStroke]: validate(wbStrokeSchema, (client, msg) => {
+      const c = client as OfficeClient;
+      if (!c.auth || !this.isWhiteboard(msg.furniId)) return;
+      if (!this.wbLimiter.tryTake(c.sessionId)) return this.sendError(c, ErrorCode.RateLimit);
+      if (services().whiteboards.count(msg.furniId) >= WB_MAX_STROKES) {
+        return this.sendError(
+          c,
+          ErrorCode.Forbidden,
+          'O quadro está cheio. Limpe antes de continuar.',
+        );
+      }
+      const stroke = services().whiteboards.add(msg.furniId, c.auth.id, msg.stroke);
+      this.broadcast(ServerMessage.WbStroke, {
+        furniId: msg.furniId,
+        stroke,
+        draftId: msg.draftId,
+        sessionId: c.sessionId,
+      } satisfies WbStrokeMessage);
+    }),
+    [ClientMessage.WbDraft]: validate(wbDraftSchema, (client, msg) => {
+      // Prévia efêmera: excesso é descartado em silêncio.
+      if (!this.isWhiteboard(msg.furniId) || !this.draftLimiter.tryTake(client.sessionId)) return;
+      this.broadcast(
+        ServerMessage.WbDraft,
+        { ...msg, sessionId: client.sessionId } satisfies WbDraft,
+        { except: client },
+      );
+    }),
+    [ClientMessage.WbUndo]: validate(wbRefSchema, (client, msg) => {
+      const c = client as OfficeClient;
+      if (!c.auth || !this.isWhiteboard(msg.furniId)) return;
+      if (!this.wbLimiter.tryTake(c.sessionId)) return;
+      const id = services().whiteboards.undo(msg.furniId, c.auth.id);
+      if (id !== null) {
+        this.broadcast(ServerMessage.WbRemoved, {
+          furniId: msg.furniId,
+          ids: [id],
+        } satisfies WbRemovedMessage);
+      }
+    }),
+    [ClientMessage.WbClear]: validate(wbRefSchema, (client, msg) => {
+      const c = client as OfficeClient;
+      if (!c.auth || !this.isWhiteboard(msg.furniId)) return;
+      services().whiteboards.clear(msg.furniId);
+      this.broadcast(ServerMessage.WbCleared, { furniId: msg.furniId });
     }),
     [ClientMessage.ChatReact]: validate(reactSchema, (client, msg) =>
       this.handleReact(client as OfficeClient, msg.id, msg.emoji),
@@ -368,6 +431,8 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     this.reactLimiter.delete(client.sessionId);
     this.useLimiter.delete(client.sessionId);
     this.boardLimiter.delete(client.sessionId);
+    this.wbLimiter.delete(client.sessionId);
+    this.draftLimiter.delete(client.sessionId);
     this.pendingUse.delete(client.sessionId);
     this.pendingSit.delete(client.sessionId);
     services().presence.remove(client.sessionId);
@@ -457,6 +522,12 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       this.movement.remove(client.sessionId);
       this.sendError(client, ErrorCode.InvalidMove, 'Não dá para chegar nesse lugar.');
     }
+  }
+
+  /** O móvel é um quadro branco desta sala? */
+  private isWhiteboard(furniId: string): boolean {
+    const f = this.state.furni.get(furniId);
+    return Boolean(f && services().furniDefs.get(f.defId)?.interaction === 'whiteboard');
   }
 
   /** O móvel é um mural desta sala? */

@@ -19,3 +19,4 @@ export * from './dm.js';
 export * from './reactions.js';
 export * from './roomEdit.js';
 export * from './ambience.js';
+export * from './whiteboard.js';

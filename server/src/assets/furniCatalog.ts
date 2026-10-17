@@ -22,7 +22,9 @@ export interface FurniCuration {
   source?: 'habboassets' | 'local';
   directions?: number[];
   anchors?: Record<string, [number, number]>;
-  interaction?: 'toggle' | 'coffee' | 'board';
+  interaction?: 'toggle' | 'coffee' | 'board' | 'whiteboard';
+  /** Cantos do papel na PNG (ver `surface` no manifesto). */
+  surface?: Record<string, [[number, number], [number, number], [number, number]]>;
   /** Emite luz quando ligado. */
   light?: boolean;
 }
@@ -128,7 +130,28 @@ export const FURNI_CURATION: FurniCuration[] = [
   },
   { id: 'shelves_silo', name: 'Estante Silo', category: 'estantes', height: 2 },
   { id: 'shelves_basic', name: 'Estante Simples', category: 'estantes', height: 2 },
-  { id: 'uni_c23_whiteboard', name: 'Quadro Branco', category: 'escritório', height: 2 },
+  {
+    id: 'uni_c23_whiteboard',
+    name: 'Quadro Branco',
+    category: 'escritório',
+    width: 1,
+    depth: 1,
+    height: 2,
+    interaction: 'whiteboard',
+    // Papel do cavalete, medido nos pixels claros das PNGs (direção 2 é o espelho da 0).
+    surface: {
+      '0': [
+        [6, 15],
+        [29, 4],
+        [28, 70],
+      ],
+      '2': [
+        [29, 4],
+        [52, 15],
+        [7, 59],
+      ],
+    },
+  },
   {
     id: 'noticeboard',
     name: 'Mural de Recados',
@@ -393,6 +416,7 @@ export function buildFurniEntry(
       stateAnchors,
       interaction: cur.interaction,
       light: cur.light ?? false,
+      surface: cur.surface,
     },
   };
 }
