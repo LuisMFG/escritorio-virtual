@@ -151,6 +151,8 @@ board_notes     { id, furniId: fk room_furni (cascade), userId, text, color, cre
 whiteboard_strokes { id, furniId: fk room_furni (cascade), userId, data: json, createdAt } // Fase 15
 meetings        { id, title, description, roomId: fk rooms (cascade), startsAt, durationMin, createdBy, createdAt, remindedAt } // Fase 16
 meeting_attendees { meetingId: fk meetings (cascade), userId, response: 'pending'|'yes'|'no' } pk(meetingId, userId)
+chat_messages   … + kind: 'text'|'dice'|'coin'|'game'   // Fase 17
+game_scores     { userId, game ('tictactoe'), wins, losses, draws } pk(userId, game)
 dm_reactions    { messageId: fk direct_messages (cascade), userId, emoji } pk(os três)
 
 rooms          { id: text pk ('reception'|'meeting'|'pantry'), name: text,
@@ -652,11 +654,19 @@ Pedido em 17/10/2026, depois da Fase 8: deixar o escritório "muito completo". M
 - Dia/noite agora segue o fuso do navegador (antes era o de Brasília), para combinar com o relógio de quem está usando.
 - Se o servidor reinicia bem na hora em que a página carrega, o cliente tenta de novo (1, 2, 4, 8 e 15 s) em vez de cair na tela de login. O token só é esquecido se o servidor responder 401.
 
-### Fase 17 — Mini-jogos
+### Fase 17 — Mini-jogos ✅ implementada
 - **Jogo da velha** numa mesa de jogo: duas pessoas sentam, cada uma joga na sua vez; o resto da sala assiste. Placar salvo.
 - Comandos rápidos no chat: `/dado` (1–6) e `/moeda`, com resultado visível para todos (sorteado no servidor).
 
 **Como testar:** duas abas sentam na mesa e jogam até o fim; uma terceira assiste; `/dado` mostra o mesmo resultado para todos.
+
+**Notas da implementação:**
+- `/dado` e `/moeda` (também no menu 😊): o servidor sorteia (`crypto.randomInt`) e grava a mensagem com `kind` próprio (migration `0013`). O chat mostra essas mensagens com destaque amarelo; digitar o mesmo texto à mão continua sendo mensagem comum, então ninguém consegue "forjar" um resultado.
+- Mesa de jogos: não achei móvel de jogo da velha no imager da HabboAssets, então a **Mesa de Jogos** é a mesa redonda `table_plasto_round` (1×1) com `interaction: 'tictactoe'`. O tabuleiro é desenhado pela cena em perspectiva isométrica em cima do tampo, com X/O e a linha vencedora, e todos na sala veem ao vivo. Ela entra na semente da Copa com duas cadeiras (bancos novos); em bancos existentes, é só colocar pelo Decorar.
+- Partida no estado da sala (`games`, um `TttGame` por mesa): jogadores, tabuleiro, vez, status e vencedor. Regras em `server/src/rooms/ticTacToe.ts`. Clicar na mesa abre um painel flutuante (dá para arrastar pelo título, para não cobrir a mesa): Jogar, as 9 casas, Revanche (quem começa alterna), Sair da mesa e o placar (top 5).
+- Ao clicar em Jogar, o avatar senta na cadeira livre encostada na mesa mais perto; sem cadeira, fica em pé ao lado. Com dois jogadores a partida começa; quem não está na mesa só assiste. Uma conta não pega os dois lugares (outra aba).
+- Fim de partida: placar em `game_scores` e aviso no chat da sala ("🏆 venceu Beto no jogo da velha", "🤝 empatou com…"). Sair no meio (botão ou saindo da sala) dá a vitória ao outro por desistência. Recarregar a página no meio da partida também conta como saída.
+- Testado no navegador contra um script temporário (Davi jogando sozinho). A pessoa que só assiste foi verificada no teste automático da sala (terceiro cliente), porque o navegador de teste só tem uma conta aberta.
 
 ### Fase 18 — Pets
 - Cada pessoa pode ter um bichinho (cachorro, gato…) com nome. Ele segue o dono, passeia sozinho quando o dono para e obedece comandos no chat (`/senta`, `/deita`, `/vem`).
