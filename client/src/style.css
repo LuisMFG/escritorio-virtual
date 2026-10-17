@@ -1834,3 +1834,304 @@ mark.mention {
     left: 16px;
   }
 }
+
+/* ---------- Fase 11: mensagens privadas ---------- */
+
+.hud-dm {
+  position: relative;
+}
+
+.dm-badge {
+  display: inline-block;
+  min-width: 18px;
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #e05555;
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+}
+
+.dm-badge[hidden] {
+  display: none;
+}
+
+.dm-panel {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  bottom: 72px;
+  z-index: 15;
+  width: min(360px, calc(100vw - 32px));
+  display: flex;
+  flex-direction: column;
+  background: #1f222b;
+  border: 1px solid var(--card-border);
+  border-radius: 14px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+
+.dm-panel[hidden] {
+  display: none;
+}
+
+/* Com o painel aberto, a lista de pessoas e o zoom saem da frente. */
+body.dm-open .people,
+body.dm-open .hud-status {
+  visibility: hidden;
+}
+
+.dm-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 10px 10px 14px;
+  border-bottom: 1px solid var(--card-border);
+}
+
+.dm-head h2 {
+  flex: 1;
+  margin: 0;
+  font-size: 16px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dm-icon {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--muted);
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.dm-icon:hover:not(:disabled) {
+  background: #2c3140;
+  color: var(--text);
+}
+
+.dm-icon:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.dm-icon[hidden] {
+  display: none;
+}
+
+.dm-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  overflow-y: auto;
+}
+
+.dm-new {
+  flex: none;
+}
+
+.dm-empty {
+  margin: 8px 4px;
+}
+
+.dm-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dm-conv {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dm-conv:hover {
+  background: #2a2e3a;
+}
+
+.dm-conv.unread .dm-conv-name,
+.dm-conv.unread .dm-conv-last {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.dm-face {
+  position: relative;
+  width: 40px;
+  height: 46px;
+}
+
+.dm-online {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--ok);
+  border: 2px solid #1f222b;
+}
+
+.dm-conv-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.dm-conv-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.dm-conv-name {
+  font-weight: 600;
+}
+
+.dm-conv-time {
+  font-size: 11px;
+}
+
+.dm-conv-last {
+  color: var(--muted);
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dm-search {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #3a3f4d;
+  background: #15171d;
+  color: var(--text);
+  font: inherit;
+}
+
+.dm-sub {
+  flex: none;
+  margin: 0;
+  font-size: 12px;
+}
+
+.dm-messages {
+  flex: 1;
+  min-height: 0;
+  list-style: none;
+  margin: 0;
+  padding: 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+}
+
+.dm-older-row {
+  align-self: center;
+}
+
+.dm-msg {
+  align-self: flex-start;
+  max-width: 82%;
+  padding: 6px 10px;
+  border-radius: 12px 12px 12px 4px;
+  background: #2c3140;
+  overflow-wrap: anywhere;
+}
+
+.dm-msg.mine {
+  align-self: flex-end;
+  border-radius: 12px 12px 4px 12px;
+  background: #3b5bd6;
+  color: white;
+}
+
+.dm-time {
+  display: block;
+  margin-top: 2px;
+  font-size: 10px;
+  opacity: 0.65;
+  text-align: right;
+}
+
+.dm-seen {
+  align-self: flex-end;
+  margin: -2px 2px 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.dm-form {
+  flex: none;
+  display: flex;
+  gap: 6px;
+}
+
+.dm-form .chat-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.team-dm {
+  flex: none;
+  align-self: center;
+}
+
+@media (max-width: 600px) {
+  .dm-panel {
+    inset: 8px 8px 64px;
+    width: auto;
+  }
+}
+
+/* Com cinco botões no canto, o campo do chat sobe para cima deles em telas menores. */
+@media (max-width: 1499px) {
+  .chat-bar {
+    left: 16px;
+    right: auto;
+    bottom: 64px;
+    transform: none;
+    width: min(520px, calc(100vw - 104px));
+  }
+  .toast {
+    bottom: 128px;
+  }
+
+  .dm-panel {
+    bottom: 124px;
+  }
+}
+
+@media (max-width: 600px) {
+  .chat-bar {
+    right: 16px;
+    width: auto;
+  }
+}

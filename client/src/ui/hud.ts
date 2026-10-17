@@ -4,6 +4,8 @@ import type { Camera } from '../scene/Camera.js';
 export interface Hud {
   setRoomName(name: string): void;
   setDecorating(on: boolean): void;
+  /** Contador de mensagens privadas não lidas no botão. */
+  setUnreadDms(n: number): void;
   /** Mostra o botão Admin (só para admins). */
   setAdmin(on: boolean): void;
   /** Sala com decoração travada para você: o botão fica desabilitado. */
@@ -17,6 +19,7 @@ export function mountHud(opts: {
   onOpenProfile: () => void;
   onOpenTeam: () => void;
   onOpenAdmin: () => void;
+  onOpenMessages: () => void;
   onToggleDecor: () => void;
   /** Liga/desliga o som de mensagem; devolve o novo estado. */
   onToggleSound: () => boolean;
@@ -74,6 +77,16 @@ export function mountHud(opts: {
   decorBtn.setAttribute('aria-pressed', 'false');
   decorBtn.addEventListener('click', opts.onToggleDecor);
 
+  const dmBtn = document.createElement('button');
+  dmBtn.type = 'button';
+  dmBtn.className = 'hud-dm btn-secondary';
+  dmBtn.textContent = 'Mensagens';
+  const dmBadge = document.createElement('span');
+  dmBadge.className = 'dm-badge';
+  dmBadge.hidden = true;
+  dmBtn.append(dmBadge);
+  dmBtn.addEventListener('click', opts.onOpenMessages);
+
   const adminBtn = document.createElement('button');
   adminBtn.type = 'button';
   adminBtn.className = 'hud-admin btn-secondary';
@@ -83,9 +96,14 @@ export function mountHud(opts: {
 
   const actions = document.createElement('div');
   actions.className = 'hud-actions';
-  actions.append(profileBtn, teamBtn, decorBtn, adminBtn);
+  actions.append(profileBtn, teamBtn, dmBtn, decorBtn, adminBtn);
   document.body.append(card, status, zoom, actions);
   return {
+    setUnreadDms(n) {
+      dmBadge.hidden = n === 0;
+      dmBadge.textContent = n > 99 ? '99+' : String(n);
+      dmBtn.setAttribute('aria-label', n ? `Mensagens (${n} não lidas)` : 'Mensagens');
+    },
     setAdmin(on) {
       adminBtn.hidden = !on;
     },

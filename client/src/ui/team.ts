@@ -17,6 +17,8 @@ export interface TeamOptions {
   isAdmin: boolean;
   /** roomId → nome da sala. */
   roomName(roomId: string): string;
+  /** Abrir conversa privada com alguém. */
+  message(userId: string, name: string): void;
   /** Recebeu a lista (para o cartão do avatar reaproveitar bio e aniversário). */
   loaded(team: TeamResponse): void;
 }
@@ -142,6 +144,19 @@ export function openTeam(opts: TeamOptions): void {
       );
     }
     li.append(face, info);
+    if (m.userId !== opts.userId) {
+      const dm = Object.assign(document.createElement('button'), {
+        type: 'button',
+        className: 'btn-secondary btn-small team-dm',
+        textContent: 'Mensagem',
+      });
+      dm.setAttribute('aria-label', `Mensagem para ${m.name}`);
+      dm.addEventListener('click', () => {
+        close();
+        opts.message(m.userId, m.name);
+      });
+      li.append(dm);
+    }
 
     if (opts.isAdmin) {
       const select = document.createElement('select');

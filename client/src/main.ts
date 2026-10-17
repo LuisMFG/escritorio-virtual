@@ -8,7 +8,7 @@ import {
   findRoom,
   RECEPTION,
   type FurniManifestEntry,
-  type PresenceResponse,
+  ROOMS,
   type Furni,
   type PlacedFurni,
   type Player,
@@ -40,6 +40,9 @@ import { showClaim, showLogin } from './ui/login.js';
 import { openProfile } from './ui/profile.js';
 import { openTeam } from './ui/team.js';
 import { openAdmin } from './ui/admin.js';
+import { MessagesPanel } from './ui/messages.js';
+import { SystemNotifier } from './ui/notifications.js';
+import { LobbyConnection, type OnlineInfo } from './net/LobbyConnection.js';
 import { confirmDialog } from './ui/confirm.js';
 import { ChatSound } from './ui/sound.js';
 import { Overlay } from './ui/overlay.js';
@@ -48,9 +51,6 @@ import { Overlay } from './ui/overlay.js';
 function roomFromHash(): string {
   return findRoom(location.hash.replace(/^#\/?/, ''))?.id ?? RECEPTION.id;
 }
-
-/** Intervalo da consulta de quem está nas outras salas. */
-const PRESENCE_POLL_MS = 10_000;
 
 async function fetchJson(url: string): Promise<unknown> {
   const res = await fetch(url);
@@ -155,15 +155,44 @@ async function start(): Promise<void> {
     remove: (id) => connection?.deleteChat(id),
   });
 
-  // Menções com a aba escondida: contador no título até voltar.
+  // Título da aba: "(@2)" para menções vistas com a aba escondida, "(3)" para DMs não lidas.
   let unseenMentions = 0;
-  const baseTitle = () => document.title.replace(/^\(@\d+\) /, '');
+  let unreadDms = 0;
+  const updateTitle = () => {
+    const base = document.title.replace(/^(\(@?\d+\) )+/, '');
+    const prefix =
+      (unseenMentions ? `(@${unseenMentions}) ` : '') + (unreadDms ? `(${unreadDms}) ` : '');
+    document.title = prefix + base;
+  };
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible' && unseenMentions) {
       unseenMentions = 0;
-      document.title = baseTitle();
+      updateTitle();
     }
+    messages.visibilityChanged();
   });
+
+  const notifier = new SystemNotifier();
+  let lobby: LobbyConnection | undefined;
+  let online: OnlineInfo[] = [];
+  const messages = new MessagesPanel({
+    get userId() {
+      return session?.userId ?? '';
+    },
+    lobby: () => lobby,
+    loadTeam: async () => {
+      await loadTeam();
+      return team?.members ?? [];
+    },
+    roomName: (id) => findRoom(id)?.name ?? id,
+    notifier,
+    unreadChanged: (n) => {
+      unreadDms = n;
+      hud.setUnreadDms(n);
+      updateTitle();
+    },
+  });
+  const openDm = (userId: string, name: string) => messages.open({ userId, name });
   let decorating = false;
   const setDecorating = (on: boolean) => {
     decorating = on;
@@ -186,6 +215,7 @@ async function start(): Promise<void> {
     onOpenProfile: () => showProfile(),
     onOpenTeam: () => showTeam(),
     onOpenAdmin: () => showAdmin(),
+    onOpenMessages: () => messages.toggle(),
   });
   function showAdmin(): void {
     if (session?.role !== 'admin') return;
@@ -237,11 +267,13 @@ async function start(): Promise<void> {
       isAdmin: session.role === 'admin',
       roomName: (id) => findRoom(id)?.name ?? id,
       loaded: (t) => (team = t),
+      message: openDm,
     });
   }
   async function logout(all: boolean): Promise<void> {
     if (session) await api.logout(session.token, all).catch(() => undefined);
     await connection?.leave();
+    await lobby?.leave();
     forgetToken();
     location.reload();
   }
@@ -270,6 +302,7 @@ async function start(): Promise<void> {
     mention: (name) => chat.insertMention(name),
     editAvatar: () => void editAvatar(),
     openProfile: () => showProfile(),
+    message: openDm,
     kick: async (userId, name, scope) => {
       if (!session) return;
       if (scope === 'office') {
@@ -357,7 +390,8 @@ async function start(): Promise<void> {
     if (scene !== s) return;
     overlay.setFading(false);
     avatarCard.hide();
-    void refreshOtherRooms();
+    refreshOtherRooms();
+    updateTitle();
     // Cada sala começa como "Disponível": reaplica o status atual.
     if (effectiveStatus() !== 'available') connection.setStatus(effectiveStatus());
     overlay.setOwnStatus(effectiveStatus());
@@ -419,21 +453,49 @@ async function start(): Promise<void> {
     if (scene === s) chat.setHistory(chatHistory, session?.userId ?? '');
   }
 
-  /** Quem está nas outras salas (a lista da sala atual vem ao vivo do estado). */
-  async function refreshOtherRooms(): Promise<void> {
-    if (!session || !connection) return;
+  /** Quem está nas outras salas, ao vivo pelo canal global (a sala atual vem do estado dela). */
+  function refreshOtherRooms(): void {
+    if (!connection) return;
+    overlay.setOtherRooms(
+      ROOMS.map((r) => ({
+        roomId: r.id,
+        name: r.name,
+        people: online.filter((p) => p.roomId === r.id).map((p) => ({ name: p.name })),
+      })),
+      connection.currentRoomId,
+    );
+  }
+
+  /** Canal global: DMs e presença. Abre depois de entrar na primeira sala. */
+  async function connectLobby(token: string): Promise<void> {
+    const l = new LobbyConnection(token, {
+      dm: (m) => {
+        messages.receive(m);
+        if (m.fromUserId === session?.userId || messages.isReading(m.fromUserId)) return;
+        const name = online.find((p) => p.userId === m.fromUserId)?.name ?? 'Alguém';
+        sound.mention();
+        if (!messages.isOpen) overlay.notify(`Mensagem de ${name}`);
+        notifier.notify(`Mensagem de ${name}`, m.text, {
+          tag: `dm-${m.fromUserId}`,
+          onClick: () => openDm(m.fromUserId, name),
+        });
+      },
+      receipt: (r) => messages.receipt(r),
+      error: (e) => overlay.notify(e.message),
+      people: (list) => {
+        online = list;
+        messages.setOnline(list);
+        refreshOtherRooms();
+      },
+      ready: () => void messages.refresh(),
+    });
+    lobby = l;
     try {
-      const res = await fetch('/api/presence', {
-        headers: { Authorization: `Bearer ${session.token}` },
-      });
-      if (!res.ok) return;
-      const body = (await res.json()) as PresenceResponse;
-      overlay.setOtherRooms(body.rooms, connection.currentRoomId);
-    } catch {
-      // Sem rede: a lista das outras salas espera a próxima rodada.
+      await l.connect();
+    } catch (err) {
+      console.warn('[lobby] sem canal global por enquanto', err);
     }
   }
-  setInterval(() => void refreshOtherRooms(), PRESENCE_POLL_MS);
 
   async function enter(current: SessionResponse): Promise<void> {
     const conn: OfficeConnection = new OfficeConnection({
@@ -446,9 +508,10 @@ async function start(): Promise<void> {
         if (mentioned) {
           sound.mention();
           overlay.notify(`${msg.name} mencionou você`);
+          notifier.notify(`${msg.name} mencionou você`, msg.text, { tag: 'mencao' });
           if (document.visibilityState === 'hidden') {
             unseenMentions++;
-            document.title = `(@${unseenMentions}) ${baseTitle()}`;
+            updateTitle();
           }
         } else if (fromOther) {
           sound.play();
@@ -479,8 +542,12 @@ async function start(): Promise<void> {
     connection = conn;
     applyRole(current.role);
     await conn.join(roomFromHash(), current.token);
+    void connectLobby(current.token);
     // Saída "educada" ao fechar/recarregar: o servidor remove o avatar na hora.
-    window.addEventListener('pagehide', () => void conn.leave());
+    window.addEventListener('pagehide', () => {
+      void conn.leave();
+      void lobby?.leave();
+    });
     if (import.meta.env.DEV || DEBUG) {
       Object.assign(window, { __office: { app, connection: conn, getScene: () => scene } });
     }

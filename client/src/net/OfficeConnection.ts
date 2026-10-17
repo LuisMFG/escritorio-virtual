@@ -26,7 +26,7 @@ export type OfficeRoomClient = Room<unknown, OfficeState>;
 /** Atrasos entre tentativas de reentrar depois que a reconexão automática desiste. */
 const REJOIN_DELAYS_MS = [1000, 2000, 4000, 8000, 15000];
 
-function serverEndpoint(): string {
+export function serverEndpoint(): string {
   const fromEnv = import.meta.env.VITE_SERVER_URL as string | undefined;
   if (fromEnv) return fromEnv;
   // Em dev o cliente está no Vite (5173) e o servidor na 2567; em produção, mesma origem.

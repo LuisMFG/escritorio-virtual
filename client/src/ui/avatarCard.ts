@@ -28,6 +28,7 @@ export interface AvatarCardHandlers {
   editAvatar(): void;
   openProfile(): void;
   kick(userId: string, name: string, scope: 'room' | 'office'): void;
+  message(userId: string, name: string): void;
 }
 
 /** Cartão que aparece ao clicar num avatar: nome, status, sala e ações rápidas. */
@@ -118,6 +119,7 @@ export class AvatarCard {
     } else {
       actions.append(
         this.button('Ir até', () => this.on.goTo(info.sessionId)),
+        this.button('Mensagem', () => this.on.message(info.userId, info.name)),
         this.button('Mencionar', () => this.on.mention(info.name)),
       );
     }
