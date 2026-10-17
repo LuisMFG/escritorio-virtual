@@ -79,6 +79,7 @@ Opções de URL do cliente: `?offline=1` usa só a arte provisória gerada por c
 | `npm run dev` | Servidor (tsx watch) + cliente (Vite) juntos |
 | `npm run dev:server` / `npm run dev:client` | Só um dos dois |
 | `npm test` | Testes unitários e de integração (Vitest) |
+| `npm run e2e` | Testes de ponta a ponta no navegador (Playwright); veja abaixo |
 | `npm run typecheck` | Checagem de tipos de todos os pacotes |
 | `npm run lint` / `npm run format` | ESLint / Prettier |
 | `npm run build` | Build de produção do cliente (`client/dist`) |
@@ -87,6 +88,15 @@ Opções de URL do cliente: `?offline=1` usa só a arte provisória gerada por c
 | `npm run assets:sync` | Regera os manifestos de roupas e móveis a partir da HabboAssets |
 | `npm run db:generate` | Gera migration SQL após mudar `server/src/db/schema.ts` |
 | `npm run vscode:package` | Gera a extensão do VS Code em `client/public/downloads/escritorio-atividade.vsix` |
+
+### Testes de ponta a ponta
+
+`npm run e2e` compila o cliente, sobe o servidor em modo produção na porta 2600 (banco e backups temporários, sem mexer no `npm run dev`) e roda no Chromium os fluxos principais com pessoas de verdade clicando: criar conta e entrar, andar, conversar e trocar de sala, decorar, marcar reunião e jogar o jogo da velha.
+
+- Primeira vez: `npx playwright install chromium`.
+- Rodar só um: `npm run e2e -- jogo`. Ver o navegador: `npm run e2e -- --headed`.
+- Quando falha: `npx playwright show-trace e2e-results/<teste>/trace.zip` mostra passo a passo (tela, cliques, rede). O relatório fica em `e2e-report/`.
+- A cena é um canvas; com `?e2e=1` no endereço, a página expõe `window.__e2e` (onde fica cada tile e móvel na tela e o estado da sala) para os testes clicarem com o mouse no lugar certo. Sem o parâmetro, nada muda.
 
 ## Estrutura
 

@@ -773,11 +773,18 @@ Escolhido em 17/10/2026, depois do roadmap v3. Ordem pensada assim: primeiro pro
 - **Admin → Backups:** texto explicando o horário e a retenção, "Fazer backup agora" e a lista com data, tamanho e "Baixar".
 - Testado: arquivo é um banco válido com os dados, sufixo no mesmo minuto, retenção, regra das 3h no fuso do escritório, permissões e registro (testes automáticos); no navegador, backup automático ao subir, "Fazer backup agora", download (anexo começando com "SQLite format 3") e o Registro. **Restauração de verdade:** um segundo servidor subiu a partir de uma cópia do backup (porta 2599) e respondeu com os dados (8 contas, 4 salas, 42 móveis).
 
-### Fase 23 — Testes de ponta a ponta (Playwright)
+### Fase 23 — Testes de ponta a ponta (Playwright) ✅ implementada
 - `npm run e2e` sobe servidor e cliente com um banco temporário e roda no Chromium os fluxos principais: cadastrar/entrar, andar, conversar (duas pessoas), trocar de sala, decorar, agenda, jogo da velha.
 - Daqui em diante, cada fase nova ganha o seu teste de ponta a ponta.
 
 **Como testar:** `npm run e2e` passa; quebrar algo de propósito (ex.: o chat) e o teste acusa.
+
+**Notas da implementação:**
+- `e2e/playwright.config.ts`: o servidor sobe com `NODE_ENV=production` na porta 2600, servindo o `client/dist` (mesma origem, como no deploy), com banco, backups e cache numa pasta temporária, Spotify desligado e `LOGIN_RATE_LIMIT=1000` (variável nova; o padrão continua 10 por minuto por IP). Um worker só (todos dividem o banco, cada teste cria contas próprias). Trace e screenshot quando falha.
+- Arte provisória (`?offline=1`) para não depender da internet, e **gancho de testes** `?e2e=1` (`client/src/e2e.ts`): posição na tela de cada tile e móvel, qual móvel um clique pegaria naquele ponto e o estado da sala (quem está onde, móveis). Os testes clicam com o mouse de verdade nesses pontos, passando pelo mesmo caminho do usuário (Pixi, cena, servidor).
+- 5 testes (`e2e/tests/`): **conta** (criar, recarregar sem pedir senha, sair, senha errada, entrar), **sala** (Ana anda e Beto vê, chat chega ao outro, porta para a Copa e a lista de pessoas acompanha), **decorar** (cadeira aparece para o outro), **agenda** (marcar com convidado e o convidado responde "Vou"), **jogo da velha** (dois sentam na mesa da Copa e jogam até a vitória; o aviso aparece no chat). Todos passam em ~1min20.
+- Achado no caminho: com a arte provisória, a cadeira na frente da mesa de jogos pega o clique no meio da mesa (correto: ela está por cima). O `clickFurni` dos testes procura um ponto em que o móvel desejado é o de cima.
+- **Conferido que acusa erro:** com o envio do chat quebrado de propósito, o teste da sala falhou em "a mensagem chega ao Beto"; depois o código voltou ao normal.
 
 ### Fase 24 — Avisos da diretoria
 - Admin publica um comunicado (título, texto, importância normal/urgente). Aparece como faixa para todo o escritório na hora (e para quem entrar depois, até a pessoa marcar "Li"). Histórico de avisos; urgente também vira notificação do sistema.
