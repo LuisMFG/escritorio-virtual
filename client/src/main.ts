@@ -44,6 +44,7 @@ import { IdleWatcher } from './ui/idle.js';
 import { showClaim, showLogin } from './ui/login.js';
 import { openProfile } from './ui/profile.js';
 import { showAchievementToast } from './ui/badges.js';
+import { exposeForTests } from './e2e.js';
 import { openTeam } from './ui/team.js';
 import { openAdmin } from './ui/admin.js';
 import { openRoomEditor } from './ui/roomEditor.js';
@@ -534,6 +535,7 @@ async function start(): Promise<void> {
       },
     );
     scene = s;
+    exposeForTests(s, room);
     s.decor.setActive(decorating);
     decorPanel.setPicked(null);
     hud.setRoomName(layout.name);
