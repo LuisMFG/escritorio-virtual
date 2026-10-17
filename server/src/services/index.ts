@@ -18,6 +18,7 @@ import { ActivityService } from './ActivityService.js';
 import { SpotifyService } from './SpotifyService.js';
 import { SpotifyPoller } from './SpotifyPoller.js';
 import { BackupService } from './BackupService.js';
+import { AnnouncementService } from './AnnouncementService.js';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { SpotifyConfig } from '../config.js';
@@ -56,6 +57,7 @@ export interface Services {
   spotify: SpotifyService;
   spotifyPoller: SpotifyPoller;
   backups: BackupService;
+  announcements: AnnouncementService;
   furni: FurniService;
   transfers: TransferRegistry;
   settings: SettingsService;
@@ -107,6 +109,7 @@ export function createServices(
     spotify,
     spotifyPoller: new SpotifyPoller(spotify, presence, activity),
     backups: new BackupService(db, backup.dir, backup.keep),
+    announcements: new AnnouncementService(db),
     furni: new FurniService(db),
     transfers: new TransferRegistry(),
     settings: new SettingsService(db, defaults),

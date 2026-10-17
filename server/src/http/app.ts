@@ -15,6 +15,7 @@ import * as petRoutes from './pets.js';
 import * as achievementRoutes from './achievements.js';
 import * as activityRoutes from './activity.js';
 import * as spotifyRoutes from './spotify.js';
+import * as announcementRoutes from './announcements.js';
 import {
   changePassword,
   claim,
@@ -64,7 +65,8 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
     petRoutes.PetDeps &
     achievementRoutes.AchievementDeps &
     activityRoutes.ActivityDeps &
-    spotifyRoutes.SpotifyDeps = {
+    spotifyRoutes.SpotifyDeps &
+    announcementRoutes.AnnouncementDeps = {
     inviteCode: () => svc.settings.inviteCode(),
     adminUsernames: cfg.adminUsernames,
     avatarManifest: svc.avatarManifest,
@@ -84,6 +86,7 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
     spotify: svc.spotify,
     spotifyPoller: svc.spotifyPoller,
     backups: svc.backups,
+    announcements: svc.announcements,
   };
   const send = <T>(res: Response, result: Result<T>) =>
     void res.status(result.status).json(result.body);
@@ -283,6 +286,34 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
   app.delete(
     '/api/spotify',
     withCaller((c, _req, res) => send(res, spotifyRoutes.spotifyDisconnect(c, auth))),
+  );
+
+  // Avisos da diretoria: todos leem; só admins publicam e apagam.
+  app.get(
+    '/api/announcements',
+    withCaller((c, _req, res) => send(res, announcementRoutes.listAnnouncements(c, auth))),
+  );
+  app.get(
+    '/api/announcements/unread',
+    withCaller((c, _req, res) => send(res, announcementRoutes.unreadAnnouncements(c, auth))),
+  );
+  app.post(
+    '/api/announcements',
+    withCaller((c, req, res) =>
+      send(res, announcementRoutes.createAnnouncement(c, req.body, auth)),
+    ),
+  );
+  app.put(
+    '/api/announcements/:id/read',
+    withCaller((c, req, res) =>
+      send(res, announcementRoutes.readAnnouncement(c, Number(id(req)), auth)),
+    ),
+  );
+  app.delete(
+    '/api/announcements/:id',
+    withCaller((c, req, res) =>
+      send(res, announcementRoutes.deleteAnnouncement(c, Number(id(req)), auth)),
+    ),
   );
 
   // Salas (admins e quem pode editar salas).

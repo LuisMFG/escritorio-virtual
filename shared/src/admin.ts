@@ -101,6 +101,8 @@ export const AUDIT_LABELS: Record<string, string> = {
   'chat.delete': 'apagou uma mensagem de',
   'backup.create': 'fez um backup do banco',
   'backup.download': 'baixou o backup',
+  'announcement.create': 'publicou o aviso',
+  'announcement.delete': 'apagou o aviso',
 };
 
 // ---------- Backups (Fase 22) ----------

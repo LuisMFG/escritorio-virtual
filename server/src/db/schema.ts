@@ -395,6 +395,37 @@ export const spotifyLinks = sqliteTable('spotify_links', {
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 });
 
+/** Avisos da diretoria (Fase 24). */
+export const announcements = sqliteTable(
+  'announcements',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    title: text('title').notNull(),
+    body: text('body').notNull(),
+    urgent: integer('urgent', { mode: 'boolean' }).notNull().default(false),
+    createdBy: text('created_by')
+      .notNull()
+      .references(() => users.id),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [index('announcements_created_idx').on(t.createdAt)],
+);
+
+/** Quem já marcou "Li" em cada aviso. */
+export const announcementReads = sqliteTable(
+  'announcement_reads',
+  {
+    announcementId: integer('announcement_id')
+      .notNull()
+      .references(() => announcements.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id),
+    readAt: integer('read_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.announcementId, t.userId] })],
+);
+
 export type UserRow = typeof users.$inferSelect;
 export type DirectMessageRow = typeof directMessages.$inferSelect;
 export type CargoRow = typeof cargos.$inferSelect;

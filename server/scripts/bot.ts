@@ -139,6 +139,8 @@ async function startBot(name: string): Promise<void> {
   lobby.onMessage(LobbyServerMessage.Error, () => undefined);
   lobby.onMessage(LobbyServerMessage.DmReadReceipt, () => undefined);
   lobby.onMessage('achievement.unlocked', () => undefined);
+  lobby.onMessage('announcement.new', () => undefined);
+  lobby.onMessage('announcement.removed', () => undefined);
   lobby.onMessage(LobbyServerMessage.DmReactions, () => undefined);
   for (const t of ['meetings.changed', 'meeting.invited', 'meeting.reminder']) {
     lobby.onMessage(t, () => undefined);

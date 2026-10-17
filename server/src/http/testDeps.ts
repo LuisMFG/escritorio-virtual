@@ -5,13 +5,19 @@ import type { PetDeps } from './pets.js';
 import type { AchievementDeps } from './achievements.js';
 import type { ActivityDeps } from './activity.js';
 import type { SpotifyDeps } from './spotify.js';
+import type { AnnouncementDeps } from './announcements.js';
 import { openDatabase } from '../db/client.js';
 import { createServices } from '../services/index.js';
 import type { MeetingDeps } from './meetings.js';
 import { register, type Caller } from './auth.js';
 
 /** Tudo que as rotas usam (os testes de cada área pegam a parte que precisam). */
-export type TestDeps = MeetingDeps & PetDeps & AchievementDeps & ActivityDeps & SpotifyDeps;
+export type TestDeps = MeetingDeps &
+  PetDeps &
+  AchievementDeps &
+  ActivityDeps &
+  SpotifyDeps &
+  AnnouncementDeps;
 
 /** Dependências das rotas sobre um banco em memória (testes). */
 export function makeDeps(): TestDeps {
@@ -39,6 +45,7 @@ export function makeDeps(): TestDeps {
     spotify: svc.spotify,
     spotifyPoller: svc.spotifyPoller,
     backups: svc.backups,
+    announcements: svc.announcements,
   };
 }
 

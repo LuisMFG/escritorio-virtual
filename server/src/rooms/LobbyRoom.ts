@@ -1,5 +1,8 @@
 import { CloseCode, Room, ServerError, validate, type Client } from '@colyseus/core';
 import {
+  AnnouncementMessage,
+  type Announcement,
+  type AnnouncementNotice,
   AchievementMessage,
   type AchievementDef,
   type AchievementUnlocked,
@@ -134,6 +137,21 @@ export class LobbyRoom extends Room<{ state: LobbyState; client: LobbyClient }> 
     for (const c of targets) c.send(LobbyServerMessage.DmMessage, msg);
   };
 
+  /** Aviso da diretoria publicado ou apagado: vai para todo mundo conectado. */
+  private readonly onAnnouncement = (announcement: Announcement, authorId: string): void => {
+    for (const c of this.clients) {
+      // Quem publicou já leu (não ganha a faixa).
+      const read = c.auth?.id === authorId;
+      c.send(AnnouncementMessage.New, {
+        announcement: { ...announcement, read },
+      } satisfies AnnouncementNotice);
+    }
+  };
+
+  private readonly onAnnouncementRemoved = (id: number): void => {
+    this.broadcast(AnnouncementMessage.Removed, { id });
+  };
+
   /** Conquista nova: aviso para a pessoa (em todas as abas). */
   private readonly onUnlocked = (userId: string, def: AchievementDef): void => {
     for (const c of this.clientsOf(userId)) {
@@ -162,6 +180,8 @@ export class LobbyRoom extends Room<{ state: LobbyState; client: LobbyClient }> 
     services().moderation.on('kick', this.onKick);
     services().achievements.events.on('unlocked', this.onUnlocked);
     services().activity.events.on('changed', this.syncPeople);
+    services().announcements.events.on('created', this.onAnnouncement);
+    services().announcements.events.on('removed', this.onAnnouncementRemoved);
   }
 
   override onDispose(): void {
@@ -176,6 +196,8 @@ export class LobbyRoom extends Room<{ state: LobbyState; client: LobbyClient }> 
     services().moderation.off('kick', this.onKick);
     services().achievements.events.off('unlocked', this.onUnlocked);
     services().activity.events.off('changed', this.syncPeople);
+    services().announcements.events.off('created', this.onAnnouncement);
+    services().announcements.events.off('removed', this.onAnnouncementRemoved);
   }
 
   override onAuth(_client: Client, options: unknown): UserRow {
