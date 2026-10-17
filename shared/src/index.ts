@@ -23,3 +23,4 @@ export * from './whiteboard.js';
 export * from './meetings.js';
 export * from './games.js';
 export * from './pets.js';
+export * from './achievements.js';

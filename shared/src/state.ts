@@ -36,6 +36,8 @@ export const Player = schema(
     birthday: t.boolean(),
     /** Pode criar e editar salas. */
     canEditRooms: t.boolean(),
+    /** Emblemas de conquistas exibidos (ids separados por vírgula, até 3). */
+    badges: t.string(),
   },
   'Player',
 );

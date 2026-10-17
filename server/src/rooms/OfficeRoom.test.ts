@@ -818,4 +818,27 @@ describe('OfficeRoom', () => {
       },
     );
   });
+
+  describe('conquistas', () => {
+    it('ações na sala desbloqueiam; emblemas exibidos aparecem para os outros', async () => {
+      const ana = newUser('Ana');
+      const unlocked: string[] = [];
+      const onUnlock = (userId: string, def: { id: string }) => {
+        if (userId === ana.user.id) unlocked.push(def.id);
+      };
+      svc.achievements.events.on('unlocked', onUnlock);
+      const a = await join(ana.token);
+      const b = await join(newUser('Beto').token);
+      const said = b.waitForMessage(ServerMessage.Chat);
+      a.send(ClientMessage.Chat, { text: 'Bom dia!' });
+      await said;
+      expect(unlocked).toContain('first_message');
+      expect(svc.achievements.get(ana.user.id).stats).toMatchObject({ chat: 1, streak: 1 });
+
+      svc.achievements.setShowcase(ana.user.id, ['first_message']);
+      await wait(100);
+      expect(b.state.players.get(a.sessionId)!.badges).toBe('first_message');
+      svc.achievements.events.off('unlocked', onUnlock);
+    });
+  });
 });

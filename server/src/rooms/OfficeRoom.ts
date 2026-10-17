@@ -175,6 +175,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
         return this.sendError(c, ErrorCode.Forbidden, 'O mural está cheio. Tire um recado antes.');
       }
       services().boards.add(msg.furniId, c.auth.id, msg.text, msg.color);
+      services().achievements.unlock(c.auth.id, 'board_note');
       this.broadcast(ServerMessage.BoardChanged, { furniId: msg.furniId });
     }),
     [ClientMessage.BoardRemove]: validate(boardRemoveSchema, (client, msg) => {
@@ -209,6 +210,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
         );
       }
       const stroke = services().whiteboards.add(msg.furniId, c.auth.id, msg.stroke);
+      services().achievements.unlock(c.auth.id, 'artist');
       this.broadcast(ServerMessage.WbStroke, {
         furniId: msg.furniId,
         stroke,
@@ -488,6 +490,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       roomId: this.layout.roomId,
     });
     services().users.touch(user.id);
+    services().achievements.visit(user.id, this.layout.roomId);
     console.log(
       `[sala ${this.layout.roomId}] ${user.name} entrou (${this.state.players.size} na sala)`,
     );
@@ -693,6 +696,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       services().furni.setState(this.layout.roomId, f.id, f.state);
     } else if (def.interaction === 'coffee') {
       this.broadcast(ServerMessage.Emote, { sessionId, emote: 'coffee' } satisfies EmoteMessage);
+      if (player.userId) services().achievements.unlock(player.userId, 'coffee');
       // A máquina "trabalha" por um instante, se tiver estado para isso.
       if (def.states.includes(1)) {
         f.state = 1;
@@ -775,6 +779,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     if (!res) return;
     if (res.forfeitTo) {
       services().games.recordWin(TTT_GAME, res.forfeitTo.user, res.left.user);
+      services().achievements.bump(res.forfeitTo.user, 'tttWins');
       this.gameChat(res.forfeitTo, `🏆 venceu ${res.left.name} no jogo da velha (desistência)`);
     }
     if (ttt.isEmpty(game)) this.state.games.delete(furniId);
@@ -791,6 +796,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     }
     const [winner, loser] = outcome.winner === 'X' ? [x, o] : [o, x];
     services().games.recordWin(TTT_GAME, winner.user, loser.user);
+    services().achievements.bump(winner.user, 'tttWins');
     this.gameChat(winner, `🏆 venceu ${loser.name} no jogo da velha`);
   }
 
@@ -818,6 +824,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       client.auth.id,
     );
     this.state.furni.set(placed.id, toFurni(placed));
+    services().achievements.bump(client.auth.id, 'furni');
   }
 
   private handleFurniMove(client: OfficeClient, msg: FurniMoveMessage): void {
@@ -934,8 +941,12 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     const cmd = parseQuickCommand(msg.text);
     let kind: ChatKind = 'text';
     if (cmd) {
-      text = quickCommandText(cmd, cmd === 'dice' ? randomInt(1, 7) : randomInt(0, 2));
+      const roll = cmd === 'dice' ? randomInt(1, 7) : randomInt(0, 2);
+      text = quickCommandText(cmd, roll);
       kind = cmd;
+      if (cmd === 'dice' && roll === 6) services().achievements.unlock(client.auth.id, 'lucky');
+    } else {
+      services().achievements.bump(client.auth.id, 'chat');
     }
     // Só quem está nesta sala recebe (cada sala física é uma instância separada).
     const message = services().chat.add(
@@ -961,6 +972,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       return this.sendError(client, ErrorCode.RateLimit);
     }
     const reactions = services().chat.react(id, user.id, emoji);
+    services().achievements.bump(user.id, 'reactions');
     this.broadcast(ServerMessage.ChatReactions, { id, reactions } satisfies ReactionsUpdate);
   }
 

@@ -138,6 +138,7 @@ async function startBot(name: string): Promise<void> {
   const lobby = await client.joinOrCreate(LOBBY_ROOM, { token: session.token }, LobbyState);
   lobby.onMessage(LobbyServerMessage.Error, () => undefined);
   lobby.onMessage(LobbyServerMessage.DmReadReceipt, () => undefined);
+  lobby.onMessage('achievement.unlocked', () => undefined);
   lobby.onMessage(LobbyServerMessage.DmReactions, () => undefined);
   for (const t of ['meetings.changed', 'meeting.invited', 'meeting.reminder']) {
     lobby.onMessage(t, () => undefined);

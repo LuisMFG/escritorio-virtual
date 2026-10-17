@@ -12,6 +12,7 @@ import * as admin from './admin.js';
 import * as roomRoutes from './rooms.js';
 import * as meetingRoutes from './meetings.js';
 import * as petRoutes from './pets.js';
+import * as achievementRoutes from './achievements.js';
 import {
   changePassword,
   claim,
@@ -57,7 +58,7 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
   });
   app.use('/api', express.json({ limit: '16kb' }));
 
-  const auth: meetingRoutes.MeetingDeps & petRoutes.PetDeps = {
+  const auth: meetingRoutes.MeetingDeps & petRoutes.PetDeps & achievementRoutes.AchievementDeps = {
     inviteCode: () => svc.settings.inviteCode(),
     adminUsernames: cfg.adminUsernames,
     avatarManifest: svc.avatarManifest,
@@ -71,6 +72,7 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
     furniDefs: svc.furniDefs,
     meetings: svc.meetings,
     pets: svc.pets,
+    achievements: svc.achievements,
   };
   const send = <T>(res: Response, result: Result<T>) =>
     void res.status(result.status).json(result.body);
@@ -211,6 +213,16 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
   app.delete(
     '/api/pets/me',
     withCaller((c, _req, res) => send(res, petRoutes.releaseMyPet(c, auth))),
+  );
+
+  // Conquistas e emblemas exibidos.
+  app.get(
+    '/api/achievements/me',
+    withCaller((c, _req, res) => send(res, achievementRoutes.myAchievements(c, auth))),
+  );
+  app.put(
+    '/api/achievements/showcase',
+    withCaller((c, req, res) => send(res, achievementRoutes.setShowcase(c, req.body, auth))),
   );
 
   // Salas (admins e quem pode editar salas).

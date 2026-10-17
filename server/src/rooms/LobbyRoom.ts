@@ -1,5 +1,8 @@
 import { CloseCode, Room, ServerError, validate, type Client } from '@colyseus/core';
 import {
+  AchievementMessage,
+  type AchievementDef,
+  type AchievementUnlocked,
   dmHistorySchema,
   dmReadSchema,
   dmSendSchema,
@@ -131,6 +134,13 @@ export class LobbyRoom extends Room<{ state: LobbyState; client: LobbyClient }> 
     for (const c of targets) c.send(LobbyServerMessage.DmMessage, msg);
   };
 
+  /** Conquista nova: aviso para a pessoa (em todas as abas). */
+  private readonly onUnlocked = (userId: string, def: AchievementDef): void => {
+    for (const c of this.clientsOf(userId)) {
+      c.send(AchievementMessage.Unlocked, { id: def.id } satisfies AchievementUnlocked);
+    }
+  };
+
   /** Tirado do escritório (ou conta desativada): o canal global também fecha. */
   private readonly onKick = ({ userId, scope }: ModerationEvents['kick'][0]): void => {
     if (scope !== 'office') return;
@@ -150,6 +160,7 @@ export class LobbyRoom extends Room<{ state: LobbyState; client: LobbyClient }> 
     ev.on('dm', this.onAutoDm);
     ev.on('tick', this.syncRooms);
     services().moderation.on('kick', this.onKick);
+    services().achievements.events.on('unlocked', this.onUnlocked);
   }
 
   override onDispose(): void {
@@ -162,6 +173,7 @@ export class LobbyRoom extends Room<{ state: LobbyState; client: LobbyClient }> 
     ev.off('dm', this.onAutoDm);
     ev.off('tick', this.syncRooms);
     services().moderation.off('kick', this.onKick);
+    services().achievements.events.off('unlocked', this.onUnlocked);
   }
 
   override onAuth(_client: Client, options: unknown): UserRow {
@@ -204,6 +216,7 @@ export class LobbyRoom extends Room<{ state: LobbyState; client: LobbyClient }> 
       );
     }
     const message = services().dms.send(from.id, to.id, text, replyToId);
+    services().achievements.unlock(from.id, 'first_dm');
     const targets = new Set([...this.clientsOf(from.id), ...this.clientsOf(to.id)]);
     for (const c of targets) c.send(LobbyServerMessage.DmMessage, message);
   }

@@ -37,6 +37,8 @@ export const users = sqliteTable('users', {
   disabled: integer('disabled', { mode: 'boolean' }).notNull().default(false),
   /** Pode criar e editar salas (admins sempre podem). */
   canEditRooms: integer('can_edit_rooms', { mode: 'boolean' }).notNull().default(false),
+  /** Emblemas exibidos no cartão (até 3 ids de conquistas, separados por vírgula). */
+  badges: text('badges').notNull().default(''),
   figure: text('figure').notNull(),
   gender: text('gender', { enum: ['M', 'F'] })
     .notNull()
@@ -319,6 +321,46 @@ export const pets = sqliteTable('pets', {
   color: integer('color').notNull().default(0),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 });
+
+/** Conquistas desbloqueadas (as definições ficam em `shared/achievements.ts`). */
+export const userAchievements = sqliteTable(
+  'user_achievements',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id),
+    achievementId: text('achievement_id').notNull(),
+    unlockedAt: integer('unlocked_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.achievementId] })],
+);
+
+/** Contadores para as conquistas (mensagens, móveis, vitórias, dias seguidos…). */
+export const userStats = sqliteTable(
+  'user_stats',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id),
+    key: text('key').notNull(),
+    value: integer('value').notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.key] })],
+);
+
+/** Salas que cada pessoa já visitou (conquista Explorador). */
+export const userVisits = sqliteTable(
+  'user_visits',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id),
+    roomId: text('room_id')
+      .notNull()
+      .references(() => rooms.id, { onDelete: 'cascade' }),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.roomId] })],
+);
 
 export type UserRow = typeof users.$inferSelect;
 export type DirectMessageRow = typeof directMessages.$inferSelect;

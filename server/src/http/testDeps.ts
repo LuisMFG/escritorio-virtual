@@ -1,11 +1,12 @@
 import type { PetDeps } from './pets.js';
+import type { AchievementDeps } from './achievements.js';
 import { openDatabase } from '../db/client.js';
 import { createServices } from '../services/index.js';
 import type { MeetingDeps } from './meetings.js';
 import { register, type Caller } from './auth.js';
 
 /** Tudo que as rotas usam (os testes de cada área pegam a parte que precisam). */
-export type TestDeps = MeetingDeps & PetDeps;
+export type TestDeps = MeetingDeps & PetDeps & AchievementDeps;
 
 /** Dependências das rotas sobre um banco em memória (testes). */
 export function makeDeps(): TestDeps {
@@ -24,6 +25,7 @@ export function makeDeps(): TestDeps {
     furniDefs: svc.furniDefs,
     meetings: svc.meetings,
     pets: svc.pets,
+    achievements: svc.achievements,
   };
 }
 

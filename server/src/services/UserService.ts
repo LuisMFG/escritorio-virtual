@@ -3,6 +3,7 @@ import { EventEmitter } from 'node:events';
 import {
   DEFAULT_CARGOS,
   isBirthdayToday,
+  parseShowcase,
   type CargoInfo,
   type Role,
   type SessionResponse,
@@ -23,6 +24,8 @@ export interface PublicProfile {
   role: Role;
   birthday: boolean;
   canEditRooms: boolean;
+  /** Emblemas exibidos (ids separados por vírgula). */
+  badges: string;
 }
 
 export interface NewUser {
@@ -45,6 +48,7 @@ type UserChanges = Partial<
     | 'role'
     | 'cargoId'
     | 'bio'
+    | 'badges'
     | 'birthday'
     | 'disabled'
     | 'canEditRooms'
@@ -257,6 +261,7 @@ export class UserService {
       role: user.role,
       birthday: isBirthdayToday(user.birthday, this.now()),
       canEditRooms: user.role === 'admin' || user.canEditRooms,
+      badges: parseShowcase(user.badges).join(','),
     };
   }
 

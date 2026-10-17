@@ -12,6 +12,7 @@ import { WhiteboardService } from './WhiteboardService.js';
 import { MeetingService } from './MeetingService.js';
 import { GameService } from './GameService.js';
 import { PetService } from './PetService.js';
+import { AchievementService } from './AchievementService.js';
 import { AuditService } from './AuditService.js';
 import { SettingsService } from './SettingsService.js';
 import { EventEmitter } from 'node:events';
@@ -41,6 +42,7 @@ export interface Services {
   meetings: MeetingService;
   games: GameService;
   pets: PetService;
+  achievements: AchievementService;
   furni: FurniService;
   transfers: TransferRegistry;
   settings: SettingsService;
@@ -55,6 +57,17 @@ export function createServices(db: Db, defaults = { inviteCode: 'convite' }): Se
   users.seedCargos();
   const moderation = new EventEmitter<ModerationEvents>();
   moderation.setMaxListeners(100);
+  const meetings = new MeetingService(db);
+  const pets = new PetService(db);
+  const achievements = new AchievementService(db, users);
+  // Conquistas que vêm da agenda e dos pets.
+  meetings.events.on('invited', (m) => achievements.unlock(m.createdBy, 'organizer'));
+  meetings.events.on('reminder', (m) => {
+    for (const a of m.attendees) if (a.response === 'yes') achievements.bump(a.userId, 'meetings');
+  });
+  pets.events.on('changed', (userId, pet) => {
+    if (pet) achievements.unlock(userId, 'pet_owner');
+  });
   return {
     db,
     users,
@@ -64,9 +77,10 @@ export function createServices(db: Db, defaults = { inviteCode: 'convite' }): Se
     dms: new DmService(db),
     boards: new BoardService(db),
     whiteboards: new WhiteboardService(db),
-    meetings: new MeetingService(db),
+    meetings,
     games: new GameService(db),
-    pets: new PetService(db),
+    pets,
+    achievements,
     furni: new FurniService(db),
     transfers: new TransferRegistry(),
     settings: new SettingsService(db, defaults),
