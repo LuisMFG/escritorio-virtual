@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   auditList,
+  backupFile,
+  createBackup,
+  listBackups,
   createCargo,
   deleteCargo,
   kick,
@@ -147,5 +150,24 @@ describe('cargos e salas', () => {
     expect(events).toEqual([{ roomId: 'meeting', decorLocked: true }]);
     const res = overview(asAdmin(), deps);
     expect(res.ok && res.body.rooms.find((r) => r.id === 'meeting')?.decorLocked).toBe(true);
+  });
+});
+
+describe('backups', () => {
+  it('só admin lista, cria e baixa; fica no registro', async () => {
+    expect(listBackups(asBeto(), deps)).toMatchObject({ status: 403 });
+    expect(await createBackup(asBeto(), deps)).toMatchObject({ status: 403 });
+    const made = await createBackup(asAdmin(), deps);
+    if (!made.ok) throw new Error('esperava backup');
+    const list = listBackups(asAdmin(), deps);
+    expect(list.ok && list.body.backups.map((b) => b.name)).toContain(made.body.name);
+    expect(backupFile(asBeto(), made.body.name, deps)).toMatchObject({ status: 403 });
+    expect(backupFile(asAdmin(), '../segredo.db', deps)).toMatchObject({ status: 404 });
+    const file = backupFile(asAdmin(), made.body.name, deps);
+    expect(file.ok && file.body).toContain(made.body.name);
+    const log = auditList(asAdmin(), deps);
+    expect(log.ok && log.body.map((e) => e.action)).toEqual(
+      expect.arrayContaining(['backup.create', 'backup.download']),
+    );
   });
 });

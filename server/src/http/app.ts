@@ -83,6 +83,7 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
     activity: svc.activity,
     spotify: svc.spotify,
     spotifyPoller: svc.spotifyPoller,
+    backups: svc.backups,
   };
   const send = <T>(res: Response, result: Result<T>) =>
     void res.status(result.status).json(result.body);
@@ -303,6 +304,23 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
   app.delete(
     '/api/rooms/:id',
     withCaller((c, req, res) => send(res, roomRoutes.deleteRoom(c, id(req), auth))),
+  );
+  // Backups do banco (só admin).
+  app.get(
+    '/api/admin/backups',
+    withCaller((c, _req, res) => send(res, admin.listBackups(c, auth))),
+  );
+  app.post(
+    '/api/admin/backups',
+    withCaller(async (c, _req, res) => send(res, await admin.createBackup(c, auth))),
+  );
+  app.get(
+    '/api/admin/backups/:name',
+    withCaller((c, req, res) => {
+      const file = admin.backupFile(c, String(req.params.name), auth);
+      if (!file.ok) return send(res, file);
+      res.download(file.body);
+    }),
   );
   app.delete(
     '/api/admin/cargos/:id',

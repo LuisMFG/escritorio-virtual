@@ -54,6 +54,8 @@ const testConfig: Config = {
   habboAssetsApiKey: undefined,
   clientDistDir: '/nao-existe',
   isProduction: false,
+  backupDir: '/tmp/escritorio-teste-backups',
+  backupKeep: 7,
 };
 
 async function join(token: string, roomId = RECEPTION.id, ticket?: string) {

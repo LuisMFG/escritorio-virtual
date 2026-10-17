@@ -99,7 +99,28 @@ export const AUDIT_LABELS: Record<string, string> = {
   'cargo.order': 'reordenou os cargos',
   'room.decor': 'mudou a decoração da sala',
   'chat.delete': 'apagou uma mensagem de',
+  'backup.create': 'fez um backup do banco',
+  'backup.download': 'baixou o backup',
 };
+
+// ---------- Backups (Fase 22) ----------
+
+/** Um arquivo de backup do banco (`GET /api/admin/backups`). */
+export interface BackupInfo {
+  name: string;
+  /** Bytes. */
+  size: number;
+  /** Epoch ms. */
+  createdAt: number;
+}
+
+export interface BackupList {
+  backups: BackupInfo[];
+  /** Quantos ficam guardados (os mais antigos saem). */
+  keep: number;
+  /** Hora (no fuso do escritório) do backup diário. */
+  dailyHour: number;
+}
 
 // ---------- Mensagens em tempo real ----------
 

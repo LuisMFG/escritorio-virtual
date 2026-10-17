@@ -10,6 +10,15 @@ import * as schema from './schema.js';
 
 export type Db = BetterSQLite3Database<typeof schema>;
 
+/** Conexão SQLite por trás de cada `Db` (para a API de backup). */
+const connections = new WeakMap<Db, Database.Database>();
+
+export function sqliteOf(db: Db): Database.Database {
+  const conn = connections.get(db);
+  if (!conn) throw new Error('Banco sem conexão SQLite registrada.');
+  return conn;
+}
+
 const MIGRATIONS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'drizzle');
 
 /**
@@ -22,6 +31,7 @@ export function openDatabase(path: string): Db {
   sqlite.pragma('journal_mode = WAL');
   sqlite.pragma('foreign_keys = ON');
   const db = drizzle(sqlite, { schema });
+  connections.set(db, sqlite);
   migrate(db, { migrationsFolder: MIGRATIONS_DIR });
   seedRooms(db);
   return db;

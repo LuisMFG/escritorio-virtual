@@ -55,6 +55,10 @@ export interface Config {
   clientDistDir: string;
   isProduction: boolean;
   spotify?: SpotifyConfig;
+  /** Pasta dos backups diários do banco (Fase 22). */
+  backupDir: string;
+  /** Quantos backups guardar. */
+  backupKeep: number;
 }
 
 export const config: Config = {
@@ -70,4 +74,6 @@ export const config: Config = {
   clientDistDir: resolve(ROOT_DIR, 'client', 'dist'),
   isProduction,
   spotify: spotify(Number(process.env.PORT ?? 2567)),
+  backupDir: fromRoot(process.env.BACKUP_DIR ?? './data/backups'),
+  backupKeep: Math.max(1, Number(process.env.BACKUP_KEEP ?? 7) || 7),
 };

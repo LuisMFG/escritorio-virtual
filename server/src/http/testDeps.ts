@@ -1,3 +1,6 @@
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { PetDeps } from './pets.js';
 import type { AchievementDeps } from './achievements.js';
 import type { ActivityDeps } from './activity.js';
@@ -12,7 +15,10 @@ export type TestDeps = MeetingDeps & PetDeps & AchievementDeps & ActivityDeps & 
 
 /** Dependências das rotas sobre um banco em memória (testes). */
 export function makeDeps(): TestDeps {
-  const svc = createServices(openDatabase(':memory:'), { inviteCode: 'segredo' });
+  const svc = createServices(openDatabase(':memory:'), { inviteCode: 'segredo' }, undefined, {
+    dir: mkdtempSync(join(tmpdir(), 'escritorio-teste-backups-')),
+    keep: 7,
+  });
   return {
     inviteCode: () => svc.settings.inviteCode(),
     adminUsernames: [],
@@ -32,6 +38,7 @@ export function makeDeps(): TestDeps {
     activity: svc.activity,
     spotify: svc.spotify,
     spotifyPoller: svc.spotifyPoller,
+    backups: svc.backups,
   };
 }
 

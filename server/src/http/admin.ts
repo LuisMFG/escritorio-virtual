@@ -13,11 +13,14 @@ import {
   roomSettingsSchema,
   type AdminOverview,
   type AuditEntry,
+  type BackupInfo,
+  type BackupList,
   type TempPasswordResponse,
 } from '@office/shared';
 import type { z } from 'zod';
 import { hashPassword } from '../auth/passwords.js';
 import type { AuditService } from '../services/AuditService.js';
+import { BACKUP_HOUR, type BackupService } from '../services/BackupService.js';
 import type { ModerationEvents } from '../services/index.js';
 import type { RoomRepository } from '../services/RoomRepository.js';
 import type { SettingsService } from '../services/SettingsService.js';
@@ -28,6 +31,7 @@ export interface AdminDeps extends AuthDeps {
   settings: SettingsService;
   rooms: RoomRepository;
   moderation: EventEmitter<ModerationEvents>;
+  backups: BackupService;
 }
 
 type Ok<T> = { ok: true; status: 200; body: T };
@@ -317,4 +321,30 @@ export function auditList(caller: Caller, deps: AdminDeps): Result<AuditEntry[]>
   const denied = guard(caller);
   if (denied) return denied;
   return ok(deps.audit.list(200));
+}
+
+// ---------- Backups ----------
+
+export function listBackups(caller: Caller, deps: AdminDeps): Result<BackupList> {
+  const denied = guard(caller);
+  if (denied) return denied;
+  return ok({ backups: deps.backups.list(), keep: deps.backups.keep, dailyHour: BACKUP_HOUR });
+}
+
+export async function createBackup(caller: Caller, deps: AdminDeps): Promise<Result<BackupInfo>> {
+  const denied = guard(caller);
+  if (denied) return denied;
+  const backup = await deps.backups.create();
+  deps.audit.log(caller.user.id, 'backup.create', null, backup.name);
+  return ok(backup);
+}
+
+/** Caminho do arquivo para baixar (só admin; registra no log). */
+export function backupFile(caller: Caller, name: string, deps: AdminDeps): Result<string> {
+  const denied = guard(caller);
+  if (denied) return denied;
+  const path = deps.backups.pathOf(name);
+  if (!path) return fail(404, ErrorCode.NotFound);
+  deps.audit.log(caller.user.id, 'backup.download', null, name);
+  return ok(path);
 }

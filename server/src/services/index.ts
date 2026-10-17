@@ -17,6 +17,9 @@ import { ApiTokenService } from './ApiTokenService.js';
 import { ActivityService } from './ActivityService.js';
 import { SpotifyService } from './SpotifyService.js';
 import { SpotifyPoller } from './SpotifyPoller.js';
+import { BackupService } from './BackupService.js';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { SpotifyConfig } from '../config.js';
 import { AuditService } from './AuditService.js';
 import { SettingsService } from './SettingsService.js';
@@ -52,6 +55,7 @@ export interface Services {
   activity: ActivityService;
   spotify: SpotifyService;
   spotifyPoller: SpotifyPoller;
+  backups: BackupService;
   furni: FurniService;
   transfers: TransferRegistry;
   settings: SettingsService;
@@ -65,6 +69,7 @@ export function createServices(
   db: Db,
   defaults = { inviteCode: 'convite' },
   spotifyConfig?: SpotifyConfig,
+  backup = { dir: join(tmpdir(), 'escritorio-backups'), keep: 7 },
 ): Services {
   const users = new UserService(db);
   users.seedCargos();
@@ -101,6 +106,7 @@ export function createServices(
     activity,
     spotify,
     spotifyPoller: new SpotifyPoller(spotify, presence, activity),
+    backups: new BackupService(db, backup.dir, backup.keep),
     furni: new FurniService(db),
     transfers: new TransferRegistry(),
     settings: new SettingsService(db, defaults),
