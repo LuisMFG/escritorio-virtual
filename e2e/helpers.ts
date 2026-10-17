@@ -113,3 +113,10 @@ export async function goThroughDoor(page: Page, door: [number, number], roomId: 
   await clickTile(page, door[0], door[1]);
   await waitRoom(page, roomId);
 }
+
+/** Abre o histórico do chat (se estiver recolhido), para ver e clicar nas mensagens. */
+export async function openChatHistory(page: Page): Promise<void> {
+  await page.locator('details.chat-history').evaluate((d) => {
+    (d as HTMLDetailsElement).open = true;
+  });
+}
