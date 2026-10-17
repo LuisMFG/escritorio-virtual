@@ -153,6 +153,7 @@ meetings        { id, title, description, roomId: fk rooms (cascade), startsAt, 
 meeting_attendees { meetingId: fk meetings (cascade), userId, response: 'pending'|'yes'|'no' } pk(meetingId, userId)
 chat_messages   … + kind: 'text'|'dice'|'coin'|'game'   // Fase 17
 game_scores     { userId, game ('tictactoe'), wins, losses, draws } pk(userId, game)
+pets            { userId pk, name, species: 'dog'|'cat'|'bunny'|'chick', color 0–2, createdAt } // Fase 18
 dm_reactions    { messageId: fk direct_messages (cascade), userId, emoji } pk(os três)
 
 rooms          { id: text pk ('reception'|'meeting'|'pantry'), name: text,
@@ -668,11 +669,20 @@ Pedido em 17/10/2026, depois da Fase 8: deixar o escritório "muito completo". M
 - Fim de partida: placar em `game_scores` e aviso no chat da sala ("🏆 venceu Beto no jogo da velha", "🤝 empatou com…"). Sair no meio (botão ou saindo da sala) dá a vitória ao outro por desistência. Recarregar a página no meio da partida também conta como saída.
 - Testado no navegador contra um script temporário (Davi jogando sozinho). A pessoa que só assiste foi verificada no teste automático da sala (terceiro cliente), porque o navegador de teste só tem uma conta aberta.
 
-### Fase 18 — Pets
+### Fase 18 — Pets ✅ implementada
 - Cada pessoa pode ter um bichinho (cachorro, gato…) com nome. Ele segue o dono, passeia sozinho quando o dono para e obedece comandos no chat (`/senta`, `/deita`, `/vem`).
 - Arte: tentar os pets da HabboAssets; se o imager não tiver render utilizável, arte própria CC0 (decisão na hora, com aviso).
 
 **Como testar:** adotar um pet, andar e ver ele seguir; dar comandos; a outra aba vê o pet.
+
+**Notas da implementação:**
+- **Arte (decisão na hora):** o imager da HabboAssets não tem render de pets (só os SWFs, sem PNG), então os pets são **pixel art própria desenhada por código** (`client/src/assets/petArt.ts`): cachorro, gato, coelho e pintinho, 3 pelagens cada, nas poses em pé, andando (2 quadros), sentado e deitado (olhos fechados). Grades 16×12 com contorno gerado, de perfil; a cena espelha para a esquerda. Registrado no `ASSETS.md`.
+- Banco: `pets` (um por pessoa, migration `0014`). Rotas `GET/PUT/DELETE /api/pets/me`. No **Perfil (👤)** aparece a seção "🐾 Meu pet": adotar (nome, espécie, pelagem, com prévia), editar e soltar. As salas abertas são avisadas e o pet aparece, muda ou some na hora.
+- Estado da sala: `pets` (chave = conta do dono) com posição, direção e ação (`idle`/`walk`/`sit`/`lie`). O movimento é o mesmo dos avatares (A* no servidor, passo a passo). Pets não bloqueiam ninguém, não param em portas, em cima de gente parada ou de outro pet.
+- Comportamento (`server/src/rooms/PetKeeper.ts`, pensa a cada 0,5 s): segue o dono quando ele passa de 2 tiles; com o dono parado, dá voltas por perto a cada 4–9 s. Troca de sala junto com o dono e, com duas abas abertas, passa para a outra quando uma fecha.
+- Comandos no chat: `/senta`, `/deita` e `/vem` (também `/sentar`, `/deitar`, `/aqui`). Viram a fala "Rex, senta!" no chat da sala. Sentado ou deitado, o pet fica assim por até 30 s ou até o dono se afastar mais de 4 tiles. Sem pet, aparece um aviso.
+- Passar o mouse sobre o pet mostra "Nome · pet de Fulano".
+- Testado no navegador com Ana (cachorro Bolota) e o robô Davi com um gato (Frajola) adotado pela API: seguir, comandos, nome e troca de sala.
 
 ### Fase 19 — Conquistas
 - ~15 conquistas (primeira mensagem, primeiro móvel colocado, visitou todas as salas, 7 dias seguidos, ganhou no jogo da velha, participou de 5 reuniões…), com emblema e aviso ao desbloquear (`achievements`, `user_achievements`).
