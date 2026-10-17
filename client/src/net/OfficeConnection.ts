@@ -8,6 +8,8 @@ import {
   type ChatDeletedMessage,
   type KickedMessage,
   type BoardNote,
+  type PollCreate,
+  type PollUpdated,
   type TttScores,
   type NoteColor,
   type WbDraft,
@@ -53,6 +55,8 @@ interface Handlers {
   emote: (msg: EmoteMessage) => void;
   chatDeleted: (msg: ChatDeletedMessage) => void;
   chatReactions: (msg: ReactionsUpdate) => void;
+  /** Votos ou estado de uma enquete mudaram. */
+  pollUpdated: (msg: PollUpdated) => void;
   /** Recados de um mural mudaram. */
   boardChanged: (furniId: string) => void;
   wbStroke: (msg: WbStrokeMessage) => void;
@@ -206,6 +210,18 @@ export class OfficeConnection {
     this.room?.send(ClientMessage.Chat, { text, replyToId });
   }
 
+  createPoll(poll: Required<PollCreate>): void {
+    this.room?.send(ClientMessage.PollCreate, poll);
+  }
+
+  votePoll(pollId: number, option: number): void {
+    this.room?.send(ClientMessage.PollVote, { pollId, option });
+  }
+
+  closePoll(pollId: number): void {
+    this.room?.send(ClientMessage.PollClose, { pollId });
+  }
+
   react(id: number, emoji: Reaction): void {
     this.room?.send(ClientMessage.ChatReact, { id, emoji });
   }
@@ -243,6 +259,7 @@ export class OfficeConnection {
     room.onMessage(ServerMessage.ChatReactions, (msg: ReactionsUpdate) =>
       this.on.chatReactions(msg),
     );
+    room.onMessage(ServerMessage.PollUpdated, (msg: PollUpdated) => this.on.pollUpdated(msg));
     room.onMessage(ServerMessage.BoardChanged, (m: { furniId: string }) =>
       this.on.boardChanged(m.furniId),
     );

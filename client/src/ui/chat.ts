@@ -13,6 +13,8 @@ import {
   type Reaction,
   type ReactionSummary,
 } from '@office/shared';
+import type { PollCreate, PollView } from '@office/shared';
+import { openPollForm, pollCard } from './poll.js';
 import { confirmDialog } from './confirm.js';
 import {
   flashMessage,
@@ -37,6 +39,10 @@ export interface ChatHandlers {
   typing(on: boolean): void;
   /** Apagar a mensagem (o servidor confere se pode). */
   remove(id: number): void;
+  /** Enquetes: criar (pelo formulário), votar e encerrar. */
+  createPoll(poll: Required<PollCreate>): void;
+  votePoll(pollId: number, option: number): void;
+  closePoll(pollId: number): void;
 }
 
 /**
@@ -95,6 +101,22 @@ export class ChatPanel {
         this.on.emote(id);
         this.toggleEmoteMenu(false);
         this.input.focus();
+      });
+      this.emoteMenu.append(b);
+    }
+    // Enquete: abre o formulário (também dá para usar /enquete Pergunta? | a | b).
+    {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.setAttribute('role', 'menuitem');
+      b.title = 'Enquete (/enquete Pergunta? | opção 1 | opção 2)';
+      b.append(
+        Object.assign(document.createElement('span'), { className: 'emoji', textContent: '📊' }),
+        Object.assign(document.createElement('span'), { textContent: 'Enquete' }),
+      );
+      b.addEventListener('click', () => {
+        this.toggleEmoteMenu(false);
+        openPollForm((poll) => this.on.createPoll(poll));
       });
       this.emoteMenu.append(b);
     }
@@ -195,6 +217,19 @@ export class ChatPanel {
   replyTo(m: ChatMessage): void {
     this.replyBar.set({ id: m.id, userId: m.userId, name: m.name, text: replyPreviewText(m.text) });
     this.input.focus();
+  }
+
+  /** Votos ou estado de uma enquete mudaram: troca o cartão. */
+  updatePoll(poll: PollView): void {
+    this.log.querySelector(`.poll-card[data-poll="${poll.id}"]`)?.replaceWith(this.pollCard(poll));
+  }
+
+  private pollCard(poll: PollView): HTMLElement {
+    return pollCard(poll, {
+      vote: (id, option) => this.on.votePoll(id, option),
+      close: (id) => this.on.closePoll(id),
+      canClose: (p) => this.isAdmin || p.createdBy === this.localUserId,
+    });
   }
 
   /** Mensagem apagada no servidor: some do histórico. */
@@ -416,7 +451,12 @@ export class ChatPanel {
     const name = document.createElement('strong');
     name.textContent = m.name;
     const body =
-      m.kind === 'text' ? this.textWithMentions(m.text) : document.createTextNode(m.text);
+      m.kind === 'poll' && m.poll
+        ? this.pollCard(m.poll)
+        : m.kind === 'text'
+          ? this.textWithMentions(m.text)
+          : document.createTextNode(m.text);
+    if (m.kind === 'poll') li.classList.add('chat-poll');
     li.append(time, ' ', name, ' ', body, this.actions(m));
     li.append(this.chips(m.id, m.reactions));
     return li;

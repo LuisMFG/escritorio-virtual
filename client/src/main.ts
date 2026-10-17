@@ -192,6 +192,9 @@ async function start(): Promise<void> {
     emote: (id) => connection?.emote(id),
     typing: (on) => connection?.typing(on),
     remove: (id) => connection?.deleteChat(id),
+    createPoll: (poll) => connection?.createPoll(poll),
+    votePoll: (id, option) => connection?.votePoll(id, option),
+    closePoll: (id) => connection?.closePoll(id),
   });
 
   // Título da aba: "(@2)" para menções vistas com a aba escondida, "(3)" para DMs não lidas.
@@ -831,6 +834,7 @@ async function start(): Promise<void> {
         if (board?.furniId === furniId) board.refresh();
       },
       chatReactions: (msg) => chat.updateReactions(msg.id, msg.reactions),
+      pollUpdated: ({ poll }) => chat.updatePoll(poll),
       kicked: (msg) => {
         if (msg.scope === 'room') return overlay.notify(msg.message);
         // Do escritório: volta para a entrada com o aviso.
