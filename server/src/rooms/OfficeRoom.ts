@@ -2,6 +2,9 @@ import { randomInt } from 'node:crypto';
 import { CloseCode, Room, ServerError, validate, type Client, type Deferred } from '@colyseus/core';
 import {
   canPlace,
+  parsePetCommand,
+  petCommandText,
+  type PetInfo,
   parseQuickCommand,
   quickCommandText,
   TTT_GAME,
@@ -71,6 +74,7 @@ import { services, type ModerationEvents } from '../services/index.js';
 import { KeyedRateLimiter } from '../util/rateLimiter.js';
 import { MovementSystem, type Mover } from './MovementSystem.js';
 import * as ttt from './ticTacToe.js';
+import { PetKeeper } from './PetKeeper.js';
 
 const TICK_MS = 50;
 /** Segundos que um avatar desconectado espera por reconexão antes de sair da sala. */
@@ -90,6 +94,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
   private layout!: RoomLayoutMessage;
   private map!: Heightmap;
   private movement!: MovementSystem;
+  private pets!: PetKeeper;
   private readonly moveLimiter = new KeyedRateLimiter(5, 5);
   private readonly avatarLimiter = new KeyedRateLimiter(3, 0.5);
   /** Chat: até 3 mensagens seguidas, recarregando 3 a cada 5 s. */
@@ -288,6 +293,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     }
     for (const c of this.clients) if (c.auth?.id === user.id) c.auth = user;
     services().presence.rename(user.id, user.name);
+    this.pets.ownerRenamed(user.id, user.name);
   };
 
   /** Admin tirou alguém: da sala (vai para a Recepção) ou do escritório (desconecta). */
@@ -322,6 +328,19 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       }
     }
   };
+
+  /** Pet adotado, editado ou solto: aparece, muda ou some nesta sala. */
+  private readonly onPetChanged = (userId: string, pet: PetInfo | null): void => {
+    const session = this.state.pets.get(userId)?.ownerSession ?? this.sessionOf(userId);
+    const player = session ? this.state.players.get(session) : undefined;
+    if (!session || !player) return;
+    this.pets.set(userId, pet, session, player.name);
+  };
+
+  private sessionOf(userId: string): string | null {
+    for (const [id, p] of this.state.players.entries()) if (p.userId === userId) return id;
+    return null;
+  }
 
   private readonly onRoomSettings = ({ roomId, decorLocked }: ModerationEvents['room'][0]) => {
     if (roomId === this.layout.roomId) this.state.decorLocked = decorLocked;
@@ -362,6 +381,14 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
         dir: layout.spawn.dir,
       });
     }
+    // Pets voltam para perto do dono (o piso pode ter mudado).
+    for (const [userId, pet] of [...this.state.pets.entries()]) {
+      const info = services().pets.get(userId);
+      const owner = pet.ownerSession;
+      const name = pet.ownerName;
+      this.pets.remove(userId);
+      this.pets.set(userId, info, owner, name);
+    }
     this.broadcast(ServerMessage.LayoutChanged, {});
   };
 
@@ -378,14 +405,28 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     this.state.roomId = layout.roomId;
     this.state.decorLocked = services().rooms.isDecorLocked(layout.roomId);
     for (const f of services().furni.list(layout.roomId)) this.state.furni.set(f.id, toFurni(f));
-    this.setSimulationInterval(
-      (dt) => this.movement.tick(dt, this.state.players.entries()),
-      TICK_MS,
-    );
+    this.pets = new PetKeeper({
+      pets: this.state.pets,
+      grid: (id) => this.petGrid(id),
+      owner: (sessionId) => {
+        const p = this.state.players.get(sessionId);
+        if (!p) return null;
+        const dest = this.movement.destinationOf(sessionId, p);
+        const walking = p.nextX !== p.x || p.nextY !== p.y || dest.x !== p.x || dest.y !== p.y;
+        return { tile: { x: p.x, y: p.y }, dest, walking };
+      },
+      now: () => Date.now(),
+      random: Math.random,
+    });
+    this.setSimulationInterval((dt) => {
+      this.movement.tick(dt, this.state.players.entries());
+      this.pets.tick(dt);
+    }, TICK_MS);
     services().users.events.on('updated', this.onUserUpdated);
     services().moderation.on('kick', this.onKick);
     services().moderation.on('room', this.onRoomSettings);
     services().moderation.on('layout', this.onLayout);
+    services().pets.events.on('changed', this.onPetChanged);
   }
 
   override onDispose(): void {
@@ -393,6 +434,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     services().moderation.off('kick', this.onKick);
     services().moderation.off('room', this.onRoomSettings);
     services().moderation.off('layout', this.onLayout);
+    services().pets.events.off('changed', this.onPetChanged);
   }
 
   override onAuth(_client: Client, options: unknown): UserRow {
@@ -435,6 +477,10 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       typing: false,
     });
     this.state.players.set(client.sessionId, player);
+    const pet = services().pets.get(user.id);
+    if (pet && !this.state.pets.has(user.id)) {
+      this.pets.set(user.id, pet, client.sessionId, player.name);
+    }
     services().presence.add({
       sessionId: client.sessionId,
       userId: user.id,
@@ -485,6 +531,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     this.pendingUse.delete(client.sessionId);
     this.pendingSit.delete(client.sessionId);
     for (const furniId of [...this.state.games.keys()]) this.leaveGame(furniId, client.sessionId);
+    this.pets.ownerLeft(client.sessionId, (userId) => this.sessionOf(userId));
     services().presence.remove(client.sessionId);
     if (client.auth) {
       services().users.touch(client.auth.id);
@@ -868,9 +915,23 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     if (!client.auth || !this.state.players.has(client.sessionId)) return;
     if (!this.chatLimiter.tryTake(client.sessionId))
       return this.sendError(client, ErrorCode.RateLimit);
+    // `/senta`, `/deita`, `/vem`: comando para o próprio pet (aparece no chat como fala do dono).
+    const petCmd = parsePetCommand(msg.text);
+    let text = msg.text;
+    if (petCmd) {
+      const pet = this.state.pets.get(client.auth.id);
+      if (!pet) {
+        return this.sendError(
+          client,
+          ErrorCode.Forbidden,
+          'Você não tem um pet. Adote um no seu Perfil (👤).',
+        );
+      }
+      text = petCommandText(petCmd, pet.name);
+      this.pets.command(client.auth.id, petCmd);
+    }
     // `/dado` e `/moeda`: o servidor sorteia, para ninguém escolher o resultado.
     const cmd = parseQuickCommand(msg.text);
-    let text = msg.text;
     let kind: ChatKind = 'text';
     if (cmd) {
       text = quickCommandText(cmd, cmd === 'dice' ? randomInt(1, 7) : randomInt(0, 2));
@@ -962,6 +1023,18 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       // Assento só vale como destino para quem clicou nele (`interact`).
       seatsAsGoal: this.pendingSit.has(sessionId),
     });
+  }
+
+  /** Grade dos pets: não param em portas, em gente parada nem em cima de outro pet. */
+  private petGrid(petId: string): RoomGrid {
+    const occupied: TilePoint[] = [...this.layout.doors];
+    for (const [id, p] of this.state.players.entries()) {
+      occupied.push({ x: p.x, y: p.y }, this.movement.destinationOf(id, p));
+    }
+    for (const [id, p] of this.state.pets.entries()) {
+      if (id !== petId) occupied.push({ x: p.nextX, y: p.nextY });
+    }
+    return new RoomGrid(this.map, this.furniList(), services().furniDefs, { occupied });
   }
 
   /** O próprio tile de entrada ou o livre mais próximo dele (busca em anéis). */

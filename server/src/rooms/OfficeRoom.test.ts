@@ -766,4 +766,56 @@ describe('OfficeRoom', () => {
       expect(c.state.games.has(table.id)).toBe(false);
     });
   });
+
+  describe('pets', () => {
+    it(
+      'aparece junto do dono, segue, obedece e some quando é solto',
+      { timeout: 20_000 },
+      async () => {
+        const roomId = svc.rooms.create('Pets', svc.furniDefs).id;
+        const ana = newUser('Ana');
+        svc.pets.save(ana.user.id, { name: 'Rex', species: 'dog', color: 0 });
+        const a = await join(ana.token, roomId);
+        const b = await join(newUser('Beto').token, roomId);
+        await wait(100);
+        const rex = () => b.state.pets.get(ana.user.id)!;
+        const me = () => a.state.players.get(a.sessionId)!;
+        expect(rex()).toMatchObject({ name: 'Rex', species: 'dog', ownerName: 'Ana' });
+        const far = (p: { x: number; y: number }, q: { x: number; y: number }) =>
+          Math.max(Math.abs(p.x - q.x), Math.abs(p.y - q.y));
+        expect(far(rex(), me())).toBeLessThanOrEqual(1);
+
+        // Dono anda para longe: o pet vai atrás.
+        const goal = me().x > 4 ? { x: 2, y: 2 } : { x: 7, y: 6 };
+        a.send(ClientMessage.Move, goal);
+        await wait(STEP_MS * 16);
+        expect(far(rex(), goal)).toBeLessThanOrEqual(2);
+
+        // Comandos: a fala aparece no chat e o pet obedece.
+        const said = b.waitForMessage(ServerMessage.Chat);
+        a.send(ClientMessage.Chat, { text: '/senta' });
+        expect(((await said) as ChatMessage).text).toBe('Rex, senta!');
+        await wait(STEP_MS * 3);
+        expect(rex().action).toBe('sit');
+
+        // Quem não tem pet recebe aviso.
+        b.send(ClientMessage.Chat, { text: '/deita' });
+        expect(((await b.waitForMessage(ServerMessage.Error)) as ErrorMessage).message).toMatch(
+          /não tem um pet/,
+        );
+
+        // Soltar o pet (HTTP) tira ele da sala na hora.
+        svc.pets.remove(ana.user.id);
+        await wait(100);
+        expect(b.state.pets.has(ana.user.id)).toBe(false);
+        // Adotar de novo: aparece ao lado.
+        svc.pets.save(ana.user.id, { name: 'Mimi', species: 'cat', color: 1 });
+        await wait(100);
+        expect(b.state.pets.get(ana.user.id)?.name).toBe('Mimi');
+        await a.leave();
+        await wait(150);
+        expect(b.state.pets.size).toBe(0);
+      },
+    );
+  });
 });

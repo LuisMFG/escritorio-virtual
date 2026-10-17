@@ -11,6 +11,7 @@ import type { PresenceResponse } from '@office/shared';
 import * as admin from './admin.js';
 import * as roomRoutes from './rooms.js';
 import * as meetingRoutes from './meetings.js';
+import * as petRoutes from './pets.js';
 import {
   changePassword,
   claim,
@@ -56,7 +57,7 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
   });
   app.use('/api', express.json({ limit: '16kb' }));
 
-  const auth: meetingRoutes.MeetingDeps = {
+  const auth: meetingRoutes.MeetingDeps & petRoutes.PetDeps = {
     inviteCode: () => svc.settings.inviteCode(),
     adminUsernames: cfg.adminUsernames,
     avatarManifest: svc.avatarManifest,
@@ -69,6 +70,7 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
     furni: svc.furni,
     furniDefs: svc.furniDefs,
     meetings: svc.meetings,
+    pets: svc.pets,
   };
   const send = <T>(res: Response, result: Result<T>) =>
     void res.status(result.status).json(result.body);
@@ -195,6 +197,20 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
   app.delete(
     '/api/meetings/:id',
     withCaller((c, req, res) => send(res, meetingRoutes.cancelMeeting(c, Number(id(req)), auth))),
+  );
+
+  // Pet de cada pessoa.
+  app.get(
+    '/api/pets/me',
+    withCaller((c, _req, res) => send(res, petRoutes.getMyPet(c, auth))),
+  );
+  app.put(
+    '/api/pets/me',
+    withCaller((c, req, res) => send(res, petRoutes.saveMyPet(c, req.body, auth))),
+  );
+  app.delete(
+    '/api/pets/me',
+    withCaller((c, _req, res) => send(res, petRoutes.releaseMyPet(c, auth))),
   );
 
   // Salas (admins e quem pode editar salas).

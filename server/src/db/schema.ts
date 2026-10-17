@@ -308,6 +308,18 @@ export const gameScores = sqliteTable(
   (t) => [primaryKey({ columns: [t.userId, t.game] })],
 );
 
+/** Pet de cada pessoa (no máximo um). */
+export const pets = sqliteTable('pets', {
+  userId: text('user_id')
+    .primaryKey()
+    .references(() => users.id),
+  name: text('name').notNull(),
+  /** 'dog' | 'cat' | 'bunny' | 'chick' */
+  species: text('species').notNull(),
+  color: integer('color').notNull().default(0),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+});
+
 export type UserRow = typeof users.$inferSelect;
 export type DirectMessageRow = typeof directMessages.$inferSelect;
 export type CargoRow = typeof cargos.$inferSelect;

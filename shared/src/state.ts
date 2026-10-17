@@ -87,6 +87,29 @@ export const TttGame = schema(
 );
 export type TttGame = SchemaType<typeof TttGame>;
 
+/** Pet que acompanha alguém na sala (chave = id da conta do dono). */
+export const Pet = schema(
+  {
+    /** Sessão (avatar) que ele segue. */
+    ownerSession: t.string(),
+    ownerName: t.string(),
+    name: t.string(),
+    /** 'dog' | 'cat' | 'bunny' | 'chick' */
+    species: t.string(),
+    color: t.uint8(),
+    x: t.uint8(),
+    y: t.uint8(),
+    z: t.float32(),
+    nextX: t.uint8(),
+    nextY: t.uint8(),
+    dir: t.uint8(),
+    /** 'idle' | 'walk' | 'sit' | 'lie' */
+    action: t.string(),
+  },
+  'Pet',
+);
+export type Pet = SchemaType<typeof Pet>;
+
 export const OfficeState = schema(
   {
     roomId: t.string(),
@@ -96,6 +119,8 @@ export const OfficeState = schema(
     furni: t.map(Furni),
     /** Partidas de jogo da velha (chave = id da mesa). */
     games: t.map(TttGame),
+    /** Pets de quem está na sala (chave = id da conta do dono). */
+    pets: t.map(Pet),
     /** Só admins decoram esta sala. */
     decorLocked: t.boolean(),
   },

@@ -11,6 +11,7 @@ import { BoardService } from './BoardService.js';
 import { WhiteboardService } from './WhiteboardService.js';
 import { MeetingService } from './MeetingService.js';
 import { GameService } from './GameService.js';
+import { PetService } from './PetService.js';
 import { AuditService } from './AuditService.js';
 import { SettingsService } from './SettingsService.js';
 import { EventEmitter } from 'node:events';
@@ -39,6 +40,7 @@ export interface Services {
   whiteboards: WhiteboardService;
   meetings: MeetingService;
   games: GameService;
+  pets: PetService;
   furni: FurniService;
   transfers: TransferRegistry;
   settings: SettingsService;
@@ -64,6 +66,7 @@ export function createServices(db: Db, defaults = { inviteCode: 'convite' }): Se
     whiteboards: new WhiteboardService(db),
     meetings: new MeetingService(db),
     games: new GameService(db),
+    pets: new PetService(db),
     furni: new FurniService(db),
     transfers: new TransferRegistry(),
     settings: new SettingsService(db, defaults),

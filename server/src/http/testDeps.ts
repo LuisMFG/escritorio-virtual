@@ -1,13 +1,14 @@
+import type { PetDeps } from './pets.js';
 import { openDatabase } from '../db/client.js';
 import { createServices } from '../services/index.js';
 import type { MeetingDeps } from './meetings.js';
 import { register, type Caller } from './auth.js';
 
 /** Tudo que as rotas usam (os testes de cada área pegam a parte que precisam). */
-export type TestDeps = MeetingDeps;
+export type TestDeps = MeetingDeps & PetDeps;
 
 /** Dependências das rotas sobre um banco em memória (testes). */
-export function makeDeps(): MeetingDeps {
+export function makeDeps(): TestDeps {
   const svc = createServices(openDatabase(':memory:'), { inviteCode: 'segredo' });
   return {
     inviteCode: () => svc.settings.inviteCode(),
@@ -22,6 +23,7 @@ export function makeDeps(): MeetingDeps {
     furni: svc.furni,
     furniDefs: svc.furniDefs,
     meetings: svc.meetings,
+    pets: svc.pets,
   };
 }
 
