@@ -94,6 +94,7 @@ if (withThumbs) {
 interface FurniInfo {
   latest: number;
   directions: number[];
+  states?: number[];
 }
 
 /** Lê nome e tamanho da furnidata, aceitando variações de formato (formato não verificado sem token). */
@@ -128,8 +129,9 @@ for (const cur of FURNI_CURATION) {
   }
   const info = await client.getImagerJson<FurniInfo>(`/info/furniture/${cur.id}`);
   const analyses = new Map<number, RenderAnalysis>();
-  for (const dir of info.directions) {
-    const url = furniImageUrl(cur.id, { direction: dir, revision: info.latest });
+  const stateAnalyses = new Map<string, RenderAnalysis>();
+  const render = async (dir: number, state?: number) => {
+    const url = furniImageUrl(cur.id, { direction: dir, revision: info.latest, state });
     const file = cacheFileFor(config.assetCacheDir, url);
     let body: Buffer;
     if (existsSync(file)) body = await readFile(file);
@@ -137,7 +139,16 @@ for (const cur of FURNI_CURATION) {
       body = (await client.fetchImage(url)).body;
       await writeAtomic(file, body);
     }
-    analyses.set(dir, analyzeRender(PNG.sync.read(body)));
+    return analyzeRender(PNG.sync.read(body));
+  };
+  for (const dir of info.directions) {
+    analyses.set(dir, await render(dir));
+    // Estados com interação (luz acesa, TV ligada…): a imagem muda e a âncora pode mudar.
+    if (cur.interaction === 'toggle') {
+      for (const state of (info.states ?? []).filter((s) => s > 0)) {
+        stateAnalyses.set(`${dir}:${state}`, await render(dir, state));
+      }
+    }
   }
   let curation = cur;
   if (client.hasApiKey) {
@@ -148,7 +159,7 @@ for (const cur of FURNI_CURATION) {
       console.warn(`[sync] furnidata de ${cur.id}: ${(err as Error).message}`);
     }
   }
-  const { entry, estimated } = buildFurniEntry(curation, info, analyses);
+  const { entry, estimated } = buildFurniEntry(curation, info, analyses, stateAnalyses);
   const size = `${entry.width}×${entry.depth}`;
   const est = `${estimated.width}×${estimated.depth}`;
   const note =

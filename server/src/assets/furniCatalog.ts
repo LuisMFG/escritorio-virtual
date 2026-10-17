@@ -22,9 +22,14 @@ export interface FurniCuration {
   source?: 'habboassets' | 'local';
   directions?: number[];
   anchors?: Record<string, [number, number]>;
+  interaction?: 'toggle' | 'coffee' | 'board';
+  /** Emite luz quando ligado. */
+  light?: boolean;
 }
 
 const SIT = { canSit: true, sitHeight: 0.5 } as const;
+const TOGGLE = { interaction: 'toggle' } as const;
+const LIGHT = { interaction: 'toggle', light: true } as const;
 
 export const FURNI_CURATION: FurniCuration[] = [
   {
@@ -124,8 +129,91 @@ export const FURNI_CURATION: FurniCuration[] = [
   { id: 'shelves_silo', name: 'Estante Silo', category: 'estantes', height: 2 },
   { id: 'shelves_basic', name: 'Estante Simples', category: 'estantes', height: 2 },
   { id: 'uni_c23_whiteboard', name: 'Quadro Branco', category: 'escritório', height: 2 },
+  {
+    id: 'noticeboard',
+    name: 'Mural de Recados',
+    category: 'escritório',
+    height: 2,
+    interaction: 'board',
+  },
+  { id: 'hc_dsk', name: 'Escrivaninha Club', category: 'escritório', height: 1, ...TOGGLE },
+  { id: 'exe_corner', name: 'Mesa de Canto Executiva', category: 'escritório', height: 1 },
+  // Tamanhos conferidos no render: a moldura passa um pouco do footprint.
+  {
+    id: 'exe_map',
+    name: 'Mapa-Múndi',
+    category: 'escritório',
+    width: 3,
+    depth: 1,
+    height: 2,
+    ...TOGGLE,
+  },
+  { id: 'safe_silo', name: 'Cofre', category: 'escritório', height: 1, ...TOGGLE },
+  { id: 'divider_nor1', name: 'Divisória Norja', category: 'escritório', height: 1 },
+  { id: 'hc_bkshlf', name: 'Estante Club', category: 'estantes', height: 2 },
+  // TI
+  {
+    id: 'computer_flatscreen',
+    name: 'Computador',
+    category: 'TI',
+    width: 1,
+    depth: 1,
+    height: 1,
+    ...TOGGLE,
+  },
+  { id: 'computer_old', name: 'Computador Antigo', category: 'TI', width: 1, depth: 1, height: 1 },
+  { id: 'tv_luxus', name: 'TV Clássica', category: 'TI', height: 1, ...TOGGLE },
+  { id: 'hc_tv', name: 'TV Club', category: 'TI', height: 1, ...TOGGLE },
+  { id: 'rare_fan', name: 'Ventilador', category: 'TI', width: 1, depth: 1, height: 1, ...TOGGLE },
+  // Luzes
+  {
+    id: 'lamp_armas',
+    name: 'Luminária Rústica',
+    category: 'luzes',
+    width: 1,
+    depth: 1,
+    height: 1,
+    ...LIGHT,
+  },
+  {
+    id: 'lamp2_armas',
+    name: 'Candeeiro',
+    category: 'luzes',
+    width: 1,
+    depth: 1,
+    height: 1,
+    ...LIGHT,
+  },
+  { id: 'hc_lmp', name: 'Abajur Club', category: 'luzes', width: 1, depth: 1, height: 1, ...LIGHT },
+  {
+    id: 'exe_artlamp',
+    name: 'Luminária de Arte',
+    category: 'luzes',
+    width: 1,
+    depth: 1,
+    height: 1,
+    ...LIGHT,
+  },
+  {
+    id: 'exe_light',
+    name: 'Luz Executiva',
+    category: 'luzes',
+    width: 1,
+    depth: 1,
+    height: 1,
+    ...LIGHT,
+  },
+  { id: 'fireplace_armas', name: 'Lareira', category: 'luzes', height: 1, ...LIGHT },
   { id: 'exe_globe', name: 'Globo', category: 'escritório', width: 1, depth: 1, height: 1 },
-  { id: 'lamp_basic', name: 'Luminária', category: 'escritório', width: 1, depth: 1, height: 1 },
+  {
+    id: 'lamp_basic',
+    name: 'Luminária',
+    category: 'luzes',
+    width: 1,
+    depth: 1,
+    height: 1,
+    ...LIGHT,
+  },
   { id: 'divider_silo1', name: 'Divisória Silo', category: 'escritório', height: 1 },
   {
     id: 'sunsetcafe_c20_coffeemachine',
@@ -134,8 +222,55 @@ export const FURNI_CURATION: FurniCuration[] = [
     width: 1,
     depth: 1,
     height: 1,
+    interaction: 'coffee',
   },
   { id: 'bardesk_polyfon', name: 'Balcão', category: 'cozinha', height: 1 },
+  { id: 'fridge', name: 'Geladeira', category: 'cozinha', height: 2, ...TOGGLE },
+  {
+    id: 'hc_machine',
+    name: 'Máquina de Bebidas',
+    category: 'cozinha',
+    width: 1,
+    depth: 2,
+    height: 2,
+    interaction: 'coffee',
+  },
+  {
+    id: 'chair_polyfon',
+    name: 'Cadeira Polyfon',
+    category: 'cadeiras',
+    width: 1,
+    depth: 1,
+    height: 1,
+    ...SIT,
+  },
+  {
+    id: 'hc_chr',
+    name: 'Cadeira Club',
+    category: 'cadeiras',
+    width: 1,
+    depth: 1,
+    height: 1,
+    ...SIT,
+  },
+  {
+    id: 'sofa_polyfon',
+    name: 'Sofá Polyfon',
+    category: 'sofás',
+    width: 2,
+    depth: 1,
+    height: 1,
+    ...SIT,
+  },
+  { id: 'plant_sunflower', name: 'Girassol', category: 'plantas', width: 1, depth: 1, height: 1 },
+  {
+    id: 'plant_small_cactus',
+    name: 'Cacto Pequeno',
+    category: 'plantas',
+    width: 1,
+    depth: 1,
+    height: 1,
+  },
   {
     id: 'carpet_standard',
     name: 'Tapete',
@@ -218,18 +353,26 @@ export function buildLocalEntry(cur: FurniCuration): FurniManifestEntry {
     directions: cur.directions ?? [0],
     source: 'local',
     anchors: cur.anchors ?? {},
+    states: [],
+    stateAnchors: {},
+    interaction: cur.interaction,
+    light: cur.light ?? false,
   };
 }
 
 /** Entrada do manifesto a partir da curadoria + dados medidos. */
 export function buildFurniEntry(
   cur: FurniCuration,
-  info: { latest: number; directions: number[] },
+  info: { latest: number; directions: number[]; states?: number[] },
   analyses: ReadonlyMap<number, RenderAnalysis>,
+  /** Âncoras dos estados > 0 (chave `direção:estado`). */
+  stateAnalyses: ReadonlyMap<string, RenderAnalysis> = new Map(),
 ): { entry: FurniManifestEntry; estimated: { width: number; depth: number } } {
   const estimated = estimateSize(analyses);
   const anchors: Record<string, [number, number]> = {};
   for (const [dir, a] of analyses) anchors[String(dir)] = a.anchor;
+  const stateAnchors: Record<string, [number, number]> = {};
+  for (const [key, a] of stateAnalyses) stateAnchors[key] = a.anchor;
   return {
     estimated,
     entry: {
@@ -246,6 +389,10 @@ export function buildFurniEntry(
       revision: info.latest,
       source: 'habboassets',
       anchors,
+      states: info.states ?? [],
+      stateAnchors,
+      interaction: cur.interaction,
+      light: cur.light ?? false,
     },
   };
 }

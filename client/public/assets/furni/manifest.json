@@ -21,7 +21,10 @@
         "2": [23.5, 60],
         "4": [26.5, 62],
         "6": [31.5, 56]
-      }
+      },
+      "states": [],
+      "stateAnchors": {},
+      "light": false
     },
     {
       "id": "chair_silo",
@@ -41,7 +44,10 @@
         "2": [27, 67],
         "4": [28, 67],
         "6": [27, 56]
-      }
+      },
+      "states": [],
+      "stateAnchors": {},
+      "light": false
     },
     {
       "id": "chair_plasto",
@@ -61,7 +67,10 @@
         "2": [23, 58],
         "4": [23, 58],
         "6": [23, 50]
-      }
+      },
+      "states": [],
+      "stateAnchors": {},
+      "light": false
     },
     {
       "id": "exe_chair",
@@ -81,7 +90,10 @@
         "2": [31.5, 64],
         "4": [41.5, 64],
         "6": [31.5, 57]
-      }
+      },
+      "states": [],
+      "stateAnchors": {},
+      "light": false
     },
     {
       "id": "couch_norja",
@@ -101,7 +113,10 @@
         "2": [18.5, 81],
         "4": [61.5, 78],
         "6": [20.5, 72]
-      }
+      },
+      "states": [],
+      "stateAnchors": {},
+      "light": false
     },
     {
       "id": "sofa_silo",
@@ -121,7 +136,10 @@
         "2": [34, 86],
         "4": [63, 86],
         "6": [33, 76]
-      }
+      },
+      "states": [],
+      "stateAnchors": {},
+      "light": false
     },
     {
       "id": "sofachair_silo",
@@ -141,7 +159,10 @@
         "2": [36, 72],
         "4": [36, 72],
         "6": [36, 62]
-      }
+      },
+      "states": [],
+      "stateAnchors": {},
+      "light": false
     },
     {
       "id": "exe_sofa",
@@ -161,7 +182,10 @@
         "2": [31.5, 92],
         "4": [103.5, 92],
         "6": [31.5, 88]
-      }
+      },
+      "states": [],
+      "stateAnchors": {},
+      "light": false
     },
     {
       "id": "table_norja_med",
@@ -178,7 +202,10 @@
       "source": "habboassets",
       "anchors": {
         "0": [50, 79]
-      }
+      },
+      "states": [],
+      "stateAnchors": {},
+      "light": false
     },
     {
       "id": "table_silo_med",
@@ -195,7 +222,10 @@
       "source": "habboassets",
       "anchors": {
         "0": [51, 77]
-      }
+      },
+      "states": [],
+      "stateAnchors": {},
+      "light": false
     },
     {
       "id": "table_plasto_square",
@@ -212,7 +242,10 @@
       "source": "habboassets",
       "anchors": {
         "0": [23, 52]
-      }
+      },
+      "states": [],
+      "stateAnchors": {},
+      "light": false
     },
     {
       "id": "exe_table",
@@ -232,7 +265,10 @@
         "2": [49, 109],
         "4": [94, 109],
         "6": [49, 109]
-      }
+      },
+      "states": [0, 1],
+      "stateAnchors": {},
+      "light": false
     },
     {
       "id": "plant_big_cactus",
@@ -249,7 +285,10 @@
       "source": "habboassets",
       "anchors": {
         "0": [25, 108]
-      }
+      },
+      "states": [],
+      "stateAnchors": {},
+      "light": false
     },
     {
       "id": "plant_yukka",
@@ -266,7 +305,10 @@
       "source": "habboassets",
       "anchors": {
         "0": [47, 156]
-      }
+      },
+      "states": [],
+      "stateAnchors": {},
+      "light": false
     },
     {
       "id": "plant_pineapple",
@@ -283,7 +325,10 @@
       "source": "habboassets",
       "anchors": {
         "0": [25, 98]
-      }
+      },
+      "states": [],
+      "stateAnchors": {},
+      "light": false
     },
     {
       "id": "plant_bonsai",
@@ -300,7 +345,10 @@
       "source": "habboassets",
       "anchors": {
         "0": [33, 70]
-      }
+      },
+      "states": [],
+      "stateAnchors": {},
+      "light": false
     },
     {
       "id": "exe_plant",
@@ -317,7 +365,10 @@
       "source": "habboassets",
       "anchors": {
         "0": [46.5, 128]
-      }
+      },
+      "states": [0, 1],
+      "stateAnchors": {},
+      "light": false
     },
     {
       "id": "shelves_norja",
@@ -335,7 +386,10 @@
       "anchors": {
         "0": [31, 112],
         "2": [19, 112]
-      }
+      },
+      "states": [],
+      "stateAnchors": {},
+      "light": false
     },
     {
       "id": "shelves_silo",
@@ -355,7 +409,10 @@
         "2": [21, 133],
         "4": [65, 133],
         "6": [21, 133]
-      }
+      },
+      "states": [0, 1],
+      "stateAnchors": {},
+      "light": false
     },
     {
       "id": "shelves_basic",
@@ -375,7 +432,10 @@
         "2": [18.5, 122],
         "4": [64.5, 122],
         "6": [18.5, 124]
-      }
+      },
+      "states": [],
+      "stateAnchors": {},
+      "light": false
     },
     {
       "id": "uni_c23_whiteboard",
@@ -393,7 +453,449 @@
       "anchors": {
         "0": [23.5, 122],
         "2": [34.5, 122]
-      }
+      },
+      "states": [0, 1, 2],
+      "stateAnchors": {},
+      "light": false
+    },
+    {
+      "id": "noticeboard",
+      "name": "Mural de Recados",
+      "category": "escritório",
+      "width": 3,
+      "depth": 1,
+      "height": 2,
+      "canSit": false,
+      "canWalk": false,
+      "sitHeight": 0,
+      "directions": [0, 2],
+      "revision": 45508,
+      "source": "habboassets",
+      "anchors": {
+        "0": [95.5, 139],
+        "2": [23.5, 139]
+      },
+      "states": [],
+      "stateAnchors": {},
+      "interaction": "board",
+      "light": false
+    },
+    {
+      "id": "hc_dsk",
+      "name": "Escrivaninha Club",
+      "category": "escritório",
+      "width": 1,
+      "depth": 2,
+      "height": 1,
+      "canSit": false,
+      "canWalk": false,
+      "sitHeight": 0,
+      "directions": [0, 6],
+      "revision": 45508,
+      "source": "habboassets",
+      "anchors": {
+        "0": [28.5, 89],
+        "6": [52.5, 89]
+      },
+      "states": [0, 1],
+      "stateAnchors": {
+        "0:1": [34.5, 109],
+        "6:1": [52.5, 109]
+      },
+      "interaction": "toggle",
+      "light": false
+    },
+    {
+      "id": "exe_corner",
+      "name": "Mesa de Canto Executiva",
+      "category": "escritório",
+      "width": 1,
+      "depth": 1,
+      "height": 1,
+      "canSit": false,
+      "canWalk": false,
+      "sitHeight": 0,
+      "directions": [0, 2, 4, 6],
+      "revision": 56746,
+      "source": "habboassets",
+      "anchors": {
+        "0": [26.5, 54],
+        "2": [29, 53],
+        "4": [25, 59],
+        "6": [20.5, 58]
+      },
+      "states": [],
+      "stateAnchors": {},
+      "light": false
+    },
+    {
+      "id": "exe_map",
+      "name": "Mapa-Múndi",
+      "category": "escritório",
+      "width": 3,
+      "depth": 1,
+      "height": 2,
+      "canSit": false,
+      "canWalk": false,
+      "sitHeight": 0,
+      "directions": [2, 4],
+      "revision": 56746,
+      "source": "habboassets",
+      "anchors": {
+        "2": [4.5, 156],
+        "4": [112.5, 156]
+      },
+      "states": [0, 1],
+      "stateAnchors": {
+        "2:1": [12.5, 156],
+        "4:1": [117.5, 156]
+      },
+      "interaction": "toggle",
+      "light": false
+    },
+    {
+      "id": "safe_silo",
+      "name": "Cofre",
+      "category": "escritório",
+      "width": 1,
+      "depth": 1,
+      "height": 1,
+      "canSit": false,
+      "canWalk": false,
+      "sitHeight": 0,
+      "directions": [2, 4],
+      "revision": 56746,
+      "source": "habboassets",
+      "anchors": {
+        "2": [24.5, 68],
+        "4": [28, 68]
+      },
+      "states": [0, 1],
+      "stateAnchors": {
+        "2:1": [24.5, 68],
+        "4:1": [39, 68]
+      },
+      "interaction": "toggle",
+      "light": false
+    },
+    {
+      "id": "divider_nor1",
+      "name": "Divisória Norja",
+      "category": "escritório",
+      "width": 1,
+      "depth": 1,
+      "height": 1,
+      "canSit": false,
+      "canWalk": false,
+      "sitHeight": 0,
+      "directions": [0, 6],
+      "revision": 61856,
+      "source": "habboassets",
+      "anchors": {
+        "0": [29.5, 65],
+        "6": [30.5, 65]
+      },
+      "states": [],
+      "stateAnchors": {},
+      "light": false
+    },
+    {
+      "id": "hc_bkshlf",
+      "name": "Estante Club",
+      "category": "estantes",
+      "width": 1,
+      "depth": 4,
+      "height": 2,
+      "canSit": false,
+      "canWalk": false,
+      "sitHeight": 0,
+      "directions": [0, 2],
+      "revision": 45508,
+      "source": "habboassets",
+      "anchors": {
+        "0": [41.5, 213],
+        "2": [137.5, 213]
+      },
+      "states": [],
+      "stateAnchors": {},
+      "light": false
+    },
+    {
+      "id": "computer_flatscreen",
+      "name": "Computador",
+      "category": "TI",
+      "width": 1,
+      "depth": 1,
+      "height": 1,
+      "canSit": false,
+      "canWalk": false,
+      "sitHeight": 0,
+      "directions": [2, 4, 6, 0],
+      "revision": 48082,
+      "source": "habboassets",
+      "anchors": {
+        "0": [12.5, 38],
+        "2": [17.5, 50],
+        "4": [29, 50],
+        "6": [27.5, 38]
+      },
+      "states": [0, 1, 2],
+      "stateAnchors": {
+        "2:1": [17.5, 50],
+        "2:2": [17.5, 50],
+        "4:1": [29, 50],
+        "4:2": [29, 50],
+        "6:1": [27.5, 38],
+        "6:2": [27.5, 38],
+        "0:1": [12.5, 38],
+        "0:2": [12.5, 38]
+      },
+      "interaction": "toggle",
+      "light": false
+    },
+    {
+      "id": "computer_old",
+      "name": "Computador Antigo",
+      "category": "TI",
+      "width": 1,
+      "depth": 1,
+      "height": 1,
+      "canSit": false,
+      "canWalk": false,
+      "sitHeight": 0,
+      "directions": [2, 4, 6, 0],
+      "revision": 48082,
+      "source": "habboassets",
+      "anchors": {
+        "0": [24, 46],
+        "2": [22, 49],
+        "4": [18, 49],
+        "6": [17.5, 50]
+      },
+      "states": [0],
+      "stateAnchors": {},
+      "light": false
+    },
+    {
+      "id": "tv_luxus",
+      "name": "TV Clássica",
+      "category": "TI",
+      "width": 1,
+      "depth": 2,
+      "height": 1,
+      "canSit": false,
+      "canWalk": false,
+      "sitHeight": 0,
+      "directions": [0, 2],
+      "revision": 48082,
+      "source": "habboassets",
+      "anchors": {
+        "0": [26, 115],
+        "2": [78, 115]
+      },
+      "states": [0, 1],
+      "stateAnchors": {
+        "0:1": [26, 115],
+        "2:1": [78, 115]
+      },
+      "interaction": "toggle",
+      "light": false
+    },
+    {
+      "id": "hc_tv",
+      "name": "TV Club",
+      "category": "TI",
+      "width": 2,
+      "depth": 1,
+      "height": 1,
+      "canSit": false,
+      "canWalk": false,
+      "sitHeight": 0,
+      "directions": [2, 4],
+      "revision": 45508,
+      "source": "habboassets",
+      "anchors": {
+        "2": [41.5, 160],
+        "4": [66.5, 160]
+      },
+      "states": [0, 1],
+      "stateAnchors": {
+        "2:1": [41.5, 160],
+        "4:1": [66.5, 160]
+      },
+      "interaction": "toggle",
+      "light": false
+    },
+    {
+      "id": "rare_fan",
+      "name": "Ventilador",
+      "category": "TI",
+      "width": 1,
+      "depth": 1,
+      "height": 1,
+      "canSit": false,
+      "canWalk": false,
+      "sitHeight": 0,
+      "directions": [0, 2, 4, 6],
+      "revision": 73739,
+      "source": "habboassets",
+      "anchors": {
+        "0": [21, 73],
+        "2": [22, 73],
+        "4": [21, 73],
+        "6": [22, 73]
+      },
+      "states": [0, 1],
+      "stateAnchors": {
+        "0:1": [22, 75],
+        "2:1": [22, 75],
+        "4:1": [22, 75],
+        "6:1": [22, 75]
+      },
+      "interaction": "toggle",
+      "light": false
+    },
+    {
+      "id": "lamp_armas",
+      "name": "Luminária Rústica",
+      "category": "luzes",
+      "width": 1,
+      "depth": 1,
+      "height": 1,
+      "canSit": false,
+      "canWalk": false,
+      "sitHeight": 0,
+      "directions": [0],
+      "revision": 49500,
+      "source": "habboassets",
+      "anchors": {
+        "0": [15, 93]
+      },
+      "states": [0, 1],
+      "stateAnchors": {
+        "0:1": [47.5, 154]
+      },
+      "interaction": "toggle",
+      "light": true
+    },
+    {
+      "id": "lamp2_armas",
+      "name": "Candeeiro",
+      "category": "luzes",
+      "width": 1,
+      "depth": 1,
+      "height": 1,
+      "canSit": false,
+      "canWalk": false,
+      "sitHeight": 0,
+      "directions": [0],
+      "revision": 49500,
+      "source": "habboassets",
+      "anchors": {
+        "0": [15, 71]
+      },
+      "states": [0, 1],
+      "stateAnchors": {
+        "0:1": [49, 133]
+      },
+      "interaction": "toggle",
+      "light": true
+    },
+    {
+      "id": "hc_lmp",
+      "name": "Abajur Club",
+      "category": "luzes",
+      "width": 1,
+      "depth": 1,
+      "height": 1,
+      "canSit": false,
+      "canWalk": false,
+      "sitHeight": 0,
+      "directions": [0],
+      "revision": 45508,
+      "source": "habboassets",
+      "anchors": {
+        "0": [19, 89]
+      },
+      "states": [0, 1],
+      "stateAnchors": {
+        "0:1": [29, 93]
+      },
+      "interaction": "toggle",
+      "light": true
+    },
+    {
+      "id": "exe_artlamp",
+      "name": "Luminária de Arte",
+      "category": "luzes",
+      "width": 1,
+      "depth": 1,
+      "height": 1,
+      "canSit": false,
+      "canWalk": false,
+      "sitHeight": 0,
+      "directions": [0],
+      "revision": 56746,
+      "source": "habboassets",
+      "anchors": {
+        "0": [32.5, 113]
+      },
+      "states": [0, 1],
+      "stateAnchors": {
+        "0:1": [32.5, 112]
+      },
+      "interaction": "toggle",
+      "light": true
+    },
+    {
+      "id": "exe_light",
+      "name": "Luz Executiva",
+      "category": "luzes",
+      "width": 1,
+      "depth": 1,
+      "height": 1,
+      "canSit": false,
+      "canWalk": false,
+      "sitHeight": 0,
+      "directions": [0],
+      "revision": 56746,
+      "source": "habboassets",
+      "anchors": {
+        "0": [31.5, 97]
+      },
+      "states": [0, 1, 2, 3],
+      "stateAnchors": {
+        "0:1": [75.5, 311],
+        "0:2": [75.5, 311],
+        "0:3": [75.5, 311]
+      },
+      "interaction": "toggle",
+      "light": true
+    },
+    {
+      "id": "fireplace_armas",
+      "name": "Lareira",
+      "category": "luzes",
+      "width": 2,
+      "depth": 1,
+      "height": 1,
+      "canSit": false,
+      "canWalk": false,
+      "sitHeight": 0,
+      "directions": [0, 2],
+      "revision": 49500,
+      "source": "habboassets",
+      "anchors": {
+        "0": [62.5, 155],
+        "2": [32.5, 155]
+      },
+      "states": [0, 1],
+      "stateAnchors": {
+        "0:1": [62.5, 155],
+        "2:1": [32.5, 155]
+      },
+      "interaction": "toggle",
+      "light": true
     },
     {
       "id": "exe_globe",
@@ -410,12 +912,15 @@
       "source": "habboassets",
       "anchors": {
         "0": [42.5, 93]
-      }
+      },
+      "states": [0, 1, 2, 3, 4, 5, 6, 7, 8],
+      "stateAnchors": {},
+      "light": false
     },
     {
       "id": "lamp_basic",
       "name": "Luminária",
-      "category": "escritório",
+      "category": "luzes",
       "width": 1,
       "depth": 1,
       "height": 1,
@@ -428,7 +933,14 @@
       "anchors": {
         "0": [29.5, 132],
         "6": [28.5, 132]
-      }
+      },
+      "states": [0, 1],
+      "stateAnchors": {
+        "0:1": [36.5, 132],
+        "6:1": [35.5, 132]
+      },
+      "interaction": "toggle",
+      "light": true
     },
     {
       "id": "divider_silo1",
@@ -448,7 +960,10 @@
         "2": [18.5, 54],
         "4": [17.5, 49],
         "6": [4.5, 54]
-      }
+      },
+      "states": [],
+      "stateAnchors": {},
+      "light": false
     },
     {
       "id": "sunsetcafe_c20_coffeemachine",
@@ -466,7 +981,11 @@
       "anchors": {
         "0": [22.5, 52],
         "2": [26.5, 52]
-      }
+      },
+      "states": [1],
+      "stateAnchors": {},
+      "interaction": "coffee",
+      "light": false
     },
     {
       "id": "bardesk_polyfon",
@@ -484,7 +1003,166 @@
       "anchors": {
         "0": [64.5, 74],
         "2": [20.5, 74]
-      }
+      },
+      "states": [],
+      "stateAnchors": {},
+      "light": false
+    },
+    {
+      "id": "fridge",
+      "name": "Geladeira",
+      "category": "cozinha",
+      "width": 1,
+      "depth": 1,
+      "height": 2,
+      "canSit": false,
+      "canWalk": false,
+      "sitHeight": 0,
+      "directions": [2, 4],
+      "revision": 48082,
+      "source": "habboassets",
+      "anchors": {
+        "2": [31.5, 113],
+        "4": [29.5, 111]
+      },
+      "states": [0, 1],
+      "stateAnchors": {
+        "2:1": [31.5, 113],
+        "4:1": [58.5, 111]
+      },
+      "interaction": "toggle",
+      "light": false
+    },
+    {
+      "id": "hc_machine",
+      "name": "Máquina de Bebidas",
+      "category": "cozinha",
+      "width": 1,
+      "depth": 2,
+      "height": 2,
+      "canSit": false,
+      "canWalk": false,
+      "sitHeight": 0,
+      "directions": [0, 2],
+      "revision": 45508,
+      "source": "habboassets",
+      "anchors": {
+        "0": [43, 168],
+        "2": [83, 168]
+      },
+      "states": [0, 1],
+      "stateAnchors": {},
+      "interaction": "coffee",
+      "light": false
+    },
+    {
+      "id": "chair_polyfon",
+      "name": "Cadeira Polyfon",
+      "category": "cadeiras",
+      "width": 1,
+      "depth": 1,
+      "height": 1,
+      "canSit": true,
+      "canWalk": false,
+      "sitHeight": 0.5,
+      "directions": [0, 2, 4, 6],
+      "revision": 45508,
+      "source": "habboassets",
+      "anchors": {
+        "0": [29.5, 61],
+        "2": [29.5, 70],
+        "4": [29.5, 70],
+        "6": [29.5, 61]
+      },
+      "states": [],
+      "stateAnchors": {},
+      "light": false
+    },
+    {
+      "id": "hc_chr",
+      "name": "Cadeira Club",
+      "category": "cadeiras",
+      "width": 1,
+      "depth": 1,
+      "height": 1,
+      "canSit": true,
+      "canWalk": false,
+      "sitHeight": 0.5,
+      "directions": [0, 2, 4, 6],
+      "revision": 45508,
+      "source": "habboassets",
+      "anchors": {
+        "0": [24, 56],
+        "2": [24, 65],
+        "4": [21, 65],
+        "6": [19, 56]
+      },
+      "states": [],
+      "stateAnchors": {},
+      "light": false
+    },
+    {
+      "id": "sofa_polyfon",
+      "name": "Sofá Polyfon",
+      "category": "sofás",
+      "width": 2,
+      "depth": 1,
+      "height": 1,
+      "canSit": true,
+      "canWalk": false,
+      "sitHeight": 0.5,
+      "directions": [0, 2, 4, 6],
+      "revision": 54450,
+      "source": "habboassets",
+      "anchors": {
+        "0": [66, 73],
+        "2": [32, 78],
+        "4": [65, 79],
+        "6": [36, 74]
+      },
+      "states": [],
+      "stateAnchors": {},
+      "light": false
+    },
+    {
+      "id": "plant_sunflower",
+      "name": "Girassol",
+      "category": "plantas",
+      "width": 1,
+      "depth": 1,
+      "height": 1,
+      "canSit": false,
+      "canWalk": false,
+      "sitHeight": 0,
+      "directions": [0],
+      "revision": 48082,
+      "source": "habboassets",
+      "anchors": {
+        "0": [19, 99]
+      },
+      "states": [0, 1],
+      "stateAnchors": {},
+      "light": false
+    },
+    {
+      "id": "plant_small_cactus",
+      "name": "Cacto Pequeno",
+      "category": "plantas",
+      "width": 1,
+      "depth": 1,
+      "height": 1,
+      "canSit": false,
+      "canWalk": false,
+      "sitHeight": 0,
+      "directions": [0],
+      "revision": 48082,
+      "source": "habboassets",
+      "anchors": {
+        "0": [25, 75]
+      },
+      "states": [],
+      "stateAnchors": {},
+      "light": false
     },
     {
       "id": "carpet_standard",
@@ -502,7 +1180,10 @@
       "anchors": {
         "0": [94.5, 128],
         "2": [166.5, 128]
-      }
+      },
+      "states": [],
+      "stateAnchors": {},
+      "light": false
     },
     {
       "id": "carpet_soft",
@@ -520,7 +1201,10 @@
       "anchors": {
         "0": [38.5, 74],
         "2": [93.5, 74]
-      }
+      },
+      "states": [],
+      "stateAnchors": {},
+      "light": false
     }
   ]
 }

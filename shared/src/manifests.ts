@@ -23,6 +23,17 @@ export const furniManifestEntrySchema = z.object({
   source: z.enum(['habboassets', 'local']).default('habboassets'),
   /** Âncoras por direção (chave = direção como string). */
   anchors: z.record(z.string().regex(/^[0-7]$/), anchor).default({}),
+  /** Estados que o imager sabe desenhar (ex.: luminária [0, 1]). Vazio = sem estados. */
+  states: z.array(z.number().int().min(0).max(20)).default([]),
+  /** Âncoras de estados além do 0 (chave `direção:estado`); o estado 0 usa `anchors`. */
+  stateAnchors: z.record(z.string().regex(/^[0-7]:\d+$/), anchor).default({}),
+  /**
+   * O que acontece ao clicar fora do modo decorar: `toggle` alterna os estados (luz, TV…),
+   * `coffee` serve um café (emote), `board` abre o mural de recados.
+   */
+  interaction: z.enum(['toggle', 'coffee', 'board']).optional(),
+  /** Emite luz quando ligado (estado > 0): brilha à noite. */
+  light: z.boolean().default(false),
 });
 
 export const furniManifestSchema = z.object({
