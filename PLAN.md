@@ -137,6 +137,9 @@ audit_log      { id: int pk, at: int, actorId: fk users, action: text,
 users          … + disabled: bool                  // Fase 10
 rooms          … + decorLocked: bool               // Fase 10
 
+direct_messages { id: int pk, fromUserId: fk users, toUserId: fk users, text: text,
+                  createdAt: int, readAt: int null }   // Fase 11; até 1000 por conversa
+
 rooms          { id: text pk ('reception'|'meeting'|'pantry'), name: text,
                  heightmap: text,        // linhas tipo Habbo: 'x' = sem tile, '0'-'9' = altura
                  wallHeight: int, floorColor: text, wallColor: text,
@@ -536,12 +539,23 @@ Pedido em 17/10/2026, depois da Fase 8: deixar o escritório "muito completo". M
 - Se um admin muda o seu papel, o botão Admin aparece/some na hora (pelo `Player.role` no estado).
 - Não verificado no navegador: a visão de um **membro** com a decoração travada (coberto pelo teste de integração) e a troca de convite pela tela (coberta pelos testes da rota).
 
-### Fase 11 — Mensagens privadas e notificações do sistema
+### Fase 11 — Mensagens privadas e notificações do sistema ✅ implementada
 - **Canal global:** uma sala Colyseus `lobby` em que todo mundo fica conectado, independente da sala física. Leva DMs, avisos e presença em tempo real (substitui a consulta a cada 10 s do `/api/presence`).
 - **DMs:** tabela `direct_messages { id, from, to, texto, criadaEm, lidaEm }`; funciona entre salas e para quem está offline (lê quando voltar). Painel de conversas com contador de não lidas; "Mensagem" no cartão do avatar e na aba Equipe.
 - **Notificações do navegador** (botão para ativar, pede permissão uma vez): menção, DM e, depois, lembrete de reunião, quando a aba não está visível.
 
 **Como testar:** mandar DM para alguém em outra sala e para alguém offline; contador de não lidas; com a aba em segundo plano chega a notificação do sistema; a lista de pessoas das outras salas atualiza na hora.
+
+**Notas da implementação:**
+- Sala Colyseus `lobby` (`server/src/rooms/LobbyRoom.ts`), uma conexão a mais por pessoa, aberta depois de entrar na primeira sala. Estado `LobbyState.people` (por userId: nome, sala, status) espelha o `PresenceRegistry`, que agora emite `changed` a cada entrada, saída, troca de sala, de nome ou de status. A lista "outras salas" usa isso ao vivo (acabou a consulta a cada 10 s; o `GET /api/presence` continua existindo).
+- Mensagens do lobby: `dm.send`, `dm.read`, requisições `dm.conversations` e `dm.history` (50 por página, "carregar anteriores"); o servidor manda `dm.message` para todas as conexões de quem enviou e de quem recebeu, e `dm.readReceipt { readerId, writerId, upToId }` (o "Visto" embaixo da última mensagem minha; outras abas de quem leu zeram o contador).
+- Limites: 5 DMs seguidas e depois 1/s; não dá para mandar para si mesmo nem para conta desativada; tirar do escritório fecha também o lobby.
+- Painel **Mensagens** (lateral): conversas com não lidas, "Nova conversa" (equipe, online primeiro), conversa com rascunho por pessoa. Botão com contador no canto; "(n)" no título da aba; aviso e som ao receber (se o painel não está naquela conversa). Também "Mensagem" no cartão do avatar e na Equipe.
+- **Notificações do navegador** (`ui/notifications.ts`): botão 🔕/🔔 no painel Mensagens; a permissão só é pedida no clique. Notifica DM e menção quando a aba está escondida; clicar abre a conversa.
+- Layout: com cinco botões no canto, abaixo de 1500 px de largura o campo do chat sobe para cima deles.
+- `@colyseus/testing`: o `boot()` ignora a porta quando recebe um `Server` pronto; o teste do lobby sobe o servidor na 2569 por conta própria (os arquivos de teste rodam em paralelo).
+- Robô de teste responde a DMs (e marca como lidas).
+- Não verificado no navegador: o pedido de permissão e a notificação do sistema em si (dependem do diálogo nativo do navegador).
 
 ### Fase 12 — Reações e respostas
 - Reagir com emoji às mensagens do histórico (sala e DM): `chat_reactions { mensagem, pessoa, emoji }`, contagem ao lado da mensagem, clicar de novo tira.

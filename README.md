@@ -10,6 +10,7 @@ Escritório virtual isométrico para amigos e colegas (até ~10 pessoas online):
 - **Cargos** (Diretor, Coordenadores, Desenvolvedor, DBA…) aparecem sob o nome do avatar, na lista de pessoas e no cartão. Só administradores definem o cargo de alguém, pela aba **Equipe**.
 - **Perfil**: nome exibido, bio, aniversário (🎂 no avatar e aviso no dia), troca de senha e "sair de todos os aparelhos".
 - **Equipe**: todo mundo agrupado por cargo, com quem está online (e em que sala) e "visto por último" de quem não está.
+- **Mensagens privadas**: botão **Mensagens** (ou "Mensagem" no cartão/Equipe) para conversar com qualquer pessoa, em qualquer sala ou offline (ela lê quando voltar). Contador de não lidas, "Visto" e notificações do navegador opcionais (🔔 no painel) para DMs e menções com a aba em segundo plano.
 - **Admin** (só administradores): promover/rebaixar, cargos (criar, renomear, cor, ordem), senha temporária, desativar conta, tirar alguém da sala ou do escritório, trocar o código de convite, travar a decoração por sala e ver o registro de ações. Mensagens do chat podem ser apagadas por quem escreveu ou por um admin (🗑 no histórico).
 - Montar o visual do avatar (270 peças do Habbo Brasil, cores das paletas reais) ao criar a conta ou em **Perfil → Meu visual**.
 - Andar clicando no piso, com desvio de móveis e outras pessoas, sincronizado em tempo real.
@@ -42,7 +43,7 @@ npm run dev
 
 Isso sobe o servidor (http://localhost:2567) e o cliente (http://localhost:5173). Abra o cliente e, na aba **Criar conta**, use o código de convite: o `INVITE_CODE` do `.env`, ou `convite` se não houver `.env`. Sem `ADMIN_USERNAMES`, a primeira conta vira administradora.
 
-Para testar com várias pessoas sozinho, abra uma janela **anônima** (cada navegador guarda o próprio acesso) ou rode robôs que passeiam, conversam, fazem emotes e mencionam quem está na Recepção:
+Para testar com várias pessoas sozinho, abra uma janela **anônima** (cada navegador guarda o próprio acesso) ou rode robôs que passeiam, conversam, fazem emotes, mencionam quem está na Recepção e respondem mensagens privadas:
 
 ```bash
 npm run bot -- Bia 3
