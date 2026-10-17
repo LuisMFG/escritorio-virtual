@@ -1,7 +1,7 @@
 # Exemplo para o Fly.io. Antes do primeiro deploy:
 #   fly apps create escritorio-virtual-SEU-NOME
 #   fly volumes create escritorio_dados --size 1 --region gru
-#   fly secrets set INVITE_CODE=... HABBOASSETS_API_KEY=...
+#   fly secrets set INVITE_CODE=... ADMIN_USERNAMES=... HABBOASSETS_API_KEY=...
 #   fly deploy
 # Rode uma máquina só: as salas vivem na memória do processo e o banco é um arquivo SQLite.
 app = 'escritorio-virtual-SEU-NOME'

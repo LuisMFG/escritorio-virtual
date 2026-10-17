@@ -63,6 +63,7 @@ Crie o `.env` de produção **na VM** (escolha um código de convite difícil de
 ```bash
 ssh -i ~/Downloads/ssh-key-XXXX.key ubuntu@203.0.113.10 'mkdir -p escritorio && cat > escritorio/.env && chmod 600 escritorio/.env' <<'ENV'
 INVITE_CODE=troque-por-um-codigo-seu
+ADMIN_USERNAMES=seu.usuario
 DOMAIN=escritorio.203-0-113-10.sslip.io
 HABBOASSETS_API_KEY=
 ENV

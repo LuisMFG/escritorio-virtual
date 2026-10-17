@@ -6,8 +6,11 @@ Escritório virtual isométrico para amigos e colegas (até ~10 pessoas online):
 
 ## O que dá para fazer
 
-- Entrar com um nome e o código de convite; o navegador lembra de você.
-- Montar o visual do avatar (270 peças do Habbo Brasil, cores das paletas reais) na entrada ou pelo botão **Meu visual**.
+- Criar conta com o código de convite (usuário, senha, nome e visual) e entrar com usuário e senha de qualquer aparelho; o navegador lembra da sessão até você clicar em **Sair**.
+- **Cargos** (Diretor, Coordenadores, Desenvolvedor, DBA…) aparecem sob o nome do avatar, na lista de pessoas e no cartão. Só administradores definem o cargo de alguém, pela aba **Equipe**.
+- **Perfil**: nome exibido, bio, aniversário (🎂 no avatar e aviso no dia), troca de senha e "sair de todos os aparelhos".
+- **Equipe**: todo mundo agrupado por cargo, com quem está online (e em que sala) e "visto por último" de quem não está.
+- Montar o visual do avatar (270 peças do Habbo Brasil, cores das paletas reais) ao criar a conta ou em **Perfil → Meu visual**.
 - Andar clicando no piso, com desvio de móveis e outras pessoas, sincronizado em tempo real.
 - Conversar: **Enter** abre o campo de mensagem; a fala aparece em balão sobre o avatar e fica no histórico **Conversa**. Há um som de mensagem opcional (🔔/🔕).
 - Emotes: botão 😊 ao lado do chat ou comandos `/acenar`, `/rir`, `/joinha`, `/coracao`, `/cafe`, `/dancar`.
@@ -36,7 +39,7 @@ cp .env.example .env
 npm run dev
 ```
 
-Isso sobe o servidor (http://localhost:2567) e o cliente (http://localhost:5173). Abra o cliente e entre com um nome e o código de convite: o `INVITE_CODE` do `.env`, ou `convite` se não houver `.env`.
+Isso sobe o servidor (http://localhost:2567) e o cliente (http://localhost:5173). Abra o cliente e, na aba **Criar conta**, use o código de convite: o `INVITE_CODE` do `.env`, ou `convite` se não houver `.env`. Sem `ADMIN_USERNAMES`, a primeira conta vira administradora.
 
 Para testar com várias pessoas sozinho, abra uma janela **anônima** (cada navegador guarda o próprio acesso) ou rode robôs que passeiam, conversam, fazem emotes e mencionam quem está na Recepção:
 
@@ -51,6 +54,7 @@ Opções de URL do cliente: `?offline=1` usa só a arte provisória gerada por c
 | Variável | Padrão | Para quê |
 |---|---|---|
 | `INVITE_CODE` | `convite` em dev; **obrigatória** em produção | Código pedido na entrada |
+| `ADMIN_USERNAMES` | vazio | Usuários (login) sempre administradores, separados por vírgula. Vazio: a primeira conta criada vira admin |
 | `HABBOASSETS_API_KEY` | vazio | Token gratuito da HabboAssets (só no servidor), usado pelo `assets:sync` para ler dados de móveis |
 | `PORT` | `2567` | Porta HTTP/WebSocket |
 | `DATABASE_PATH` | `./data/sqlite.db` | Arquivo SQLite |
@@ -156,7 +160,7 @@ Troque `app` no `fly.toml` pelo nome criado. Mantenha uma máquina só.
 
 ### Segurança
 
-- Entrada por código de convite (limite de 10 tentativas por minuto por IP); o token de sessão fica no navegador e o banco guarda só o hash.
+- Contas criadas só com o código de convite; senhas com `scrypt` (sal por senha); limite de 10 tentativas de entrada/cadastro por minuto por IP. Cada aparelho tem seu token de sessão, e o banco guarda só o hash. Trocar a senha desconecta os outros aparelhos.
 - Em produção: CSP restrita (sem `eval`), `X-Frame-Options: DENY`, `nosniff`; mensagens WebSocket de no máximo 4 KB; limites por ação (andar, chat, decorar, trocar visual).
 - Texto do chat sempre exibido como texto puro; visuais e colocações de móveis validados no servidor.
 - Os gráficos são da Sulake/Habbo (via HabboAssets, não afiliada): uso pessoal e privado. Não publique o site de forma aberta.

@@ -119,9 +119,17 @@
 ### 4.1 SQLite (Drizzle)
 
 ```ts
-users          { id: text pk (nanoid), name: text,   // nome livre; pode repetir (ver §9)
-                 sessionTokenHash: text, figure: text, gender: 'M'|'F',
-                 createdAt: int, lastSeenAt: int }
+users          { id: text pk (uuid), name: text,     // nome exibido; livre (ver §9)
+                 username: text unique null,          // login (Fase 9); null = conta antiga
+                 passwordHash: text null,             // scrypt$N$r$p$sal$hash
+                 role: 'admin'|'member', cargoId: fk cargos null,
+                 bio: text, birthday: text null ('MM-DD'),
+                 figure: text, gender: 'M'|'F', createdAt: int, lastSeenAt: int }
+
+sessions       { tokenHash: text pk (SHA-256), userId: fk users (cascade),
+                 createdAt: int, lastUsedAt: int }    // um por aparelho (Fase 9)
+
+cargos         { id: int pk, name: text unique, color: text ('#rrggbb'), sort: int }
 
 rooms          { id: text pk ('reception'|'meeting'|'pantry'), name: text,
                  heightmap: text,        // linhas tipo Habbo: 'x' = sem tile, '0'-'9' = altura
@@ -179,7 +187,17 @@ Layout estático (heightmap, portas, cores e, até a Fase 6, os móveis) é pedi
 
 | Rota | Payload → Resposta |
 |---|---|
-| `POST /api/session` | `{ name, inviteCode?, figure?, gender?, token? }` → `{ userId, token, name, figure, gender }` (cria ou reaproveita usuário; token salvo no localStorage; erro `NAME_IN_USE` se o nome estiver em uso por alguém online) |
+| `POST /api/register` | `{ inviteCode, username, password, name, figure?, gender? }` → `SessionResponse` (erros `INVALID_INVITE`, `USERNAME_TAKEN`, `NAME_IN_USE`, `INVALID_FIGURE`) |
+| `POST /api/login` | `{ username, password }` → `SessionResponse` (nova sessão; `INVALID_CREDENTIALS` sem dizer se o usuário existe) |
+| `GET /api/me` | (Bearer) → `SessionResponse` — o cliente entra direto com o token salvo |
+| `PATCH /api/me` | (Bearer) `{ name?, bio?, birthday? }` → `SessionResponse` |
+| `POST /api/me/claim` | (Bearer) `{ username, password }` — conta antiga escolhe login |
+| `POST /api/me/password` | (Bearer) `{ current, next }` — derruba as outras sessões |
+| `POST /api/logout` | (Bearer) `{ all? }` |
+| `GET /api/team` | (Bearer) → `{ members[], cargos[] }` |
+| `PUT /api/users/:id/cargo` | (Bearer, admin) `{ cargoId \| null }` |
+
+`SessionResponse = { userId, token, username, name, figure, gender, role, cargo, bio, birthday }`. Entrada, cadastro e troca de senha: 10 tentativas/min por IP.
 | `GET /api/presence` | (header `Authorization: Bearer token`) → `{ rooms: [{ roomId, name, people: [{ name }] }] }` |
 | `GET /hh/*` | proxy/cache de imagens do imager (`avatar.png`, `furniture/{c}.png`, `clothing/set/{id}.png`) |
 
@@ -389,7 +407,7 @@ Pedida depois de encerrar a v1 (o deploy na Oracle ficou para quando houver a VM
 1. **Animação de caminhada:** render parado do imager + bob/balanço procedural na v1. Renderer de partes `.nitro` fica fora da v1 (a interface `AvatarRenderer` deixa a porta aberta).
 2. **Token HabboAssets:** sim, token gratuito lido de `HABBOASSETS_API_KEY` (só no servidor) para importar furnidata e nomes PT-BR. Sem a variável, o app continua funcionando com imager + manifesto manual.
 3. **Quem pode decorar:** qualquer pessoa conectada (entrou com o código de convite) pode usar o modo editar.
-4. **Nomes:** livres e podem repetir; só bloqueamos (erro `NAME_IN_USE`, sugerindo um sufixo) quando alguém **online no momento** já usa o mesmo nome. A identidade real é o token do navegador.
+4. **Nomes:** livres e podem repetir; só bloqueamos (erro `NAME_IN_USE`, sugerindo um sufixo) quando alguém **online no momento** já usa o mesmo nome. ~~A identidade real é o token do navegador.~~ Desde a Fase 9 a identidade é o **usuário** (login único com senha); o nome exibido continua livre.
 5. **Deploy:** VPS simples (DigitalOcean/Hetzner) com Docker, ou Fly.io com Persistent Volume. Local: SQLite em arquivo (`DATABASE_PATH=./data/sqlite.db`).
 6. **Idioma:** 100% PT-BR — interface, botões, mensagens de erro, chat e instruções.
 
@@ -464,13 +482,23 @@ Pedida depois de encerrar a v1 (o deploy na Oracle ficou para quando houver a VM
 
 Pedido em 17/10/2026, depois da Fase 8: deixar o escritório "muito completo". Mesmo fluxo de sempre: uma fase por vez, cada uma testada e aprovada. A ordem segue as dependências — identidade e papéis vêm primeiro, porque quase tudo depois (DMs, moderação, agenda, conquistas) precisa saber quem é quem e o que cada um pode fazer.
 
-### Fase 9 — Contas com senha, cargos e perfil
+### Fase 9 — Contas com senha, cargos e perfil ✅ implementada
 - **Contas:** nome de usuário único (login) + senha (hash `scrypt` do `node:crypto`, sem dependência nova). O código de convite continua sendo pedido só para **criar** a conta. Entrar em vários aparelhos: nova tabela `sessions` (um token por aparelho; "sair de todos os aparelhos" no perfil). Quem já tem conta pelo token do navegador entra normalmente e é convidado a definir usuário e senha.
 - **Cargos:** tabela `cargos { id, nome, cor, ordem }`, começando com **Diretor, Coordenador de TI, Coordenador de Transparência Ativa, Coordenador de Transparência Passiva, Desenvolvedor e DBA**. O cargo aparece numa etiqueta colorida embaixo do nome sobre o avatar, no cartão e na lista de pessoas (agrupável por cargo).
 - **Perfil:** bio curta (160 caracteres), cargo, aniversário (dia/mês, 🎂 no avatar e aviso para todos no dia) e "visto por último". Nova aba **Equipe** com todas as pessoas, online e offline.
 - Modelo: `users` ganha `username` (único), `passwordHash`, `role` ('admin'|'member'), `cargoId`, `bio` e `birthday`; `Player` no estado ganha `cargo` e `role`.
 
 **Como testar:** criar conta com convite, sair e entrar com usuário e senha em outra janela anônima (dois aparelhos); conta antiga define senha; cargo aparece sobre o avatar, no cartão e na lista; aba Equipe mostra quem está offline com "visto há X"; aniversário de hoje mostra 🎂.
+
+**Notas da implementação:**
+- Migrations `0004` (tabelas `cargos` e `sessions`, colunas novas em `users`, e cópia de cada token antigo para `sessions`, para ninguém ser deslogado) e `0005` (remove `users.session_token_hash`). Geradas em dois passos para o drizzle-kit não pedir confirmação interativa.
+- Senhas com `scrypt` do `node:crypto` (N=16384, r=8, p=1, sal de 16 bytes), comparadas em tempo constante; login com usuário inexistente também roda o scrypt (contra um hash de mentira), para o tempo não revelar quem existe.
+- Admin: `ADMIN_USERNAMES` no `.env` (conferido em cada cadastro/login/claim); sem a variável, a primeira conta com usuário vira admin. Na Fase 9 o admin só define cargos (na aba Equipe); o resto vem na Fase 10.
+- O cliente entra direto com o token salvo (`GET /api/me`); a tela de entrada só aparece sem token ou depois de **Sair**. Conta antiga cai na tela "Crie seu acesso" (usuário sugerido a partir do nome).
+- Estado: `Player` ganhou `cargo`, `cargoColor`, `role` e `birthday` (aniversário hoje, no fuso de Brasília). Mudanças de perfil/cargo emitem `users.events('updated')` e as salas abertas atualizam os avatares na hora.
+- Cargo aparece com o nome ao passar o mouse (o nome sobe uma linha), como etiqueta colorida na lista e no cartão. O cartão busca bio, usuário e aniversário na Equipe.
+- Botões do canto: **Perfil · Equipe · Decorar** ("Meu visual" foi para dentro do Perfil e do cartão).
+- Robô de teste agora usa conta própria (`bot.<nome>`, cria se não existir).
 
 ### Fase 10 — Administração e moderação
 - Papel **admin** (o primeiro vem do `.env`, `ADMIN_USERNAMES`; depois um admin promove outros).
