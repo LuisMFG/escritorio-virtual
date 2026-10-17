@@ -149,6 +149,8 @@ room_furni      … + state: int                        // Fase 14
 rooms           … + ambient: 'none'|'office'|'cafe'|'rain' // Fase 14
 board_notes     { id, furniId: fk room_furni (cascade), userId, text, color, createdAt }
 whiteboard_strokes { id, furniId: fk room_furni (cascade), userId, data: json, createdAt } // Fase 15
+meetings        { id, title, description, roomId: fk rooms (cascade), startsAt, durationMin, createdBy, createdAt, remindedAt } // Fase 16
+meeting_attendees { meetingId: fk meetings (cascade), userId, response: 'pending'|'yes'|'no' } pk(meetingId, userId)
 dm_reactions    { messageId: fk direct_messages (cascade), userId, emoji } pk(os três)
 
 rooms          { id: text pk ('reception'|'meeting'|'pantry'), name: text,
@@ -633,11 +635,22 @@ Pedido em 17/10/2026, depois da Fase 8: deixar o escritório "muito completo". M
 - Miniatura: o cliente carrega os traços de cada quadro da sala ao entrar, desenha uma miniatura 240×180 e a encaixa no papel do móvel com uma transformação afim (`FurniView.setSurfaceCanvas`), atualizando a cada traço.
 - `@colyseus/core`: `maxMessagesPerSecond` da sala subiu de 30 para 40 por causa dos rascunhos.
 
-### Fase 16 — Agenda de reuniões
+### Fase 16 — Agenda de reuniões ✅ implementada
 - Marcar reunião: título, sala, data/hora, duração e convidados (`meetings`, `meeting_attendees`). Painel **Agenda** com hoje e os próximos dias; aceitar/recusar.
 - Lembrete 5 min antes (aviso, notificação do sistema e DM automática) com o botão "Ir para a sala". Durante a reunião a porta da sala mostra "Em reunião: título".
 
 **Como testar:** marcar uma reunião para daqui a 6 minutos com um convidado; o lembrete chega para os dois; "Ir para a sala" leva até lá; a placa aparece na porta.
+
+**Notas da implementação:**
+- Banco: `meetings` e `meeting_attendees` (migration `0012`). Quem marca entra como convidado com resposta "Vou". Até 50 convidados; duração de 15 min a 8 h.
+- Rotas: `GET /api/meetings` (padrão: de ontem até 14 dias à frente, no máximo 62 dias), `POST /api/meetings`, `PUT /api/meetings/:id/response` (só convidados) e `DELETE /api/meetings/:id` (quem marcou ou admin). Não deixa duas reuniões na mesma sala no mesmo horário (409 com o nome da que já está lá). Aceita início até 15 min no passado, porque o campo de hora anda de 5 em 5 minutos e "agora" seria recusado.
+- Lembretes: um agendador no servidor roda a cada 30 s, pega as reuniões que começam em até 5 min e ainda não foram lembradas, marca `remindedAt` e avisa pelo `lobby` (banner "⏰ … começa às HH:MM" com "Ir para a sala" e notificação do sistema). Também manda uma DM de quem marcou para cada convidado, menos para quem recusou. A DM não tem horário no texto ("começa em até 5 minutos"), porque o servidor e cada pessoa podem estar em fusos diferentes; o banner mostra o horário no fuso do navegador.
+- Convite: quem é convidado recebe aviso, som e notificação na hora. Mudanças na agenda (`meetings.changed`) atualizam o painel aberto de todo mundo.
+- "Em reunião": a lista de salas do `lobby` ganhou o título da reunião em andamento. A porta mostra "🔴 Em reunião: título" ao passar o mouse, e a lista de pessoas mostra "· 🔴 em reunião" na sala.
+- Painel **📅 Agenda**: reuniões por dia (Hoje, Amanhã, dia da semana), filtro "Só as minhas", Vou/Não vou, "Ir para a sala" a partir de 15 min antes e Cancelar (com confirmação). Formulário "Nova reunião" com busca de convidados.
+- HUD: os botões de baixo ganharam ícone + nome; abaixo de 700 px de largura fica só o ícone.
+- Dia/noite agora segue o fuso do navegador (antes era o de Brasília), para combinar com o relógio de quem está usando.
+- Se o servidor reinicia bem na hora em que a página carrega, o cliente tenta de novo (1, 2, 4, 8 e 15 s) em vez de cair na tela de login. O token só é esquecido se o servidor responder 401.
 
 ### Fase 17 — Mini-jogos
 - **Jogo da velha** numa mesa de jogo: duas pessoas sentam, cada uma joga na sua vez; o resto da sala assiste. Placar salvo.
