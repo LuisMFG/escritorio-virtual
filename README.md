@@ -10,6 +10,8 @@ Escritório virtual isométrico para amigos e colegas (até ~10 pessoas online):
 - **Cargos** (Diretor, Coordenadores, Desenvolvedor, DBA…) aparecem sob o nome do avatar, na lista de pessoas e no cartão. Só administradores definem o cargo de alguém, pela aba **Equipe**.
 - **Perfil**: nome exibido, bio, aniversário (🎂 no avatar e aviso no dia), troca de senha e "sair de todos os aparelhos".
 - **Equipe**: todo mundo agrupado por cargo, com quem está online (e em que sala) e "visto por último" de quem não está.
+- **Móveis interativos**: clique numa luminária, TV, computador, ventilador ou cofre para ligar/desligar (o avatar vai até lá); a máquina de café serve um ☕; o **Mural de Recados** guarda post-its coloridos para o pessoal.
+- **Dia e noite** pelo horário de Brasília, com as luzes acesas brilhando à noite (`?hora=21` força a hora para testar), e **som ambiente** opcional por sala (🎵: escritório, cafeteria ou chuva, gerado no próprio navegador).
 - **Reações e respostas**: passe o mouse numa mensagem (sala ou privada) para reagir (👍 ❤️ 😂 😮 😢 🎉) ou responder citando; quem é respondido recebe aviso.
 - **Mensagens privadas**: botão **Mensagens** (ou "Mensagem" no cartão/Equipe) para conversar com qualquer pessoa, em qualquer sala ou offline (ela lê quando voltar). Contador de não lidas, "Visto" e notificações do navegador opcionais (🔔 no painel) para DMs e menções com a aba em segundo plano.
 - **Admin** (só administradores): promover/rebaixar, cargos (criar, renomear, cor, ordem), senha temporária, desativar conta, tirar alguém da sala ou do escritório, trocar o código de convite, travar a decoração por sala e ver o registro de ações. Mensagens do chat podem ser apagadas por quem escreveu ou por um admin (🗑 no histórico).

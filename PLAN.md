@@ -145,6 +145,9 @@ direct_messages { id: int pk, fromUserId: fk users, toUserId: fk users, text: te
 chat_messages   … + replyToId: fk chat_messages null (on delete set null)    // Fase 12
 direct_messages … + replyToId: fk direct_messages null (on delete set null)  // Fase 12
 chat_reactions  { messageId: fk chat_messages (cascade), userId, emoji } pk(os três)
+room_furni      … + state: int                        // Fase 14
+rooms           … + ambient: 'none'|'office'|'cafe'|'rain' // Fase 14
+board_notes     { id, furniId: fk room_furni (cascade), userId, text, color, createdAt }
 dm_reactions    { messageId: fk direct_messages (cascade), userId, emoji } pk(os três)
 
 rooms          { id: text pk ('reception'|'meeting'|'pantry'), name: text,
@@ -597,13 +600,23 @@ Pedido em 17/10/2026, depois da Fase 8: deixar o escritório "muito completo". M
 - Editor (`ui/roomEditor.ts`): seletor de sala, "+ Nova sala" (8×6 com porta para a Recepção), nome, cores, tamanho, ferramentas Piso/Apagar/Entrada/Porta (clicar ou arrastar), lista de portas com destino, validação ao vivo, "Ir para a sala" (vai direto, sem porta) e excluir.
 - Alturas (degraus) não entram no editor por enquanto: o piso editado é todo na altura 0.
 
-### Fase 14 — Móveis interativos e ambiente
+### Fase 14 — Móveis interativos e ambiente ✅ implementada
 - Móveis ganham `estado` sincronizado. Interações: abajur/luminária liga e desliga, cafeteira "serve" café (emote ☕), TV liga e desliga, **mural de recados** com post-its de texto que ficam salvos, porta-retrato.
 - +20 móveis no catálogo (escritório, TI: servidores/racks, monitores, quadro de avisos).
 - **Dia e noite:** a iluminação acompanha o horário de Brasília (manhã, tarde, noite); à noite as luminárias acesas brilham.
 - **Som ambiente** opcional por sala (loops livres CC0), com volume local.
 
 **Como testar:** ligar o abajur e a outra aba vê; deixar um recado no mural, recarregar e ele continua; forçar a hora (`?hora=21`) e ver a sala escura com as luzes acesas; ligar e desligar o som ambiente.
+
+**Notas da implementação:**
+- **Catálogo:** 53 móveis (25 novos), com categorias novas "TI" e "Luzes". O manifesto ganhou `states` (lidos do `/imaging/info/furniture`), `stateAnchors` (âncora por direção e estado, medida pelo `assets:sync`), `interaction` (`toggle`, `coffee`, `board`) e `light`. Tamanhos estimados conferidos no render; a máquina de bebidas e o mapa-múndi foram corrigidos à mão.
+- **Estado no banco** (`room_furni.state`, migration `0010`) e no estado sincronizado (`Furni.state`). Clicar num móvel de usar: o avatar anda até um tile encostado e então usa (alterna o estado, ou serve café = emote ☕ e a máquina "trabalha" 2,5 s). Limite de 6 usos seguidos, 2/s.
+- **Luzes:** no Habbo o facho de luz é uma camada somada (ink ADD) que o imager achata num disco escuro; por isso luzes usam sempre o desenho "apagado" e a cena desenha um brilho (elipses concêntricas com blend aditivo), mais forte à noite. TVs, computadores etc. usam o desenho do estado do imager.
+- **Dia e noite** pelo horário de Brasília (`dayLight` em `shared/ambience.ts`): dia 8h–17h, entardecer até 19h (tom quente), noite azulada até 5h e amanhecer até 8h, atualizando a cada minuto. Camada de multiplicação sobre a sala (os balões de chat ficam por cima). `?hora=21` força a hora para testar.
+- **Mural de recados:** `board_notes` (até 30 por mural, 140 caracteres, 4 cores de papel); mensagens `board.notes`/`board.add`/`board.remove` e aviso `board.changed`. Quem escreveu ou admin tira o recado.
+- **Som ambiente** (`rooms.ambient`, escolhido no editor de sala): **gerado com WebAudio** em vez de loops CC0 — sem arquivos para baixar nem licença para registrar. Escritório (zumbido + teclas), cafeteria (burburinho + xícaras) e chuva. Botão 🎵 com ligar e volume, salvo no navegador; desligado por padrão.
+- O porta-retrato previsto no plano ficou de fora (não achei um classname com render utilizável).
+- Correção no banco de desenvolvimento: a primeira versão da migration `0010` colocou `ambient` na tabela errada e foi refeita; o banco local foi ajustado à mão (bancos novos ou de produção só veem a versão certa).
 
 ### Fase 15 — Quadro branco
 - Móvel "quadro branco" (já na Sala de reunião). Clicar abre o quadro em tela cheia: traço livre, cores, espessura, borracha, texto, desfazer e limpar (limpar pede confirmação).
