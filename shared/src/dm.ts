@@ -87,6 +87,8 @@ export const OnlinePerson = schema(
     roomId: t.string(),
     /** 'available' | 'busy' | 'away' */
     status: t.string(),
+    /** Atividade fora do escritório (VS Code, Spotify). */
+    activity: t.string(),
   },
   'OnlinePerson',
 );

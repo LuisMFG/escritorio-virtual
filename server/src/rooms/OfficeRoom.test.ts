@@ -841,4 +841,18 @@ describe('OfficeRoom', () => {
       svc.achievements.events.off('unlocked', onUnlock);
     });
   });
+
+  describe('atividade', () => {
+    it('sinal do VS Code aparece no avatar para todos na sala', async () => {
+      const ana = newUser('Ana');
+      const a = await join(ana.token);
+      const b = await join(newUser('Beto').token);
+      svc.activity.editor(ana.user.id, { state: 'active', language: 'sql' });
+      await wait(100);
+      expect(b.state.players.get(a.sessionId)!.activity).toBe('💻 Codando em SQL no VS Code');
+      svc.activity.editor(ana.user.id, { state: 'closed' });
+      await wait(100);
+      expect(b.state.players.get(a.sessionId)!.activity).toBe('');
+    });
+  });
 });

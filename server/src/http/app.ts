@@ -13,6 +13,7 @@ import * as roomRoutes from './rooms.js';
 import * as meetingRoutes from './meetings.js';
 import * as petRoutes from './pets.js';
 import * as achievementRoutes from './achievements.js';
+import * as activityRoutes from './activity.js';
 import {
   changePassword,
   claim,
@@ -58,7 +59,10 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
   });
   app.use('/api', express.json({ limit: '16kb' }));
 
-  const auth: meetingRoutes.MeetingDeps & petRoutes.PetDeps & achievementRoutes.AchievementDeps = {
+  const auth: meetingRoutes.MeetingDeps &
+    petRoutes.PetDeps &
+    achievementRoutes.AchievementDeps &
+    activityRoutes.ActivityDeps = {
     inviteCode: () => svc.settings.inviteCode(),
     adminUsernames: cfg.adminUsernames,
     avatarManifest: svc.avatarManifest,
@@ -73,6 +77,8 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
     meetings: svc.meetings,
     pets: svc.pets,
     achievements: svc.achievements,
+    apiTokens: svc.apiTokens,
+    activity: svc.activity,
   };
   const send = <T>(res: Response, result: Result<T>) =>
     void res.status(result.status).json(result.body);
@@ -224,6 +230,33 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
     '/api/achievements/showcase',
     withCaller((c, req, res) => send(res, achievementRoutes.setShowcase(c, req.body, auth))),
   );
+
+  // Atividade (integrações): privacidade, tokens pessoais e o sinal das extensões dos editores.
+  app.get(
+    '/api/activity/settings',
+    withCaller((c, _req, res) => send(res, activityRoutes.getSettings(c, auth))),
+  );
+  app.put(
+    '/api/activity/settings',
+    withCaller((c, req, res) => send(res, activityRoutes.setCodeShare(c, req.body, auth))),
+  );
+  app.post(
+    '/api/activity/tokens',
+    withCaller((c, req, res) => send(res, activityRoutes.createToken(c, req.body, auth))),
+  );
+  app.delete(
+    '/api/activity/tokens/:id',
+    withCaller((c, req, res) => send(res, activityRoutes.revokeToken(c, Number(id(req)), auth))),
+  );
+  // Um sinal por minuto por extensão; folga para várias janelas e editores.
+  const heartbeatLimiter = new KeyedRateLimiter(20, 20 / 60);
+  app.post('/api/activity/editor', (req, res) => {
+    const token = getBearerToken(req.headers.authorization ?? '');
+    if (!heartbeatLimiter.tryTake(token || req.ip || '?')) {
+      return void res.status(429).json({ error: 'RATE_LIMIT', message: 'Muitos sinais.' });
+    }
+    send(res, activityRoutes.editorHeartbeat(token, req.body, auth));
+  });
 
   // Salas (admins e quem pode editar salas).
   app.get(

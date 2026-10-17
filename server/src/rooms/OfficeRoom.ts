@@ -331,6 +331,12 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     }
   };
 
+  /** Atividade de alguém mudou (VS Code…): atualiza o texto dos avatares dessa pessoa. */
+  private readonly onActivity = (userId: string): void => {
+    const text = services().activity.text(userId);
+    for (const p of this.state.players.values()) if (p.userId === userId) p.activity = text;
+  };
+
   /** Pet adotado, editado ou solto: aparece, muda ou some nesta sala. */
   private readonly onPetChanged = (userId: string, pet: PetInfo | null): void => {
     const session = this.state.pets.get(userId)?.ownerSession ?? this.sessionOf(userId);
@@ -429,6 +435,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     services().moderation.on('room', this.onRoomSettings);
     services().moderation.on('layout', this.onLayout);
     services().pets.events.on('changed', this.onPetChanged);
+    services().activity.events.on('changed', this.onActivity);
   }
 
   override onDispose(): void {
@@ -437,6 +444,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     services().moderation.off('room', this.onRoomSettings);
     services().moderation.off('layout', this.onLayout);
     services().pets.events.off('changed', this.onPetChanged);
+    services().activity.events.off('changed', this.onActivity);
   }
 
   override onAuth(_client: Client, options: unknown): UserRow {
@@ -477,6 +485,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       away: false,
       status: 'available',
       typing: false,
+      activity: services().activity.text(user.id),
     });
     this.state.players.set(client.sessionId, player);
     const pet = services().pets.get(user.id);

@@ -13,6 +13,8 @@ import { MeetingService } from './MeetingService.js';
 import { GameService } from './GameService.js';
 import { PetService } from './PetService.js';
 import { AchievementService } from './AchievementService.js';
+import { ApiTokenService } from './ApiTokenService.js';
+import { ActivityService } from './ActivityService.js';
 import { AuditService } from './AuditService.js';
 import { SettingsService } from './SettingsService.js';
 import { EventEmitter } from 'node:events';
@@ -43,6 +45,8 @@ export interface Services {
   games: GameService;
   pets: PetService;
   achievements: AchievementService;
+  apiTokens: ApiTokenService;
+  activity: ActivityService;
   furni: FurniService;
   transfers: TransferRegistry;
   settings: SettingsService;
@@ -81,6 +85,8 @@ export function createServices(db: Db, defaults = { inviteCode: 'convite' }): Se
     games: new GameService(db),
     pets,
     achievements,
+    apiTokens: new ApiTokenService(db),
+    activity: new ActivityService(users),
     furni: new FurniService(db),
     transfers: new TransferRegistry(),
     settings: new SettingsService(db, defaults),

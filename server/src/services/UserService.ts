@@ -49,6 +49,7 @@ type UserChanges = Partial<
     | 'cargoId'
     | 'bio'
     | 'badges'
+    | 'codeShare'
     | 'birthday'
     | 'disabled'
     | 'canEditRooms'

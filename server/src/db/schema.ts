@@ -39,6 +39,8 @@ export const users = sqliteTable('users', {
   canEditRooms: integer('can_edit_rooms', { mode: 'boolean' }).notNull().default(false),
   /** Emblemas exibidos no cartão (até 3 ids de conquistas, separados por vírgula). */
   badges: text('badges').notNull().default(''),
+  /** O que aparece quando a pessoa programa: 'hidden' | 'coding' | 'language' | 'project'. */
+  codeShare: text('code_share').notNull().default('language'),
   figure: text('figure').notNull(),
   gender: text('gender', { enum: ['M', 'F'] })
     .notNull()
@@ -360,6 +362,22 @@ export const userVisits = sqliteTable(
       .references(() => rooms.id, { onDelete: 'cascade' }),
   },
   (t) => [primaryKey({ columns: [t.userId, t.roomId] })],
+);
+
+/** Tokens pessoais para integrações (extensão do VS Code). Só o SHA-256 fica guardado. */
+export const apiTokens = sqliteTable(
+  'api_tokens',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id),
+    name: text('name').notNull(),
+    tokenHash: text('token_hash').notNull().unique(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    lastUsedAt: integer('last_used_at', { mode: 'timestamp_ms' }),
+  },
+  (t) => [index('api_tokens_user_idx').on(t.userId)],
 );
 
 export type UserRow = typeof users.$inferSelect;

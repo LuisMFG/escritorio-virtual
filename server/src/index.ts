@@ -25,6 +25,7 @@ const server = defineServer({
 await server.listen(config.port);
 // Lembretes de reunião e placas "Em reunião" (a cada 30 s).
 new MeetingScheduler(services.meetings, services.dms).start();
+services.activity.start();
 console.log(`[servidor] escritório no ar em http://localhost:${config.port}`);
 console.log(`[servidor] banco: ${config.databasePath}`);
 console.log(

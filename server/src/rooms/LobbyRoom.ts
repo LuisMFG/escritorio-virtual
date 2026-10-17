@@ -89,7 +89,7 @@ export class LobbyRoom extends Room<{ state: LobbyState; client: LobbyClient }> 
     }
     for (const [userId, info] of latest) {
       const person = this.state.people.get(userId) ?? new OnlinePerson();
-      Object.assign(person, { userId, ...info });
+      Object.assign(person, { userId, ...info, activity: services().activity.text(userId) });
       if (!this.state.people.has(userId)) this.state.people.set(userId, person);
     }
   };
@@ -161,6 +161,7 @@ export class LobbyRoom extends Room<{ state: LobbyState; client: LobbyClient }> 
     ev.on('tick', this.syncRooms);
     services().moderation.on('kick', this.onKick);
     services().achievements.events.on('unlocked', this.onUnlocked);
+    services().activity.events.on('changed', this.syncPeople);
   }
 
   override onDispose(): void {
@@ -174,6 +175,7 @@ export class LobbyRoom extends Room<{ state: LobbyState; client: LobbyClient }> 
     ev.off('tick', this.syncRooms);
     services().moderation.off('kick', this.onKick);
     services().achievements.events.off('unlocked', this.onUnlocked);
+    services().activity.events.off('changed', this.syncPeople);
   }
 
   override onAuth(_client: Client, options: unknown): UserRow {
