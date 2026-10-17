@@ -786,10 +786,18 @@ Escolhido em 17/10/2026, depois do roadmap v3. Ordem pensada assim: primeiro pro
 - Achado no caminho: com a arte provisória, a cadeira na frente da mesa de jogos pega o clique no meio da mesa (correto: ela está por cima). O `clickFurni` dos testes procura um ponto em que o móvel desejado é o de cima.
 - **Conferido que acusa erro:** com o envio do chat quebrado de propósito, o teste da sala falhou em "a mensagem chega ao Beto"; depois o código voltou ao normal.
 
-### Fase 24 — Avisos da diretoria
+### Fase 24 — Avisos da diretoria ✅ implementada
 - Admin publica um comunicado (título, texto, importância normal/urgente). Aparece como faixa para todo o escritório na hora (e para quem entrar depois, até a pessoa marcar "Li"). Histórico de avisos; urgente também vira notificação do sistema.
 
 **Como testar:** publicar um aviso com duas abas abertas; a outra recebe a faixa; "Li" some só para ela; quem entra depois ainda vê.
+
+**Notas da implementação:**
+- Banco: `announcements` e `announcement_reads` (migration `0018`). Rotas: `GET /api/announcements` (histórico, 50), `GET /api/announcements/unread`, `POST` (só admin), `PUT /:id/read` e `DELETE /:id` (só admin; publicar e apagar entram no Registro).
+- Ao publicar, o canal global manda o aviso para todos os conectados; quem publicou recebe já como lido (sem faixa). Ao entrar, cada pessoa busca os não lidos dos últimos 30 dias, então quem cria a conta depois também vê.
+- **Faixa** no topo, um aviso por vez: urgente em vermelho, passa na frente da fila e vira notificação do sistema; os outros tocam o som de menção. "Li" grava e mostra o próximo; "Ver todos (N)" abre o painel.
+- **Botão 📢 Avisos** no HUD com o contador de não lidos. Painel com o histórico (novos destacados, "Li" também ali). Para admins: formulário "Publicar aviso" (título, texto, urgente), "lido por N" e "Apagar" (com confirmação).
+- **Teste de ponta a ponta** (`e2e/tests/avisos.spec.ts`): a diretora (`admin.e2e`) publica, o Beto online recebe a faixa ao vivo e o contador, "Li" some e não volta ao recarregar, o Caio, que cria a conta depois, vê ao entrar, e o admin vê "lido por 2". O teste pegou um erro na primeira versão: quem publicava também recebia a própria faixa.
+- No navegador: publicar um aviso urgente pelo painel (barra vermelha, "lido por 1", sem faixa para a autora). A faixa vista por outra pessoa foi conferida pela foto do teste de ponta a ponta.
 
 ### Fase 25 — Enquetes no chat
 - `/enquete Pergunta? | opção 1 | opção 2 …` (até 6 opções) ou botão no chat. Mensagem especial com botões; um voto por pessoa (dá para trocar), resultado ao vivo com barras. Quem criou encerra. Anônima ou com nomes (escolha ao criar).

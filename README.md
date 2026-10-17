@@ -18,6 +18,7 @@ Escritório virtual isométrico para amigos e colegas (até ~10 pessoas online):
 - **Conquistas**: 17 conquistas (conversar, decorar, explorar as salas, jogar, ir às reuniões…) com aviso ao desbloquear. No Perfil você escolhe até 3 emblemas para aparecer no seu cartão.
 - **Status do editor de código**: com a extensão do VS Code ou do Visual Studio, seu cartão mostra “💻 Codando em C# no Visual Studio” enquanto você programa. No Perfil você escolhe o que aparece (nada, só “Codando”, a linguagem ou também o projeto). Veja [Extensões dos editores](#extensões-dos-editores).
 - **Spotify**: conecte sua conta no Perfil e a música que você está ouvindo aparece no seu cartão (“🎵 Música – Artista”, com link). Dá para esconder sem desconectar. Precisa de um app do Spotify configurado; veja [Spotify](#spotify).
+- **Avisos da diretoria**: botão 📢 Avisos. Admins publicam comunicados (normais ou urgentes); aparecem como faixa no topo para todo mundo, inclusive para quem entrar depois, até a pessoa clicar em **Li**. Histórico com “lido por N” para os admins.
 - **Dia e noite** pelo horário de Brasília, com as luzes acesas brilhando à noite (`?hora=21` força a hora para testar), e **som ambiente** opcional por sala (🎵: escritório, cafeteria ou chuva, gerado no próprio navegador).
 - **Reações e respostas**: passe o mouse numa mensagem (sala ou privada) para reagir (👍 ❤️ 😂 😮 😢 🎉) ou responder citando; quem é respondido recebe aviso.
 - **Mensagens privadas**: botão **Mensagens** (ou "Mensagem" no cartão/Equipe) para conversar com qualquer pessoa, em qualquer sala ou offline (ela lê quando voltar). Contador de não lidas, "Visto" e notificações do navegador opcionais (🔔 no painel) para DMs e menções com a aba em segundo plano.
@@ -94,7 +95,7 @@ Opções de URL do cliente: `?offline=1` usa só a arte provisória gerada por c
 `npm run e2e` compila o cliente, sobe o servidor em modo produção na porta 2600 (banco e backups temporários, sem mexer no `npm run dev`) e roda no Chromium os fluxos principais com pessoas de verdade clicando: criar conta e entrar, andar, conversar e trocar de sala, decorar, marcar reunião e jogar o jogo da velha.
 
 - Primeira vez: `npx playwright install chromium`.
-- Rodar só um: `npm run e2e -- jogo`. Ver o navegador: `npm run e2e -- --headed`.
+- Rodar só um: `npm run e2e -- jogo`. Testes de hoje: conta, sala, decorar, agenda, jogo da velha e avisos. Ver o navegador: `npm run e2e -- --headed`.
 - Quando falha: `npx playwright show-trace e2e-results/<teste>/trace.zip` mostra passo a passo (tela, cliques, rede). O relatório fica em `e2e-report/`.
 - A cena é um canvas; com `?e2e=1` no endereço, a página expõe `window.__e2e` (onde fica cada tile e móvel na tela e o estado da sala) para os testes clicarem com o mouse no lugar certo. Sem o parâmetro, nada muda.
 
