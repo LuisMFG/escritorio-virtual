@@ -16,6 +16,8 @@ import {
   type ChatMessage,
   type RoomLayoutMessage,
   type SessionResponse,
+  type Status,
+  STATUSES,
 } from '@office/shared';
 import { Application, TextureSource } from 'pixi.js';
 import { AssetLoader } from './assets/AssetLoader.js';
@@ -26,10 +28,12 @@ import type { AvatarSnapshot } from './entities/AvatarView.js';
 import { isSessionError, OfficeConnection, type OfficeRoomClient } from './net/OfficeConnection.js';
 import { forgetToken, loadSession, saveSession } from './net/storage.js';
 import { RoomScene, type SceneDeps } from './scene/RoomScene.js';
+import { AvatarCard } from './ui/avatarCard.js';
 import { openAvatarEditor } from './ui/avatarEditor.js';
 import { ChatPanel } from './ui/chat.js';
 import { DecorPanel } from './ui/decorPanel.js';
 import { mountHud } from './ui/hud.js';
+import { IdleWatcher } from './ui/idle.js';
 import { showLogin } from './ui/login.js';
 import { ChatSound } from './ui/sound.js';
 import { Overlay } from './ui/overlay.js';
@@ -62,6 +66,8 @@ function snapshot(p: Player): AvatarSnapshot {
     nextY: p.nextY,
     dir: p.dir,
     away: p.away,
+    status: p.status,
+    typing: p.typing,
     action: p.action,
     z: p.z,
   };
@@ -104,9 +110,50 @@ async function start(): Promise<void> {
   let scene: RoomScene | undefined;
   let connection: OfficeConnection | undefined;
   let session: SessionResponse | undefined;
-  const overlay = new Overlay();
+  // Status: o escolhido pela pessoa e o "ausente" automático por inatividade.
+  // O escolhido fica salvo no navegador (sobrevive ao recarregar a página).
+  let manualStatus: Status = loadStatus();
+  let autoAway = false;
+  const effectiveStatus = (): Status => (autoAway ? 'away' : manualStatus);
+  const applyStatus = () => {
+    connection?.setStatus(effectiveStatus());
+    overlay.setOwnStatus(effectiveStatus());
+  };
+  const overlay = new Overlay((status) => {
+    manualStatus = status;
+    saveStatus(status);
+    autoAway = false;
+    applyStatus();
+  });
+  new IdleWatcher(
+    () => {
+      if (manualStatus === 'away') return;
+      autoAway = true;
+      applyStatus();
+    },
+    () => {
+      if (!autoAway) return;
+      autoAway = false;
+      applyStatus();
+    },
+  );
+
   const sound = new ChatSound();
-  const chat = new ChatPanel((text) => connection?.say(text));
+  const chat = new ChatPanel({
+    send: (text) => connection?.say(text),
+    emote: (id) => connection?.emote(id),
+    typing: (on) => connection?.typing(on),
+  });
+
+  // Menções com a aba escondida: contador no título até voltar.
+  let unseenMentions = 0;
+  const baseTitle = () => document.title.replace(/^\(@\d+\) /, '');
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && unseenMentions) {
+      unseenMentions = 0;
+      document.title = baseTitle();
+    }
+  });
   let decorating = false;
   const setDecorating = (on: boolean) => {
     decorating = on;
@@ -126,7 +173,10 @@ async function start(): Promise<void> {
     onToggleDecor: () => setDecorating(!decorating),
     onToggleSound: () => sound.toggle(),
     soundOn: sound.enabled,
-    onEditAvatar: async () => {
+    onEditAvatar: () => void editAvatar(),
+  });
+  async function editAvatar(): Promise<void> {
+    {
       if (!session || !connection) return;
       const choice = await openAvatarEditor({
         manifest: avatarManifest,
@@ -139,7 +189,16 @@ async function start(): Promise<void> {
       connection.updateAvatar(choice);
       session = { ...session, ...choice };
       saveSession({ ...(loadSession() ?? { name: session.name }), ...choice });
+    }
+  }
+  const avatarCard = new AvatarCard({
+    goTo: (sessionId) => {
+      const info = scene?.avatarInfo(sessionId);
+      // O servidor leva até o tile livre mais perto da pessoa.
+      if (info) connection?.move(info.tile);
     },
+    mention: (name) => chat.insertMention(name),
+    editAvatar: () => void editAvatar(),
   });
   hud.setRoomName(RECEPTION.name);
   app.ticker.add((ticker) => scene?.update(ticker.deltaMS));
@@ -160,6 +219,10 @@ async function start(): Promise<void> {
         placeFurni: (msg) => connection.placeFurni(msg),
         moveFurni: (msg) => connection.moveFurni(msg),
         removeFurni: (furniId) => connection.removeFurni(furniId),
+        avatarClick: (sessionId, at) => {
+          const info = s.avatarInfo(sessionId);
+          if (info) avatarCard.show({ sessionId, ...info, roomName: layout.name }, at);
+        },
       },
       {
         onPickChange: (defId) => decorPanel.setPicked(defId),
@@ -176,17 +239,28 @@ async function start(): Promise<void> {
     await s.load();
     if (scene !== s) return;
     overlay.setFading(false);
+    avatarCard.hide();
     void refreshOtherRooms();
+    // Cada sala começa como "Disponível": reaplica o status atual.
+    if (effectiveStatus() !== 'available') connection.setStatus(effectiveStatus());
+    overlay.setOwnStatus(effectiveStatus());
 
-    const refreshPeople = () =>
+    const refreshPeople = () => {
+      const players = [...room.state.players.entries()];
       overlay.setPeople(
-        [...room.state.players.entries()].map(([id, p]) => ({
+        players.map(([id, p]) => ({
           id,
           name: p.name,
           away: p.away,
           isLocal: id === room.sessionId,
+          status: p.status,
         })),
       );
+      chat.setPeople(
+        players.map(([, p]) => p.name),
+        room.state.players.get(room.sessionId)?.name ?? session?.name ?? '',
+      );
+    };
     const cb = Callbacks.get(room);
     cb.onAdd('players', (player, id) => {
       s.addAvatar(id, snapshot(player), id === room.sessionId);
@@ -232,9 +306,21 @@ async function start(): Promise<void> {
       serverError: (err) => overlay.notify(err.message),
       chat: (msg) => {
         chat.add(msg);
-        if (msg.userId !== session?.userId) sound.play();
-        scene?.say(msg.sessionId, msg.name, msg.text);
+        const fromOther = msg.userId !== session?.userId;
+        const mentioned = fromOther && chat.mentionsMe(msg.text);
+        if (mentioned) {
+          sound.mention();
+          overlay.notify(`${msg.name} mencionou você`);
+          if (document.visibilityState === 'hidden') {
+            unseenMentions++;
+            document.title = `(@${unseenMentions}) ${baseTitle()}`;
+          }
+        } else if (fromOther) {
+          sound.play();
+        }
+        scene?.say(msg.sessionId, msg.name, msg.text, mentioned);
       },
+      emote: (msg) => scene?.playEmote(msg.sessionId, msg.emote),
       sessionInvalid: () => {
         forgetToken();
         location.reload();
@@ -277,3 +363,22 @@ start().catch((err: unknown) => {
   box.textContent = `Não foi possível iniciar o escritório: ${(err as Error).message}`;
   document.body.append(box);
 });
+
+const STATUS_KEY = 'escritorio.status';
+
+function loadStatus(): Status {
+  try {
+    const saved = localStorage.getItem(STATUS_KEY);
+    return STATUSES.find((s) => s === saved) ?? 'available';
+  } catch {
+    return 'available';
+  }
+}
+
+function saveStatus(status: Status): void {
+  try {
+    localStorage.setItem(STATUS_KEY, status);
+  } catch {
+    // aba anônima ou armazenamento bloqueado: só não lembra
+  }
+}

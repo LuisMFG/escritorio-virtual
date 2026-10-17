@@ -8,8 +8,9 @@ import {
   type FurniManifestEntry,
   type PlacedFurni,
 } from '@office/shared';
-import { Container, Sprite, type Point, type Texture } from 'pixi.js';
+import { Container, Sprite, type Point } from 'pixi.js';
 import type { AssetLoader } from '../assets/AssetLoader.js';
+import { spriteHitTest } from '../assets/hitTest.js';
 import type { PlaceholderFactory } from '../assets/PlaceholderFactory.js';
 
 /** Sprite de um móvel posicionado. O ponto de origem é o vértice de baixo do footprint. */
@@ -63,12 +64,7 @@ export class FurniView extends Container {
 
   /** O ponto de tela cai num pixel visível do desenho deste móvel? */
   hitTest(global: Point): boolean {
-    if (!this.visible || !this.sprite.getBounds().containsPoint(global.x, global.y)) return false;
-    const local = this.sprite.toLocal(global);
-    const tex = this.sprite.texture;
-    const px = Math.floor(local.x + this.sprite.anchor.x * tex.width);
-    const py = Math.floor(local.y + this.sprite.anchor.y * tex.height);
-    return alphaAt(tex, px, py) > 32;
+    return this.visible && spriteHitTest(this.sprite, global);
   }
 
   get footprint() {
@@ -88,38 +84,6 @@ export class FurniView extends Container {
     const fp = this.footprint;
     const p = tileToScreen(fp.maxX, fp.maxY, this.placed.z);
     this.position.set(p.sx, p.sy + TILE_H / 2);
-  }
-}
-
-/** Canais alfa por textura, lidos uma vez de um canvas (para o teste de clique por pixel). */
-const alphaCache = new WeakMap<Texture, { w: number; data: Uint8ClampedArray } | null>();
-
-function alphaAt(tex: Texture, x: number, y: number): number {
-  if (x < 0 || y < 0 || x >= tex.width || y >= tex.height) return 0;
-  let entry = alphaCache.get(tex);
-  if (entry === undefined) {
-    entry = readPixels(tex);
-    alphaCache.set(tex, entry);
-  }
-  // Sem acesso aos pixels (ex.: textura gerada na GPU): vale a caixa do sprite.
-  if (!entry) return 255;
-  return entry.data[(y * entry.w + x) * 4 + 3] ?? 0;
-}
-
-function readPixels(tex: Texture): { w: number; data: Uint8ClampedArray } | null {
-  const resource = tex.source.resource as CanvasImageSource | undefined;
-  if (!(resource instanceof HTMLImageElement) && !(resource instanceof HTMLCanvasElement))
-    return null;
-  try {
-    const canvas = document.createElement('canvas');
-    canvas.width = tex.width;
-    canvas.height = tex.height;
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    if (!ctx) return null;
-    ctx.drawImage(resource, 0, 0);
-    return { w: tex.width, data: ctx.getImageData(0, 0, tex.width, tex.height).data };
-  } catch {
-    return null;
   }
 }
 

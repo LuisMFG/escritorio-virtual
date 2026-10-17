@@ -5,6 +5,9 @@ import {
   OfficeState,
   ServerMessage,
   type ChatMessage,
+  type EmoteId,
+  type EmoteMessage,
+  type Status,
   type ErrorMessage,
   type FurniMoveMessage,
   type FurniPlaceMessage,
@@ -34,6 +37,7 @@ interface Handlers {
   joined: (room: OfficeRoomClient, layout: RoomLayoutMessage) => void;
   serverError: (err: ErrorMessage) => void;
   chat: (msg: ChatMessage) => void;
+  emote: (msg: EmoteMessage) => void;
   /** Vai trocar de sala por uma porta (hora de escurecer a tela). */
   transferStart: (targetRoomId: string) => void;
   /** Sessão recusada pelo servidor: voltar para a tela de entrada. */
@@ -90,6 +94,18 @@ export class OfficeConnection {
     this.room?.send(ClientMessage.FurniRemove, { furniId });
   }
 
+  setStatus(status: Status): void {
+    this.room?.send(ClientMessage.SetStatus, { status });
+  }
+
+  typing(on: boolean): void {
+    this.room?.send(ClientMessage.Typing, { on });
+  }
+
+  emote(emote: EmoteId): void {
+    this.room?.send(ClientMessage.Emote, { emote });
+  }
+
   say(text: string): void {
     this.room?.send(ClientMessage.Chat, { text });
   }
@@ -114,6 +130,7 @@ export class OfficeConnection {
     this.room = room;
     room.onMessage(ServerMessage.Error, (err: ErrorMessage) => this.on.serverError(err));
     room.onMessage(ServerMessage.Chat, (msg: ChatMessage) => this.on.chat(msg));
+    room.onMessage(ServerMessage.Emote, (msg: EmoteMessage) => this.on.emote(msg));
     room.onMessage(
       ServerMessage.RoomTransfer,
       (msg: RoomTransferMessage) => void this.switchRoom(msg),

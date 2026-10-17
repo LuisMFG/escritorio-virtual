@@ -1,3 +1,4 @@
+import { STATUS_LABELS, STATUSES, type Status } from '@office/shared';
 import type { ConnectionStatus } from '../net/OfficeConnection.js';
 
 export interface PersonEntry {
@@ -5,6 +6,7 @@ export interface PersonEntry {
   name: string;
   away: boolean;
   isLocal: boolean;
+  status: string;
 }
 
 export interface OtherRoom {
@@ -26,6 +28,7 @@ export class Overlay {
   private readonly people = document.createElement('details');
   private readonly peopleSummary = document.createElement('summary');
   private readonly peopleBody = document.createElement('div');
+  private readonly statusSelect = document.createElement('select');
   private readonly banner = document.createElement('div');
   private readonly toast = document.createElement('div');
   private readonly fade = document.createElement('div');
@@ -34,11 +37,22 @@ export class Overlay {
   private others: OtherRoom[] = [];
   private roomName = '';
 
-  constructor() {
+  constructor(onStatusChange: (status: Status) => void) {
     this.people.className = 'people';
     this.people.open = window.innerWidth > 600;
     this.peopleBody.className = 'people-body';
-    this.people.append(this.peopleSummary, this.peopleBody);
+
+    // Seletor do próprio status (fica fora da lista para não perder o foco ao re-renderizar).
+    const statusRow = Object.assign(document.createElement('label'), { className: 'status-row' });
+    statusRow.append(Object.assign(document.createElement('span'), { textContent: 'Seu status' }));
+    for (const st of STATUSES) {
+      this.statusSelect.append(new Option(STATUS_LABELS[st], st));
+    }
+    this.statusSelect.addEventListener('change', () =>
+      onStatusChange(this.statusSelect.value as Status),
+    );
+    statusRow.append(this.statusSelect);
+    this.people.append(this.peopleSummary, statusRow, this.peopleBody);
 
     this.banner.className = 'conn-banner';
     this.banner.setAttribute('role', 'status');
@@ -60,6 +74,12 @@ export class Overlay {
     );
     this.roomName = roomName;
     this.render();
+  }
+
+  /** Mostra no seletor o status atual (inclusive o ausente automático). */
+  setOwnStatus(status: Status): void {
+    this.statusSelect.value = status;
+    this.statusSelect.dataset.status = status;
   }
 
   /** Outras salas (a atual é ignorada: ela vem do estado ao vivo). */
@@ -87,7 +107,12 @@ export class Overlay {
     const hereItems = this.here.map((p) => {
       const li = document.createElement('li');
       li.textContent = p.name;
+      li.dataset.status = p.status;
+      li.title = STATUS_LABELS[p.status as Status] ?? '';
       if (p.isLocal) li.append(tag('você'));
+      if (!p.isLocal && (p.status === 'busy' || p.status === 'away')) {
+        li.append(tag(STATUS_LABELS[p.status].toLowerCase()));
+      }
       if (p.away) {
         li.classList.add('away');
         li.append(tag('reconectando'));

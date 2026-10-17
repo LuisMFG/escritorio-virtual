@@ -27,7 +27,8 @@ export class ChatBubble extends Container {
   targetY: number;
   private age = 0;
 
-  constructor(name: string, message: string, isLocal: boolean) {
+  /** @param highlight mensagem que menciona quem está vendo (fundo amarelo). */
+  constructor(name: string, message: string, isLocal: boolean, highlight = false) {
     super();
     const nameText = new Text({
       text: `${name}:`,
@@ -61,9 +62,10 @@ export class ChatBubble extends Container {
     const w = Math.ceil(contentW + PAD_X * 2);
     const h = Math.ceil(contentH + PAD_Y * 2);
 
+    const bgColor = highlight ? 0xfff1b8 : 0xfdfdf7;
     const bg = new Graphics();
-    bg.roundRect(0, 0, w, h, 5).fill(0xfdfdf7).stroke({ width: 1, color: 0x2a2d36 });
-    bg.poly([w / 2 - TAIL, h - 0.5, w / 2 + TAIL, h - 0.5, w / 2, h + TAIL]).fill(0xfdfdf7);
+    bg.roundRect(0, 0, w, h, 5).fill(bgColor).stroke({ width: 1, color: 0x2a2d36 });
+    bg.poly([w / 2 - TAIL, h - 0.5, w / 2 + TAIL, h - 0.5, w / 2, h + TAIL]).fill(bgColor);
     bg.moveTo(w / 2 - TAIL, h)
       .lineTo(w / 2, h + TAIL)
       .lineTo(w / 2 + TAIL, h)

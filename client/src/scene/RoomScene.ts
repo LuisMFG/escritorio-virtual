@@ -7,6 +7,7 @@ import {
   tileCorners,
   tileHeight,
   type DepthBox,
+  type EmoteId,
   type FurniManifestEntry,
   type Heightmap,
   type PlacedFurni,
@@ -43,6 +44,8 @@ export interface SceneDeps {
 export interface SceneActions extends DecorActions {
   move(tile: TilePoint): void;
   interact(furniId: string): void;
+  /** Clique num avatar (abre o cartão). `at` = posição na tela. */
+  avatarClick(sessionId: string, at: { x: number; y: number }): void;
 }
 
 /**
@@ -78,6 +81,7 @@ export class RoomScene implements DecorHost {
   private depthKey = '';
   private targetFade = 0;
   private localId: string | null = null;
+  private hoveredAvatar: AvatarView | null = null;
 
   constructor(
     private readonly app: Application,
@@ -111,6 +115,7 @@ export class RoomScene implements DecorHost {
     app.stage.on('globalpointermove', this.onPointerMove, this);
     app.stage.on('pointerup', this.onPointerUp, this);
     app.stage.on('pointerupoutside', this.onPointerUp, this);
+    app.canvas.addEventListener('pointerleave', this.onPointerLeave);
   }
 
   get defs(): ReadonlyMap<string, FurniManifestEntry> {
@@ -246,9 +251,38 @@ export class RoomScene implements DecorHost {
     });
   }
 
+  /** Toca um emote no avatar de quem mandou. */
+  playEmote(sessionId: string, emote: EmoteId): void {
+    this.avatars.get(sessionId)?.playEmote(emote);
+  }
+
+  /** Dados para o cartão do avatar. */
+  avatarInfo(sessionId: string) {
+    const a = this.avatars.get(sessionId);
+    return a
+      ? {
+          name: a.displayName,
+          status: a.status,
+          isLocal: a.isLocal,
+          tile: a.destination,
+          figure: a.figure,
+        }
+      : null;
+  }
+
+  /** Avatar sob o ponteiro (pixel visível do desenho), o mais à frente primeiro. */
+  pickAvatar(global: Point): AvatarView | null {
+    return (
+      [...this.avatars.values()]
+        .filter((a) => a.hitTest(global))
+        .sort((a, b) => b.zIndex - a.zIndex)[0] ?? null
+    );
+  }
+
   removeAvatar(id: string): void {
     const view = this.avatars.get(id);
     if (!view) return;
+    if (this.hoveredAvatar === view) this.hoveredAvatar = null;
     this.avatars.delete(id);
     view.destroy({ children: true });
   }
@@ -257,10 +291,10 @@ export class RoomScene implements DecorHost {
    * Balão de fala sobre a cabeça de quem falou. Como no Habbo, os balões já na tela sobem
    * para dar lugar ao novo e somem depois de alguns segundos.
    */
-  say(sessionId: string, name: string, text: string): void {
+  say(sessionId: string, name: string, text: string, highlight = false): void {
     const avatar = this.avatars.get(sessionId);
     if (!avatar) return;
-    const bubble = new ChatBubble(name, text, avatar.isLocal);
+    const bubble = new ChatBubble(name, text, avatar.isLocal, highlight);
     const gap = 3;
     for (const b of this.bubbles.children as ChatBubble[]) b.targetY -= bubble.stackHeight + gap;
     bubble.position.set(avatar.x, avatar.y + HEAD_OFFSET_Y);
@@ -292,6 +326,7 @@ export class RoomScene implements DecorHost {
     this.app.stage.off('globalpointermove', this.onPointerMove, this);
     this.app.stage.off('pointerup', this.onPointerUp, this);
     this.app.stage.off('pointerupoutside', this.onPointerUp, this);
+    this.app.canvas.removeEventListener('pointerleave', this.onPointerLeave);
     this.world.destroy({ children: true });
   }
 
@@ -339,6 +374,10 @@ export class RoomScene implements DecorHost {
     const tile = this.pickTile(global);
     if (!this.localId) return;
 
+    // Clique numa pessoa: cartão com nome, status e ações.
+    const avatar = this.pickAvatar(global);
+    if (avatar) return this.actions.avatarClick(avatar.avatarId, { x: global.x, y: global.y });
+
     // Clique num assento (no tile dele ou no desenho, se o tile não dá para andar): sentar.
     const seat = this.seatAt(global, tile);
     if (seat) {
@@ -366,8 +405,25 @@ export class RoomScene implements DecorHost {
     this.decor.pointerUp();
   }
 
+  /** O ponteiro foi para um painel HTML: esconde o nome e o destaque do tile. */
+  private readonly onPointerLeave = (): void => {
+    this.hoveredAvatar?.setNameVisible(false);
+    this.hoveredAvatar = null;
+    this.app.canvas.style.cursor = '';
+    this.hover.clear();
+    this.doorLabel.visible = false;
+  };
+
   private onPointerMove(e: { global: Point }): void {
     this.decor.pointerMove(e.global);
+    // Nome só de quem está sob o ponteiro.
+    const avatar = this.decor.active ? null : this.pickAvatar(e.global);
+    if (avatar !== this.hoveredAvatar) {
+      this.hoveredAvatar?.setNameVisible(false);
+      avatar?.setNameVisible(true);
+      this.hoveredAvatar = avatar;
+      this.app.canvas.style.cursor = avatar ? 'pointer' : '';
+    }
     const t = this.pickTile(e.global);
     this.hover.clear();
     if (!t) {
