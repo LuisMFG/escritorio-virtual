@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { assignCargo, type AdminDeps } from './admin.js';
+import { assignCargo } from './admin.js';
+import type { RoomDeps } from './rooms.js';
 import {
   changePassword,
   claim,
@@ -13,7 +14,7 @@ import {
 } from './auth.js';
 import { callerOf, conta, makeDeps, registered as registeredWith } from './testDeps.js';
 
-let deps: AdminDeps;
+let deps: RoomDeps;
 
 beforeEach(() => {
   deps = makeDeps();

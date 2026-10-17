@@ -11,6 +11,7 @@ import {
   LobbyServerMessage,
   LobbyState,
   OnlinePerson,
+  RoomEntry,
   type DmReadReceipt,
   type ErrorMessage,
 } from '@office/shared';
@@ -86,6 +87,18 @@ export class LobbyRoom extends Room<{ state: LobbyState; client: LobbyClient }> 
     }
   };
 
+  /** Lista de salas (nomes e ordem) para todos. */
+  private readonly syncRooms = (): void => {
+    const list = services().rooms.list();
+    const ids = new Set(list.map((r) => r.id));
+    for (const id of [...this.state.rooms.keys()]) if (!ids.has(id)) this.state.rooms.delete(id);
+    list.forEach((r, sort) => {
+      const entry = this.state.rooms.get(r.id) ?? new RoomEntry();
+      Object.assign(entry, { id: r.id, name: r.name, sort });
+      if (!this.state.rooms.has(r.id)) this.state.rooms.set(r.id, entry);
+    });
+  };
+
   /** Tirado do escritório (ou conta desativada): o canal global também fecha. */
   private readonly onKick = ({ userId, scope }: ModerationEvents['kick'][0]): void => {
     if (scope !== 'office') return;
@@ -95,12 +108,15 @@ export class LobbyRoom extends Room<{ state: LobbyState; client: LobbyClient }> 
   override onCreate(): void {
     this.state = new LobbyState();
     this.syncPeople();
+    this.syncRooms();
     services().presence.events.on('changed', this.syncPeople);
+    services().moderation.on('rooms', this.syncRooms);
     services().moderation.on('kick', this.onKick);
   }
 
   override onDispose(): void {
     services().presence.events.off('changed', this.syncPeople);
+    services().moderation.off('rooms', this.syncRooms);
     services().moderation.off('kick', this.onKick);
   }
 

@@ -35,6 +35,8 @@ export const users = sqliteTable('users', {
   birthday: text('birthday'),
   /** Conta desativada por um admin: não entra mais (sessões apagadas). */
   disabled: integer('disabled', { mode: 'boolean' }).notNull().default(false),
+  /** Pode criar e editar salas (admins sempre podem). */
+  canEditRooms: integer('can_edit_rooms', { mode: 'boolean' }).notNull().default(false),
   figure: text('figure').notNull(),
   gender: text('gender', { enum: ['M', 'F'] })
     .notNull()
@@ -71,6 +73,8 @@ export const rooms = sqliteTable('rooms', {
   furniSeeded: integer('furni_seeded', { mode: 'boolean' }).notNull().default(false),
   /** Só admins decoram esta sala. */
   decorLocked: integer('decor_locked', { mode: 'boolean' }).notNull().default(false),
+  /** Ordem nas listas (salas novas vão para o fim). */
+  sort: integer('sort').notNull().default(0),
 });
 
 /** Configurações editáveis pelo painel Admin (ex.: código de convite). */

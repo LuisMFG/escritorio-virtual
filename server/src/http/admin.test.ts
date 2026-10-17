@@ -11,12 +11,12 @@ import {
   setRoom,
   updateCargo,
   updateUser,
-  type AdminDeps,
 } from './admin.js';
+import type { RoomDeps } from './rooms.js';
 import { login, register } from './auth.js';
 import { callerOf, makeDeps, registered } from './testDeps.js';
 
-let deps: AdminDeps;
+let deps: RoomDeps;
 let admin: Awaited<ReturnType<typeof registered>>;
 let beto: Awaited<ReturnType<typeof registered>>;
 const asAdmin = () => callerOf(deps, admin.token);

@@ -9,6 +9,7 @@ import { KeyedRateLimiter } from '../util/rateLimiter.js';
 import { getBearerToken } from '@colyseus/core';
 import type { PresenceResponse } from '@office/shared';
 import * as admin from './admin.js';
+import * as roomRoutes from './rooms.js';
 import {
   changePassword,
   claim,
@@ -54,7 +55,7 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
   });
   app.use('/api', express.json({ limit: '16kb' }));
 
-  const auth: admin.AdminDeps = {
+  const auth: roomRoutes.RoomDeps = {
     inviteCode: () => svc.settings.inviteCode(),
     adminUsernames: cfg.adminUsernames,
     avatarManifest: svc.avatarManifest,
@@ -64,6 +65,8 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
     settings: svc.settings,
     rooms: svc.rooms,
     moderation: svc.moderation,
+    furni: svc.furni,
+    furniDefs: svc.furniDefs,
   };
   const send = <T>(res: Response, result: Result<T>) =>
     void res.status(result.status).json(result.body);
@@ -171,6 +174,27 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
   app.patch(
     '/api/admin/cargos/:id',
     withCaller((c, req, res) => send(res, admin.updateCargo(c, Number(id(req)), req.body, auth))),
+  );
+  // Salas (admins e quem pode editar salas).
+  app.get(
+    '/api/rooms',
+    withCaller((_c, _req, res) => send(res, roomRoutes.listRooms(auth))),
+  );
+  app.get(
+    '/api/rooms/:id',
+    withCaller((c, req, res) => send(res, roomRoutes.getRoom(c, id(req), auth))),
+  );
+  app.post(
+    '/api/rooms',
+    withCaller((c, req, res) => send(res, roomRoutes.createRoom(c, req.body, auth))),
+  );
+  app.put(
+    '/api/rooms/:id',
+    withCaller((c, req, res) => send(res, roomRoutes.updateRoom(c, id(req), req.body, auth))),
+  );
+  app.delete(
+    '/api/rooms/:id',
+    withCaller((c, req, res) => send(res, roomRoutes.deleteRoom(c, id(req), auth))),
   );
   app.delete(
     '/api/admin/cargos/:id',

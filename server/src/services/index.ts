@@ -18,6 +18,10 @@ export interface ModerationEvents {
   kick: [{ userId: string; scope: KickScope; roomId?: string; byName: string }];
   /** Decoração travada/destravada numa sala. */
   room: [{ roomId: string; decorLocked: boolean }];
+  /** Formato, portas ou nome da sala mudaram: a instância aberta recarrega. */
+  layout: [{ roomId: string }];
+  /** Salas criadas, renomeadas ou excluídas (o lobby atualiza a lista). */
+  rooms: [];
 }
 
 export interface Services {

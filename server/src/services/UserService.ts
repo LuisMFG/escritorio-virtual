@@ -22,6 +22,7 @@ export interface PublicProfile {
   cargoColor: string;
   role: Role;
   birthday: boolean;
+  canEditRooms: boolean;
 }
 
 export interface NewUser {
@@ -46,6 +47,7 @@ type UserChanges = Partial<
     | 'bio'
     | 'birthday'
     | 'disabled'
+    | 'canEditRooms'
   >
 >;
 
@@ -254,6 +256,7 @@ export class UserService {
       cargoColor: cargo?.color ?? '',
       role: user.role,
       birthday: isBirthdayToday(user.birthday, this.now()),
+      canEditRooms: user.role === 'admin' || user.canEditRooms,
     };
   }
 
@@ -269,6 +272,7 @@ export class UserService {
       cargo: this.cargoOf(user),
       bio: user.bio,
       birthday: user.birthday,
+      canEditRooms: user.role === 'admin' || user.canEditRooms,
     };
   }
 }

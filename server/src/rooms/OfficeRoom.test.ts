@@ -502,4 +502,26 @@ describe('OfficeRoom', () => {
       expect(svc.chat.recent(RECEPTION.id).at(-1)!.reactions).toEqual([]);
     });
   });
+
+  describe('editor de salas', () => {
+    it('sala editada com gente dentro: quem ficou fora do piso volta e o cliente é avisado', async () => {
+      const { id } = svc.rooms.create('Sala nova', svc.furniDefs);
+      const a = await join(newUser('Ana').token, id);
+      a.send(ClientMessage.Move, { x: 8, y: 6 });
+      await wait(STEP_MS * 9);
+      expect(a.state.players.get(a.sessionId)).toMatchObject({ x: 8, y: 6 });
+
+      const data = svc.rooms.editorData(id, 1)!;
+      const heightmap = data.heightmap.map((r, y) => (y >= 5 ? r.slice(0, 5) + 'xxxx' : r));
+      svc.rooms.update(id, { ...data, heightmap }, [], svc.furniDefs);
+      const changed = a.waitForMessage(ServerMessage.LayoutChanged);
+      svc.moderation.emit('layout', { roomId: id });
+      await changed;
+      const layout = (await a.request(ClientMessage.GetLayout)) as RoomLayoutMessage;
+      expect(layout.heightmap[6]).toBe('x0000xxxx');
+      await wait(150); // a posição chega no próximo patch do estado
+      const p = a.state.players.get(a.sessionId)!;
+      expect(p.x < 5 || p.y < 5).toBe(true);
+    });
+  });
 });

@@ -179,6 +179,40 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     if (roomId === this.layout.roomId) this.state.decorLocked = decorLocked;
   };
 
+  /** A sala foi editada (formato, portas, nome): recarrega e avisa os clientes. */
+  private readonly onLayout = ({ roomId }: ModerationEvents['layout'][0]): void => {
+    if (roomId !== this.layout.roomId) return;
+    const layout = services().rooms.getLayout(roomId);
+    if (!layout) return; // excluída (só acontece vazia)
+    this.layout = layout;
+    this.map = parseHeightmap(layout.heightmap);
+    // Móveis que saíram na edição somem do estado.
+    const kept = new Set(
+      services()
+        .furni.list(roomId)
+        .map((f) => f.id),
+    );
+    for (const id of [...this.state.furni.keys()]) if (!kept.has(id)) this.state.furni.delete(id);
+    // Quem ficou fora do piso (ou numa porta) volta para perto da entrada.
+    for (const [sessionId, p] of this.state.players.entries()) {
+      const onDoor = layout.doors.some((d) => d.x === p.x && d.y === p.y);
+      if (!onDoor && this.gridFor(sessionId).isWalkable(p.x, p.y, true)) continue;
+      this.movement.remove(sessionId);
+      this.pendingSit.delete(sessionId);
+      const t = this.freeTileNear(layout.spawn);
+      Object.assign(p, {
+        x: t.x,
+        y: t.y,
+        nextX: t.x,
+        nextY: t.y,
+        z: this.gridFor(sessionId).heightAt(t.x, t.y),
+        action: 'idle',
+        dir: layout.spawn.dir,
+      });
+    }
+    this.broadcast(ServerMessage.LayoutChanged, {});
+  };
+
   override onCreate(options: { officeRoomId: string }): void {
     const layout = services().rooms.getLayout(options.officeRoomId);
     if (!layout) throw new ServerError(404, `Sala inexistente: ${options.officeRoomId}`);
@@ -199,12 +233,14 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     services().users.events.on('updated', this.onUserUpdated);
     services().moderation.on('kick', this.onKick);
     services().moderation.on('room', this.onRoomSettings);
+    services().moderation.on('layout', this.onLayout);
   }
 
   override onDispose(): void {
     services().users.events.off('updated', this.onUserUpdated);
     services().moderation.off('kick', this.onKick);
     services().moderation.off('room', this.onRoomSettings);
+    services().moderation.off('layout', this.onLayout);
   }
 
   override onAuth(_client: Client, options: unknown): UserRow {

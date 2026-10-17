@@ -69,6 +69,7 @@ export function overview(caller: Caller, deps: AdminDeps): Result<AdminOverview>
     users: t.body.members.map((m) => ({
       ...m,
       disabled: byId.get(m.userId)?.disabled ?? false,
+      canEditRooms: byId.get(m.userId)?.canEditRooms ?? false,
       fixedAdmin: Boolean(m.username && deps.adminUsernames.includes(m.username)),
     })),
   });
@@ -87,7 +88,7 @@ export function updateUser(
   if ('error' in p) return p.error!;
   const target = deps.users.findById(userId);
   if (!target) return fail(404, ErrorCode.NotFound);
-  const { role, disabled, cargoId } = p.data;
+  const { role, disabled, cargoId, canEditRooms } = p.data;
   const actor = caller.user.id;
 
   if (role !== undefined && role !== target.role) {
@@ -111,6 +112,11 @@ export function updateUser(
       return fail(404, ErrorCode.NotFound, { message: 'Cargo inexistente.' });
     deps.users.update(userId, { cargoId });
     deps.audit.log(actor, 'user.cargo', userId, cargo?.name ?? 'Sem cargo');
+  }
+
+  if (canEditRooms !== undefined && canEditRooms !== target.canEditRooms) {
+    deps.users.update(userId, { canEditRooms });
+    deps.audit.log(actor, 'user.rooms', userId, canEditRooms ? 'pode' : 'não pode');
   }
 
   if (disabled !== undefined && disabled !== target.disabled) {
