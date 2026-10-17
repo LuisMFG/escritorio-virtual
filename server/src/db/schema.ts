@@ -380,6 +380,21 @@ export const apiTokens = sqliteTable(
   (t) => [index('api_tokens_user_idx').on(t.userId)],
 );
 
+/** Conta do Spotify ligada (Fase 21). Só o necessário para ler a música atual. */
+export const spotifyLinks = sqliteTable('spotify_links', {
+  userId: text('user_id')
+    .primaryKey()
+    .references(() => users.id),
+  refreshToken: text('refresh_token').notNull(),
+  accessToken: text('access_token').notNull(),
+  /** Epoch ms em que o access token vence. */
+  expiresAt: integer('expires_at').notNull(),
+  displayName: text('display_name'),
+  /** Esconder a música por enquanto, sem desconectar. */
+  hidden: integer('hidden', { mode: 'boolean' }).notNull().default(false),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+});
+
 export type UserRow = typeof users.$inferSelect;
 export type DirectMessageRow = typeof directMessages.$inferSelect;
 export type CargoRow = typeof cargos.$inferSelect;

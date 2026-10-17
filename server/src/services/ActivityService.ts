@@ -2,6 +2,8 @@ import {
   ACTIVITY_TTL_MS,
   CODE_SHARE,
   codingText,
+  musicText,
+  type NowPlaying,
   type CodeShare,
   type CodingActivity,
   editorHeartbeatSchema,
@@ -21,6 +23,7 @@ interface Coding extends CodingActivity {
 export class ActivityService {
   readonly events = new EventEmitter<{ changed: [userId: string] }>();
   private readonly coding = new Map<string, Coding>();
+  private readonly music = new Map<string, NowPlaying & { at: number }>();
   private timer: NodeJS.Timeout | undefined;
 
   constructor(
@@ -47,11 +50,27 @@ export class ActivityService {
     if (this.text(userId) !== before) this.events.emit('changed', userId);
   }
 
-  /** Texto para o cartão, já com a privacidade da pessoa (`''` = nada). */
+  /** Música tocando agora (`null` = parou ou escondeu). */
+  setMusic(userId: string, playing: NowPlaying | null): void {
+    const before = `${this.text(userId)}|${this.url(userId)}`;
+    if (playing) this.music.set(userId, { ...playing, at: this.now() });
+    else this.music.delete(userId);
+    if (`${this.text(userId)}|${this.url(userId)}` !== before) this.events.emit('changed', userId);
+  }
+
+  /** Texto para o cartão, já com a privacidade da pessoa (`''` = nada). Uma atividade por linha. */
   text(userId: string): string {
+    const lines: string[] = [];
     const c = this.coding.get(userId);
-    if (!c) return '';
-    return codingText(c, this.shareOf(userId));
+    if (c) lines.push(codingText(c, this.shareOf(userId)));
+    const m = this.music.get(userId);
+    if (m) lines.push(musicText(m));
+    return lines.filter(Boolean).join('\n');
+  }
+
+  /** Link da música (linha 🎵), se houver. */
+  url(userId: string): string {
+    return this.music.get(userId)?.url ?? '';
   }
 
   /** A pessoa mudou a privacidade: o texto pode mudar. */
@@ -62,10 +81,12 @@ export class ActivityService {
   /** Tira quem parou de mandar sinal. */
   sweep(): void {
     const limit = this.now() - ACTIVITY_TTL_MS;
-    for (const [userId, c] of this.coding) {
-      if (c.at >= limit) continue;
-      this.coding.delete(userId);
-      this.events.emit('changed', userId);
+    for (const map of [this.coding, this.music] as Map<string, { at: number }>[]) {
+      for (const [userId, c] of map) {
+        if (c.at >= limit) continue;
+        map.delete(userId);
+        this.events.emit('changed', userId);
+      }
     }
   }
 

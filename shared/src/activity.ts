@@ -107,6 +107,34 @@ export function codingText(a: CodingActivity, share: CodeShare): string {
   return share === 'project' && a.project ? `${base} · ${a.project}` : base;
 }
 
+// ---------- Spotify ----------
+
+export interface NowPlaying {
+  track: string;
+  artists: string;
+  /** Link da música no Spotify. */
+  url: string;
+}
+
+const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
+
+/** "🎵 Música – Artista" (cortado para caber no cartão). */
+export function musicText(m: NowPlaying): string {
+  return `🎵 ${clip(m.track, 40)} – ${clip(m.artists, 30)}`;
+}
+
+export const spotifySettingsSchema = z.object({ hidden: z.boolean() });
+
+/** `GET /api/spotify/status`. */
+export interface SpotifyStatus {
+  /** O escritório tem um app do Spotify configurado. */
+  configured: boolean;
+  linked: boolean;
+  /** Conectado, mas escondendo a música por enquanto. */
+  hidden: boolean;
+  displayName: string | null;
+}
+
 // ---------- Tokens pessoais ----------
 
 export const API_TOKEN_MAX = 5;

@@ -8,9 +8,12 @@ import { OfficeRoom } from './rooms/OfficeRoom.js';
 import { createServices, setServices } from './services/index.js';
 import { MeetingScheduler } from './services/MeetingScheduler.js';
 
-const services = createServices(openDatabase(config.databasePath), {
-  inviteCode: config.inviteCode,
-});
+const services = createServices(
+  openDatabase(config.databasePath),
+  { inviteCode: config.inviteCode },
+  config.spotify,
+);
+if (config.spotify) console.log('[spotify] integração ligada');
 setServices(services);
 
 const server = defineServer({
@@ -26,6 +29,7 @@ await server.listen(config.port);
 // Lembretes de reunião e placas "Em reunião" (a cada 30 s).
 new MeetingScheduler(services.meetings, services.dms).start();
 services.activity.start();
+services.spotifyPoller.start();
 console.log(`[servidor] escritório no ar em http://localhost:${config.port}`);
 console.log(`[servidor] banco: ${config.databasePath}`);
 console.log(

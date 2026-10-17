@@ -334,7 +334,10 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
   /** Atividade de alguém mudou (VS Code…): atualiza o texto dos avatares dessa pessoa. */
   private readonly onActivity = (userId: string): void => {
     const text = services().activity.text(userId);
-    for (const p of this.state.players.values()) if (p.userId === userId) p.activity = text;
+    const url = services().activity.url(userId);
+    for (const p of this.state.players.values()) {
+      if (p.userId === userId) Object.assign(p, { activity: text, activityUrl: url });
+    }
   };
 
   /** Pet adotado, editado ou solto: aparece, muda ou some nesta sala. */
@@ -486,6 +489,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       status: 'available',
       typing: false,
       activity: services().activity.text(user.id),
+      activityUrl: services().activity.url(user.id),
     });
     this.state.players.set(client.sessionId, player);
     const pet = services().pets.get(user.id);

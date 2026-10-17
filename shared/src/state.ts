@@ -38,8 +38,10 @@ export const Player = schema(
     canEditRooms: t.boolean(),
     /** Emblemas de conquistas exibidos (ids separados por vírgula, até 3). */
     badges: t.string(),
-    /** Atividade fora do escritório ("💻 Codando em TypeScript"); vazio = nada. */
+    /** Atividade fora do escritório ("💻 Codando em TypeScript"); vazio = nada. Uma por linha. */
     activity: t.string(),
+    /** Link da música que está tocando (linha 🎵 da atividade), se houver. */
+    activityUrl: t.string(),
   },
   'Player',
 );

@@ -15,6 +15,9 @@ import { PetService } from './PetService.js';
 import { AchievementService } from './AchievementService.js';
 import { ApiTokenService } from './ApiTokenService.js';
 import { ActivityService } from './ActivityService.js';
+import { SpotifyService } from './SpotifyService.js';
+import { SpotifyPoller } from './SpotifyPoller.js';
+import type { SpotifyConfig } from '../config.js';
 import { AuditService } from './AuditService.js';
 import { SettingsService } from './SettingsService.js';
 import { EventEmitter } from 'node:events';
@@ -47,6 +50,8 @@ export interface Services {
   achievements: AchievementService;
   apiTokens: ApiTokenService;
   activity: ActivityService;
+  spotify: SpotifyService;
+  spotifyPoller: SpotifyPoller;
   furni: FurniService;
   transfers: TransferRegistry;
   settings: SettingsService;
@@ -56,7 +61,11 @@ export interface Services {
   avatarManifest: AvatarManifest;
 }
 
-export function createServices(db: Db, defaults = { inviteCode: 'convite' }): Services {
+export function createServices(
+  db: Db,
+  defaults = { inviteCode: 'convite' },
+  spotifyConfig?: SpotifyConfig,
+): Services {
   const users = new UserService(db);
   users.seedCargos();
   const moderation = new EventEmitter<ModerationEvents>();
@@ -64,6 +73,9 @@ export function createServices(db: Db, defaults = { inviteCode: 'convite' }): Se
   const meetings = new MeetingService(db);
   const pets = new PetService(db);
   const achievements = new AchievementService(db, users);
+  const presence = new PresenceRegistry();
+  const activity = new ActivityService(users);
+  const spotify = new SpotifyService(db, spotifyConfig);
   // Conquistas que vêm da agenda e dos pets.
   meetings.events.on('invited', (m) => achievements.unlock(m.createdBy, 'organizer'));
   meetings.events.on('reminder', (m) => {
@@ -75,7 +87,7 @@ export function createServices(db: Db, defaults = { inviteCode: 'convite' }): Se
   return {
     db,
     users,
-    presence: new PresenceRegistry(),
+    presence,
     rooms: new RoomRepository(db),
     chat: new ChatService(db),
     dms: new DmService(db),
@@ -86,7 +98,9 @@ export function createServices(db: Db, defaults = { inviteCode: 'convite' }): Se
     pets,
     achievements,
     apiTokens: new ApiTokenService(db),
-    activity: new ActivityService(users),
+    activity,
+    spotify,
+    spotifyPoller: new SpotifyPoller(spotify, presence, activity),
     furni: new FurniService(db),
     transfers: new TransferRegistry(),
     settings: new SettingsService(db, defaults),

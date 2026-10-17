@@ -24,6 +24,26 @@ function inviteCode(): string {
   return 'convite';
 }
 
+/** App do Spotify (Fase 21). Sem `SPOTIFY_CLIENT_ID`, a integração fica desligada. */
+export interface SpotifyConfig {
+  clientId: string;
+  /** Endereço de retorno cadastrado no app do Spotify (https, ou http://127.0.0.1 em dev). */
+  redirectUri: string;
+  /** Para onde o navegador volta depois de conectar (o endereço do escritório). */
+  returnUrl: string;
+}
+
+function spotify(port: number): SpotifyConfig | undefined {
+  const clientId = process.env.SPOTIFY_CLIENT_ID?.trim();
+  if (!clientId) return undefined;
+  return {
+    clientId,
+    redirectUri:
+      process.env.SPOTIFY_REDIRECT_URI?.trim() || `http://127.0.0.1:${port}/api/spotify/callback`,
+    returnUrl: process.env.SPOTIFY_RETURN_URL?.trim() || '/',
+  };
+}
+
 export interface Config {
   port: number;
   inviteCode: string;
@@ -34,6 +54,7 @@ export interface Config {
   habboAssetsApiKey: string | undefined;
   clientDistDir: string;
   isProduction: boolean;
+  spotify?: SpotifyConfig;
 }
 
 export const config: Config = {
@@ -48,4 +69,5 @@ export const config: Config = {
   habboAssetsApiKey: process.env.HABBOASSETS_API_KEY?.trim() || undefined,
   clientDistDir: resolve(ROOT_DIR, 'client', 'dist'),
   isProduction,
+  spotify: spotify(Number(process.env.PORT ?? 2567)),
 };

@@ -14,6 +14,7 @@ import * as meetingRoutes from './meetings.js';
 import * as petRoutes from './pets.js';
 import * as achievementRoutes from './achievements.js';
 import * as activityRoutes from './activity.js';
+import * as spotifyRoutes from './spotify.js';
 import {
   changePassword,
   claim,
@@ -62,7 +63,8 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
   const auth: meetingRoutes.MeetingDeps &
     petRoutes.PetDeps &
     achievementRoutes.AchievementDeps &
-    activityRoutes.ActivityDeps = {
+    activityRoutes.ActivityDeps &
+    spotifyRoutes.SpotifyDeps = {
     inviteCode: () => svc.settings.inviteCode(),
     adminUsernames: cfg.adminUsernames,
     avatarManifest: svc.avatarManifest,
@@ -79,6 +81,8 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
     achievements: svc.achievements,
     apiTokens: svc.apiTokens,
     activity: svc.activity,
+    spotify: svc.spotify,
+    spotifyPoller: svc.spotifyPoller,
   };
   const send = <T>(res: Response, result: Result<T>) =>
     void res.status(result.status).json(result.body);
@@ -257,6 +261,27 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
     }
     send(res, activityRoutes.editorHeartbeat(token, req.body, auth));
   });
+
+  // Spotify: ligar a conta (OAuth com PKCE), esconder a música e desconectar.
+  app.get(
+    '/api/spotify/status',
+    withCaller((c, _req, res) => send(res, spotifyRoutes.spotifyStatus(c, auth))),
+  );
+  app.post(
+    '/api/spotify/connect',
+    withCaller((c, _req, res) => send(res, spotifyRoutes.spotifyConnect(c, auth))),
+  );
+  app.get('/api/spotify/callback', async (req, res) => {
+    res.redirect(await spotifyRoutes.spotifyCallback(req.query, auth));
+  });
+  app.put(
+    '/api/spotify/settings',
+    withCaller((c, req, res) => send(res, spotifyRoutes.spotifySettings(c, req.body, auth))),
+  );
+  app.delete(
+    '/api/spotify',
+    withCaller((c, _req, res) => send(res, spotifyRoutes.spotifyDisconnect(c, auth))),
+  );
 
   // Salas (admins e quem pode editar salas).
   app.get(
