@@ -33,11 +33,18 @@ export interface Person {
   username: string;
 }
 
-/** Abre um navegador novo e cria uma conta pela tela de verdade. */
-export async function newPerson(browser: Browser, base: string): Promise<Person> {
+/**
+ * Abre um navegador novo e cria uma conta pela tela de verdade. `username` fixo serve para o
+ * admin (`admin.e2e` está em `ADMIN_USERNAMES` no servidor de teste; dá para criar uma vez só).
+ */
+export async function newPerson(
+  browser: Browser,
+  base: string,
+  opts: { username?: string } = {},
+): Promise<Person> {
   const id = uniq();
   const name = `${base} ${id}`;
-  const username = `${base.toLowerCase()}.${id}`;
+  const username = opts.username ?? `${base.toLowerCase()}.${id}`;
   const context = await browser.newContext();
   const page = await context.newPage();
   await page.goto(APP);
