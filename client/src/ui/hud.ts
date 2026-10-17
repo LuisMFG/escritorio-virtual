@@ -1,9 +1,13 @@
 import type { AssetLoader, AssetStats } from '../assets/AssetLoader.js';
+import { AMBIENT_LABELS } from '@office/shared';
 import type { Camera } from '../scene/Camera.js';
+import type { AmbientSound } from './ambient.js';
 
 export interface Hud {
   setRoomName(name: string): void;
   setDecorating(on: boolean): void;
+  /** O ambiente da sala mudou: atualiza o painel do 🎵. */
+  refreshAmbient(): void;
   /** Contador de mensagens privadas não lidas no botão. */
   setUnreadDms(n: number): void;
   /** Mostra o "✎ Editar sala" (admins e quem pode editar salas). */
@@ -23,6 +27,7 @@ export function mountHud(opts: {
   onOpenAdmin: () => void;
   onOpenMessages: () => void;
   onEditRoom: () => void;
+  ambient: AmbientSound;
   onToggleDecor: () => void;
   /** Liga/desliga o som de mensagem; devolve o novo estado. */
   onToggleSound: () => boolean;
@@ -67,6 +72,48 @@ export function mountHud(opts: {
   renderSound(opts.soundOn);
   zoom.prepend(soundBtn);
 
+  // Som ambiente: botão 🎵 com um painelzinho (ligar e volume).
+  const ambientBtn = button('🎵', 'Som ambiente', () => {
+    panel.hidden = !panel.hidden;
+    renderAmbient();
+  });
+  const panel = document.createElement('div');
+  panel.className = 'ambient-panel';
+  panel.hidden = true;
+  const toggleLabel = document.createElement('label');
+  const toggle = Object.assign(document.createElement('input'), { type: 'checkbox' });
+  toggleLabel.append(toggle, ' Som ambiente');
+  const volume = Object.assign(document.createElement('input'), {
+    type: 'range',
+    min: '0',
+    max: '1',
+    step: '0.05',
+  });
+  volume.setAttribute('aria-label', 'Volume do som ambiente');
+  const nowPlaying = Object.assign(document.createElement('small'), { className: 'muted' });
+  panel.append(toggleLabel, volume, nowPlaying);
+  const renderAmbient = () => {
+    const a = opts.ambient;
+    toggle.checked = a.enabled;
+    volume.value = String(a.volume);
+    volume.disabled = !a.enabled;
+    nowPlaying.textContent =
+      a.current === 'none' ? 'Esta sala é silenciosa.' : `Nesta sala: ${AMBIENT_LABELS[a.current]}`;
+    ambientBtn.setAttribute('aria-pressed', String(a.enabled));
+    ambientBtn.classList.toggle('on', a.enabled);
+  };
+  toggle.addEventListener('change', () => {
+    opts.ambient.setEnabled(toggle.checked);
+    renderAmbient();
+  });
+  volume.addEventListener('input', () => opts.ambient.setVolume(Number(volume.value)));
+  document.addEventListener('pointerdown', (e) => {
+    if (!panel.hidden && !panel.contains(e.target as Node) && e.target !== ambientBtn) {
+      panel.hidden = true;
+    }
+  });
+  zoom.prepend(ambientBtn);
+
   const profileBtn = document.createElement('button');
   profileBtn.type = 'button';
   profileBtn.className = 'hud-avatar btn-secondary';
@@ -106,7 +153,7 @@ export function mountHud(opts: {
   const actions = document.createElement('div');
   actions.className = 'hud-actions';
   actions.append(profileBtn, teamBtn, dmBtn, decorBtn, adminBtn);
-  document.body.append(card, status, zoom, actions);
+  document.body.append(card, status, zoom, actions, panel);
   return {
     setUnreadDms(n) {
       dmBadge.hidden = n === 0;
@@ -126,6 +173,9 @@ export function mountHud(opts: {
     setDecorating(on) {
       decorBtn.textContent = on ? 'Concluir decoração' : 'Decorar';
       decorBtn.setAttribute('aria-pressed', String(on));
+    },
+    refreshAmbient() {
+      renderAmbient();
     },
     setRoomName(name) {
       title.textContent = name;

@@ -15,6 +15,7 @@ import {
   type RoomDefinition,
   type RoomLayoutMessage,
   type TilePoint,
+  type DayLight,
 } from '@office/shared';
 import { Container, Graphics, Text, type Application, type Point } from 'pixi.js';
 import type { AssetLoader } from '../assets/AssetLoader.js';
@@ -44,6 +45,8 @@ export interface SceneDeps {
 export interface SceneActions extends DecorActions {
   move(tile: TilePoint): void;
   interact(furniId: string): void;
+  /** Clique num mural de recados. */
+  openBoard(furniId: string): void;
   /** Clique num avatar (abre o cartão). `at` = posição na tela. */
   avatarClick(sessionId: string, at: { x: number; y: number }): void;
 }
@@ -65,6 +68,11 @@ export class RoomScene implements DecorHost {
   private readonly target = new Graphics({ label: 'target' });
   private readonly debugLayer = new Graphics({ label: 'debug' });
   private readonly bubbles = new Container({ label: 'bubbles' });
+  /** Luz do dia/noite: multiplica a cena por uma cor (branco = dia). */
+  private readonly nightShade = new Graphics({ label: 'night' });
+  /** Brilho das luzes acesas (soma por cima da sombra da noite). */
+  private readonly glows = new Container({ label: 'glows' });
+  private darkness = 0;
   private readonly doorLabel = new Text({
     text: '',
     resolution: 2,
@@ -100,10 +108,17 @@ export class RoomScene implements DecorHost {
       this.target,
       this.overlay,
       this.objects,
+      this.nightShade,
+      this.glows,
       this.debugLayer,
       this.bubbles,
       this.doorLabel,
     );
+    this.nightShade.rect(-4000, -4000, 8000, 8000).fill(0xffffff);
+    this.nightShade.blendMode = 'multiply';
+    this.nightShade.eventMode = 'none';
+    this.glows.blendMode = 'add';
+    this.glows.eventMode = 'none';
     this.doorLabel.anchor.set(0.5, 1);
     this.doorLabel.visible = false;
     app.stage.addChild(this.world);
@@ -143,9 +158,35 @@ export class RoomScene implements DecorHost {
       const view = new FurniView(placed, def, this.deps.loader, this.deps.placeholders);
       this.furni.set(id, view);
       this.objects.addChild(view);
-      void view.load();
+      void view.load().then(() => this.drawGlows());
     }
     this.onFurniChanged();
+    this.drawGlows();
+  }
+
+  /** Luz do ambiente (dia/noite). */
+  setDayLight(light: DayLight): void {
+    this.darkness = light.darkness;
+    this.nightShade.tint = light.tint;
+    this.nightShade.visible = light.darkness > 0.01;
+    this.drawGlows();
+  }
+
+  /** Brilho de cada luz acesa: mais forte quanto mais escuro estiver. */
+  private drawGlows(): void {
+    this.glows.removeChildren().forEach((c) => c.destroy());
+    const strength = 0.18 + this.darkness * 0.55;
+    for (const f of this.furni.values()) {
+      if (!f.lit) continue;
+      const { x, y } = f.glowPoint;
+      const g = new Graphics();
+      // Muitas elipses concêntricas com alfa baixo: um degradê radial barato e suave.
+      const rings = 14;
+      for (let i = rings; i >= 1; i--) {
+        g.ellipse(x, y + i * 2, 9 * i, 7 * i).fill({ color: 0xffd27a, alpha: strength / rings });
+      }
+      this.glows.addChild(g);
+    }
   }
 
   removeFurni(id: string): void {
@@ -384,10 +425,23 @@ export class RoomScene implements DecorHost {
       this.flashTarget({ x: seat.placed.x, y: seat.placed.y }, 0x7aa7ff);
       return this.actions.interact(seat.placed.id);
     }
+    // Móvel de usar (luz, TV, café) ou mural, clicando no desenho dele.
+    const usable = this.usableAt(global);
+    if (usable) {
+      if (usable.def.interaction === 'board') return this.actions.openBoard(usable.placed.id);
+      this.flashTarget({ x: usable.placed.x, y: usable.placed.y }, 0xffd27a);
+      return this.actions.interact(usable.placed.id);
+    }
     if (!tile) return;
     // O servidor decide o caminho; aqui é só um retorno visual imediato.
     this.flashTarget(tile, this.grid.isWalkable(tile.x, tile.y, true) ? 0xffffff : 0xe0a040);
     this.actions.move(tile);
+  }
+
+  /** Móvel interativo sob o ponteiro (pixel visível do desenho). */
+  private usableAt(global: Point): FurniView | null {
+    const f = this.pickFurni(global);
+    return f?.def.interaction && f.hitTest(global) ? f : null;
   }
 
   /** Assento clicado: pixel do desenho da cadeira/sofá, ou o tile dele. */
@@ -422,8 +476,10 @@ export class RoomScene implements DecorHost {
       this.hoveredAvatar?.setNameVisible(false);
       avatar?.setNameVisible(true);
       this.hoveredAvatar = avatar;
-      this.app.canvas.style.cursor = avatar ? 'pointer' : '';
     }
+    // Mãozinha em pessoas e em móveis que dá para usar.
+    const usable = !avatar && !this.decor.active && this.usableAt(e.global);
+    this.app.canvas.style.cursor = avatar || usable ? 'pointer' : '';
     const t = this.pickTile(e.global);
     this.hover.clear();
     if (!t) {

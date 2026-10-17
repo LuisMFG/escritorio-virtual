@@ -16,7 +16,8 @@ import type { PlaceholderFactory } from '../assets/PlaceholderFactory.js';
 /** Sprite de um móvel posicionado. O ponto de origem é o vértice de baixo do footprint. */
 export class FurniView extends Container {
   private readonly sprite = new Sprite();
-  private loadedDir: number | null = null;
+  /** `direção:estado` da textura atual. */
+  private loadedKey: string | null = null;
   private loadToken = 0;
 
   constructor(
@@ -31,28 +32,59 @@ export class FurniView extends Container {
     this.updatePosition();
   }
 
-  /** Carrega a textura da direção atual (só se mudou). */
+  /**
+   * Estado que o imager sabe desenhar (senão, o padrão). Luzes ficam sempre no desenho
+   * "apagado": no Habbo o facho de luz é uma camada somada (ink ADD) que o imager achata
+   * num disco escuro; o brilho aceso é desenhado pela cena.
+   */
+  get state(): number {
+    if (this.def.light) return 0;
+    const s = this.placed.state ?? 0;
+    return s > 0 && this.def.states.includes(s) ? s : 0;
+  }
+
+  /** Carrega a textura da direção e do estado atuais (só se mudaram). */
   async load(): Promise<void> {
     const { def, placed } = this;
     const dir = renderDirection(def, placed.rot);
-    if (dir === this.loadedDir) return;
+    const state = this.state;
+    const key = `${dir}:${state}`;
+    if (key === this.loadedKey) return;
     const token = ++this.loadToken;
-    const opts = { direction: dir, revision: def.revision, color: def.color };
+    const opts = {
+      direction: dir,
+      revision: def.revision,
+      color: def.color,
+      state: state > 0 ? state : undefined,
+    };
     // Proxy com cache do servidor primeiro; imager direto se o servidor não responder.
     // Locais (CC0 ou próprios): client/public/assets/local/furni/{id}_{dir}.png.
     const urls =
       def.source === 'habboassets'
         ? [furniImageUrl(def.id, opts, '/hh'), furniImageUrl(def.id, opts)]
         : [`/assets/local/furni/${def.id}_${dir}.png`];
-    const loaded = await this.loader.load(`furni:${def.id}:${dir}:${def.color ?? ''}`, urls, () =>
-      this.placeholders.furni(def, placed.rot),
+    const loaded = await this.loader.load(
+      `furni:${def.id}:${dir}:${def.color ?? ''}:${state}`,
+      urls,
+      () => this.placeholders.furni(def, placed.rot),
     );
     if (token !== this.loadToken || this.destroyed) return;
     const tex = loaded.texture;
-    const anchor = loaded.anchor ?? anchorFromManifest(def, dir, tex.width, tex.height);
+    const anchor = loaded.anchor ?? anchorFromManifest(def, dir, state, tex.width, tex.height);
     this.sprite.texture = tex;
     this.sprite.anchor.set(anchor.x / tex.width, anchor.y / tex.height);
-    this.loadedDir = dir;
+    this.loadedKey = key;
+  }
+
+  /** Móvel de luz aceso? (A cena desenha o brilho.) */
+  get lit(): boolean {
+    return this.def.light && (this.placed.state ?? 0) > 0;
+  }
+
+  /** Ponto (na cena) de onde sai a luz: perto do topo do desenho. */
+  get glowPoint(): { x: number; y: number } {
+    const h = this.sprite.texture.height || 64;
+    return { x: this.x, y: this.y - h * 0.7 };
   }
 
   /** Aplica posição/rotação novas vindas do servidor (ou do fantasma do modo decorar). */
@@ -88,7 +120,13 @@ export class FurniView extends Container {
 }
 
 /** Âncora calibrada no manifesto ou, sem ela, o centro da base da imagem. */
-function anchorFromManifest(def: FurniManifestEntry, dir: number, w: number, h: number) {
-  const a = def.anchors[String(dir)];
+function anchorFromManifest(
+  def: FurniManifestEntry,
+  dir: number,
+  state: number,
+  w: number,
+  h: number,
+) {
+  const a = (state > 0 && def.stateAnchors[`${dir}:${state}`]) || def.anchors[String(dir)];
   return a ? { x: a[0], y: a[1] } : { x: w / 2, y: h };
 }

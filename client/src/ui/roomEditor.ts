@@ -1,5 +1,8 @@
 import {
+  AMBIENT_LABELS,
+  AMBIENTS,
   RECEPTION,
+  type Ambient,
   ROOM_MAX_DOORS,
   ROOM_MAX_SIZE,
   ROOM_MIN_SIZE,
@@ -136,6 +139,7 @@ export function openRoomEditor(opts: RoomEditorOptions): void {
       spawn,
       floorColor: String(f.get('floor') ?? '#b8b09a'),
       wallColor: String(f.get('wall') ?? '#a7b4c2'),
+      ambient: (f.get('ambient') as Ambient | null) ?? 'none',
       doors,
     };
   }
@@ -190,6 +194,7 @@ export function openRoomEditor(opts: RoomEditorOptions): void {
         <label class="field"><span>Nome</span><input name="name" maxlength="30" /></label>
         <label class="field re-color"><span>Piso</span><input name="floor" type="color" /></label>
         <label class="field re-color"><span>Parede</span><input name="wall" type="color" /></label>
+        <label class="field re-ambient"><span>Som ambiente</span><select name="ambient"></select></label>
         <label class="field re-size"><span>Largura</span><input name="w" type="number" min="${ROOM_MIN_SIZE}" max="${ROOM_MAX_SIZE}" /></label>
         <label class="field re-size"><span>Altura</span><input name="h" type="number" min="${ROOM_MIN_SIZE}" max="${ROOM_MAX_SIZE}" /></label>
       </div>
@@ -213,6 +218,9 @@ export function openRoomEditor(opts: RoomEditorOptions): void {
     input('name').value = data.name;
     input('floor').value = data.floorColor;
     input('wall').value = data.wallColor;
+    const ambientSelect = form.querySelector<HTMLSelectElement>('select[name=ambient]')!;
+    for (const a of AMBIENTS) ambientSelect.append(new Option(AMBIENT_LABELS[a], a));
+    ambientSelect.value = data.ambient;
     input('w').value = String(width());
     input('h').value = String(height());
     const onSize = () => {

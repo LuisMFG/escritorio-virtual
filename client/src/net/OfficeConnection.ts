@@ -7,6 +7,8 @@ import {
   type ChatMessage,
   type ChatDeletedMessage,
   type KickedMessage,
+  type BoardNote,
+  type NoteColor,
   type Reaction,
   type ReactionsUpdate,
   type EmoteId,
@@ -45,6 +47,8 @@ interface Handlers {
   emote: (msg: EmoteMessage) => void;
   chatDeleted: (msg: ChatDeletedMessage) => void;
   chatReactions: (msg: ReactionsUpdate) => void;
+  /** Recados de um mural mudaram. */
+  boardChanged: (furniId: string) => void;
   /** A sala foi editada: pedir o layout de novo e remontar a cena. */
   layoutChanged: (room: OfficeRoomClient, layout: RoomLayoutMessage) => void;
   /** Um admin tirou você (da sala: vem um transfer em seguida; do escritório: fim). */
@@ -124,6 +128,19 @@ export class OfficeConnection {
     this.room?.send(ClientMessage.Emote, { emote });
   }
 
+  async boardNotes(furniId: string): Promise<BoardNote[]> {
+    if (!this.room) return [];
+    return (await this.room.request(ClientMessage.BoardNotes, { furniId })) as BoardNote[];
+  }
+
+  boardAdd(furniId: string, text: string, color: NoteColor): void {
+    this.room?.send(ClientMessage.BoardAdd, { furniId, text, color });
+  }
+
+  boardRemove(noteId: number): void {
+    this.room?.send(ClientMessage.BoardRemove, { noteId });
+  }
+
   deleteChat(id: number): void {
     this.room?.send(ClientMessage.ChatDelete, { id });
   }
@@ -168,6 +185,9 @@ export class OfficeConnection {
     );
     room.onMessage(ServerMessage.ChatReactions, (msg: ReactionsUpdate) =>
       this.on.chatReactions(msg),
+    );
+    room.onMessage(ServerMessage.BoardChanged, (m: { furniId: string }) =>
+      this.on.boardChanged(m.furniId),
     );
     room.onMessage(ServerMessage.LayoutChanged, async () => {
       const layout = (await room.request(ClientMessage.GetLayout)) as RoomLayoutMessage;

@@ -19,13 +19,15 @@ import {
   type Status,
   type TeamResponse,
   type RoomSummary,
+  dayLight,
+  officeHour,
   STATUSES,
 } from '@office/shared';
 import { Application, TextureSource } from 'pixi.js';
 import { AssetLoader } from './assets/AssetLoader.js';
 import { AvatarTextureCache, ImagerAvatarRenderer } from './assets/AvatarTextureCache.js';
 import { PlaceholderFactory } from './assets/PlaceholderFactory.js';
-import { DEBUG, OFFLINE_ASSETS } from './config.js';
+import { DEBUG, HOUR_OVERRIDE, OFFLINE_ASSETS } from './config.js';
 import type { AvatarSnapshot } from './entities/AvatarView.js';
 import { isSessionError, OfficeConnection, type OfficeRoomClient } from './net/OfficeConnection.js';
 import { adminApi, api, ApiRequestError } from './net/api.js';
@@ -42,6 +44,8 @@ import { openProfile } from './ui/profile.js';
 import { openTeam } from './ui/team.js';
 import { openAdmin } from './ui/admin.js';
 import { openRoomEditor } from './ui/roomEditor.js';
+import { AmbientSound } from './ui/ambient.js';
+import { openBoard } from './ui/board.js';
 import { MessagesPanel } from './ui/messages.js';
 import { SystemNotifier } from './ui/notifications.js';
 import { LobbyConnection, type OnlineInfo } from './net/LobbyConnection.js';
@@ -62,7 +66,12 @@ async function fetchJson(url: string): Promise<unknown> {
 }
 
 function placed(f: Furni): PlacedFurni {
-  return { id: f.id, defId: f.defId, x: f.x, y: f.y, z: f.z, rot: f.rot };
+  return { id: f.id, defId: f.defId, x: f.x, y: f.y, z: f.z, rot: f.rot, state: f.state };
+}
+
+/** Luz do dia agora (ou na hora forçada por `?hora=`). */
+function currentLight() {
+  return dayLight(HOUR_OVERRIDE ?? officeHour());
 }
 
 function snapshot(p: Player): AvatarSnapshot {
@@ -182,6 +191,9 @@ async function start(): Promise<void> {
     roomList.find((r) => r.id === id)?.name ?? findRoom(id)?.name ?? id;
 
   const notifier = new SystemNotifier();
+  const ambient = new AmbientSound();
+  /** Mural aberto (para atualizar quando alguém pregar ou tirar recado). */
+  let board: ReturnType<typeof openBoard> | null = null;
   let lobby: LobbyConnection | undefined;
   let online: OnlineInfo[] = [];
   const messages = new MessagesPanel({
@@ -225,6 +237,7 @@ async function start(): Promise<void> {
     onOpenTeam: () => showTeam(),
     onOpenAdmin: () => showAdmin(),
     onOpenMessages: () => messages.toggle(),
+    ambient,
     onEditRoom: () => {
       if (!session || !connection) return;
       const conn = connection;
@@ -352,6 +365,8 @@ async function start(): Promise<void> {
   const birthdaysSeen = new Set<string>();
   hud.setRoomName(RECEPTION.name);
   app.ticker.add((ticker) => scene?.update(ticker.deltaMS));
+  // Dia e noite acompanham o relógio (de minuto em minuto).
+  setInterval(() => scene?.setDayLight(currentLight()), 60_000);
 
   async function mountRoom(
     connection: OfficeConnection,
@@ -368,6 +383,21 @@ async function start(): Promise<void> {
       {
         move: (tile) => connection.move(tile),
         interact: (furniId) => connection.interact(furniId),
+        openBoard: (furniId) => {
+          const f = room.state.furni.get(furniId);
+          const def = f && deps.furniDefs.get(f.defId);
+          if (!def || !session) return;
+          board?.close();
+          board = openBoard({
+            furniId,
+            title: def.name,
+            myUserId: session.userId,
+            isAdmin: session.role === 'admin',
+            load: () => connection.boardNotes(furniId),
+            add: (text, color) => connection.boardAdd(furniId, text, color),
+            remove: (noteId) => connection.boardRemove(noteId),
+          });
+        },
         placeFurni: (msg) => connection.placeFurni(msg),
         moveFurni: (msg) => connection.moveFurni(msg),
         removeFurni: (furniId) => connection.removeFurni(furniId),
@@ -416,6 +446,9 @@ async function start(): Promise<void> {
     overlay.setPeople([], layout.name);
     await s.load();
     if (scene !== s) return;
+    s.setDayLight(currentLight());
+    ambient.setAmbient(layout.ambient);
+    hud.refreshAmbient();
     overlay.setFading(false);
     avatarCard.hide();
     refreshOtherRooms();
@@ -570,6 +603,9 @@ async function start(): Promise<void> {
       },
       emote: (msg) => scene?.playEmote(msg.sessionId, msg.emote),
       chatDeleted: (msg) => chat.removeMessage(msg.id),
+      boardChanged: (furniId) => {
+        if (board?.furniId === furniId) board.refresh();
+      },
       chatReactions: (msg) => chat.updateReactions(msg.id, msg.reactions),
       kicked: (msg) => {
         if (msg.scope === 'room') return overlay.notify(msg.message);
