@@ -760,11 +760,18 @@ Pedido em 17/10/2026: mostrar no escritório o que cada pessoa está fazendo for
 
 Escolhido em 17/10/2026, depois do roadmap v3. Ordem pensada assim: primeiro proteger os dados e o código (backup e testes de ponta a ponta, que passam a cobrir todas as fases seguintes), depois o que é rápido e muito usado, e por fim o que é maior ou depende de sistemas de fora.
 
-### Fase 22 — Backup automático
+### Fase 22 — Backup automático ✅ implementada
 - Cópia diária do SQLite às 3h (API de backup do SQLite, segura com o servidor rodando), em `data/backups/`, guardando as últimas 7. Painel Admin: lista dos backups, "Fazer backup agora" e baixar.
 - README: como restaurar (parar, trocar o arquivo, subir) e como levar os backups para fora da VM.
 
 **Como testar:** "Fazer backup agora" cria o arquivo; o oitavo apaga o mais antigo; restaurar um backup numa cópia e o escritório sobe com os dados daquele momento.
+
+**Notas da implementação:**
+- `BackupService` usa `db.backup()` do better-sqlite3 (API de backup do SQLite: cópia consistente mesmo com o servidor rodando e o WAL ligado). A conexão SQLite por trás do Drizzle fica registrada ao abrir o banco (`sqliteOf`). Nomes `escritorio-AAAA-MM-DD-HHMM.db` no horário de Brasília (com `-2`, `-3`… no mesmo minuto). Guarda os últimos `BACKUP_KEEP` (7).
+- `BackupScheduler` confere a cada 10 min (e ao subir): passou das 3h e não tem backup de hoje → faz. Assim um servidor que estava desligado às 3h faz o backup ao voltar (no teste, o primeiro saiu sozinho ao reiniciar o servidor).
+- Rotas só de admin: `GET /api/admin/backups`, `POST /api/admin/backups`, `GET /api/admin/backups/:nome` (download; só nomes no formato de backup que existem na pasta, então `../sqlite.db` dá 404). Criar e baixar entram no Registro.
+- **Admin → Backups:** texto explicando o horário e a retenção, "Fazer backup agora" e a lista com data, tamanho e "Baixar".
+- Testado: arquivo é um banco válido com os dados, sufixo no mesmo minuto, retenção, regra das 3h no fuso do escritório, permissões e registro (testes automáticos); no navegador, backup automático ao subir, "Fazer backup agora", download (anexo começando com "SQLite format 3") e o Registro. **Restauração de verdade:** um segundo servidor subiu a partir de uma cópia do backup (porta 2599) e respondeu com os dados (8 contas, 4 salas, 42 móveis).
 
 ### Fase 23 — Testes de ponta a ponta (Playwright)
 - `npm run e2e` sobe servidor e cliente com um banco temporário e roda no Chromium os fluxos principais: cadastrar/entrar, andar, conversar (duas pessoas), trocar de sala, decorar, agenda, jogo da velha.

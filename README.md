@@ -203,6 +203,22 @@ fly deploy
 
 Troque `app` no `fly.toml` pelo nome criado. Mantenha uma máquina só.
 
+### Backups
+
+O servidor faz uma cópia do banco **todo dia às 3h** (horário de Brasília) em `data/backups/` e guarda as últimas 7 (`BACKUP_DIR` e `BACKUP_KEEP` no `.env`). Se o servidor estava desligado às 3h, a cópia sai assim que ele voltar. A cópia usa a API de backup do SQLite, então é segura com o escritório funcionando. Em **Admin → Backups** dá para ver a lista, fazer um backup na hora e baixar (fica no Registro).
+
+**Restaurar:**
+1. Pare o servidor (`docker compose stop app`, ou Ctrl+C em desenvolvimento).
+2. Guarde o banco atual por precaução: `mv data/sqlite.db data/sqlite.db.antes`, e apague `data/sqlite.db-wal` e `data/sqlite.db-shm` se existirem.
+3. Copie o backup: `cp data/backups/escritorio-AAAA-MM-DD-HHMM.db data/sqlite.db`.
+4. Suba de novo (`docker compose start app`). As migrations novas, se houver, são aplicadas sozinhas.
+
+**Levar os backups para fora da VM** (se a máquina sumir, os backups vão junto). Do seu computador, por exemplo uma vez por semana:
+
+```bash
+rsync -avz usuario@IP-DA-VM:~/escritorio-virtual/data/backups/ ./backups-escritorio/
+```
+
 ### Segurança
 
 - Contas criadas só com o código de convite; senhas com `scrypt` (sal por senha); limite de 10 tentativas de entrada/cadastro por minuto por IP. Cada aparelho tem seu token de sessão, e o banco guarda só o hash. Trocar a senha desconecta os outros aparelhos.
