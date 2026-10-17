@@ -3715,3 +3715,41 @@ button.reply-quote:hover {
   margin-right: auto;
   font-size: 13px;
 }
+
+/* ---------- Fase 22: backups ---------- */
+
+.backup-intro {
+  margin: 0 0 10px;
+  font-size: 13px;
+}
+
+.backup-list {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.backup-list li {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  gap: 12px;
+  align-items: center;
+  padding: 6px 10px;
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.backup-name {
+  font-family: ui-monospace, monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.backup-now {
+  width: auto;
+  justify-self: start;
+  align-self: flex-start;
+}

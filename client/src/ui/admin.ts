@@ -5,6 +5,7 @@ import {
   type AdminOverview,
   type AdminUser,
   type AuditEntry,
+  type BackupList,
 } from '@office/shared';
 import { adminApi } from '../net/api.js';
 import { confirmDialog } from './confirm.js';
@@ -17,11 +18,12 @@ export interface AdminOptions {
   roomName(roomId: string): string;
 }
 
-type Tab = 'people' | 'cargos' | 'settings' | 'audit';
+type Tab = 'people' | 'cargos' | 'settings' | 'backups' | 'audit';
 const TABS: [Tab, string][] = [
   ['people', 'Pessoas'],
   ['cargos', 'Cargos'],
   ['settings', 'Convite e salas'],
+  ['backups', 'Backups'],
   ['audit', 'Registro'],
 ];
 
@@ -69,6 +71,7 @@ export function openAdmin(opts: AdminOptions): void {
   let tab: Tab = 'people';
   let data: AdminOverview | null = null;
   let audit: AuditEntry[] = [];
+  let backups: BackupList | null = null;
   let flashTimer = 0;
   /** Caixa da senha temporária: fica no topo até o admin fechar (sobrevive a recarregar). */
   let tempBox: HTMLElement | null = null;
@@ -96,6 +99,7 @@ export function openAdmin(opts: AdminOptions): void {
     try {
       data = await adminApi.overview(opts.token);
       if (tab === 'audit') audit = await adminApi.audit(opts.token);
+      if (tab === 'backups') backups = await adminApi.backups(opts.token);
       render();
     } catch (err) {
       body.replaceChildren(el('p', 'login-error', (err as Error).message));
@@ -123,6 +127,7 @@ export function openAdmin(opts: AdminOptions): void {
       people: () => renderPeople(data!),
       cargos: () => renderCargos(data!),
       settings: () => renderSettings(data!),
+      backups: () => renderBackups(),
       audit: () => renderAudit(),
     };
     body.replaceChildren(...(tempBox ? [tempBox] : []), ...views[tab]());
@@ -458,6 +463,47 @@ export function openAdmin(opts: AdminOptions): void {
   }
 
   // ---------- Registro ----------
+
+  // ---------- Backups ----------
+
+  function renderBackups(): HTMLElement[] {
+    if (!backups) return [el('p', 'muted', 'Carregando…')];
+    const intro = el(
+      'p',
+      'muted backup-intro',
+      `Backup automático do banco todo dia às ${backups.dailyHour}h (horário de Brasília), guardando os últimos ${backups.keep}. Para restaurar, veja o README (seção Backups).`,
+    );
+    const now = button('Fazer backup agora', () =>
+      act(() => adminApi.createBackup(opts.token), 'Backup feito.'),
+    );
+    now.className = 'btn-primary btn-small backup-now';
+    if (backups.backups.length === 0) {
+      return [intro, now, el('p', 'muted', 'Nenhum backup ainda.')];
+    }
+    const ul = el('ul', 'backup-list');
+    for (const b of backups.backups) {
+      const li = el('li', '');
+      const kb =
+        b.size >= 1024 * 1024
+          ? `${(b.size / 1024 / 1024).toFixed(1)} MB`
+          : `${Math.ceil(b.size / 1024)} KB`;
+      const download = button('Baixar', async () => {
+        try {
+          await adminApi.downloadBackup(opts.token, b.name);
+        } catch (err) {
+          flash((err as Error).message, true);
+        }
+      });
+      li.append(
+        el('span', 'backup-name', b.name),
+        el('time', 'muted', timeFormat.format(b.createdAt)),
+        el('span', 'muted', kb),
+        download,
+      );
+      ul.append(li);
+    }
+    return [intro, now, ul];
+  }
 
   function renderAudit(): HTMLElement[] {
     if (audit.length === 0) return [el('p', 'muted', 'Nenhuma ação registrada ainda.')];

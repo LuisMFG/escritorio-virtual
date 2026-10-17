@@ -15,6 +15,8 @@ import {
   type MeetingCreate,
   type PetInfo,
   type AchievementsResponse,
+  type BackupInfo,
+  type BackupList,
   type ActivitySettings,
   type ApiTokenCreated,
   type CodeShare,
@@ -112,6 +114,20 @@ export const adminApi = {
     request<Ok>('DELETE', `/api/admin/cargos/${id}`, { token }),
   reorderCargos: (token: string, ids: number[]) =>
     request<Ok>('PUT', '/api/admin/cargos/order', { token, body: { ids } }),
+  backups: (token: string) => request<BackupList>('GET', '/api/admin/backups', { token }),
+  createBackup: (token: string) => request<BackupInfo>('POST', '/api/admin/backups', { token }),
+  /** Baixa o arquivo (precisa do token no cabeçalho, então não dá para ser um link comum). */
+  downloadBackup: async (token: string, name: string) => {
+    const res = await fetch(`/api/admin/backups/${encodeURIComponent(name)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok)
+      throw new ApiRequestError(res.status, { message: 'Não foi possível baixar o backup.' });
+    const url = URL.createObjectURL(await res.blob());
+    const a = Object.assign(document.createElement('a'), { href: url, download: name });
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  },
 };
 
 const room = (id: string) => `/api/rooms/${encodeURIComponent(id)}`;
