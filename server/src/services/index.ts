@@ -20,9 +20,11 @@ export interface Services {
 }
 
 export function createServices(db: Db): Services {
+  const users = new UserService(db);
+  users.seedCargos();
   return {
     db,
-    users: new UserService(db),
+    users,
     presence: new PresenceRegistry(),
     rooms: new RoomRepository(db),
     chat: new ChatService(db),

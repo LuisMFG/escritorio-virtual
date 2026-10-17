@@ -114,6 +114,16 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     ),
   };
 
+  /** Perfil mudou (nome, cargo, papel…): atualiza os avatares dessa pessoa nesta sala. */
+  private readonly onUserUpdated = (user: UserRow): void => {
+    const profile = services().users.publicProfile(user);
+    for (const p of this.state.players.values()) {
+      if (p.userId === user.id) Object.assign(p, profile);
+    }
+    for (const c of this.clients) if (c.auth?.id === user.id) c.auth = user;
+    services().presence.rename(user.id, user.name);
+  };
+
   override onCreate(options: { officeRoomId: string }): void {
     const layout = services().rooms.getLayout(options.officeRoomId);
     if (!layout) throw new ServerError(404, `Sala inexistente: ${options.officeRoomId}`);
@@ -130,6 +140,11 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       (dt) => this.movement.tick(dt, this.state.players.entries()),
       TICK_MS,
     );
+    services().users.events.on('updated', this.onUserUpdated);
+  }
+
+  override onDispose(): void {
+    services().users.events.off('updated', this.onUserUpdated);
   }
 
   override onAuth(_client: Client, options: unknown): UserRow {
@@ -158,7 +173,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     const player = new Player();
     Object.assign(player, {
       userId: user.id,
-      name: user.name,
+      ...services().users.publicProfile(user),
       figure: user.figure,
       x: spawn.x,
       y: spawn.y,

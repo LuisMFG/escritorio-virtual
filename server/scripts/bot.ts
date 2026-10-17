@@ -5,7 +5,8 @@
  *   npm run bot                 # um robô chamado "Robô"
  *   npm run bot -- Bia 3        # três robôs: "Bia 1", "Bia 2", "Bia 3"
  *
- * Usa o mesmo fluxo do navegador: POST /api/session (com INVITE_CODE) e depois o WebSocket.
+ * Usa o mesmo fluxo do navegador: entra com a conta `bot.<nome>` (ou cria, com o INVITE_CODE)
+ * e depois abre o WebSocket.
  */
 import { Client } from '@colyseus/sdk';
 import {
@@ -50,20 +51,39 @@ function randomTile() {
   }
 }
 
-async function startBot(name: string): Promise<void> {
-  const res = await fetch(`${endpoint}/api/session`, {
+const BOT_PASSWORD = 'robo-de-teste';
+
+async function post(path: string, body: unknown) {
+  const res = await fetch(`${endpoint}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      name,
-      inviteCode: config.inviteCode,
-      gender: 'M',
-      figure: randomFigure(avatarManifest, 'M'),
-    }),
+    body: JSON.stringify(body),
   });
-  const session = (await res.json()) as SessionResponse & { message?: string };
-  if (!res.ok) throw new Error(`${name}: ${session.message}`);
+  return { res, body: (await res.json()) as SessionResponse & { message?: string } };
+}
 
+/** Entra com a conta do robô; se ainda não existe, cria. */
+async function botSession(name: string): Promise<SessionResponse> {
+  const username = `bot.${name
+    .normalize('NFD')
+    .replace(/[^a-zA-Z0-9]/g, '')
+    .toLowerCase()}`;
+  const login = await post('/api/login', { username, password: BOT_PASSWORD });
+  if (login.res.ok) return login.body;
+  const created = await post('/api/register', {
+    inviteCode: config.inviteCode,
+    username,
+    password: BOT_PASSWORD,
+    name,
+    gender: 'M',
+    figure: randomFigure(avatarManifest, 'M'),
+  });
+  if (!created.res.ok) throw new Error(`${name}: ${created.body.message}`);
+  return created.body;
+}
+
+async function startBot(name: string): Promise<void> {
+  const session = await botSession(name);
   const client = new Client(endpoint);
   const room = await client.joinOrCreate(
     OFFICE_ROOM,

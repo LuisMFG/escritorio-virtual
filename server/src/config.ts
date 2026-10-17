@@ -27,6 +27,8 @@ function inviteCode(): string {
 export interface Config {
   port: number;
   inviteCode: string;
+  /** `ADMIN_USERNAMES` (separados por vírgula, minúsculos). */
+  adminUsernames: string[];
   databasePath: string;
   assetCacheDir: string;
   habboAssetsApiKey: string | undefined;
@@ -37,6 +39,10 @@ export interface Config {
 export const config: Config = {
   port: Number(process.env.PORT ?? 2567),
   inviteCode: inviteCode(),
+  adminUsernames: (process.env.ADMIN_USERNAMES ?? '')
+    .split(',')
+    .map((u) => u.trim().toLowerCase())
+    .filter(Boolean),
   databasePath: fromRoot(process.env.DATABASE_PATH ?? './data/sqlite.db'),
   assetCacheDir: fromRoot(process.env.ASSET_CACHE_DIR ?? './data/asset-cache'),
   habboAssetsApiKey: process.env.HABBOASSETS_API_KEY?.trim() || undefined,

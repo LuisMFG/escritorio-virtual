@@ -27,6 +27,13 @@ export const Player = schema(
     status: t.string(),
     /** Está digitando no chat. */
     typing: t.boolean(),
+    /** Cargo (nome e cor da etiqueta); vazio = sem cargo. */
+    cargo: t.string(),
+    cargoColor: t.string(),
+    /** 'admin' | 'member' */
+    role: t.string(),
+    /** Faz aniversário hoje (fuso do escritório). */
+    birthday: t.boolean(),
   },
   'Player',
 );

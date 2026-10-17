@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { genderSchema, type Gender } from './manifests.js';
+import { genderSchema } from './manifests.js';
 import type { RoomDoor } from './rooms.js';
 import type { TilePoint } from './iso.js';
 
@@ -54,6 +54,12 @@ export const ErrorCode = {
   InvalidChat: 'INVALID_CHAT',
   InvalidPlacement: 'INVALID_PLACEMENT',
   RateLimit: 'RATE_LIMIT',
+  InvalidCredentials: 'INVALID_CREDENTIALS',
+  UsernameTaken: 'USERNAME_TAKEN',
+  AccountExists: 'ACCOUNT_EXISTS',
+  WrongPassword: 'WRONG_PASSWORD',
+  Forbidden: 'FORBIDDEN',
+  NotFound: 'NOT_FOUND',
 } as const;
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];
 
@@ -68,6 +74,12 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
   INVALID_CHAT: 'Mensagem inválida.',
   INVALID_PLACEMENT: 'Não dá para colocar o móvel aí.',
   RATE_LIMIT: 'Calma! Muitas ações em pouco tempo.',
+  INVALID_CREDENTIALS: 'Usuário ou senha incorretos.',
+  USERNAME_TAKEN: 'Esse usuário já existe. Escolha outro.',
+  ACCOUNT_EXISTS: 'Esta conta já tem usuário e senha.',
+  WRONG_PASSWORD: 'A senha atual não confere.',
+  FORBIDDEN: 'Só administradores podem fazer isso.',
+  NOT_FOUND: 'Não encontrado.',
 };
 
 export const NAME_MIN = 2;
@@ -108,24 +120,6 @@ export const figureSchema = z
     /^[a-z]{2}-\d{1,6}(-\d{1,4}){0,2}(\.[a-z]{2}-\d{1,6}(-\d{1,4}){0,2})*$/,
     'Visual inválido.',
   );
-
-export const sessionRequestSchema = z.object({
-  name: nameSchema,
-  /** Opcional quando o navegador já tem um token válido. */
-  inviteCode: z.string().max(100).optional(),
-  figure: figureSchema.optional(),
-  gender: genderSchema.optional(),
-  token: z.string().max(200).optional(),
-});
-export type SessionRequest = z.input<typeof sessionRequestSchema>;
-
-export interface SessionResponse {
-  userId: string;
-  token: string;
-  name: string;
-  figure: string;
-  gender: Gender;
-}
 
 export interface ApiError {
   error: ErrorCode;

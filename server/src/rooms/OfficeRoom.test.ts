@@ -48,6 +48,7 @@ function newUser(name: string) {
 const testConfig: Config = {
   port: 0,
   inviteCode: 'segredo',
+  adminUsernames: [],
   databasePath: ':memory:',
   assetCacheDir: '/tmp/escritorio-teste-cache',
   habboAssetsApiKey: undefined,
@@ -351,6 +352,40 @@ describe('OfficeRoom', () => {
       for (let i = 0; i < 3; i++) a.send(ClientMessage.Emote, { emote: 'dance' });
       const err = (await a.waitForMessage(ServerMessage.Error)) as ErrorMessage;
       expect(err.code).toBe('RATE_LIMIT');
+    });
+  });
+
+  describe('perfil na sala', () => {
+    it('cargo, nome e aniversário aparecem no avatar e mudam ao vivo', async () => {
+      const ana = newUser('Ana');
+      const a = await join(ana.token);
+      const b = await join(newUser('Beto').token);
+      expect(b.state.players.get(a.sessionId)).toMatchObject({
+        cargo: '',
+        role: 'member',
+        birthday: false,
+      });
+
+      const ti = svc.users.listCargos().find((c) => c.name === 'Coordenador de TI')!;
+      svc.users.update(ana.user.id, { cargoId: ti.id, name: 'Ana Lima' });
+      await wait(150);
+      expect(b.state.players.get(a.sessionId)).toMatchObject({
+        name: 'Ana Lima',
+        cargo: 'Coordenador de TI',
+        cargoColor: ti.color,
+      });
+      expect(svc.presence.list().find((e) => e.userId === ana.user.id)?.name).toBe('Ana Lima');
+    });
+
+    it('a equipe só abre com sessão', async () => {
+      const ana = newUser('Ana');
+      const base = `http://127.0.0.1:${colyseus.server['port']}`;
+      const res = await fetch(`${base}/api/team`, {
+        headers: { Authorization: `Bearer ${ana.token}` },
+      });
+      expect(res.status).toBe(200);
+      const anon = await fetch(`${base}/api/team`);
+      expect(anon.status).toBe(401);
     });
   });
 });

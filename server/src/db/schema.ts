@@ -1,11 +1,30 @@
 import { index, integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
+/** Cargos da equipe (Diretor, Coordenador de TI…). Só admins atribuem. */
+export const cargos = sqliteTable('cargos', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  name: text('name').notNull().unique(),
+  /** Cor da etiqueta (`#rrggbb`). */
+  color: text('color').notNull(),
+  /** Ordem na lista da equipe (menor primeiro). */
+  sort: integer('sort').notNull().default(0),
+});
+
 export const users = sqliteTable('users', {
   id: text('id').primaryKey(),
-  /** Nome livre (pode repetir; só é recusado se alguém online já usa o mesmo). */
+  /** Nome exibido: livre (só é recusado se alguém online já usa o mesmo). */
   name: text('name').notNull(),
-  /** SHA-256 do token guardado no navegador; o token em si nunca é salvo. */
-  sessionTokenHash: text('session_token_hash').notNull().unique(),
+  /** Login (minúsculo, único). Vazio só em contas antigas que ainda não criaram senha. */
+  username: text('username').unique(),
+  /** `scrypt$N$r$p$sal$hash` (ver `passwords.ts`). */
+  passwordHash: text('password_hash'),
+  role: text('role', { enum: ['admin', 'member'] })
+    .notNull()
+    .default('member'),
+  cargoId: integer('cargo_id').references(() => cargos.id, { onDelete: 'set null' }),
+  bio: text('bio').notNull().default(''),
+  /** Aniversário `MM-DD` (sem ano). */
+  birthday: text('birthday'),
   figure: text('figure').notNull(),
   gender: text('gender', { enum: ['M', 'F'] })
     .notNull()
@@ -13,6 +32,20 @@ export const users = sqliteTable('users', {
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   lastSeenAt: integer('last_seen_at', { mode: 'timestamp_ms' }).notNull(),
 });
+
+/** Um token por aparelho/navegador. Guarda só o SHA-256. */
+export const sessions = sqliteTable(
+  'sessions',
+  {
+    tokenHash: text('token_hash').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    lastUsedAt: integer('last_used_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [index('sessions_user_id_idx').on(t.userId)],
+);
 
 export const rooms = sqliteTable('rooms', {
   id: text('id').primaryKey(),
@@ -81,6 +114,7 @@ export const chatMessages = sqliteTable(
 );
 
 export type UserRow = typeof users.$inferSelect;
+export type CargoRow = typeof cargos.$inferSelect;
 export type RoomRow = typeof rooms.$inferSelect;
 export type ChatMessageRow = typeof chatMessages.$inferSelect;
 export type RoomFurniRow = typeof roomFurni.$inferSelect;

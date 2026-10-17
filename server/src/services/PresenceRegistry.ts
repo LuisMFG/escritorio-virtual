@@ -22,6 +22,11 @@ export class PresenceRegistry {
     this.bySession.delete(sessionId);
   }
 
+  /** A pessoa mudou o nome exibido: vale para todas as conexões dela. */
+  rename(userId: string, name: string): void {
+    for (const e of this.bySession.values()) if (e.userId === userId) e.name = name;
+  }
+
   list(): OnlineEntry[] {
     return [...this.bySession.values()];
   }

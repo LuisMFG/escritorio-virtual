@@ -8,7 +8,6 @@ import {
   moveSchema,
   nameKey,
   nameSchema,
-  sessionRequestSchema,
 } from './protocol.js';
 
 describe('nome', () => {
@@ -50,11 +49,6 @@ describe('payloads', () => {
     expect(moveSchema.safeParse({ x: -1, y: 4 }).success).toBe(false);
     expect(moveSchema.safeParse({ x: '3', y: 4 }).success).toBe(false);
     expect(moveSchema.safeParse({ x: 3 }).success).toBe(false);
-  });
-
-  it('sessão: convite e token são opcionais, nome não', () => {
-    expect(sessionRequestSchema.safeParse({ name: 'Ana' }).success).toBe(true);
-    expect(sessionRequestSchema.safeParse({ inviteCode: 'x' }).success).toBe(false);
   });
 
   it('join exige sala e token', () => {
