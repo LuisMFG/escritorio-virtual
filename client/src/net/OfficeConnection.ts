@@ -9,6 +9,11 @@ import {
   type KickedMessage,
   type BoardNote,
   type NoteColor,
+  type WbDraft,
+  type WbRemovedMessage,
+  type WbStroke,
+  type WbStrokeInput,
+  type WbStrokeMessage,
   type Reaction,
   type ReactionsUpdate,
   type EmoteId,
@@ -49,6 +54,10 @@ interface Handlers {
   chatReactions: (msg: ReactionsUpdate) => void;
   /** Recados de um mural mudaram. */
   boardChanged: (furniId: string) => void;
+  wbStroke: (msg: WbStrokeMessage) => void;
+  wbDraft: (msg: WbDraft) => void;
+  wbRemoved: (msg: WbRemovedMessage) => void;
+  wbCleared: (furniId: string) => void;
   /** A sala foi editada: pedir o layout de novo e remontar a cena. */
   layoutChanged: (room: OfficeRoomClient, layout: RoomLayoutMessage) => void;
   /** Um admin tirou você (da sala: vem um transfer em seguida; do escritório: fim). */
@@ -128,6 +137,32 @@ export class OfficeConnection {
     this.room?.send(ClientMessage.Emote, { emote });
   }
 
+  /** Id desta conexão na sala (para reconhecer os próprios traços). */
+  get sessionId(): string {
+    return this.room?.sessionId ?? '';
+  }
+
+  async wbLoad(furniId: string): Promise<WbStroke[]> {
+    if (!this.room) return [];
+    return (await this.room.request(ClientMessage.WbLoad, { furniId })) as WbStroke[];
+  }
+
+  wbStroke(furniId: string, stroke: WbStrokeInput, draftId?: string): void {
+    this.room?.send(ClientMessage.WbStroke, { furniId, stroke, draftId });
+  }
+
+  wbDraft(draft: Omit<WbDraft, 'sessionId'>): void {
+    this.room?.send(ClientMessage.WbDraft, draft);
+  }
+
+  wbUndo(furniId: string): void {
+    this.room?.send(ClientMessage.WbUndo, { furniId });
+  }
+
+  wbClear(furniId: string): void {
+    this.room?.send(ClientMessage.WbClear, { furniId });
+  }
+
   async boardNotes(furniId: string): Promise<BoardNote[]> {
     if (!this.room) return [];
     return (await this.room.request(ClientMessage.BoardNotes, { furniId })) as BoardNote[];
@@ -188,6 +223,12 @@ export class OfficeConnection {
     );
     room.onMessage(ServerMessage.BoardChanged, (m: { furniId: string }) =>
       this.on.boardChanged(m.furniId),
+    );
+    room.onMessage(ServerMessage.WbStroke, (m: WbStrokeMessage) => this.on.wbStroke(m));
+    room.onMessage(ServerMessage.WbDraft, (m: WbDraft) => this.on.wbDraft(m));
+    room.onMessage(ServerMessage.WbRemoved, (m: WbRemovedMessage) => this.on.wbRemoved(m));
+    room.onMessage(ServerMessage.WbCleared, (m: { furniId: string }) =>
+      this.on.wbCleared(m.furniId),
     );
     room.onMessage(ServerMessage.LayoutChanged, async () => {
       const layout = (await room.request(ClientMessage.GetLayout)) as RoomLayoutMessage;

@@ -8,7 +8,7 @@ import {
   type FurniManifestEntry,
   type PlacedFurni,
 } from '@office/shared';
-import { Container, Sprite, type Point } from 'pixi.js';
+import { Container, Matrix, Sprite, Texture, type Point } from 'pixi.js';
 import type { AssetLoader } from '../assets/AssetLoader.js';
 import { spriteHitTest } from '../assets/hitTest.js';
 import type { PlaceholderFactory } from '../assets/PlaceholderFactory.js';
@@ -19,6 +19,9 @@ export class FurniView extends Container {
   /** `direção:estado` da textura atual. */
   private loadedKey: string | null = null;
   private loadToken = 0;
+  /** Miniatura do quadro branco por cima do papel (se o móvel tiver `surface`). */
+  private surface: { sprite: Sprite; canvas: HTMLCanvasElement; texture: Texture } | null = null;
+  private loadedDir = -1;
 
   constructor(
     public placed: PlacedFurni,
@@ -74,6 +77,58 @@ export class FurniView extends Container {
     this.sprite.texture = tex;
     this.sprite.anchor.set(anchor.x / tex.width, anchor.y / tex.height);
     this.loadedKey = key;
+    this.loadedDir = dir;
+    this.placeSurface();
+  }
+
+  /** Mostra (ou atualiza) a miniatura do desenho no papel do quadro. */
+  setSurfaceCanvas(canvas: HTMLCanvasElement): void {
+    if (!this.def.surface) return;
+    if (!this.surface || this.surface.canvas !== canvas) {
+      this.surface?.sprite.destroy();
+      this.surface?.texture.destroy();
+      const texture = Texture.from(canvas);
+      const sprite = new Sprite(texture);
+      this.addChild(sprite);
+      this.surface = { sprite, canvas, texture };
+    } else {
+      this.surface.texture.source.update();
+    }
+    this.placeSurface();
+  }
+
+  /**
+   * Encaixa a miniatura no paralelogramo do papel (cantos medidos na PNG daquela direção):
+   * transformação afim do retângulo da textura para os cantos, com uma margem de 6%.
+   */
+  private placeSurface(): void {
+    const corners = this.def.surface?.[String(this.loadedDir)];
+    if (!this.surface || !corners) {
+      if (this.surface) this.surface.sprite.visible = false;
+      return;
+    }
+    const [tl, tr, bl] = corners;
+    const tex = this.sprite.texture;
+    // Canto superior esquerdo da PNG, no espaço deste container (o sprite usa âncora).
+    const ox = -this.sprite.anchor.x * tex.width;
+    const oy = -this.sprite.anchor.y * tex.height;
+    const u = [tr[0] - tl[0], tr[1] - tl[1]];
+    const v = [bl[0] - tl[0], bl[1] - tl[1]];
+    const m = 0.06;
+    const { width: w, height: h } = this.surface.canvas;
+    const sx = (1 - 2 * m) / w;
+    const sy = (1 - 2 * m) / h;
+    this.surface.sprite.setFromMatrix(
+      new Matrix(
+        u[0]! * sx,
+        u[1]! * sx,
+        v[0]! * sy,
+        v[1]! * sy,
+        ox + tl[0] + m * (u[0]! + v[0]!),
+        oy + tl[1] + m * (u[1]! + v[1]!),
+      ),
+    );
+    this.surface.sprite.visible = true;
   }
 
   /** Móvel de luz aceso? (A cena desenha o brilho.) */

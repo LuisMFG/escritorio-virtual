@@ -19,6 +19,7 @@ import {
   type Status,
   type TeamResponse,
   type RoomSummary,
+  type WbStroke,
   dayLight,
   officeHour,
   STATUSES,
@@ -46,6 +47,8 @@ import { openAdmin } from './ui/admin.js';
 import { openRoomEditor } from './ui/roomEditor.js';
 import { AmbientSound } from './ui/ambient.js';
 import { openBoard } from './ui/board.js';
+import { openWhiteboard, type WhiteboardHandle } from './ui/whiteboard.js';
+import { renderThumbnail } from './ui/wbDraw.js';
 import { MessagesPanel } from './ui/messages.js';
 import { SystemNotifier } from './ui/notifications.js';
 import { LobbyConnection, type OnlineInfo } from './net/LobbyConnection.js';
@@ -194,6 +197,22 @@ async function start(): Promise<void> {
   const ambient = new AmbientSound();
   /** Mural aberto (para atualizar quando alguém pregar ou tirar recado). */
   let board: ReturnType<typeof openBoard> | null = null;
+  // Quadros brancos da sala: traços (para a janela) e miniatura no móvel.
+  const wbStrokes = new Map<string, WbStroke[]>();
+  const wbThumbs = new Map<string, HTMLCanvasElement>();
+  let whiteboard: WhiteboardHandle | null = null;
+  const updateThumb = (furniId: string) => {
+    const canvas = renderThumbnail(wbStrokes.get(furniId) ?? [], wbThumbs.get(furniId));
+    wbThumbs.set(furniId, canvas);
+    scene?.setWhiteboardThumb(furniId, canvas);
+  };
+  /** Carrega os traços de um quadro da sala (uma vez por montagem). */
+  const loadWhiteboard = async (furniId: string) => {
+    if (!connection) return;
+    wbStrokes.set(furniId, await connection.wbLoad(furniId));
+    updateThumb(furniId);
+    whiteboard?.redraw();
+  };
   let lobby: LobbyConnection | undefined;
   let online: OnlineInfo[] = [];
   const messages = new MessagesPanel({
@@ -383,6 +402,22 @@ async function start(): Promise<void> {
       {
         move: (tile) => connection.move(tile),
         interact: (furniId) => connection.interact(furniId),
+        openWhiteboard: (furniId) => {
+          const f = room.state.furni.get(furniId);
+          const def = f && deps.furniDefs.get(f.defId);
+          if (!def) return;
+          whiteboard?.close();
+          whiteboard = openWhiteboard({
+            furniId,
+            title: def.name,
+            strokes: () => wbStrokes.get(furniId) ?? [],
+            mySessionId: () => connection.sessionId,
+            stroke: (stroke, draftId) => connection.wbStroke(furniId, stroke, draftId),
+            draft: (d) => connection.wbDraft({ ...d, furniId }),
+            undo: () => connection.wbUndo(furniId),
+            clear: () => connection.wbClear(furniId),
+          });
+        },
         openBoard: (furniId) => {
           const f = room.state.furni.get(furniId);
           const def = f && deps.furniDefs.get(f.defId);
@@ -511,9 +546,12 @@ async function start(): Promise<void> {
         refreshPeople();
       }),
     );
+    wbStrokes.clear();
+    whiteboard?.close();
     keep(
       cb.onAdd('furni', (f, id) => {
         s.setFurni(id, placed(f));
+        if (deps.furniDefs.get(f.defId)?.interaction === 'whiteboard') void loadWhiteboard(id);
         keep(cb.onChange(f, () => s.setFurni(id, placed(f))));
       }),
     );
@@ -603,6 +641,30 @@ async function start(): Promise<void> {
       },
       emote: (msg) => scene?.playEmote(msg.sessionId, msg.emote),
       chatDeleted: (msg) => chat.removeMessage(msg.id),
+      wbStroke: (msg) => {
+        const list = wbStrokes.get(msg.furniId) ?? [];
+        if (!list.some((x) => x.id === msg.stroke.id)) list.push(msg.stroke);
+        wbStrokes.set(msg.furniId, list);
+        updateThumb(msg.furniId);
+        if (whiteboard?.furniId === msg.furniId) whiteboard.stroke(msg);
+      },
+      wbDraft: (msg) => {
+        if (whiteboard?.furniId === msg.furniId) whiteboard.draft(msg);
+      },
+      wbRemoved: (msg) => {
+        const gone = new Set(msg.ids);
+        wbStrokes.set(
+          msg.furniId,
+          (wbStrokes.get(msg.furniId) ?? []).filter((x) => !gone.has(x.id)),
+        );
+        updateThumb(msg.furniId);
+        if (whiteboard?.furniId === msg.furniId) whiteboard.redraw();
+      },
+      wbCleared: (furniId) => {
+        wbStrokes.set(furniId, []);
+        updateThumb(furniId);
+        if (whiteboard?.furniId === furniId) whiteboard.redraw();
+      },
       boardChanged: (furniId) => {
         if (board?.furniId === furniId) board.refresh();
       },

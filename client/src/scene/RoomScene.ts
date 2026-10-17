@@ -47,6 +47,8 @@ export interface SceneActions extends DecorActions {
   interact(furniId: string): void;
   /** Clique num mural de recados. */
   openBoard(furniId: string): void;
+  /** Clique num quadro branco. */
+  openWhiteboard(furniId: string): void;
   /** Clique num avatar (abre o cartão). `at` = posição na tela. */
   avatarClick(sessionId: string, at: { x: number; y: number }): void;
 }
@@ -162,6 +164,11 @@ export class RoomScene implements DecorHost {
     }
     this.onFurniChanged();
     this.drawGlows();
+  }
+
+  /** Miniatura do quadro branco no móvel. */
+  setWhiteboardThumb(furniId: string, canvas: HTMLCanvasElement): void {
+    this.furni.get(furniId)?.setSurfaceCanvas(canvas);
   }
 
   /** Luz do ambiente (dia/noite). */
@@ -429,6 +436,9 @@ export class RoomScene implements DecorHost {
     const usable = this.usableAt(global);
     if (usable) {
       if (usable.def.interaction === 'board') return this.actions.openBoard(usable.placed.id);
+      if (usable.def.interaction === 'whiteboard') {
+        return this.actions.openWhiteboard(usable.placed.id);
+      }
       this.flashTarget({ x: usable.placed.x, y: usable.placed.y }, 0xffd27a);
       return this.actions.interact(usable.placed.id);
     }

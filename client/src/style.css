@@ -2773,3 +2773,139 @@ button.reply-quote:hover {
   border-color: white;
   box-shadow: 0 0 0 2px #7aa7ff;
 }
+
+/* ---------- Fase 15: quadro branco ---------- */
+
+.wb-backdrop {
+  padding: 12px;
+}
+
+.wb {
+  width: min(1400px, 100%);
+  height: calc(100vh - 24px);
+  display: flex;
+  flex-direction: column;
+  background: #1f222b;
+  border: 1px solid var(--card-border);
+  border-radius: 14px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+.wb-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--card-border);
+}
+
+.wb-bar h2 {
+  margin: 0;
+  font-size: 16px;
+  white-space: nowrap;
+}
+
+.wb-tools,
+.wb-colors,
+.wb-widths {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 9px;
+  background: #15171d;
+}
+
+.wb-btn {
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.wb-btn[aria-checked='true'] {
+  background: #2c3140;
+  color: var(--text);
+}
+
+.wb-color {
+  width: 26px;
+  height: 26px;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  background: var(--c);
+  cursor: pointer;
+}
+
+.wb-color[aria-checked='true'] {
+  border-color: white;
+  box-shadow: 0 0 0 2px #7aa7ff;
+}
+
+.wb-spacer {
+  flex: 1;
+}
+
+.wb-close {
+  margin-left: 0;
+}
+
+.wb-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  padding: 12px;
+  background:
+    radial-gradient(circle, rgba(255, 255, 255, 0.04) 1px, transparent 1px) 0 0 / 16px 16px,
+    #2a2e3a;
+}
+
+.wb-canvas,
+.wb-live {
+  grid-area: 1 / 1;
+  border-radius: 6px;
+}
+
+.wb-canvas {
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
+}
+
+.wb-live {
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.wb-stage[data-tool='text'] .wb-live {
+  cursor: text;
+}
+
+.wb-stage[data-tool='eraser'] .wb-live {
+  cursor: cell;
+}
+
+.wb-text-input {
+  position: absolute;
+  min-width: 160px;
+  padding: 4px 6px;
+  border: 1px dashed #7aa7ff;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.95);
+  font:
+    600 18px system-ui,
+    sans-serif;
+}
+
+@media (max-width: 700px) {
+  .wb-bar h2 {
+    width: 100%;
+  }
+}
