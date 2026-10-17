@@ -271,6 +271,27 @@
       "light": false
     },
     {
+      "id": "table_plasto_round",
+      "name": "Mesa de Jogos",
+      "category": "diversão",
+      "width": 1,
+      "depth": 1,
+      "height": 1,
+      "canSit": false,
+      "canWalk": false,
+      "sitHeight": 0,
+      "directions": [0],
+      "revision": 45508,
+      "source": "habboassets",
+      "anchors": {
+        "0": [45.5, 82]
+      },
+      "states": [],
+      "stateAnchors": {},
+      "interaction": "tictactoe",
+      "light": false
+    },
+    {
       "id": "plant_big_cactus",
       "name": "Cacto Grande",
       "category": "plantas",

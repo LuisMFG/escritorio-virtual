@@ -8,6 +8,7 @@ import {
   type ChatDeletedMessage,
   type KickedMessage,
   type BoardNote,
+  type TttScores,
   type NoteColor,
   type WbDraft,
   type WbRemovedMessage,
@@ -161,6 +162,27 @@ export class OfficeConnection {
 
   wbClear(furniId: string): void {
     this.room?.send(ClientMessage.WbClear, { furniId });
+  }
+
+  tttJoin(furniId: string): void {
+    this.room?.send(ClientMessage.TttJoin, { furniId });
+  }
+
+  tttLeave(furniId: string): void {
+    this.room?.send(ClientMessage.TttLeave, { furniId });
+  }
+
+  tttMove(furniId: string, cell: number): void {
+    this.room?.send(ClientMessage.TttMove, { furniId, cell });
+  }
+
+  tttRematch(furniId: string): void {
+    this.room?.send(ClientMessage.TttRematch, { furniId });
+  }
+
+  async tttScores(furniId: string): Promise<TttScores> {
+    if (!this.room) return { top: [], players: [] };
+    return (await this.room.request(ClientMessage.TttScores, { furniId })) as TttScores;
   }
 
   async boardNotes(furniId: string): Promise<BoardNote[]> {

@@ -49,6 +49,8 @@ export interface SceneActions extends DecorActions {
   openBoard(furniId: string): void;
   /** Clique num quadro branco. */
   openWhiteboard(furniId: string): void;
+  /** Clique numa mesa de jogos. */
+  openGame(furniId: string): void;
   /** Clique num avatar (abre o cartão). `at` = posição na tela. */
   avatarClick(sessionId: string, at: { x: number; y: number }): void;
 }
@@ -77,6 +79,8 @@ export class RoomScene implements DecorHost {
   private darkness = 0;
   /** Salas com reunião acontecendo agora (placa na porta). */
   private busyRooms = new Map<string, string>();
+  /** Partidas em andamento por mesa (desenhadas no tampo). */
+  private readonly games = new Map<string, { board: string; line: number[] }>();
   private readonly doorLabel = new Text({
     text: '',
     resolution: 2,
@@ -162,6 +166,7 @@ export class RoomScene implements DecorHost {
       const view = new FurniView(placed, def, this.deps.loader, this.deps.placeholders);
       this.furni.set(id, view);
       this.objects.addChild(view);
+      if (this.games.has(id)) view.setGame(this.games.get(id)!);
       void view.load().then(() => this.drawGlows());
     }
     this.onFurniChanged();
@@ -171,6 +176,13 @@ export class RoomScene implements DecorHost {
   /** Reuniões em andamento por sala (a placa aparece ao passar o mouse na porta). */
   setBusyRooms(busy: Map<string, string>): void {
     this.busyRooms = busy;
+  }
+
+  /** Tabuleiro de uma mesa de jogos (`null` = mesa sem partida). */
+  setGame(furniId: string, game: { board: string; line: number[] } | null): void {
+    if (game) this.games.set(furniId, game);
+    else this.games.delete(furniId);
+    this.furni.get(furniId)?.setGame(game);
   }
 
   /** Miniatura do quadro branco no móvel. */
@@ -446,6 +458,7 @@ export class RoomScene implements DecorHost {
       if (usable.def.interaction === 'whiteboard') {
         return this.actions.openWhiteboard(usable.placed.id);
       }
+      if (usable.def.interaction === 'tictactoe') return this.actions.openGame(usable.placed.id);
       this.flashTarget({ x: usable.placed.x, y: usable.placed.y }, 0xffd27a);
       return this.actions.interact(usable.placed.id);
     }

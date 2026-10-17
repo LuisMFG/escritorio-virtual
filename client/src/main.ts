@@ -48,6 +48,7 @@ import { openRoomEditor } from './ui/roomEditor.js';
 import { AmbientSound } from './ui/ambient.js';
 import { openBoard } from './ui/board.js';
 import { openWhiteboard, type WhiteboardHandle } from './ui/whiteboard.js';
+import { openTicTacToe, type TicTacToeHandle, type TttView } from './ui/ticTacToe.js';
 import { renderThumbnail } from './ui/wbDraw.js';
 import { openAgenda, type AgendaHandle } from './ui/agenda.js';
 import { showReminder } from './ui/reminder.js';
@@ -204,6 +205,8 @@ async function start(): Promise<void> {
   const wbStrokes = new Map<string, WbStroke[]>();
   const wbThumbs = new Map<string, HTMLCanvasElement>();
   let whiteboard: WhiteboardHandle | null = null;
+  /** Jogo da velha aberto (mesa de jogos). */
+  let ttt: TicTacToeHandle | null = null;
   let agenda: AgendaHandle | null = null;
   const busyRooms = () =>
     new Map(roomList.flatMap((r) => (r.meeting ? [[r.id, r.meeting] as [string, string]] : [])));
@@ -441,6 +444,19 @@ async function start(): Promise<void> {
             clear: () => connection.wbClear(furniId),
           });
         },
+        openGame: (furniId) => {
+          ttt?.close();
+          ttt = openTicTacToe({
+            furniId,
+            mySessionId: () => connection.sessionId,
+            join: () => connection.tttJoin(furniId),
+            leave: () => connection.tttLeave(furniId),
+            move: (cell) => connection.tttMove(furniId, cell),
+            rematch: () => connection.tttRematch(furniId),
+            loadScores: () => connection.tttScores(furniId),
+          });
+          ttt.update((room.state.games.get(furniId)?.toJSON() as TttView | undefined) ?? null);
+        },
         openBoard: (furniId) => {
           const f = room.state.furni.get(furniId);
           const def = f && deps.furniDefs.get(f.defId);
@@ -580,6 +596,19 @@ async function start(): Promise<void> {
       }),
     );
     keep(cb.onRemove('furni', (_f, id) => s.removeFurni(id)));
+    // Jogo da velha: tabuleiro no tampo da mesa e painel aberto, ao vivo.
+    ttt?.close();
+    const syncGame = (id: string, g: TttView | null) => {
+      s.setGame(id, g && { board: g.board, line: g.line ? g.line.split(',').map(Number) : [] });
+      if (ttt?.furniId === id) ttt.update(g);
+    };
+    keep(
+      cb.onAdd('games', (g, id) => {
+        syncGame(id, g.toJSON() as TttView);
+        keep(cb.onChange(g, () => syncGame(id, g.toJSON() as TttView)));
+      }),
+    );
+    keep(cb.onRemove('games', (_g, id) => syncGame(id, null)));
     keep(
       cb.listen('decorLocked', (locked) => {
         decorLocked = locked;

@@ -98,10 +98,30 @@ export class ChatPanel {
       });
       this.emoteMenu.append(b);
     }
+    // Sorteios: o servidor tira o resultado e todos veem o mesmo.
+    for (const [emoji, label, cmd] of [
+      ['🎲', 'Dado', '/dado'],
+      ['🪙', 'Moeda', '/moeda'],
+    ] as const) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.setAttribute('role', 'menuitem');
+      b.title = `${label} (${cmd})`;
+      b.append(
+        Object.assign(document.createElement('span'), { className: 'emoji', textContent: emoji }),
+        Object.assign(document.createElement('span'), { textContent: label }),
+      );
+      b.addEventListener('click', () => {
+        this.on.send(cmd);
+        this.toggleEmoteMenu(false);
+        this.input.focus();
+      });
+      this.emoteMenu.append(b);
+    }
 
     this.input.className = 'chat-input';
     this.input.maxLength = CHAT_MAX_LENGTH;
-    this.input.placeholder = 'Diga algo… (Enter envia, @ menciona, / emotes)';
+    this.input.placeholder = 'Diga algo… (Enter envia, @ menciona, / emotes, /dado)';
     this.input.autocomplete = 'off';
     this.input.setAttribute('aria-label', 'Mensagem para a sala');
     this.input.setAttribute('aria-autocomplete', 'list');
@@ -374,7 +394,10 @@ export class ChatPanel {
   private item(m: ChatMessage): HTMLLIElement {
     const li = document.createElement('li');
     if (m.userId === this.localUserId) li.classList.add('mine');
+    // Resultado sorteado pelo servidor (dado, moeda, jogo): visual próprio, sem menção.
+    if (m.kind !== 'text') li.classList.add('chat-roll');
     const forMe =
+      m.kind === 'text' &&
       m.userId !== this.localUserId &&
       (this.mentionsMe(m.text) || m.replyTo?.userId === this.localUserId);
     if (forMe) li.classList.add('mentioned');
@@ -392,7 +415,9 @@ export class ChatPanel {
     time.textContent = timeFormat.format(m.ts);
     const name = document.createElement('strong');
     name.textContent = m.name;
-    li.append(time, ' ', name, ' ', this.textWithMentions(m.text), this.actions(m));
+    const body =
+      m.kind === 'text' ? this.textWithMentions(m.text) : document.createTextNode(m.text);
+    li.append(time, ' ', name, ' ', body, this.actions(m));
     li.append(this.chips(m.id, m.reactions));
     return li;
   }

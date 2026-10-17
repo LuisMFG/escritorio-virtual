@@ -3144,3 +3144,148 @@ button.reply-quote:hover {
     opacity: 0;
   }
 }
+
+/* ---------- Fase 17: mini-jogos ---------- */
+
+.chat-log li.chat-roll {
+  margin: 0 -6px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: rgba(242, 201, 76, 0.1);
+  box-shadow: inset 3px 0 0 var(--warn);
+}
+
+.ttt-panel {
+  position: fixed;
+  z-index: 7;
+  left: 16px;
+  top: 205px;
+  width: 240px;
+  max-width: calc(100vw - 32px);
+  padding: 12px 14px 10px;
+  background: #1f222b;
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+
+.ttt-head {
+  cursor: move;
+  touch-action: none;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.ttt-head h2 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.ttt-players {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.ttt-player {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ttt-player.turn {
+  border-color: var(--warn);
+  background: rgba(242, 201, 76, 0.1);
+}
+
+.ttt-status {
+  min-height: 2.8em;
+  margin: 8px 0;
+  font-size: 13px;
+  text-align: center;
+}
+
+.ttt-board {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  width: 168px;
+  margin: 0 auto;
+}
+
+.ttt-cell {
+  aspect-ratio: 1;
+  border: 0;
+  border-radius: 8px;
+  background: #fdf6e3;
+  color: #1f2937;
+  font:
+    700 28px/1 system-ui,
+    sans-serif;
+  cursor: pointer;
+}
+
+.ttt-cell:disabled {
+  cursor: default;
+}
+
+.ttt-cell:not(:disabled):hover {
+  background: #fef3c7;
+}
+
+.ttt-cell.x {
+  color: #dc2626;
+}
+
+.ttt-cell.o {
+  color: #2563eb;
+}
+
+.ttt-cell.win {
+  background: #fcd34d;
+}
+
+.ttt-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+  align-items: center;
+  min-height: 34px;
+  margin-top: 10px;
+  font-size: 13px;
+}
+
+.ttt-scores {
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+.ttt-scores summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+
+.ttt-scores ol {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ttt-scores li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 0;
+}

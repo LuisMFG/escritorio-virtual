@@ -8,7 +8,7 @@ import {
   type FurniManifestEntry,
   type PlacedFurni,
 } from '@office/shared';
-import { Container, Matrix, Sprite, Texture, type Point } from 'pixi.js';
+import { Container, Graphics, Matrix, Sprite, Texture, type Point } from 'pixi.js';
 import type { AssetLoader } from '../assets/AssetLoader.js';
 import { spriteHitTest } from '../assets/hitTest.js';
 import type { PlaceholderFactory } from '../assets/PlaceholderFactory.js';
@@ -22,6 +22,9 @@ export class FurniView extends Container {
   /** Miniatura do quadro branco por cima do papel (se o móvel tiver `surface`). */
   private surface: { sprite: Sprite; canvas: HTMLCanvasElement; texture: Texture } | null = null;
   private loadedDir = -1;
+  /** Tabuleiro do jogo da velha deitado no tampo (mesa de jogos). */
+  private gameBoard: Graphics | null = null;
+  private game: { board: string; line: number[] } | null = null;
 
   constructor(
     public placed: PlacedFurni,
@@ -79,6 +82,73 @@ export class FurniView extends Container {
     this.loadedKey = key;
     this.loadedDir = dir;
     this.placeSurface();
+    this.drawGameBoard();
+  }
+
+  /** Mostra a partida no tampo da mesa (`null` tira). */
+  setGame(game: { board: string; line: number[] } | null): void {
+    this.game = game;
+    this.drawGameBoard();
+  }
+
+  /**
+   * Tabuleiro em perspectiva isométrica sobre o tampo: um losango 3×3 centrado no meio do
+   * tampo (medido na PNG da mesa redonda: ~27% da altura a partir do topo).
+   */
+  private drawGameBoard(): void {
+    if (!this.game) {
+      this.gameBoard?.destroy();
+      this.gameBoard = null;
+      return;
+    }
+    if (!this.gameBoard) {
+      this.gameBoard = new Graphics();
+      this.gameBoard.eventMode = 'none';
+      this.addChild(this.gameBoard);
+    }
+    const tex = this.sprite.texture;
+    const cx = -this.sprite.anchor.x * tex.width + tex.width / 2;
+    const cy = -this.sprite.anchor.y * tex.height + tex.height * 0.27;
+    const W = 27;
+    const H = 13.5;
+    // (u, v) de 0 a 3: canto de cima (0,0), direita (3,0), esquerda (0,3), baixo (3,3).
+    const pt = (u: number, v: number): [number, number] => [
+      cx + ((u - v) * W) / 3,
+      cy - H + ((u + v) * H) / 3,
+    ];
+    const g = this.gameBoard.clear();
+    g.poly([...pt(0, 0), ...pt(3, 0), ...pt(3, 3), ...pt(0, 3)], true)
+      .fill({ color: 0xfdf6e3, alpha: 0.95 })
+      .stroke({ width: 1.5, color: 0x5b4636 });
+    for (const k of [1, 2]) {
+      g.moveTo(...pt(k, 0))
+        .lineTo(...pt(k, 3))
+        .moveTo(...pt(0, k))
+        .lineTo(...pt(3, k));
+    }
+    g.stroke({ width: 1, color: 0x5b4636, alpha: 0.8 });
+    const { board, line } = this.game;
+    for (let i = 0; i < 9; i++) {
+      const u = (i % 3) + 0.5;
+      const v = Math.floor(i / 3) + 0.5;
+      if (board[i] === 'X') {
+        g.moveTo(...pt(u - 0.28, v - 0.28))
+          .lineTo(...pt(u + 0.28, v + 0.28))
+          .moveTo(...pt(u + 0.28, v - 0.28))
+          .lineTo(...pt(u - 0.28, v + 0.28))
+          .stroke({ width: 2, color: 0xdc2626 });
+      } else if (board[i] === 'O') {
+        const [x, y] = pt(u, v);
+        g.ellipse(x, y, W * 0.11, H * 0.11).stroke({ width: 2, color: 0x2563eb });
+      }
+    }
+    if (line.length === 3) {
+      const a = pt((line[0]! % 3) + 0.5, Math.floor(line[0]! / 3) + 0.5);
+      const b = pt((line[2]! % 3) + 0.5, Math.floor(line[2]! / 3) + 0.5);
+      g.moveTo(...a)
+        .lineTo(...b)
+        .stroke({ width: 2.5, color: 0xf59e0b, alpha: 0.9 });
+    }
   }
 
   /** Mostra (ou atualiza) a miniatura do desenho no papel do quadro. */
