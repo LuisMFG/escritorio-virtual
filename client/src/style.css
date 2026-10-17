@@ -1178,3 +1178,347 @@ mark.mention {
   padding: 6px 10px;
   font-size: 12px;
 }
+
+/* ---------- Fase 9: contas, cargos, perfil e equipe ---------- */
+
+.login-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 3px;
+  border-radius: 9px;
+  background: #15171d;
+}
+
+.login-tabs button {
+  padding: 8px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.login-tabs button[aria-selected='true'] {
+  background: #2c3140;
+  color: var(--text);
+}
+
+.login-card [hidden] {
+  display: none;
+}
+
+.login-error.ok {
+  background: rgba(111, 207, 151, 0.15);
+  color: #b6f0cd;
+}
+
+.field textarea,
+.field select,
+.birthday-row select,
+.team-cargo,
+.team-search {
+  padding: 9px 10px;
+  border-radius: 8px;
+  border: 1px solid #3a3f4d;
+  background: #15171d;
+  color: var(--text);
+  font: inherit;
+}
+
+.field textarea {
+  resize: vertical;
+  min-height: 56px;
+}
+
+.birthday-row {
+  display: flex;
+  gap: 8px;
+}
+
+.birthday-row select:last-child {
+  flex: 1;
+}
+
+/* Etiqueta do cargo: cor vem do cargo (--cargo). */
+.cargo-pill {
+  --cargo: #8b93a7;
+  display: inline-block;
+  max-width: 100%;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--cargo) 60%, transparent);
+  background: color-mix(in srgb, var(--cargo) 18%, transparent);
+  color: color-mix(in srgb, var(--cargo) 70%, white);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.6;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+}
+
+.cargo-pill.none {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.people-list .cargo-pill {
+  margin-left: 6px;
+  font-size: 10px;
+}
+
+/* Janelas (perfil e equipe) */
+.sheet {
+  width: min(440px, 100%);
+  max-height: calc(100vh - 32px);
+  display: flex;
+  flex-direction: column;
+  background: #1f222b;
+  border: 1px solid var(--card-border);
+  border-radius: 14px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  font-size: 14px;
+}
+
+.sheet-wide {
+  width: min(680px, 100%);
+}
+
+.sheet-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--card-border);
+}
+
+.sheet-head h2 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.sheet-close {
+  margin-left: auto;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--muted);
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.sheet-close:hover {
+  background: #2c3140;
+  color: var(--text);
+}
+
+.sheet-body {
+  padding: 16px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.profile-top {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+
+.profile-top p {
+  margin: 0 0 4px;
+}
+
+.profile-avatar {
+  flex: none;
+  image-rendering: pixelated;
+  background: #2a2e3a;
+  border-radius: 12px;
+}
+
+.profile-name {
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.profile-visual {
+  margin-top: 6px;
+}
+
+.profile-form,
+.profile-password form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.profile-password summary {
+  cursor: pointer;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.profile-exit {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--card-border);
+}
+
+/* Equipe */
+.team-search {
+  flex: 1;
+  min-width: 0;
+}
+
+.team-summary {
+  margin: 0;
+}
+
+.team-group {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.team-group .cargo-pill {
+  font-size: 12px;
+}
+
+.team-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.team-member {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #252935;
+}
+
+.team-member[data-online='false'] {
+  opacity: 0.75;
+}
+
+/* Rosto: o render inteiro do avatar, recortado na cabeça. */
+.team-face {
+  flex: none;
+  width: 44px;
+  height: 52px;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #2f3442;
+}
+
+.team-face img {
+  display: block;
+  margin: -14px 0 0 -10px;
+  image-rendering: pixelated;
+}
+
+.team-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.team-info p {
+  margin: 0;
+}
+
+.team-name {
+  font-weight: 600;
+}
+
+.team-name .tag {
+  margin-left: 6px;
+}
+
+.team-meta {
+  font-size: 12px;
+}
+
+.team-member[data-online='true'] .team-meta {
+  color: var(--ok);
+}
+
+.team-bio {
+  margin-top: 2px !important;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.team-birthday {
+  font-size: 12px;
+}
+
+.team-birthday.today {
+  color: var(--warn);
+  font-weight: 600;
+}
+
+.team-cargo {
+  flex: none;
+  max-width: 180px;
+  font-size: 12px;
+}
+
+/* Cartão do avatar */
+.avatar-card .card-user {
+  margin-top: -4px;
+}
+
+.avatar-card .card-bio {
+  max-width: 200px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+/* Botões do canto: Perfil, Equipe e Decorar numa linha */
+.hud-actions {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  display: flex;
+  gap: 8px;
+}
+
+.hud-actions .hud-avatar,
+.hud-actions .hud-decor {
+  position: static;
+}
+
+@media (max-width: 900px) {
+  .chat-bar {
+    left: 300px;
+  }
+}
+
+@media (max-width: 600px) {
+  .chat-bar {
+    left: 16px;
+  }
+
+  .team-member {
+    flex-wrap: wrap;
+  }
+
+  .team-cargo {
+    max-width: none;
+    width: 100%;
+  }
+}

@@ -1,8 +1,9 @@
-import type { Gender } from '@office/shared';
+import type { Gender, SessionResponse } from '@office/shared';
 
-/** O que o navegador lembra entre visitas (nome, visual e token da sessão). */
+/** O que o navegador lembra entre visitas (nome, usuário, visual e token da sessão). */
 export interface StoredSession {
   name: string;
+  username?: string;
   figure?: string;
   gender?: Gender;
   token?: string;
@@ -30,7 +31,19 @@ export function saveSession(session: StoredSession): void {
   }
 }
 
+/** Guarda o que veio do servidor ao entrar (o token abre direto da próxima vez). */
+export function rememberSession(s: SessionResponse): void {
+  saveSession({
+    name: s.name,
+    username: s.username ?? undefined,
+    figure: s.figure,
+    gender: s.gender,
+    token: s.token,
+  });
+}
+
+/** Sair ou sessão expirada: esquece o token, mas lembra usuário e visual para o formulário. */
 export function forgetToken(): void {
   const s = loadSession();
-  if (s) saveSession({ name: s.name, figure: s.figure, gender: s.gender });
+  if (s) saveSession({ name: s.name, username: s.username, figure: s.figure, gender: s.gender });
 }

@@ -17,6 +17,8 @@ const BOB_Y = [0, -1, -2, -1];
 const CATCH_UP_SPEED = 1.5;
 /** Altura do nome acima dos pés. */
 const NAME_Y = -88;
+/** Com cargo, o nome sobe uma linha e o cargo fica logo acima da cabeça. */
+const CARGO_LINE = 12;
 /** Pose sentada simulada (o imager não tem): desce o corpo e esconde as pernas abaixo do assento. */
 const SIT_DROP = 8;
 const SIT_CUT_Y = -2;
@@ -44,6 +46,11 @@ export interface AvatarSnapshot {
   /** 'available' | 'busy' | 'away' */
   status: string;
   typing: boolean;
+  /** Cargo e cor da etiqueta (`#rrggbb`); vazio = sem cargo. */
+  cargo: string;
+  cargoColor: string;
+  /** Faz aniversário hoje. */
+  birthday: boolean;
 }
 
 interface Step {
@@ -68,6 +75,8 @@ export class AvatarView extends Container {
   private readonly body = new Sprite();
   private readonly shadow = new Graphics();
   private readonly nameTag: Text;
+  private readonly cargoTag: Text;
+  private readonly cake: Text;
   private readonly legMask = new Graphics();
   private readonly statusBadge = new Graphics();
   private readonly typingBubble = new Container();
@@ -111,6 +120,24 @@ export class AvatarView extends Container {
     this.nameTag.anchor.set(0.5, 1);
     this.nameTag.position.set(0, NAME_Y);
     this.nameTag.visible = false;
+    this.cargoTag = new Text({
+      text: '',
+      resolution: 2,
+      style: {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: 9,
+        fontWeight: '600',
+        fill: 0xffffff,
+        stroke: { color: 0x101114, width: 3 },
+      },
+    });
+    this.cargoTag.anchor.set(0.5, 1);
+    this.cargoTag.position.set(0, NAME_Y);
+    this.cargoTag.visible = false;
+    this.cake = new Text({ text: '🎂', resolution: 2, style: { fontSize: 12 } });
+    this.cake.anchor.set(0.5, 1);
+    this.cake.position.set(-14, -76);
+    this.cake.visible = false;
     this.legMask.rect(-60, -220, 120, 220 + SIT_CUT_Y).fill(0xffffff);
     this.legMask.visible = false;
     this.statusBadge.visible = false;
@@ -134,7 +161,9 @@ export class AvatarView extends Container {
       this.body,
       this.legMask,
       this.statusBadge,
+      this.cake,
       this.typingBubble,
+      this.cargoTag,
       this.nameTag,
     );
     this.applySnapshot(snapshot);
@@ -160,6 +189,7 @@ export class AvatarView extends Container {
   setNameVisible(on: boolean): void {
     this.nameVisible = on;
     this.nameTag.visible = on;
+    this.cargoTag.visible = on && this.cargoTag.text !== '';
     this.layoutOverlays();
   }
 
@@ -179,8 +209,12 @@ export class AvatarView extends Container {
 
   /** Aplica um estado novo vindo do servidor. */
   applySnapshot(s: AvatarSnapshot): void {
-    this.nameTag.text = s.name;
+    this.nameTag.text = s.birthday ? `${s.name} 🎂` : s.name;
     this.displayName = s.name;
+    this.cargoTag.text = s.cargo;
+    this.cargoTag.style.fill = s.cargoColor || 0xffffff;
+    this.cargoTag.visible = this.nameVisible && s.cargo !== '';
+    this.cake.visible = s.birthday;
     this.alpha = s.away ? 0.45 : 1;
     this.setSitting(s.action === 'sit', s.z);
     this.setStatus(s.status);
@@ -262,9 +296,11 @@ export class AvatarView extends Container {
 
   /** Selo de status ao lado do nome (ou da cabeça, com o nome escondido). */
   private layoutOverlays(): void {
+    const nameY = this.cargoTag.text ? NAME_Y - CARGO_LINE : NAME_Y;
+    this.nameTag.position.y = nameY;
     const bounds = this.nameVisible ? this.nameTag.width / 2 + 7 : 12;
-    this.statusBadge.position.set(bounds, this.nameVisible ? NAME_Y - 6 : -80);
-    this.typingBubble.position.set(0, this.nameVisible ? NAME_Y - 20 : TYPING_Y);
+    this.statusBadge.position.set(bounds, this.nameVisible ? nameY - 6 : -80);
+    this.typingBubble.position.set(0, this.nameVisible ? nameY - 20 : TYPING_Y);
   }
 
   private updateEmote(dtMs: number): void {

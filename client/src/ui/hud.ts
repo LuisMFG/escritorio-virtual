@@ -10,7 +10,8 @@ export interface Hud {
 export function mountHud(opts: {
   getCamera: () => Camera | undefined;
   loader: AssetLoader;
-  onEditAvatar: () => void;
+  onOpenProfile: () => void;
+  onOpenTeam: () => void;
   onToggleDecor: () => void;
   /** Liga/desliga o som de mensagem; devolve o novo estado. */
   onToggleSound: () => boolean;
@@ -49,11 +50,17 @@ export function mountHud(opts: {
   renderSound(opts.soundOn);
   zoom.prepend(soundBtn);
 
-  const avatarBtn = document.createElement('button');
-  avatarBtn.type = 'button';
-  avatarBtn.className = 'hud-avatar btn-secondary';
-  avatarBtn.textContent = 'Meu visual';
-  avatarBtn.addEventListener('click', opts.onEditAvatar);
+  const profileBtn = document.createElement('button');
+  profileBtn.type = 'button';
+  profileBtn.className = 'hud-avatar btn-secondary';
+  profileBtn.textContent = 'Perfil';
+  profileBtn.addEventListener('click', opts.onOpenProfile);
+
+  const teamBtn = document.createElement('button');
+  teamBtn.type = 'button';
+  teamBtn.className = 'hud-team btn-secondary';
+  teamBtn.textContent = 'Equipe';
+  teamBtn.addEventListener('click', opts.onOpenTeam);
 
   const decorBtn = document.createElement('button');
   decorBtn.type = 'button';
@@ -62,7 +69,10 @@ export function mountHud(opts: {
   decorBtn.setAttribute('aria-pressed', 'false');
   decorBtn.addEventListener('click', opts.onToggleDecor);
 
-  document.body.append(card, status, zoom, avatarBtn, decorBtn);
+  const actions = document.createElement('div');
+  actions.className = 'hud-actions';
+  actions.append(profileBtn, teamBtn, decorBtn);
+  document.body.append(card, status, zoom, actions);
   return {
     setDecorating(on) {
       decorBtn.textContent = on ? 'Concluir decoração' : 'Decorar';

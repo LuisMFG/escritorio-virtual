@@ -17,6 +17,7 @@ import {
   type RoomLayoutMessage,
   type SessionResponse,
   type Status,
+  type TeamResponse,
   STATUSES,
 } from '@office/shared';
 import { Application, TextureSource } from 'pixi.js';
@@ -26,7 +27,8 @@ import { PlaceholderFactory } from './assets/PlaceholderFactory.js';
 import { DEBUG, OFFLINE_ASSETS } from './config.js';
 import type { AvatarSnapshot } from './entities/AvatarView.js';
 import { isSessionError, OfficeConnection, type OfficeRoomClient } from './net/OfficeConnection.js';
-import { forgetToken, loadSession, saveSession } from './net/storage.js';
+import { api, ApiRequestError } from './net/api.js';
+import { forgetToken, loadSession, rememberSession, saveSession } from './net/storage.js';
 import { RoomScene, type SceneDeps } from './scene/RoomScene.js';
 import { AvatarCard } from './ui/avatarCard.js';
 import { openAvatarEditor } from './ui/avatarEditor.js';
@@ -34,7 +36,9 @@ import { ChatPanel } from './ui/chat.js';
 import { DecorPanel } from './ui/decorPanel.js';
 import { mountHud } from './ui/hud.js';
 import { IdleWatcher } from './ui/idle.js';
-import { showLogin } from './ui/login.js';
+import { showClaim, showLogin } from './ui/login.js';
+import { openProfile } from './ui/profile.js';
+import { openTeam } from './ui/team.js';
 import { ChatSound } from './ui/sound.js';
 import { Overlay } from './ui/overlay.js';
 
@@ -68,6 +72,9 @@ function snapshot(p: Player): AvatarSnapshot {
     away: p.away,
     status: p.status,
     typing: p.typing,
+    cargo: p.cargo,
+    cargoColor: p.cargoColor,
+    birthday: p.birthday,
     action: p.action,
     z: p.z,
   };
@@ -173,8 +180,46 @@ async function start(): Promise<void> {
     onToggleDecor: () => setDecorating(!decorating),
     onToggleSound: () => sound.toggle(),
     soundOn: sound.enabled,
-    onEditAvatar: () => void editAvatar(),
+    onOpenProfile: () => showProfile(),
+    onOpenTeam: () => showTeam(),
   });
+  /** Última lista da Equipe (bio e aniversário no cartão do avatar). */
+  let team: TeamResponse | undefined;
+  const loadTeam = async () => {
+    if (!session) return;
+    try {
+      team = await api.team(session.token);
+    } catch {
+      // Sem a lista, o cartão mostra só o que vem do estado da sala.
+    }
+  };
+  function showProfile(): void {
+    if (!session) return;
+    openProfile(session, {
+      saved: (updated) => {
+        session = updated;
+        rememberSession(updated);
+      },
+      editAvatar: () => void editAvatar(),
+      logout: (all) => void logout(all),
+    });
+  }
+  function showTeam(): void {
+    if (!session) return;
+    openTeam({
+      token: session.token,
+      userId: session.userId,
+      isAdmin: session.role === 'admin',
+      roomName: (id) => findRoom(id)?.name ?? id,
+      loaded: (t) => (team = t),
+    });
+  }
+  async function logout(all: boolean): Promise<void> {
+    if (session) await api.logout(session.token, all).catch(() => undefined);
+    await connection?.leave();
+    forgetToken();
+    location.reload();
+  }
   async function editAvatar(): Promise<void> {
     {
       if (!session || !connection) return;
@@ -199,7 +244,10 @@ async function start(): Promise<void> {
     },
     mention: (name) => chat.insertMention(name),
     editAvatar: () => void editAvatar(),
+    openProfile: () => showProfile(),
   });
+  /** Avisos de aniversário: uma vez por pessoa por visita. */
+  const birthdaysSeen = new Set<string>();
   hud.setRoomName(RECEPTION.name);
   app.ticker.add((ticker) => scene?.update(ticker.deltaMS));
 
@@ -221,7 +269,30 @@ async function start(): Promise<void> {
         removeFurni: (furniId) => connection.removeFurni(furniId),
         avatarClick: (sessionId, at) => {
           const info = s.avatarInfo(sessionId);
-          if (info) avatarCard.show({ sessionId, ...info, roomName: layout.name }, at);
+          const player = room.state.players.get(sessionId);
+          if (!info || !player) return;
+          const show = () => {
+            const member = team?.members.find((m) => m.userId === player.userId);
+            avatarCard.show(
+              {
+                sessionId,
+                ...info,
+                roomName: layout.name,
+                username: member?.username ?? null,
+                cargo: player.cargo,
+                cargoColor: player.cargoColor,
+                bio: member?.bio ?? '',
+                birthday: member?.birthday ?? null,
+                birthdayToday: player.birthday,
+              },
+              at,
+            );
+          };
+          show();
+          // Bio e aniversário vêm da Equipe: atualiza o cartão quando a lista chegar.
+          void loadTeam().then(() => {
+            if (avatarCard.isOpenFor(sessionId)) show();
+          });
         },
       },
       {
@@ -254,6 +325,9 @@ async function start(): Promise<void> {
           away: p.away,
           isLocal: id === room.sessionId,
           status: p.status,
+          cargo: p.cargo,
+          cargoColor: p.cargoColor,
+          birthday: p.birthday,
         })),
       );
       chat.setPeople(
@@ -264,6 +338,14 @@ async function start(): Promise<void> {
     const cb = Callbacks.get(room);
     cb.onAdd('players', (player, id) => {
       s.addAvatar(id, snapshot(player), id === room.sessionId);
+      if (player.birthday && !birthdaysSeen.has(player.userId)) {
+        birthdaysSeen.add(player.userId);
+        overlay.notify(
+          id === room.sessionId
+            ? 'Feliz aniversário! 🎂'
+            : `Hoje é aniversário de ${player.name}! 🎂`,
+        );
+      }
       cb.onChange(player, () => {
         s.updateAvatar(id, snapshot(player));
         refreshPeople();
@@ -339,20 +421,39 @@ async function start(): Promise<void> {
   }
 
   let notice: string | undefined;
+  let result = await resumeSession();
   for (;;) {
-    const result = await showLogin({ manifest: avatarManifest, fallbackPreview, notice });
+    result ??= await showLogin({ manifest: avatarManifest, fallbackPreview, notice });
+    // Conta antiga (só o token deste navegador): escolhe usuário e senha antes de entrar.
+    if (!result.username) result = await showClaim(result);
     try {
       await enter(result);
       return;
     } catch (err) {
       overlay.setStatus('offline');
+      result = undefined;
       if (isSessionError(err)) {
         forgetToken();
-        notice = 'Sua sessão expirou. Entre novamente com o código de convite.';
+        notice = 'Sua sessão expirou. Entre novamente.';
       } else {
         notice = `Não foi possível entrar na sala: ${(err as Error).message}`;
       }
     }
+  }
+}
+
+/** Token salvo de outra visita: entra direto, sem tela de entrada. */
+async function resumeSession(): Promise<SessionResponse | undefined> {
+  const token = loadSession()?.token;
+  if (!token) return undefined;
+  try {
+    const session = await api.me(token);
+    rememberSession(session);
+    return session;
+  } catch (err) {
+    // Só esquece o token se o servidor disse que ele não vale (não por falta de rede).
+    if (err instanceof ApiRequestError && err.status === 401) forgetToken();
+    return undefined;
   }
 }
 

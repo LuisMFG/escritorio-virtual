@@ -1,5 +1,6 @@
 import { STATUS_LABELS, STATUSES, type Status } from '@office/shared';
 import type { ConnectionStatus } from '../net/OfficeConnection.js';
+import { cargoPill } from './profile.js';
 
 export interface PersonEntry {
   id: string;
@@ -7,6 +8,9 @@ export interface PersonEntry {
   away: boolean;
   isLocal: boolean;
   status: string;
+  cargo: string;
+  cargoColor: string;
+  birthday: boolean;
 }
 
 export interface OtherRoom {
@@ -106,8 +110,9 @@ export class Overlay {
 
     const hereItems = this.here.map((p) => {
       const li = document.createElement('li');
-      li.textContent = p.name;
+      li.textContent = p.birthday ? `${p.name} 🎂` : p.name;
       li.dataset.status = p.status;
+      if (p.cargo) li.append(cargoPill(p.cargo, p.cargoColor));
       li.title = STATUS_LABELS[p.status as Status] ?? '';
       if (p.isLocal) li.append(tag('você'));
       if (!p.isLocal && (p.status === 'busy' || p.status === 'away')) {

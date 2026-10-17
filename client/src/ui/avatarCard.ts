@@ -1,4 +1,5 @@
-import { avatarImageUrl, STATUS_LABELS, type Status } from '@office/shared';
+import { avatarImageUrl, formatBirthday, STATUS_LABELS, type Status } from '@office/shared';
+import { cargoPill } from './profile.js';
 
 export interface AvatarCardInfo {
   sessionId: string;
@@ -7,12 +8,20 @@ export interface AvatarCardInfo {
   isLocal: boolean;
   figure: string;
   roomName: string;
+  username: string | null;
+  cargo: string;
+  cargoColor: string;
+  bio: string;
+  /** `MM-DD` (da aba Equipe, quando já carregada). */
+  birthday: string | null;
+  birthdayToday: boolean;
 }
 
 export interface AvatarCardHandlers {
   goTo(sessionId: string): void;
   mention(name: string): void;
   editAvatar(): void;
+  openProfile(): void;
 }
 
 /** Cartão que aparece ao clicar num avatar: nome, status, sala e ações rápidas. */
@@ -34,6 +43,7 @@ export class AvatarCard {
 
   show(info: AvatarCardInfo, at: { x: number; y: number }): void {
     this.root.setAttribute('aria-label', `Cartão de ${info.name}`);
+    this.root.dataset.session = info.sessionId;
 
     const img = Object.assign(document.createElement('img'), { alt: '', width: 64, height: 110 });
     const sources = [
@@ -47,7 +57,41 @@ export class AvatarCard {
     };
     img.src = sources.shift()!;
 
-    const name = Object.assign(document.createElement('h3'), { textContent: info.name });
+    const name = Object.assign(document.createElement('h3'), {
+      textContent: info.birthdayToday ? `${info.name} 🎂` : info.name,
+    });
+    const extra: HTMLElement[] = [];
+    if (info.username) {
+      extra.push(
+        Object.assign(document.createElement('p'), {
+          className: 'muted card-user',
+          textContent: `@${info.username}`,
+        }),
+      );
+    }
+    if (info.cargo) {
+      const p = document.createElement('p');
+      p.append(cargoPill(info.cargo, info.cargoColor));
+      extra.push(p);
+    }
+    if (info.bio) {
+      extra.push(
+        Object.assign(document.createElement('p'), {
+          className: 'card-bio',
+          textContent: info.bio,
+        }),
+      );
+    }
+    if (info.birthdayToday || info.birthday) {
+      extra.push(
+        Object.assign(document.createElement('p'), {
+          className: 'muted',
+          textContent: info.birthdayToday
+            ? '🎂 Faz aniversário hoje!'
+            : `🎂 ${formatBirthday(info.birthday!)}`,
+        }),
+      );
+    }
     const status = Object.assign(document.createElement('p'), {
       className: 'card-status',
       textContent: STATUS_LABELS[info.status as Status] ?? STATUS_LABELS.available,
@@ -61,7 +105,10 @@ export class AvatarCard {
     const actions = document.createElement('div');
     actions.className = 'card-actions';
     if (info.isLocal) {
-      actions.append(this.button('Meu visual', () => this.on.editAvatar()));
+      actions.append(
+        this.button('Meu perfil', () => this.on.openProfile()),
+        this.button('Meu visual', () => this.on.editAvatar()),
+      );
     } else {
       actions.append(
         this.button('Ir até', () => this.on.goTo(info.sessionId)),
@@ -71,7 +118,7 @@ export class AvatarCard {
 
     const text = document.createElement('div');
     text.className = 'card-text';
-    text.append(name, status, room, actions);
+    text.append(name, ...extra, status, room, actions);
     this.root.replaceChildren(img, text);
     this.root.hidden = false;
 
@@ -82,6 +129,11 @@ export class AvatarCard {
     this.root.style.left = `${x}px`;
     this.root.style.top = `${y}px`;
     actions.querySelector('button')?.focus();
+  }
+
+  /** O cartão aberto é desta pessoa? (Para atualizar quando mais dados chegarem.) */
+  isOpenFor(sessionId: string): boolean {
+    return !this.root.hidden && this.root.dataset.session === sessionId;
   }
 
   hide(): void {
