@@ -86,9 +86,11 @@ export function mountSpotifySection(box: HTMLElement, token: string): void {
         fail(err);
       }
     });
+    // Nome do Spotify pode já terminar em pontuação ("celo."): sem ponto dobrado.
+    const connected = s.displayName ? `Conectado como ${s.displayName}` : 'Conectado';
     const who = el('p', {
       className: 'spotify-intro',
-      textContent: `Conectado${s.displayName ? ` como ${s.displayName}` : ''}. Pausou ou parou, a linha some.`,
+      textContent: `${connected}${/[.!?…]$/.test(connected) ? '' : '.'} Pausou ou parou, a linha some.`,
     });
     const actions = el('div', { className: 'pet-actions' });
     actions.append(show, disconnect);

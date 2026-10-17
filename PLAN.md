@@ -737,7 +737,7 @@ Pedido em 17/10/2026: mostrar no escritório o que cada pessoa está fazendo for
 - **Perfil → 💻 Editores de código:** link para baixar a extensão do VS Code, escolha do que aparece, lista de tokens (último uso, revogar com confirmação) e criação (o token aparece uma vez, com botão Copiar).
 - Testado no navegador: gerar token, sinais no formato das duas extensões (enviados pela página com o token gerado), texto no cartão e na lista, troca de privacidade e revogação (sinal recusado com 401). A extensão do VS Code não foi instalada no seu VS Code; o `.vsix` está pronto para você instalar.
 
-### Fase 21 — Spotify ✅ implementada (falta o teste com um app real)
+### Fase 21 — Spotify ✅ implementada e testada com o app real
 - No Perfil, "Conectar Spotify" (OAuth com PKCE, escopo `user-read-currently-playing`). O servidor guarda o refresh token e consulta a música atual de quem está online a cada ~20–30 s.
 - Mostra "🎵 Ouvindo: Música – Artista" (com link para a música) no cartão e na lista de pessoas; esconde quando pausado. Botões para desconectar e para ocultar temporariamente.
 - **Pré-requisitos (seus):** criar um app no Spotify Developer Dashboard (Client ID no `.env`), cadastrar o endereço de retorno (https em produção; `http://127.0.0.1:…` em desenvolvimento) e, no modo de desenvolvimento do Spotify, adicionar o e-mail de cada pessoa que vai conectar (limite de ~25).
@@ -750,4 +750,6 @@ Pedido em 17/10/2026: mostrar no escritório o que cada pessoa está fazendo for
 - **Atividade com várias linhas:** código e música aparecem juntos (uma por linha) no cartão e na lista de pessoas. Na linha 🎵 do cartão, link para a música (`Player.activityUrl`, só links `open.spotify.com`).
 - **Perfil → 🎵 Spotify:** sem app configurado, explica o que falta. Com app: "Conectar Spotify", depois "Conectado como …", "Mostrar o que estou ouvindo" (esconder sem desconectar) e "Desconectar".
 - **Config:** `SPOTIFY_CLIENT_ID` (sem ele a integração fica desligada), `SPOTIFY_REDIRECT_URI` (padrão `http://127.0.0.1:2567/api/spotify/callback`; o Spotify não aceita `localhost`) e `SPOTIFY_RETURN_URL` (em dev, `http://localhost:5173/`).
-- **Testado:** troca de código com PKCE, renovação, pausado, conta desautorizada, consulta só de quem está online, esconder e o redirect de volta, tudo contra um Spotify falso nos testes automáticos. No navegador: o aviso de "não configurado", o botão levando à página real do Spotify (com um Client ID provisório, sem entrar na conta) e o aviso na volta. **Falta** o teste de ponta a ponta com um app real do Spotify: depende do Client ID do app que você criar.
+- **Testado:** troca de código com PKCE, renovação, pausado, conta desautorizada, consulta só de quem está online, esconder e o redirect de volta, tudo contra um Spotify falso nos testes automáticos. **De ponta a ponta com o app real** (17/10/2026): conectar pelo Perfil (login e autorização no Spotify), a música tocando apareceu na lista de pessoas e no cartão com link para a faixa, esconder/mostrar funcionou na hora e, ao pausar no Spotify, a linha sumiu na consulta seguinte.
+- Ao voltar do Spotify, a primeira consulta é imediata; se a música começar depois, ela aparece na consulta seguinte (até 20 s).
+- Ajuste no teste: nome do Spotify que já termina em pontuação ("celo.") não ganha ponto dobrado em "Conectado como …".
