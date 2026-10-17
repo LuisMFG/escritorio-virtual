@@ -524,4 +524,81 @@ describe('OfficeRoom', () => {
       expect(p.x < 5 || p.y < 5).toBe(true);
     });
   });
+
+  describe('móveis interativos', () => {
+    /** Sala nova vazia (8×6), para não esbarrar nos móveis iniciais. */
+    function emptyRoom() {
+      return svc.rooms.create('Teste interativo', svc.furniDefs).id;
+    }
+    const owner = () => newUser('Dono').user.id;
+
+    it('luminária: anda até o lado, acende, salva e apaga no clique seguinte', async () => {
+      const roomId = emptyRoom();
+      const lamp = svc.furni.add(
+        roomId,
+        { defId: 'lamp_basic', x: 6, y: 2, z: 0, rot: 0 },
+        owner(),
+      );
+      const a = await join(newUser('Ana').token, roomId);
+      a.send(ClientMessage.Interact, { furniId: lamp.id });
+      await wait(STEP_MS * 8);
+      const me = a.state.players.get(a.sessionId)!;
+      expect(Math.max(Math.abs(me.x - 6), Math.abs(me.y - 2))).toBe(1);
+      expect(a.state.furni.get(lamp.id)!.state).toBe(1);
+      expect(svc.furni.list(roomId).find((f) => f.id === lamp.id)?.state).toBe(1);
+
+      a.send(ClientMessage.Interact, { furniId: lamp.id });
+      await wait(150);
+      expect(a.state.furni.get(lamp.id)!.state).toBe(0);
+    });
+
+    it('máquina de café: emote ☕ para a sala', async () => {
+      const roomId = emptyRoom();
+      const m = svc.furni.add(
+        roomId,
+        { defId: 'sunsetcafe_c20_coffeemachine', x: 2, y: 4, z: 0, rot: 0 },
+        owner(),
+      );
+      const a = await join(newUser('Ana').token, roomId);
+      const b = await join(newUser('Beto').token, roomId);
+      const emote = b.waitForMessage(ServerMessage.Emote);
+      a.send(ClientMessage.Interact, { furniId: m.id });
+      expect((await emote) as EmoteMessage).toEqual({ sessionId: a.sessionId, emote: 'coffee' });
+    });
+
+    it('mural: prega, lista com nome, só autor ou admin tira', async () => {
+      const roomId = emptyRoom();
+      const board = svc.furni.add(
+        roomId,
+        { defId: 'noticeboard', x: 4, y: 1, z: 0, rot: 0 },
+        owner(),
+      );
+      const ana = newUser('Ana');
+      const a = await join(ana.token, roomId);
+      const b = await join(newUser('Beto').token, roomId);
+
+      const changed = b.waitForMessage(ServerMessage.BoardChanged);
+      a.send(ClientMessage.BoardAdd, {
+        furniId: board.id,
+        text: '  Reunião às 15h ',
+        color: 'pink',
+      });
+      expect(await changed).toEqual({ furniId: board.id });
+      const notes = (await b.request(ClientMessage.BoardNotes, { furniId: board.id })) as {
+        id: number;
+        name: string;
+        text: string;
+        color: string;
+      }[];
+      expect(notes).toMatchObject([{ name: 'Ana', text: 'Reunião às 15h', color: 'pink' }]);
+
+      b.send(ClientMessage.BoardRemove, { noteId: notes[0]!.id });
+      expect(((await b.waitForMessage(ServerMessage.Error)) as ErrorMessage).code).toBe(
+        'FORBIDDEN',
+      );
+      a.send(ClientMessage.BoardRemove, { noteId: notes[0]!.id });
+      await wait(150);
+      expect(svc.boards.notes(board.id)).toEqual([]);
+    });
+  });
 });

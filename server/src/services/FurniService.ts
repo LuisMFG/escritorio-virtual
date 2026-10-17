@@ -17,7 +17,7 @@ export class FurniService {
       .from(roomFurni)
       .where(eq(roomFurni.roomId, roomId))
       .all()
-      .map(({ id, defId, x, y, z, rot }) => ({ id, defId, x, y, z, rot }));
+      .map(({ id, defId, x, y, z, rot, state }) => ({ id, defId, x, y, z, rot, state }));
   }
 
   add(roomId: string, f: Omit<PlacedFurni, 'id'>, placedBy: string): PlacedFurni {
@@ -26,7 +26,15 @@ export class FurniService {
       .insert(roomFurni)
       .values({ id, roomId, ...f, placedBy, updatedAt: this.now() })
       .run();
-    return { id, ...f };
+    return { id, ...f, state: 0 };
+  }
+
+  setState(roomId: string, id: string, state: number): void {
+    this.db
+      .update(roomFurni)
+      .set({ state, updatedAt: this.now() })
+      .where(and(eq(roomFurni.roomId, roomId), eq(roomFurni.id, id)))
+      .run();
   }
 
   update(roomId: string, id: string, changes: Pick<PlacedFurni, 'x' | 'y' | 'z' | 'rot'>): void {

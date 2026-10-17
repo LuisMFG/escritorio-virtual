@@ -29,6 +29,7 @@ const base: RoomEdit = {
   spawn: { x: 1, y: 2 },
   floorColor: '#aabbcc',
   wallColor: '#ccbbaa',
+  ambient: 'none',
   doors: [{ x: 0, y: 2, targetRoomId: 'reception' }],
 };
 const check = (edit: Partial<RoomEdit>, furni = []) =>
@@ -38,7 +39,7 @@ describe('validateRoomEdit', () => {
   it('as salas iniciais seguem as regras do editor', () => {
     for (const r of ROOMS) {
       const res = validateRoomEdit(
-        { ...r, spawn: r.spawn, doors: r.doors },
+        { ...r, spawn: r.spawn, doors: r.doors, ambient: 'none' },
         { selfId: r.id, roomIds, furni: r.furni, defs },
       );
       expect(res, r.id).toMatchObject({ ok: true, removedFurni: [] });

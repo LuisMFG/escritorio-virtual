@@ -50,6 +50,8 @@ export const Furni = schema(
     y: t.uint8(),
     z: t.float32(),
     rot: t.uint8(),
+    /** Estado (luz acesa, TV ligada…). */
+    state: t.uint8(),
   },
   'Furni',
 );

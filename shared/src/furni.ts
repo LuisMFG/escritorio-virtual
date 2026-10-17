@@ -26,6 +26,8 @@ export interface PlacedFurni {
   y: number;
   z: number;
   rot: number;
+  /** Estado do móvel (luz acesa, TV ligada…); 0 = padrão. */
+  state?: number;
 }
 
 export interface Footprint {

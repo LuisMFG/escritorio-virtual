@@ -2,6 +2,8 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import {
+  AMBIENTS,
+  type Ambient,
   defaultRoomHeightmap,
   doorInside,
   findDoorSpot,
@@ -122,6 +124,7 @@ export class RoomRepository {
       spawn: { x: row.spawnX, y: row.spawnY, dir: row.spawnDir },
       floorColor: row.floorColor,
       wallColor: row.wallColor,
+      ambient: toAmbient(row.ambient),
       doors,
     };
   }
@@ -137,6 +140,7 @@ export class RoomRepository {
       spawn: { x: row.spawnX, y: row.spawnY },
       floorColor: row.floorColor,
       wallColor: row.wallColor,
+      ambient: toAmbient(row.ambient),
       doors: this.doorsOf(roomId).map((d) => ({ x: d.x, y: d.y, targetRoomId: d.targetRoomId })),
       online,
     };
@@ -203,6 +207,7 @@ export class RoomRepository {
           spawnDir: 2,
           floorColor: edit.floorColor,
           wallColor: edit.wallColor,
+          ambient: edit.ambient,
         })
         .where(eq(rooms.id, roomId))
         .run();
@@ -283,6 +288,10 @@ export class RoomRepository {
     }
     return changed;
   }
+}
+
+function toAmbient(v: string): Ambient {
+  return (AMBIENTS as readonly string[]).includes(v) ? (v as Ambient) : 'none';
 }
 
 /** Linha de `room_doors` (o destino exato é calculado na hora em `getLayout`). */

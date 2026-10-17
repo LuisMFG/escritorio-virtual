@@ -71,6 +71,13 @@
       "when": 1792255126208,
       "tag": "0009_editor_de_salas",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1792256435787,
+      "tag": "0010_moveis_interativos",
+      "breakpoints": true
     }
   ]
 }

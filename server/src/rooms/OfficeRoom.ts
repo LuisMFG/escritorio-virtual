@@ -3,6 +3,10 @@ import {
   canPlace,
   chatSchema,
   chatDeleteSchema,
+  boardAddSchema,
+  boardRefSchema,
+  boardRemoveSchema,
+  NOTES_PER_BOARD,
   reactSchema,
   type ReactionsUpdate,
   type ReactRequest,
@@ -31,6 +35,7 @@ import {
   RoomGrid,
   ServerMessage,
   type EmoteMessage,
+  type FurniManifestEntry,
   type EmoteRequest,
   type ErrorMessage,
   type FurniMoveMessage,
@@ -77,10 +82,16 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
   private readonly emoteLimiter = new KeyedRateLimiter(3, 0.5);
   /** Reações: 10 seguidas, recarregando 3 por segundo. */
   private readonly reactLimiter = new KeyedRateLimiter(10, 3);
+  /** Usar móveis (luz, TV…): 6 seguidos, recarregando 2 por segundo. */
+  private readonly useLimiter = new KeyedRateLimiter(6, 2);
+  /** Recados: 5 seguidos, depois 1 a cada 5 s. */
+  private readonly boardLimiter = new KeyedRateLimiter(5, 0.2);
   /** Decorar: rajada de 10 ações, recarregando 4 por segundo. */
   private readonly editLimiter = new KeyedRateLimiter(10, 4);
   /** Quem clicou numa cadeira e está andando até ela (sessionId → móvel e assento). */
   private readonly pendingSit = new Map<string, { furniId: string; seat: TilePoint }>();
+  /** Quem clicou num móvel de usar (luz, café…) e está andando até ficar do lado dele. */
+  private readonly pendingUse = new Map<string, { furniId: string; at: TilePoint }>();
   /** Reconexões pendentes por sessionId, para cancelar quando a pessoa volta numa aba nova. */
   private readonly pendingReconnects = new Map<string, Deferred<Client>>();
 
@@ -121,6 +132,36 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     [ClientMessage.Emote]: validate(emoteSchema, (client, msg) =>
       this.handleEmote(client as OfficeClient, msg),
     ),
+    [ClientMessage.BoardNotes]: (client: Client, input: unknown) => {
+      const p = boardRefSchema.safeParse(input);
+      return p.success && this.boardFurni(p.data.furniId)
+        ? services().boards.notes(p.data.furniId)
+        : [];
+    },
+    [ClientMessage.BoardAdd]: validate(boardAddSchema, (client, msg) => {
+      const c = client as OfficeClient;
+      if (!c.auth || !this.boardFurni(msg.furniId)) return;
+      if (!this.boardLimiter.tryTake(c.sessionId)) return this.sendError(c, ErrorCode.RateLimit);
+      if (services().boards.count(msg.furniId) >= NOTES_PER_BOARD) {
+        return this.sendError(c, ErrorCode.Forbidden, 'O mural está cheio. Tire um recado antes.');
+      }
+      services().boards.add(msg.furniId, c.auth.id, msg.text, msg.color);
+      this.broadcast(ServerMessage.BoardChanged, { furniId: msg.furniId });
+    }),
+    [ClientMessage.BoardRemove]: validate(boardRemoveSchema, (client, msg) => {
+      const c = client as OfficeClient;
+      const note = services().boards.find(msg.noteId);
+      if (!c.auth || !note || !this.boardFurni(note.furniId)) return;
+      if (note.userId !== c.auth.id && c.auth.role !== 'admin') {
+        return this.sendError(
+          c,
+          ErrorCode.Forbidden,
+          'Só quem escreveu (ou um admin) tira o recado.',
+        );
+      }
+      services().boards.remove(note.id);
+      this.broadcast(ServerMessage.BoardChanged, { furniId: note.furniId });
+    }),
     [ClientMessage.ChatReact]: validate(reactSchema, (client, msg) =>
       this.handleReact(client as OfficeClient, msg.id, msg.emoji),
     ),
@@ -325,6 +366,9 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     this.typingLimiter.delete(client.sessionId);
     this.emoteLimiter.delete(client.sessionId);
     this.reactLimiter.delete(client.sessionId);
+    this.useLimiter.delete(client.sessionId);
+    this.boardLimiter.delete(client.sessionId);
+    this.pendingUse.delete(client.sessionId);
     this.pendingSit.delete(client.sessionId);
     services().presence.remove(client.sessionId);
     if (client.auth) {
@@ -340,6 +384,12 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     const sit = this.pendingSit.get(sessionId);
     if (sit && sit.seat.x === m.x && sit.seat.y === m.y) {
       this.sitDown(sessionId, sit.furniId);
+      return true;
+    }
+    const use = this.pendingUse.get(sessionId);
+    if (use && use.at.x === m.x && use.at.y === m.y) {
+      this.pendingUse.delete(sessionId);
+      this.useFurni(sessionId, use.furniId);
       return true;
     }
     const door = this.layout.doors.find((d) => d.x === m.x && d.y === m.y);
@@ -365,6 +415,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     if (!this.moveLimiter.tryTake(client.sessionId))
       return this.sendError(client, ErrorCode.RateLimit);
     this.pendingSit.delete(client.sessionId);
+    this.pendingUse.delete(client.sessionId);
     const res = this.movement.request(client.sessionId, player, msg);
     if (!res.ok) this.sendError(client, ErrorCode.InvalidMove);
   }
@@ -376,7 +427,11 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     const player = this.state.players.get(client.sessionId);
     const f = this.state.furni.get(furniId);
     const def = f && services().furniDefs.get(f.defId);
-    if (!player || !f || !def?.canSit) return;
+    if (!player || !f || !def) return;
+    if (def.interaction === 'toggle' || def.interaction === 'coffee') {
+      return this.handleUse(client, player, f, def);
+    }
+    if (!def.canSit) return;
     if (!this.moveLimiter.tryTake(client.sessionId))
       return this.sendError(client, ErrorCode.RateLimit);
     const from =
@@ -401,6 +456,73 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       this.pendingSit.delete(client.sessionId);
       this.movement.remove(client.sessionId);
       this.sendError(client, ErrorCode.InvalidMove, 'Não dá para chegar nesse lugar.');
+    }
+  }
+
+  /** O móvel é um mural desta sala? */
+  private boardFurni(furniId: string): boolean {
+    const f = this.state.furni.get(furniId);
+    return Boolean(f && services().furniDefs.get(f.defId)?.interaction === 'board');
+  }
+
+  // ---------- Usar (luz, TV, café…) ----------
+
+  /** Do lado do móvel: usa já. Longe: anda até o tile livre encostado mais perto e usa ao chegar. */
+  private handleUse(client: OfficeClient, player: Player, f: Furni, def: FurniManifestEntry): void {
+    if (!this.useLimiter.tryTake(client.sessionId)) {
+      return this.sendError(client, ErrorCode.RateLimit);
+    }
+    this.pendingSit.delete(client.sessionId);
+    const fp = footprint(def, f.x, f.y, f.rot);
+    const walking = player.nextX !== player.x || player.nextY !== player.y;
+    if (!walking && touches(fp, player)) return this.useFurni(client.sessionId, f.id);
+
+    const from = walking ? { x: player.nextX, y: player.nextY } : player;
+    const grid = this.gridFor(client.sessionId);
+    const candidates: TilePoint[] = [];
+    for (let y = fp.minY - 1; y <= fp.maxY + 1; y++) {
+      for (let x = fp.minX - 1; x <= fp.maxX + 1; x++) {
+        const t = { x, y };
+        const isDoor = this.layout.doors.some((d) => d.x === x && d.y === y);
+        if (touches(fp, t) && !isDoor && grid.isWalkable(x, y, true)) candidates.push(t);
+      }
+    }
+    candidates.sort(
+      (a, b) =>
+        Math.max(Math.abs(a.x - from.x), Math.abs(a.y - from.y)) -
+        Math.max(Math.abs(b.x - from.x), Math.abs(b.y - from.y)),
+    );
+    for (const at of candidates) {
+      const res = this.movement.request(client.sessionId, player, at);
+      if (res.ok && res.dest.x === at.x && res.dest.y === at.y) {
+        this.pendingUse.set(client.sessionId, { furniId: f.id, at });
+        return;
+      }
+    }
+    this.movement.remove(client.sessionId);
+    this.sendError(client, ErrorCode.InvalidMove, 'Não dá para chegar perto desse móvel.');
+  }
+
+  private useFurni(sessionId: string, furniId: string): void {
+    const player = this.state.players.get(sessionId);
+    const f = this.state.furni.get(furniId);
+    const def = f && services().furniDefs.get(f.defId);
+    if (!player || !f || !def) return;
+    player.dir = faceTowards(player, footprint(def, f.x, f.y, f.rot));
+    if (def.interaction === 'toggle' && def.states.length > 1) {
+      // Próximo estado da lista (0 → 1 → … → 0).
+      const i = def.states.indexOf(f.state);
+      f.state = def.states[(i + 1) % def.states.length]!;
+      services().furni.setState(this.layout.roomId, f.id, f.state);
+    } else if (def.interaction === 'coffee') {
+      this.broadcast(ServerMessage.Emote, { sessionId, emote: 'coffee' } satisfies EmoteMessage);
+      // A máquina "trabalha" por um instante, se tiver estado para isso.
+      if (def.states.includes(1)) {
+        f.state = 1;
+        this.clock.setTimeout(() => {
+          if (this.state.furni.get(furniId) === f) f.state = 0;
+        }, 2500);
+      }
     }
   }
 
@@ -635,9 +757,41 @@ function toFurni(f: PlacedFurni): Furni {
     y: f.y,
     z: f.z,
     rot: f.rot,
+    state: f.state ?? 0,
   });
 }
 
 function toPlaced(f: Furni): PlacedFurni {
-  return { id: f.id, defId: f.defId, x: f.x, y: f.y, z: f.z, rot: f.rot };
+  return { id: f.id, defId: f.defId, x: f.x, y: f.y, z: f.z, rot: f.rot, state: f.state };
+}
+
+/** Tile está encostado no footprint (inclusive na diagonal)? */
+function touches(fp: { minX: number; minY: number; maxX: number; maxY: number }, t: TilePoint) {
+  return (
+    t.x >= fp.minX - 1 &&
+    t.x <= fp.maxX + 1 &&
+    t.y >= fp.minY - 1 &&
+    t.y <= fp.maxY + 1 &&
+    !(t.x >= fp.minX && t.x <= fp.maxX && t.y >= fp.minY && t.y <= fp.maxY)
+  );
+}
+
+/** Direção (0–7) de `from` olhando para o centro do footprint. */
+function faceTowards(
+  from: TilePoint,
+  fp: { minX: number; minY: number; maxX: number; maxY: number },
+) {
+  const dx = Math.sign((fp.minX + fp.maxX) / 2 - from.x);
+  const dy = Math.sign((fp.minY + fp.maxY) / 2 - from.y);
+  const table: Record<string, number> = {
+    '0,-1': 0,
+    '1,-1': 1,
+    '1,0': 2,
+    '1,1': 3,
+    '0,1': 4,
+    '-1,1': 5,
+    '-1,0': 6,
+    '-1,-1': 7,
+  };
+  return table[`${dx},${dy}`] ?? 2;
 }

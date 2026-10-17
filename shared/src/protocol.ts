@@ -3,6 +3,7 @@ import { genderSchema } from './manifests.js';
 import type { RoomDoor } from './rooms.js';
 import type { TilePoint } from './iso.js';
 import type { ReactionSummary, ReplyPreview } from './reactions.js';
+import type { Ambient } from './ambience.js';
 
 /** Nome da sala Colyseus. Cada sala física é uma instância filtrada por `officeRoomId`. */
 export const OFFICE_ROOM = 'office';
@@ -36,6 +37,12 @@ export const ClientMessage = {
   ChatDelete: 'chat.delete',
   /** `{ id, emoji }`: põe ou tira uma reação. */
   ChatReact: 'chat.react',
+  /** Requisição `{ furniId }`: recados do mural (`BoardNote[]`). */
+  BoardNotes: 'board.notes',
+  /** `{ furniId, text, color }`: prega um recado. */
+  BoardAdd: 'board.add',
+  /** `{ noteId }`: tira um recado (quem escreveu ou admin). */
+  BoardRemove: 'board.remove',
 } as const;
 
 /** Mensagens servidor → cliente. */
@@ -55,6 +62,8 @@ export const ServerMessage = {
   Kicked: 'moderation.kicked',
   /** A sala foi editada: o cliente pede o layout de novo e remonta a cena. */
   LayoutChanged: 'room.layoutChanged',
+  /** `{ furniId }`: os recados de um mural mudaram. */
+  BoardChanged: 'board.changed',
 } as const;
 
 export const ErrorCode = {
@@ -190,6 +199,8 @@ export interface RoomLayoutMessage {
   doors: RoomDoor[];
   floorColor: string;
   wallColor: string;
+  /** Som ambiente da sala. */
+  ambient: Ambient;
 }
 
 export const CHAT_MAX_LENGTH = 200;

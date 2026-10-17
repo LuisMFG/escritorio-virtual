@@ -75,6 +75,8 @@ export const rooms = sqliteTable('rooms', {
   decorLocked: integer('decor_locked', { mode: 'boolean' }).notNull().default(false),
   /** Ordem nas listas (salas novas vão para o fim). */
   sort: integer('sort').notNull().default(0),
+  /** Som ambiente: 'none' | 'office' | 'cafe' | 'rain'. */
+  ambient: text('ambient').notNull().default('none'),
 });
 
 /** Configurações editáveis pelo painel Admin (ex.: código de convite). */
@@ -114,6 +116,8 @@ export const roomFurni = sqliteTable(
     y: integer('y').notNull(),
     z: real('z').notNull(),
     rot: integer('rot').notNull(),
+    /** Estado (luz acesa, TV ligada…); 0 = padrão. */
+    state: integer('state').notNull().default(0),
     placedBy: text('placed_by').references(() => users.id),
     updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
   },
@@ -210,6 +214,25 @@ export const dmReactions = sqliteTable(
     emoji: text('emoji').notNull(),
   },
   (t) => [primaryKey({ columns: [t.messageId, t.userId, t.emoji] })],
+);
+
+/** Recados (post-its) dos murais. Somem junto com o móvel. */
+export const boardNotes = sqliteTable(
+  'board_notes',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    furniId: text('furni_id')
+      .notNull()
+      .references(() => roomFurni.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id),
+    text: text('text').notNull(),
+    /** Cor do papel: 'yellow' | 'pink' | 'blue' | 'green'. */
+    color: text('color').notNull().default('yellow'),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [index('board_notes_furni_idx').on(t.furniId)],
 );
 
 export type UserRow = typeof users.$inferSelect;

@@ -3,6 +3,7 @@ import { footprint, type FurniDef, type PlacedFurni } from './furni.js';
 import { parseHeightmap, RoomGrid, tileHeight, type Heightmap } from './grid.js';
 import type { TilePoint } from './iso.js';
 import { findPath } from './pathfinding.js';
+import { ambientSchema } from './ambience.js';
 
 /**
  * Editor de salas (Fase 13). Regras de forma:
@@ -34,6 +35,7 @@ export const roomEditSchema = z.object({
   spawn: z.object({ x: z.number().int().min(0), y: z.number().int().min(0) }),
   floorColor: hexColor,
   wallColor: hexColor,
+  ambient: ambientSchema.default('none'),
   doors: z
     .array(
       z.object({

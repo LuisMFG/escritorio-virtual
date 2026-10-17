@@ -29,8 +29,8 @@ function newRoom(name = 'Sala do TI'): string {
 function edit(id: string): RoomEdit {
   const res = getRoom(asAdmin(), id, deps);
   if (!res.ok) throw new Error(res.body.message);
-  const { name, heightmap, spawn, floorColor, wallColor, doors } = res.body;
-  return { name, heightmap, spawn, floorColor, wallColor, doors };
+  const { name, heightmap, spawn, floorColor, wallColor, ambient, doors } = res.body;
+  return { name, heightmap, spawn, floorColor, wallColor, ambient, doors };
 }
 
 describe('salas', () => {

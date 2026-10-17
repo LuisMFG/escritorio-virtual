@@ -101,6 +101,9 @@ async function startBot(name: string): Promise<void> {
   room.onMessage('emote.played', () => undefined);
   room.onMessage('room.transfer', () => undefined);
   room.onMessage('chat.deleted', () => undefined);
+  room.onMessage('chat.reactions', () => undefined);
+  room.onMessage('board.changed', () => undefined);
+  room.onMessage('room.layoutChanged', () => undefined);
   room.onMessage('moderation.kicked', (m: { scope: string; message: string }) => {
     console.log(`[bot] ${name}: ${m.message}`);
     if (m.scope === 'office') process.exit(0);
