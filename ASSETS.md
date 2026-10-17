@@ -32,6 +32,7 @@ Desde a Fase 2 as imagens passam pelo proxy do servidor (`/hh/avatar.png`, `/hh/
 - **Ícone do site** (`client/public/favicon.svg`): desenhado para o projeto.
 - **Som de mensagem** (`client/src/ui/sound.ts`): sintetizado na hora com Web Audio, sem arquivo de áudio.
 - **Pets** (`client/src/assets/petArt.ts`): pixel art própria (cachorro, gato, coelho e pintinho, 3 pelagens, em pé/andando/sentado/deitado), desenhada por código a partir de grades 16×12 com contorno automático. O imager da HabboAssets não renderiza pets (só oferece os SWFs), por isso não usamos a arte do Habbo.
+- **Emblemas de conquistas** (`client/src/ui/badges.ts` + CSS): medalhas desenhadas em CSS com emoji. A HabboAssets não tem imagens de emblemas.
 - **Som ambiente** (`client/src/ui/ambient.ts`) e **tabuleiro do jogo da velha** (`FurniView.drawGameBoard`): gerados por código.
 
 ## Arte local e pacotes CC0

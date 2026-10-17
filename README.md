@@ -15,6 +15,7 @@ Escritório virtual isométrico para amigos e colegas (até ~10 pessoas online):
 - **Agenda de reuniões**: botão 📅 Agenda para marcar reunião (sala, horário, duração e convidados), responder Vou/Não vou e cancelar. Lembrete 5 min antes (aviso, notificação e DM) com "Ir para a sala"; durante a reunião a porta da sala mostra "🔴 Em reunião".
 - **Mini-jogos**: jogo da velha na Mesa de Jogos da Copa (duas pessoas sentam e jogam, o resto da sala assiste, com placar) e `/dado` e `/moeda` no chat, sorteados pelo servidor.
 - **Pets**: adote um bichinho no Perfil (cachorro, gato, coelho ou pintinho). Ele segue você entre as salas, passeia quando você para e obedece `/senta`, `/deita` e `/vem` no chat.
+- **Conquistas**: 17 conquistas (conversar, decorar, explorar as salas, jogar, ir às reuniões…) com aviso ao desbloquear. No Perfil você escolhe até 3 emblemas para aparecer no seu cartão.
 - **Dia e noite** pelo horário de Brasília, com as luzes acesas brilhando à noite (`?hora=21` força a hora para testar), e **som ambiente** opcional por sala (🎵: escritório, cafeteria ou chuva, gerado no próprio navegador).
 - **Reações e respostas**: passe o mouse numa mensagem (sala ou privada) para reagir (👍 ❤️ 😂 😮 😢 🎉) ou responder citando; quem é respondido recebe aviso.
 - **Mensagens privadas**: botão **Mensagens** (ou "Mensagem" no cartão/Equipe) para conversar com qualquer pessoa, em qualquer sala ou offline (ela lê quando voltar). Contador de não lidas, "Visto" e notificações do navegador opcionais (🔔 no painel) para DMs e menções com a aba em segundo plano.

@@ -154,6 +154,10 @@ meeting_attendees { meetingId: fk meetings (cascade), userId, response: 'pending
 chat_messages   … + kind: 'text'|'dice'|'coin'|'game'   // Fase 17
 game_scores     { userId, game ('tictactoe'), wins, losses, draws } pk(userId, game)
 pets            { userId pk, name, species: 'dog'|'cat'|'bunny'|'chick', color 0–2, createdAt } // Fase 18
+user_achievements { userId, achievementId, unlockedAt } pk(userId, achievementId)   // Fase 19
+user_stats      { userId, key, value } pk(userId, key)   // contadores das conquistas
+user_visits     { userId, roomId: fk rooms (cascade) } pk(userId, roomId)
+users           … + badges: text (até 3 ids exibidos no cartão)
 dm_reactions    { messageId: fk direct_messages (cascade), userId, emoji } pk(os três)
 
 rooms          { id: text pk ('reception'|'meeting'|'pantry'), name: text,
@@ -684,11 +688,19 @@ Pedido em 17/10/2026, depois da Fase 8: deixar o escritório "muito completo". M
 - Passar o mouse sobre o pet mostra "Nome · pet de Fulano".
 - Testado no navegador com Ana (cachorro Bolota) e o robô Davi com um gato (Frajola) adotado pela API: seguir, comandos, nome e troca de sala.
 
-### Fase 19 — Conquistas
+### Fase 19 — Conquistas ✅ implementada
 - ~15 conquistas (primeira mensagem, primeiro móvel colocado, visitou todas as salas, 7 dias seguidos, ganhou no jogo da velha, participou de 5 reuniões…), com emblema e aviso ao desbloquear (`achievements`, `user_achievements`).
 - Emblemas aparecem no cartão e no perfil; a pessoa escolhe até 3 para exibir.
 
 **Como testar:** fazer as ações e ver os avisos; os emblemas aparecem no cartão para os outros.
+
+**Notas da implementação:**
+- **17 conquistas** em `shared/src/achievements.ts`: Primeira palavra, Tagarela (100 mensagens), Correio (1ª DM), Expressivo (10 reações), Decorador, Arquiteto de interiores (25 móveis), Explorador (todas as salas), Assíduo (7 dias seguidos), Cafezinho, Recado dado, Artista (quadro branco), Organizador (1ª reunião marcada), Sempre presente (5 reuniões confirmadas que aconteceram), Primeira vitória, Mestre da velha (5 vitórias), Sorte grande (6 no `/dado`) e Melhor amigo (adotar pet).
+- As definições ficam no código compartilhado (não há tabela `achievements`). O banco guarda só o que cada pessoa desbloqueou (`user_achievements`), os contadores (`user_stats`) e as salas visitadas (`user_visits`), na migration `0015`. As de contador desbloqueiam sozinhas ao bater a meta; as outras o servidor dá na hora da ação. Nada é retroativo: a contagem começa nesta fase.
+- "Dias seguidos" usam o dia no fuso do escritório (Brasília); voltar no mesmo dia não conta de novo e pular um dia recomeça do 1. "Reuniões" contam quando o lembrete de 5 minutos dispara, para quem respondeu Vou.
+- **Emblemas (arte própria):** a HabboAssets não tem imagens de emblemas (só o CDN do próprio Habbo, que não é a fonte combinada), então cada emblema é uma medalha em CSS com o emoji sobre a cor da conquista.
+- Aviso: ao desbloquear, o canal global manda `achievement.unlocked` e aparece uma faixa dourada no topo ("Conquista desbloqueada!", com "Ver conquistas"), com som e notificação do sistema. Conquistas ganhas antes do canal global conectar (ex.: o dia seguido na primeira entrada) não mostram a faixa, mas aparecem no perfil.
+- **Perfil → 🏅 Conquistas:** grade com todas (as bloqueadas em cinza, com progresso tipo 37/100) e clique para exibir até 3 emblemas no cartão (`PUT /api/achievements/showcase`). Os emblemas vão para o estado da sala (`Player.badges`) e aparecem no cartão do avatar para todo mundo. Com o perfil aberto, a grade se atualiza quando chega uma conquista nova.
 
 ### Fora deste roadmap (por enquanto)
 Voz/vídeo por proximidade (WebRTC) — fica como possível fase extra no fim, porque é grande e pede servidor TURN para funcionar fora da rede local.
