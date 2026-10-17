@@ -108,7 +108,7 @@ As duas extensões mandam ao escritório, a cada minuto enquanto você mexe no c
 **VS Code**
 1. Baixe a extensão pelo link no Perfil (ou `client/public/downloads/escritorio-atividade.vsix`).
 2. No VS Code: Extensões → menu “…” → **Instalar do VSIX…** (ou `code --install-extension escritorio-atividade.vsix`).
-3. Paleta de comandos → **Escritório: conectar** → endereço do escritório e o token. O token fica no armazenamento seguro do VS Code.
+3. No Perfil, gere o token e clique em **Conectar no VS Code**: o VS Code abre, pede para confirmar o link e conecta sozinho. Se o navegador não abrir o VS Code, clique em **Escritório** na barra de status (ou paleta → **Escritório: conectar**), confirme o endereço e cole o token. O token fica no armazenamento seguro do VS Code.
 4. O item “Escritório” na barra de status mostra se está conectado; clique para pausar/retomar.
 
 **Visual Studio 2022 (17.14+) / 2026**

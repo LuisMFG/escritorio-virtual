@@ -96,6 +96,41 @@ export function activate(context: vscode.ExtensionContext): void {
   const timer = setInterval(() => tracker.tick(), TICK_MS);
   context.subscriptions.push({ dispose: () => clearInterval(timer) });
 
+  /** Guarda endereço e token e começa a mandar sinal. */
+  const saveConnection = async (url: string, value: string) => {
+    await vscode.workspace
+      .getConfiguration('escritorio')
+      .update('serverUrl', url.trim().replace(/\/+$/, ''), vscode.ConfigurationTarget.Global);
+    token = value.trim();
+    await context.secrets.store(TOKEN_KEY, token);
+    paused = false;
+    await context.globalState.update('escritorio.paused', false);
+    setStatus('ok');
+    touch();
+    void vscode.window.showInformationMessage(
+      'Escritório Virtual conectado. Quando você programar, aparece no seu cartão.',
+    );
+  };
+
+  // Link do Perfil do escritório: vscode://escritorio-virtual.escritorio-virtual-atividade/connect?server=…&token=…
+  context.subscriptions.push(
+    vscode.window.registerUriHandler({
+      handleUri: async (uri) => {
+        if (uri.path !== '/connect') return;
+        const params = new URLSearchParams(uri.query);
+        const server = params.get('server') ?? '';
+        const value = params.get('token') ?? '';
+        if (!/^https?:\/\/\S+$/.test(server) || !value.startsWith('esc_')) {
+          void vscode.window.showErrorMessage(
+            'Link do Escritório Virtual inválido. Gere outro no Perfil.',
+          );
+          return;
+        }
+        await saveConnection(server, value);
+      },
+    }),
+  );
+
   context.subscriptions.push(
     vscode.commands.registerCommand('escritorio.connect', async () => {
       const url = await vscode.window.showInputBox({
@@ -115,16 +150,7 @@ export function activate(context: vscode.ExtensionContext): void {
         validateInput: (v) => (v.trim().startsWith('esc_') ? undefined : 'O token começa com esc_'),
       });
       if (!value) return;
-      await vscode.workspace
-        .getConfiguration('escritorio')
-        .update('serverUrl', url.trim(), vscode.ConfigurationTarget.Global);
-      token = value.trim();
-      await context.secrets.store(TOKEN_KEY, token);
-      paused = false;
-      await context.globalState.update('escritorio.paused', false);
-      setStatus('ok');
-      touch();
-      void vscode.window.showInformationMessage('Escritório Virtual conectado.');
+      await saveConnection(url, value);
     }),
     vscode.commands.registerCommand('escritorio.disconnect', async () => {
       tracker.stop();

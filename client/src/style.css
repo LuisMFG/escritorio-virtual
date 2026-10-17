@@ -3645,8 +3645,15 @@ button.reply-quote:hover {
   font-size: 12px;
 }
 
-.token-fresh strong {
+.token-fresh strong,
+.token-hint {
   grid-column: 1 / -1;
+}
+
+.token-vscode {
+  grid-column: 1 / -1;
+  justify-self: start;
+  text-decoration: none;
 }
 
 .token-value {

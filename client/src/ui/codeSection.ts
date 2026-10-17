@@ -118,12 +118,29 @@ export function mountCodeSection(box: HTMLElement, token: string): void {
         }
         copy.textContent = 'Copiado ✓';
       });
+      // Um clique: abre o VS Code e a extensão se conecta sozinha (precisa da extensão instalada).
+      const vscodeLink = el('a', {
+        className: 'btn-primary btn-small token-vscode',
+        textContent: 'Conectar no VS Code',
+        href: `vscode://escritorio-virtual.escritorio-virtual-atividade/connect?${new URLSearchParams(
+          {
+            server: location.origin,
+            token: fresh.token,
+          },
+        )}`,
+      });
       shown.append(
         el('strong', {
           textContent: `Token “${fresh.name}” criado. Copie agora: ele não aparece de novo.`,
         }),
         input,
         copy,
+        vscodeLink,
+        el('small', {
+          className: 'muted token-hint',
+          textContent:
+            'Com a extensão instalada, “Conectar no VS Code” abre o VS Code e conecta sozinho (confirme em “Abrir”). No Visual Studio, use Extensões → Escritório: conectar e cole o token.',
+        }),
       );
       nodes.push(shown);
     }

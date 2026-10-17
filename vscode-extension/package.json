@@ -2,7 +2,7 @@
   "name": "escritorio-virtual-atividade",
   "displayName": "Escritório Virtual — Atividade",
   "description": "Mostra no Escritório Virtual quando você está programando (linguagem e projeto, conforme a privacidade escolhida no seu Perfil).",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "escritorio-virtual",
   "private": true,
   "license": "UNLICENSED",
@@ -14,7 +14,8 @@
   ],
   "main": "./dist/extension.js",
   "activationEvents": [
-    "onStartupFinished"
+    "onStartupFinished",
+    "onUri"
   ],
   "contributes": {
     "commands": [
