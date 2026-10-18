@@ -839,10 +839,18 @@ Escolhido em 17/10/2026, depois do roadmap v3. Ordem pensada assim: primeiro pro
 - Testes: `FocusService` (fases, sem pausa, parar), sala (os outros veem, a fase chega à pessoa, entra em outra sala ainda em foco, parar) e ponta a ponta (`e2e/tests/foco.spec.ts`: começar pelo botão, contagem no botão e na aba, tag para o outro, menção segurada, resumo ao parar).
 - No navegador: foco de 1 minuto sem pausa terminou sozinho ("🍅 Foco concluído!", botão e título voltaram); foco 25+5 com o 🍅 sobre o avatar e a tag na lista. Ajuste visto no teste: com a janela estreita a contagem sumia do botão; agora fica.
 
-### Fase 28 — Minimapa do escritório
+### Fase 28 — Minimapa do escritório ✅ implementada
 - Botão "🗺️ Mapa": todas as salas como cartões ligados pelas portas, com quem está em cada uma (e quem está em reunião). Clicar na sala vai até ela; clicar numa pessoa vai até a sala dela e anda até perto.
 
 **Como testar:** abrir o mapa, ver as pessoas por sala ao vivo, ir até alguém de outra sala.
+
+**Notas da implementação:**
+- `GET /api/map`: cada sala e para onde vão as portas dela, com o lado (porta na parede esquerda ou no fundo).
+- Posição das salas (`layoutMap` em `shared/map.ts`, testado): parte da Recepção e anda pelas portas. Porta na parede esquerda põe a vizinha à esquerda; porta no fundo põe acima. Lugar ocupado vai para o livre mais perto, e salas sem porta ficam numa linha embaixo. As portas viram linhas tracejadas entre os cartões, e o mapa encolhe para caber na janela.
+- Cartões ao vivo (com a presença do canal global): nome da sala ("você está aqui" na atual), "🔴 Em reunião: …" e as pessoas com a bolinha de status (passar o mouse mostra a atividade).
+- Clicar na sala troca de sala. Clicar numa pessoa: na mesma sala, anda até ela; em outra, troca de sala e, ao chegar, anda até perto (o servidor escolhe o tile livre mais próximo).
+- Testes: `layoutMap` (vizinhas à esquerda/acima, sala solta, colisão) e ponta a ponta (`e2e/tests/mapa.spec.ts`: Copa acima da Recepção com o Beto, clicar nele e a Ana termina na Copa do lado dele).
+- No navegador: mapa com as 4 salas do banco de desenvolvimento (inclusive a Sala do TI), "você está aqui" e "ir até" outra pessoa na mesma sala. Ajuste visto no teste: com 3 colunas o mapa passava da largura da janela e cortava a Copa; agora encolhe para caber.
 
 ### Fase 29 — Anexos e busca no chat
 - Enviar imagens e arquivos no chat da sala e nas DMs (arrastar, colar print ou botão 📎), até 10 MB, guardados em `data/uploads/` e servidos só para quem está logado. Imagens com miniatura e visualização; links com prévia (título do site). Busca no histórico da sala e das conversas.
