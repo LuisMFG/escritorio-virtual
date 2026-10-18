@@ -21,6 +21,10 @@ import {
   type ApiTokenCreated,
   type CodeShare,
   type SpotifyStatus,
+  type JiraBoard,
+  type JiraConnect,
+  type JiraShare,
+  type JiraStatus,
   type Announcement,
   type Kudos,
   type MapRoom,
@@ -103,6 +107,8 @@ export const adminApi = {
   audit: (token: string) => request<AuditEntry[]>('GET', '/api/admin/audit', { token }),
   setInvite: (token: string, inviteCode: string) =>
     request<Ok>('PUT', '/api/admin/invite', { token, body: { inviteCode } }),
+  setJiraSite: (token: string, site: string) =>
+    request<{ site: string | null }>('PUT', '/api/admin/jira', { token, body: { site } }),
   setRoom: (token: string, roomId: string, decorLocked: boolean) =>
     request<Ok>('PUT', `/api/admin/rooms/${encodeURIComponent(roomId)}`, {
       token,
@@ -212,6 +218,16 @@ export const announcementApi = {
     request<Ok>('PUT', `/api/announcements/${id}/read`, { token, body: {} }),
   remove: (token: string, id: number) =>
     request<Ok>('DELETE', `/api/announcements/${id}`, { token }),
+};
+
+export const jiraApi = {
+  status: (token: string) => request<JiraStatus>('GET', '/api/jira/status', { token }),
+  connect: (token: string, body: JiraConnect) =>
+    request<JiraStatus>('POST', '/api/jira/connect', { token, body }),
+  setShare: (token: string, share: JiraShare) =>
+    request<JiraStatus>('PUT', '/api/jira/settings', { token, body: { share } }),
+  disconnect: (token: string) => request<JiraStatus>('DELETE', '/api/jira', { token }),
+  board: (token: string) => request<JiraBoard>('GET', '/api/jira/board', { token }),
 };
 
 export const spotifyApi = {

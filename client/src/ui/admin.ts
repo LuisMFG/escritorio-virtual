@@ -449,6 +449,34 @@ export function openAdmin(opts: AdminOptions): void {
       rooms.append(li);
     }
 
+    // Jira Cloud: endereço do site (cada pessoa conecta a própria conta no Perfil).
+    const jiraForm = document.createElement('form');
+    jiraForm.className = 'invite-form';
+    const jiraInput = Object.assign(document.createElement('input'), {
+      value: d.jiraSite?.replace(/^https:\/\//, '') ?? '',
+      maxLength: 200,
+      spellcheck: false,
+      placeholder: 'suaempresa.atlassian.net',
+      disabled: d.jiraSiteLocked,
+    });
+    jiraInput.setAttribute('aria-label', 'Endereço do Jira');
+    const jiraSave = Object.assign(document.createElement('button'), {
+      type: 'submit',
+      className: 'btn-primary',
+      textContent: 'Salvar Jira',
+      disabled: d.jiraSiteLocked,
+    });
+    jiraForm.append(jiraInput, jiraSave);
+    jiraForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      void act(
+        () => adminApi.setJiraSite(opts.token, jiraInput.value),
+        jiraInput.value.trim()
+          ? 'Endereço do Jira salvo. Cada pessoa conecta a própria conta no Perfil.'
+          : 'Integração com o Jira desligada.',
+      );
+    });
+
     return [
       el('h3', 'admin-section', 'Código de convite'),
       el(
@@ -459,6 +487,15 @@ export function openAdmin(opts: AdminOptions): void {
       inviteForm,
       el('h3', 'admin-section', 'Decoração por sala'),
       rooms,
+      el('h3', 'admin-section', 'Jira Cloud'),
+      el(
+        'p',
+        'muted',
+        d.jiraSiteLocked
+          ? 'Definido no servidor (JIRA_SITE). Para mudar, altere o .env.'
+          : 'Endereço do Jira da empresa. Vazio desliga. Cada pessoa conecta a própria conta no Perfil (e-mail + token de API).',
+      ),
+      jiraForm,
     ];
   }
 

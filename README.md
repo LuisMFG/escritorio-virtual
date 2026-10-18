@@ -23,6 +23,7 @@ Escritório virtual isométrico para amigos e colegas (até ~10 pessoas online):
 - **Elogios**: botão 🙌 Elogiar no cartão do avatar e na Equipe (🙌 Ajudou muito, 💡 Boa ideia, 🚀 Entregou, 🤝 Parceria). A pessoa é avisada na hora, e o elogio vai para o **Quadro de Elogios** da Recepção. Elogiar e ser elogiado destrava conquistas.
 - **Modo foco (Pomodoro)**: botão 🍅 Foco (25+5, 50+10, 90+15 ou o tempo que quiser). Os outros veem 🍅 com os minutos no seu avatar, no cartão e na lista de pessoas. Menções, mensagens e elogios ficam sem som e chegam num resumo no fim. A contagem aparece no botão e no título da aba.
 - **Mapa do escritório**: botão 🗺️ Mapa com todas as salas ligadas pelas portas, quem está em cada uma e as reuniões em andamento. Clicar numa sala leva até ela; clicar numa pessoa leva até a sala dela e anda até perto.
+- **Jira**: cada pessoa conecta a conta do Jira Cloud no Perfil (e-mail + token de API) e o cartão mostra a demanda em andamento (“📋 PROJ-123 · título”, com link; dá para mostrar só o código ou esconder). O **Quadro de Demandas** (na Sala de reunião, ou onde um admin colocar pelo Decorar) junta as demandas de quem conectou em A fazer / Em andamento / Concluídas, com filtro por pessoa. Veja [Jira](#jira).
 - **Anexos e busca**: 📎 no chat da sala e nas Mensagens (ou cole um print / arraste o arquivo), até 10 MB: imagens, PDF, Office, texto/CSV e zip. Imagens aparecem em miniatura (clique amplia); links viram clicáveis com prévia do site. 🔎 busca no chat das salas e nas suas conversas.
 - **Dia e noite** pelo horário de Brasília, com as luzes acesas brilhando à noite (`?hora=21` força a hora para testar), e **som ambiente** opcional por sala (🎵: escritório, cafeteria ou chuva, gerado no próprio navegador).
 - **Reações e respostas**: passe o mouse numa mensagem (sala ou privada) para reagir (👍 ❤️ 😂 😮 😢 🎉) ou responder citando; quem é respondido recebe aviso.
@@ -78,6 +79,9 @@ Opções de URL do cliente: `?offline=1` usa só a arte provisória gerada por c
 | `DATABASE_PATH` | `./data/sqlite.db` | Arquivo SQLite |
 | `ASSET_CACHE_DIR` | `./data/asset-cache` | Cache em disco das imagens da HabboAssets |
 | `UPLOAD_DIR` | `./data/uploads` | Anexos do chat e das mensagens privadas |
+| `JIRA_SITE` | vazio | Endereço do Jira Cloud fixo pelo servidor. Vazio: o admin define em **Admin → Convite e salas** |
+| `SECRET_KEY` | vazio | Chave (32 bytes em base64, `openssl rand -base64 32`) que cifra os tokens do Jira. Vazio: gerada em `SECRET_KEY_FILE` |
+| `SECRET_KEY_FILE` | `./data/secret.key` | Onde fica a chave gerada quando `SECRET_KEY` não é definida |
 
 ### Scripts
 
@@ -147,6 +151,14 @@ Fora do Windows, `dotnet build` só compila (confere o código) e não gera o `.
 5. Reinicie o servidor. No Perfil, cada pessoa clica em **Conectar Spotify**.
 
 O servidor consulta a música de quem está online a cada 20 segundos e guarda só o necessário para isso (o refresh token, com o escopo `user-read-currently-playing`).
+
+## Jira
+
+1. Um admin abre **Admin → Convite e salas → Jira Cloud** e informa o endereço (`suaempresa.atlassian.net`). Ou defina `JIRA_SITE` no `.env`.
+2. Cada pessoa cria um token de API em <https://id.atlassian.com/manage-profile/security/api-tokens> e, no **Perfil → Jira**, informa o e-mail da conta Atlassian e o token. O servidor confere no Jira antes de guardar.
+3. Pronto: em até 1 minuto a demanda **em andamento** (categoria de status “Em andamento” do Jira) aparece no cartão, e o **Quadro de Demandas** mostra as demandas abertas e as concluídas nos últimos 7 dias de quem conectou.
+
+Como funciona: o servidor consulta o Jira a cada minuto, uma pessoa por vez, com o token de cada um (cada pessoa só aparece com o que ela mesma pode ver no Jira). O token fica cifrado no banco (AES-256-GCM) com a chave de `SECRET_KEY` ou `data/secret.key`; sem a chave, os tokens não abrem, e as pessoas só precisam conectar de novo. Se o Jira recusar um token (vencido ou revogado), a pessoa vê o aviso no Perfil e deixa de ser consultada até conectar de novo.
 
 ## Assets: HabboAssets e arte própria
 
@@ -229,6 +241,8 @@ O servidor faz uma cópia do banco **todo dia às 3h** (horário de Brasília) e
 2. Guarde o banco atual por precaução: `mv data/sqlite.db data/sqlite.db.antes`, e apague `data/sqlite.db-wal` e `data/sqlite.db-shm` se existirem.
 3. Copie o backup: `cp data/backups/escritorio-AAAA-MM-DD-HHMM.db data/sqlite.db`.
 4. Suba de novo (`docker compose start app`). As migrations novas, se houver, são aplicadas sozinhas.
+
+**Chave dos tokens:** guarde também `data/secret.key` (ou use `SECRET_KEY`). Sem ela, o banco restaurado funciona, mas cada pessoa precisa conectar o Jira de novo.
 
 **Anexos:** o backup diário copia só o banco. Os arquivos anexados ficam em `data/uploads/`; para ter tudo, copie essa pasta junto (o `rsync` abaixo com `data/` inteiro em vez de `data/backups/` resolve).
 

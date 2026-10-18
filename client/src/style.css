@@ -4580,3 +4580,100 @@ button.reply-quote:hover {
     width: 32px;
   }
 }
+
+/* ---------- Fase 30: Jira ---------- */
+
+.jira-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.jira-form input {
+  flex: 1 1 180px;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #3a3f4d;
+  background: #15171d;
+  color: var(--text);
+  font: inherit;
+}
+
+.jira-info {
+  margin-left: auto;
+  font-size: 12px;
+}
+
+.jira-columns {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.jira-col {
+  min-width: 0;
+  padding: 8px;
+  border-radius: 10px;
+  background: #1a1d25;
+  border-top: 3px solid #94a3b8;
+}
+
+.jira-col-doing {
+  border-top-color: #3b82f6;
+}
+
+.jira-col-done {
+  border-top-color: #22c55e;
+}
+
+.jira-col h3 {
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+
+.jira-col ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 55vh;
+  overflow-y: auto;
+}
+
+.jira-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 9px;
+  border-radius: 8px;
+  background: #262a35;
+  font-size: 13px;
+}
+
+.jira-key {
+  color: #7aa7ff;
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.jira-title {
+  overflow-wrap: anywhere;
+}
+
+.jira-empty {
+  text-align: center;
+}
+
+@media (max-width: 600px) {
+  .jira-columns {
+    grid-template-columns: 1fr;
+  }
+}
+
+.profile-jira .pet-actions {
+  align-items: flex-end;
+}

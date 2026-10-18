@@ -104,13 +104,16 @@ export class AvatarCard {
         }),
       );
     }
-    for (const line of info.activity.split('\n').filter(Boolean)) {
+    const urls = info.activityUrl.split('\n');
+    for (const [i, line] of info.activity.split('\n').entries()) {
+      if (!line) continue;
       const p = Object.assign(document.createElement('p'), { className: 'card-activity' });
-      // A linha da música vira link para ela no Spotify.
-      if (line.startsWith('🎵') && /^https:\/\/open\.spotify\.com\//.test(info.activityUrl)) {
+      // A música vira link para o Spotify; a demanda, para o Jira.
+      const url = urls[i] ?? '';
+      if (/^https?:\/\//.test(url) && (line.startsWith('🎵') || line.startsWith('📋'))) {
         p.append(
           Object.assign(document.createElement('a'), {
-            href: info.activityUrl,
+            href: url,
             target: '_blank',
             rel: 'noopener noreferrer',
             textContent: line,

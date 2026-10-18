@@ -4,6 +4,7 @@ import { setAvatarPreview } from './login.js';
 import { mountPetSection } from './petSection.js';
 import { mountCodeSection } from './codeSection.js';
 import { mountSpotifySection } from './spotifySection.js';
+import { mountJiraSection } from './jiraSection.js';
 import { mountAchievements } from './achievementsSection.js';
 
 export interface ProfileHandlers {
@@ -67,6 +68,7 @@ export function openProfile(session: SessionResponse, on: ProfileHandlers): void
         <section class="profile-pet" aria-label="Meu pet"></section>
         <section class="profile-code" aria-label="Editores de código"></section>
         <section class="profile-spotify" aria-label="Spotify"></section>
+        <section class="profile-jira" aria-label="Jira"></section>
         <details class="profile-password">
           <summary>Trocar senha</summary>
           <form novalidate>
@@ -168,6 +170,7 @@ export function openProfile(session: SessionResponse, on: ProfileHandlers): void
   mountPetSection($<HTMLElement>('.profile-pet'), session.token);
   mountCodeSection($<HTMLElement>('.profile-code'), session.token);
   mountSpotifySection($<HTMLElement>('.profile-spotify'), session.token);
+  mountJiraSection($<HTMLElement>('.profile-jira'), session.token);
   const achievementsBox = $<HTMLElement>('.profile-achievements');
   void mountAchievements(achievementsBox, session.token).then(() => {
     if (on.focusAchievements) achievementsBox.scrollIntoView({ block: 'start' });

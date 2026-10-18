@@ -54,6 +54,8 @@ export interface SceneActions extends DecorActions {
   openGame(furniId: string): void;
   /** Clique no Quadro de Elogios. */
   openKudos(): void;
+  /** Clique no Quadro de Demandas (Jira). */
+  openJira(): void;
   /** Clique num avatar (abre o cartão). `at` = posição na tela. */
   avatarClick(sessionId: string, at: { x: number; y: number }): void;
 }
@@ -493,6 +495,7 @@ export class RoomScene implements DecorHost {
       }
       if (usable.def.interaction === 'tictactoe') return this.actions.openGame(usable.placed.id);
       if (usable.def.interaction === 'kudos') return this.actions.openKudos();
+      if (usable.def.interaction === 'jira') return this.actions.openJira();
       this.flashTarget({ x: usable.placed.x, y: usable.placed.y }, 0xffd27a);
       return this.actions.interact(usable.placed.id);
     }

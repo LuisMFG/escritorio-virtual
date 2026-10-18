@@ -33,7 +33,7 @@ import { PlaceholderFactory } from './assets/PlaceholderFactory.js';
 import { DEBUG, HOUR_OVERRIDE, OFFLINE_ASSETS } from './config.js';
 import type { AvatarSnapshot } from './entities/AvatarView.js';
 import { isSessionError, OfficeConnection, type OfficeRoomClient } from './net/OfficeConnection.js';
-import { adminApi, announcementApi, api, ApiRequestError } from './net/api.js';
+import { adminApi, announcementApi, api, ApiRequestError, jiraApi } from './net/api.js';
 import { forgetToken, loadSession, rememberSession, saveSession } from './net/storage.js';
 import { RoomScene, type SceneDeps } from './scene/RoomScene.js';
 import { AvatarCard } from './ui/avatarCard.js';
@@ -51,6 +51,7 @@ import { openKudosForm, openKudosWall } from './ui/kudos.js';
 import { FocusController } from './ui/focus.js';
 import { openMinimap } from './ui/minimap.js';
 import { openSearch, setUploadToken } from './ui/attachments.js';
+import { openJiraBoard, renderJiraThumb } from './ui/jiraBoard.js';
 import { openTeam } from './ui/team.js';
 import { openAdmin } from './ui/admin.js';
 import { openRoomEditor } from './ui/roomEditor.js';
@@ -328,6 +329,16 @@ async function start(): Promise<void> {
     wbThumbs.set(furniId, canvas);
     scene?.setWhiteboardThumb(furniId, canvas);
   };
+  // Quadros de Demandas da sala: mini-kanban no papel, atualizado a cada minuto.
+  const jiraFurni = new Set<string>();
+  let jiraCanvas: HTMLCanvasElement | undefined;
+  const refreshJiraThumbs = async () => {
+    if (!session || jiraFurni.size === 0) return;
+    const board = await jiraApi.board(session.token).catch(() => null);
+    jiraCanvas = renderJiraThumb(board, jiraCanvas);
+    for (const id of jiraFurni) scene?.setWhiteboardThumb(id, jiraCanvas);
+  };
+  setInterval(() => void refreshJiraThumbs(), 60_000);
   /** Carrega os traços de um quadro da sala (uma vez por montagem). */
   const loadWhiteboard = async (furniId: string) => {
     if (!connection) return;
@@ -589,6 +600,14 @@ async function start(): Promise<void> {
           ttt.update((room.state.games.get(furniId)?.toJSON() as TttView | undefined) ?? null);
         },
         openKudos: () => showKudosWall(),
+        openJira: () => {
+          if (!session) return;
+          openJiraBoard({
+            token: session.token,
+            myUserId: session.userId,
+            openProfile: () => showProfile(),
+          });
+        },
         openBoard: (furniId) => {
           const f = room.state.furni.get(furniId);
           const def = f && deps.furniDefs.get(f.defId);
@@ -727,15 +746,27 @@ async function start(): Promise<void> {
       }),
     );
     wbStrokes.clear();
+    jiraFurni.clear();
     whiteboard?.close();
     keep(
       cb.onAdd('furni', (f, id) => {
         s.setFurni(id, placed(f));
-        if (deps.furniDefs.get(f.defId)?.interaction === 'whiteboard') void loadWhiteboard(id);
+        const interaction = deps.furniDefs.get(f.defId)?.interaction;
+        if (interaction === 'whiteboard') void loadWhiteboard(id);
+        if (interaction === 'jira') {
+          jiraFurni.add(id);
+          if (jiraCanvas) s.setWhiteboardThumb(id, jiraCanvas);
+          else void refreshJiraThumbs();
+        }
         keep(cb.onChange(f, () => s.setFurni(id, placed(f))));
       }),
     );
-    keep(cb.onRemove('furni', (_f, id) => s.removeFurni(id)));
+    keep(
+      cb.onRemove('furni', (_f, id) => {
+        s.removeFurni(id);
+        jiraFurni.delete(id);
+      }),
+    );
     // Jogo da velha: tabuleiro no tampo da mesa e painel aberto, ao vivo.
     ttt?.close();
     const syncGame = (id: string, g: TttView | null) => {

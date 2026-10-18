@@ -868,11 +868,20 @@ Escolhido em 17/10/2026, depois do roadmap v3. Ordem pensada assim: primeiro pro
 - Testes: anexos (tipos, conteúdo falso, tamanho, nome com caminho, quem pode baixar, limpeza), busca (salas + só as próprias DMs, nome do anexo, curingas), prévia (IPs internos, Open Graph, redirecionamento, cache, esquemas recusados) e ponta a ponta (`e2e/tests/anexos.spec.ts`: imagem na sala vista pelo outro e ampliada, `.exe` recusado, PDF na DM, busca acha as duas e pisca a mensagem).
 - No navegador: print anexado com legenda e link, miniatura carregada, prévia do MDN e busca por "sprint". Ajuste visto no teste: a prévia falhava em todos os sites (o Node pede o endereço em formato de lista ao tentar IPv4 e IPv6 juntos); corrigido e testado com MDN e GitHub, e endereços internos continuam recusados.
 
-### Fase 30 — Jira (quadro de demandas)
+### Fase 30 — Jira (quadro de demandas) ✅ implementada
 - Cada pessoa liga a conta do Jira no Perfil. O cartão mostra "📋 PROJ-123 · título" da demanda em andamento atribuída a ela (privacidade como a do editor). Painel na Sala do TI com as demandas da equipe por status, com link para o Jira.
-- Depende de qual Jira vocês usam (decisão abaixo).
 
 **Como testar:** mover uma demanda para "Em andamento" no Jira; em até 1 min aparece no cartão; o painel mostra as demandas da equipe.
+
+**Notas da implementação:**
+- Endereço: o admin informa em **Admin → Convite e salas → Jira Cloud** (`empresa`, `empresa.atlassian.net` ou a URL inteira viram `https://empresa.atlassian.net`; só endereços `*.atlassian.net`) ou `JIRA_SITE` no `.env` (aí o painel só mostra). Vazio desliga.
+- Conectar (Perfil → 📋 Jira): e-mail da conta Atlassian + token de API (link para criar). O servidor confere em `/rest/api/3/myself` antes de guardar; o token fica cifrado (AES-256-GCM) com a chave de `SECRET_KEY` ou de `data/secret.key` (gerada na primeira vez, só o dono lê). Limite de 5 tentativas por minuto.
+- A cada minuto (`JiraPoller`), uma pessoa por vez, com o token dela: `assignee = currentUser() AND (statusCategory != Done OR resolved >= -7d)`, até 30 demandas. A primeira "Em andamento" (categoria de status do Jira) vira a linha do cartão, com link para a demanda; privacidade: não mostrar, só o código ou código e título. Token recusado: aviso no Perfil ("Conecte de novo"), some do cartão e do quadro e para de consultar.
+- Linhas do cartão com link próprio cada uma (`activityUrl` agora tem um link por linha): 💻 editor, 📋 Jira, 🎵 Spotify.
+- Quadro de Demandas: móvel novo (`jira_board`, mesma arte do quadro branco com um mini-kanban desenhado no papel, atualizado a cada minuto), na Sala de reunião das instalações novas e no catálogo do Decorar. No banco de desenvolvimento foi colocado na Sala do TI. Clicar abre as colunas A fazer / Em andamento / Concluídas (7 dias), com quem está com cada demanda, filtro por pessoa e link para o Jira.
+- Testes: cofre de segredos, endereço do Jira, conectar (token certo/errado, guardado cifrado), cartão e privacidade, quadro, token revogado, linhas e links alinhados, admin define/desliga; ponta a ponta (`e2e/tests/jira.spec.ts`) com um Jira de mentira local (`e2e/jira-mock.mjs`): conectar pelo Perfil, outra pessoa vê a demanda no cartão, só o código, quadro na Sala de reunião.
+- No navegador (com o Jira de mentira ligado só para o teste): conectar no Perfil, mini-kanban no quadro da Sala do TI, quadro com as duas demandas, campo do Admin. Depois disso, a conexão de teste foi apagada e o endereço ficou vazio, esperando o endereço real.
+- Falta: testar com o Jira de vocês (o admin informa o endereço e cada pessoa conecta com o próprio token).
 
 ### Decisões para aprovar antes da Fase 22
 1. **Ordem:** a acima (backup → testes → avisos → enquetes → elogios → foco → mapa → anexos → Jira).

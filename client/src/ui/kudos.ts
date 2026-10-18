@@ -15,7 +15,7 @@ const el = <K extends keyof HTMLElementTagNameMap>(
 ): HTMLElementTagNameMap[K] => Object.assign(document.createElement(tag), props);
 
 /** Janela com fundo, fechada por Esc, clique fora ou ✕. */
-function sheet(title: string, cls: string): { body: HTMLElement; close(): void } {
+export function sheet(title: string, cls: string): { body: HTMLElement; close(): void } {
   const backdrop = el('div', { className: 'modal-backdrop' });
   backdrop.innerHTML = `
     <section class="sheet ${cls}" role="dialog" aria-modal="true">
