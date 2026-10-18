@@ -127,7 +127,10 @@ export class DecorPanel {
           });
           const sources =
             item.source === 'habboassets'
-              ? [furniImageUrl(item.id, opts, '/hh'), furniImageUrl(item.id, opts)]
+              ? [
+                  furniImageUrl(item.sprite ?? item.id, opts, '/hh'),
+                  furniImageUrl(item.sprite ?? item.id, opts),
+                ]
               : [`/assets/local/furni/${item.id}_${dir}.png`];
           img.onerror = () => {
             const next = sources.shift();

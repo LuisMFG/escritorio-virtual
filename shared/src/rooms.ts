@@ -98,6 +98,8 @@ export const MEETING: RoomDefinition = {
     { id: 'm-chair-w', defId: 'chair_norja', x: 3, y: 3, z: 0, rot: 2 },
     { id: 'm-chair-e', defId: 'chair_norja', x: 8, y: 4, z: 0, rot: 6 },
     { id: 'm-whiteboard', defId: 'uni_c23_whiteboard', x: 10, y: 3, z: 0, rot: 6 },
+    // Quadro de Demandas do Jira (Fase 30).
+    { id: 'm-jira', defId: 'jira_board', x: 10, y: 6, z: 0, rot: 6 },
     { id: 'm-shelves', defId: 'shelves_norja', x: 1, y: 1, z: 0, rot: 2 },
     { id: 'm-cactus-1', defId: 'plant_big_cactus', x: 10, y: 1, z: 0, rot: 0 },
     { id: 'm-cactus-2', defId: 'plant_big_cactus', x: 1, y: 8, z: 0, rot: 0 },

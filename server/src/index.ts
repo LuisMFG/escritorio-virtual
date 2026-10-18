@@ -8,13 +8,15 @@ import { OfficeRoom } from './rooms/OfficeRoom.js';
 import { createServices, setServices } from './services/index.js';
 import { MeetingScheduler } from './services/MeetingScheduler.js';
 import { BackupScheduler } from './services/BackupService.js';
+import { loadSecretKey } from './util/secretBox.js';
 
 const services = createServices(
   openDatabase(config.databasePath),
-  { inviteCode: config.inviteCode },
+  { inviteCode: config.inviteCode, jiraSite: config.jiraSite },
   config.spotify,
   { dir: config.backupDir, keep: config.backupKeep },
   config.uploadDir,
+  { secretKey: loadSecretKey(config.secretKey, config.secretKeyFile) },
 );
 if (config.spotify) console.log('[spotify] integração ligada');
 setServices(services);
@@ -33,6 +35,7 @@ await server.listen(config.port);
 new MeetingScheduler(services.meetings, services.dms).start();
 services.activity.start();
 services.spotifyPoller.start();
+services.jiraPoller.start();
 services.focus.startTimer();
 new BackupScheduler(services.backups).start();
 // Anexos enviados e nunca mandados (ou de mensagens que saíram do histórico): limpa a cada hora.

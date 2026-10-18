@@ -31,3 +31,4 @@ export * from './kudos.js';
 export * from './focus.js';
 export * from './map.js';
 export * from './uploads.js';
+export * from './jira.js';

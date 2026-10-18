@@ -22,7 +22,9 @@ export interface FurniCuration {
   source?: 'habboassets' | 'local';
   directions?: number[];
   anchors?: Record<string, [number, number]>;
-  interaction?: 'toggle' | 'coffee' | 'board' | 'whiteboard' | 'tictactoe' | 'kudos';
+  interaction?: 'toggle' | 'coffee' | 'board' | 'whiteboard' | 'tictactoe' | 'kudos' | 'jira';
+  /** Arte de outro móvel do Habbo (padrão = `id`). */
+  sprite?: string;
   /** Cantos do papel na PNG (ver `surface` no manifesto). */
   surface?: Record<string, [[number, number], [number, number], [number, number]]>;
   /** Emite luz quando ligado. */
@@ -159,6 +161,29 @@ export const FURNI_CURATION: FurniCuration[] = [
     height: 2,
     interaction: 'whiteboard',
     // Papel do cavalete, medido nos pixels claros das PNGs (direção 2 é o espelho da 0).
+    surface: {
+      '0': [
+        [6, 15],
+        [29, 4],
+        [28, 70],
+      ],
+      '2': [
+        [29, 4],
+        [52, 15],
+        [7, 59],
+      ],
+    },
+  },
+  {
+    // Quadro de Demandas (Fase 30): mesma arte do quadro branco, com um mini-kanban no papel.
+    id: 'jira_board',
+    sprite: 'uni_c23_whiteboard',
+    name: 'Quadro de Demandas',
+    category: 'escritório',
+    width: 1,
+    depth: 1,
+    height: 2,
+    interaction: 'jira',
     surface: {
       '0': [
         [6, 15],
@@ -437,6 +462,7 @@ export function buildFurniEntry(
       interaction: cur.interaction,
       light: cur.light ?? false,
       surface: cur.surface,
+      ...(cur.sprite ? { sprite: cur.sprite } : {}),
     },
   };
 }

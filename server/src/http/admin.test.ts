@@ -11,6 +11,7 @@ import {
   reorderCargos,
   resetPassword,
   setInvite,
+  setJiraSite,
   setRoom,
   updateCargo,
   updateUser,
@@ -169,5 +170,21 @@ describe('backups', () => {
     expect(log.ok && log.body.map((e) => e.action)).toEqual(
       expect.arrayContaining(['backup.create', 'backup.download']),
     );
+  });
+});
+
+describe('endereço do Jira', () => {
+  it('admin define (normalizado), vazio desliga, endereço que não é Jira Cloud é recusado', async () => {
+    const deps = makeDeps();
+    const ana = await registered(deps);
+    const beto = await registered(deps, { username: 'beto', name: 'Beto' });
+    const asAna = callerOf(deps, ana.token);
+    expect(setJiraSite(callerOf(deps, beto.token), { site: 'empresa' }, deps).status).toBe(403);
+    expect(setJiraSite(asAna, { site: 'jira.empresa.com.br' }, deps).ok).toBe(false);
+    const res = setJiraSite(asAna, { site: 'Empresa.atlassian.net/jira' }, deps);
+    expect(res.ok && res.body.site).toBe('https://empresa.atlassian.net');
+    expect(deps.settings.jiraSite()).toBe('https://empresa.atlassian.net');
+    expect(setJiraSite(asAna, { site: '' }, deps).ok).toBe(true);
+    expect(deps.settings.jiraSite()).toBeNull();
   });
 });

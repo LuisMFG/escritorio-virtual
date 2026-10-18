@@ -30,9 +30,14 @@ export const furniManifestEntrySchema = z.object({
   /**
    * O que acontece ao clicar fora do modo decorar: `toggle` alterna os estados (luz, TV…),
    * `coffee` serve um café (emote), `board` abre o mural de recados, `whiteboard` abre o
-   * quadro branco, `tictactoe` abre o jogo da velha, `kudos` abre o mural de elogios.
+   * quadro branco, `tictactoe` abre o jogo da velha, `kudos` abre o mural de elogios, `jira`
+   * abre o quadro de demandas.
    */
-  interaction: z.enum(['toggle', 'coffee', 'board', 'whiteboard', 'tictactoe', 'kudos']).optional(),
+  interaction: z
+    .enum(['toggle', 'coffee', 'board', 'whiteboard', 'tictactoe', 'kudos', 'jira'])
+    .optional(),
+  /** Desenho do Habbo usado (quando o móvel reaproveita a arte de outro; padrão = `id`). */
+  sprite: z.string().optional(),
   /** Emite luz quando ligado (estado > 0): brilha à noite. */
   light: z.boolean().default(false),
   /**

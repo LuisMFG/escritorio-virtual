@@ -58,6 +58,9 @@ export interface AdminRoom {
 
 export interface AdminOverview {
   inviteCode: string;
+  /** Endereço do Jira Cloud (`null` = desligado) e se veio do `.env` (não muda pelo painel). */
+  jiraSite: string | null;
+  jiraSiteLocked: boolean;
   rooms: AdminRoom[];
   users: AdminUser[];
   cargos: CargoInfo[];
@@ -83,6 +86,7 @@ export interface AuditEntry {
 /** Como cada ação aparece no registro. */
 export const AUDIT_LABELS: Record<string, string> = {
   'invite.change': 'trocou o código de convite',
+  'jira.site': 'mudou o endereço do Jira',
   'user.role': 'mudou o papel de',
   'user.cargo': 'mudou o cargo de',
   'user.disable': 'desativou a conta de',

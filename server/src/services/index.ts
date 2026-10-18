@@ -25,6 +25,10 @@ import { FocusService } from './FocusService.js';
 import { UploadService } from './UploadService.js';
 import { LinkPreviewService } from './LinkPreviewService.js';
 import { SearchService } from './SearchService.js';
+import { JiraService } from './JiraService.js';
+import { JiraPoller } from './JiraPoller.js';
+import { SecretBox } from '../util/secretBox.js';
+import { randomBytes } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { SpotifyConfig } from '../config.js';
@@ -70,6 +74,8 @@ export interface Services {
   uploads: UploadService;
   linkPreviews: LinkPreviewService;
   search: SearchService;
+  jira: JiraService;
+  jiraPoller: JiraPoller;
   furni: FurniService;
   transfers: TransferRegistry;
   settings: SettingsService;
@@ -81,10 +87,11 @@ export interface Services {
 
 export function createServices(
   db: Db,
-  defaults = { inviteCode: 'convite' },
+  defaults: { inviteCode: string; jiraSite?: string } = { inviteCode: 'convite' },
   spotifyConfig?: SpotifyConfig,
   backup = { dir: join(tmpdir(), 'escritorio-backups'), keep: 7 },
   uploadDir = join(tmpdir(), 'escritorio-uploads'),
+  opts: { secretKey?: Buffer; http?: typeof fetch } = {},
 ): Services {
   const users = new UserService(db);
   users.seedCargos();
@@ -96,6 +103,13 @@ export function createServices(
   const presence = new PresenceRegistry();
   const activity = new ActivityService(users);
   const spotify = new SpotifyService(db, spotifyConfig);
+  const settings = new SettingsService(db, defaults);
+  const jira = new JiraService(
+    db,
+    settings,
+    new SecretBox(opts.secretKey ?? randomBytes(32)),
+    opts.http,
+  );
   // Conquistas que vêm da agenda e dos pets.
   meetings.events.on('invited', (m) => achievements.unlock(m.createdBy, 'organizer'));
   meetings.events.on('reminder', (m) => {
@@ -129,9 +143,11 @@ export function createServices(
     uploads: new UploadService(db, uploadDir),
     linkPreviews: new LinkPreviewService(),
     search: new SearchService(db),
+    jira,
+    jiraPoller: new JiraPoller(jira, activity, users),
     furni: new FurniService(db),
     transfers: new TransferRegistry(),
-    settings: new SettingsService(db, defaults),
+    settings,
     audit: new AuditService(db),
     moderation,
     furniDefs: loadFurniDefs(),

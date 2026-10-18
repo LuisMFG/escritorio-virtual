@@ -67,7 +67,10 @@ export class FurniView extends Container {
     // Locais (CC0 ou próprios): client/public/assets/local/furni/{id}_{dir}.png.
     const urls =
       def.source === 'habboassets'
-        ? [furniImageUrl(def.id, opts, '/hh'), furniImageUrl(def.id, opts)]
+        ? [
+            furniImageUrl(def.sprite ?? def.id, opts, '/hh'),
+            furniImageUrl(def.sprite ?? def.id, opts),
+          ]
         : [`/assets/local/furni/${def.id}_${dir}.png`];
     const loaded = await this.loader.load(
       `furni:${def.id}:${dir}:${def.color ?? ''}:${state}`,

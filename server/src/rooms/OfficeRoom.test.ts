@@ -57,6 +57,8 @@ const testConfig: Config = {
   backupDir: '/tmp/escritorio-teste-backups',
   backupKeep: 7,
   uploadDir: '/tmp/escritorio-teste-uploads',
+  secretKey: undefined,
+  secretKeyFile: '/tmp/escritorio-teste-secret.key',
   loginRateLimit: 10,
 };
 

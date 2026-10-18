@@ -24,6 +24,7 @@ export class ActivityService {
   readonly events = new EventEmitter<{ changed: [userId: string] }>();
   private readonly coding = new Map<string, Coding>();
   private readonly music = new Map<string, NowPlaying & { at: number }>();
+  private readonly jira = new Map<string, { text: string; url: string; at: number }>();
   private timer: NodeJS.Timeout | undefined;
 
   constructor(
@@ -58,19 +59,37 @@ export class ActivityService {
     if (`${this.text(userId)}|${this.url(userId)}` !== before) this.events.emit('changed', userId);
   }
 
-  /** Texto para o cartão, já com a privacidade da pessoa (`''` = nada). Uma atividade por linha. */
-  text(userId: string): string {
-    const lines: string[] = [];
-    const c = this.coding.get(userId);
-    if (c) lines.push(codingText(c, this.shareOf(userId)));
-    const m = this.music.get(userId);
-    if (m) lines.push(musicText(m));
-    return lines.filter(Boolean).join('\n');
+  /** Demanda do Jira em andamento, já no texto do cartão (`null` = nenhuma ou escondida). */
+  setJira(userId: string, line: { text: string; url: string } | null): void {
+    const before = `${this.text(userId)}|${this.url(userId)}`;
+    if (line) this.jira.set(userId, { ...line, at: this.now() });
+    else this.jira.delete(userId);
+    if (`${this.text(userId)}|${this.url(userId)}` !== before) this.events.emit('changed', userId);
   }
 
-  /** Link da música (linha 🎵), se houver. */
+  /** Linhas do cartão (texto e link de cada uma), já com a privacidade da pessoa. */
+  private lines(userId: string): { text: string; url: string }[] {
+    const lines: { text: string; url: string }[] = [];
+    const c = this.coding.get(userId);
+    if (c) lines.push({ text: codingText(c, this.shareOf(userId)), url: '' });
+    const j = this.jira.get(userId);
+    if (j) lines.push({ text: j.text, url: j.url });
+    const m = this.music.get(userId);
+    if (m) lines.push({ text: musicText(m), url: m.url });
+    return lines.filter((l) => l.text);
+  }
+
+  /** Texto para o cartão (`''` = nada). Uma atividade por linha. */
+  text(userId: string): string {
+    return this.lines(userId)
+      .map((l) => l.text)
+      .join('\n');
+  }
+
+  /** Links das linhas (na mesma ordem de `text`, uma por linha; vazio = sem link). */
   url(userId: string): string {
-    return this.music.get(userId)?.url ?? '';
+    const lines = this.lines(userId);
+    return lines.some((l) => l.url) ? lines.map((l) => l.url).join('\n') : '';
   }
 
   /** A pessoa mudou a privacidade: o texto pode mudar. */
@@ -81,7 +100,7 @@ export class ActivityService {
   /** Tira quem parou de mandar sinal. */
   sweep(): void {
     const limit = this.now() - ACTIVITY_TTL_MS;
-    for (const map of [this.coding, this.music] as Map<string, { at: number }>[]) {
+    for (const map of [this.coding, this.music, this.jira] as Map<string, { at: number }>[]) {
       for (const [userId, c] of map) {
         if (c.at >= limit) continue;
         map.delete(userId);

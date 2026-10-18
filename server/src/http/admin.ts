@@ -16,6 +16,8 @@ import {
   type BackupInfo,
   type BackupList,
   type TempPasswordResponse,
+  jiraSiteSchema,
+  normalizeJiraSite,
 } from '@office/shared';
 import type { z } from 'zod';
 import { hashPassword } from '../auth/passwords.js';
@@ -68,6 +70,8 @@ export function overview(caller: Caller, deps: AdminDeps): Result<AdminOverview>
   const byId = new Map(deps.users.list().map((u) => [u.id, u]));
   return ok({
     inviteCode: deps.settings.inviteCode(),
+    jiraSite: deps.settings.jiraSite(),
+    jiraSiteLocked: deps.settings.jiraSiteLocked,
     rooms: deps.rooms.list(),
     cargos: t.body.cargos,
     users: t.body.members.map((m) => ({
@@ -218,6 +222,33 @@ export function setInvite(caller: Caller, input: unknown, deps: AdminDeps): Resu
   deps.settings.setInviteCode(p.data.inviteCode);
   deps.audit.log(caller.user.id, 'invite.change');
   return done();
+}
+
+/** Endereço do Jira Cloud (vazio desliga). */
+export function setJiraSite(
+  caller: Caller,
+  input: unknown,
+  deps: AdminDeps,
+): Result<{ site: string | null }> {
+  const denied = guard(caller);
+  if (denied) return denied;
+  const p = parse(jiraSiteSchema, input);
+  if ('error' in p) return p.error!;
+  if (deps.settings.jiraSiteLocked) {
+    return fail(400, ErrorCode.InvalidPayload, {
+      message: 'O endereço do Jira está definido no servidor (JIRA_SITE).',
+    });
+  }
+  const raw = p.data.site.trim();
+  const site = raw ? normalizeJiraSite(raw) : null;
+  if (raw && !site) {
+    return fail(400, ErrorCode.InvalidPayload, {
+      message: 'Use o endereço do Jira Cloud, por exemplo suaempresa.atlassian.net.',
+    });
+  }
+  deps.settings.setJiraSite(site);
+  deps.audit.log(caller.user.id, 'jira.site', null, site ?? 'desligado');
+  return ok({ site });
 }
 
 export function setRoom(

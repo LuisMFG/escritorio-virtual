@@ -399,6 +399,23 @@ export const spotifyLinks = sqliteTable('spotify_links', {
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 });
 
+/** Conta do Jira Cloud de cada pessoa (Fase 30). O token de API fica criptografado. */
+export const jiraLinks = sqliteTable('jira_links', {
+  userId: text('user_id')
+    .primaryKey()
+    .references(() => users.id),
+  email: text('email').notNull(),
+  /** Token de API cifrado (AES-256-GCM, chave fora do banco). */
+  tokenEnc: text('token_enc').notNull(),
+  accountId: text('account_id').notNull(),
+  displayName: text('display_name'),
+  /** 'hidden' | 'key' | 'title' */
+  share: text('share').notNull().default('title'),
+  /** Último problema ao consultar (token revogado etc.); com erro, para de consultar. */
+  lastError: text('last_error'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+});
+
 /** Avisos da diretoria (Fase 24). */
 export const announcements = sqliteTable(
   'announcements',

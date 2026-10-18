@@ -8,6 +8,7 @@ import type { SpotifyDeps } from './spotify.js';
 import type { AnnouncementDeps } from './announcements.js';
 import type { KudosDeps } from './kudos.js';
 import type { UploadDeps } from './uploads.js';
+import type { JiraDeps } from './jira.js';
 import { openDatabase } from '../db/client.js';
 import { createServices } from '../services/index.js';
 import type { MeetingDeps } from './meetings.js';
@@ -21,7 +22,8 @@ export type TestDeps = MeetingDeps &
   SpotifyDeps &
   AnnouncementDeps &
   KudosDeps &
-  UploadDeps;
+  UploadDeps &
+  JiraDeps;
 
 /** Dependências das rotas sobre um banco em memória (testes). */
 export function makeDeps(): TestDeps {
@@ -60,6 +62,8 @@ export function makeDeps(): TestDeps {
     uploads: svc.uploads,
     linkPreviews: svc.linkPreviews,
     search: svc.search,
+    jira: svc.jira,
+    jiraPoller: svc.jiraPoller,
   };
 }
 

@@ -57,6 +57,11 @@ export interface Config {
   spotify?: SpotifyConfig;
   /** Pasta dos backups diários do banco (Fase 22). */
   backupDir: string;
+  /** Jira Cloud fixo pelo servidor (senão, o admin define no painel). */
+  jiraSite?: string;
+  /** Chave que cifra os tokens das integrações (`SECRET_KEY`, base64) e o arquivo usado sem ela. */
+  secretKey: string | undefined;
+  secretKeyFile: string;
   /** Pasta dos anexos do chat (Fase 29). */
   uploadDir: string;
   /** Quantos backups guardar. */
@@ -79,6 +84,9 @@ export const config: Config = {
   isProduction,
   spotify: spotify(Number(process.env.PORT ?? 2567)),
   backupDir: fromRoot(process.env.BACKUP_DIR ?? './data/backups'),
+  jiraSite: process.env.JIRA_SITE?.trim().replace(/\/+$/, '') || undefined,
+  secretKey: process.env.SECRET_KEY,
+  secretKeyFile: fromRoot(process.env.SECRET_KEY_FILE ?? './data/secret.key'),
   uploadDir: fromRoot(process.env.UPLOAD_DIR ?? './data/uploads'),
   backupKeep: Math.max(1, Number(process.env.BACKUP_KEEP ?? 7) || 7),
   loginRateLimit: Math.max(1, Number(process.env.LOGIN_RATE_LIMIT ?? 10) || 10),

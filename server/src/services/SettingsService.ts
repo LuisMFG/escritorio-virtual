@@ -6,7 +6,7 @@ import { settings } from '../db/schema.js';
 export class SettingsService {
   constructor(
     private readonly db: Db,
-    private readonly defaults: { inviteCode: string },
+    private readonly defaults: { inviteCode: string; jiraSite?: string },
   ) {}
 
   private get(key: string): string | undefined {
@@ -27,5 +27,19 @@ export class SettingsService {
 
   setInviteCode(code: string): void {
     this.set('invite_code', code);
+  }
+
+  /** Endereço do Jira Cloud (`JIRA_SITE` no servidor vale mais que o do painel). `null` = desligado. */
+  jiraSite(): string | null {
+    return this.defaults.jiraSite || this.get('jira_site') || null;
+  }
+
+  /** Definido no `.env`: o painel só mostra. */
+  get jiraSiteLocked(): boolean {
+    return Boolean(this.defaults.jiraSite);
+  }
+
+  setJiraSite(site: string | null): void {
+    this.set('jira_site', site ?? '');
   }
 }

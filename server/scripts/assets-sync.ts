@@ -127,11 +127,15 @@ for (const cur of FURNI_CURATION) {
     console.log(`[sync]   ${cur.id.padEnd(30)} local`);
     continue;
   }
-  const info = await client.getImagerJson<FurniInfo>(`/info/furniture/${cur.id}`);
+  const info = await client.getImagerJson<FurniInfo>(`/info/furniture/${cur.sprite ?? cur.id}`);
   const analyses = new Map<number, RenderAnalysis>();
   const stateAnalyses = new Map<string, RenderAnalysis>();
   const render = async (dir: number, state?: number) => {
-    const url = furniImageUrl(cur.id, { direction: dir, revision: info.latest, state });
+    const url = furniImageUrl(cur.sprite ?? cur.id, {
+      direction: dir,
+      revision: info.latest,
+      state,
+    });
     const file = cacheFileFor(config.assetCacheDir, url);
     let body: Buffer;
     if (existsSync(file)) body = await readFile(file);
@@ -153,7 +157,9 @@ for (const cur of FURNI_CURATION) {
   let curation = cur;
   if (client.hasApiKey) {
     try {
-      const fd = readFurnidata(await client.getJson(`/furniture/${cur.id}`, { auth: true }));
+      const fd = readFurnidata(
+        await client.getJson(`/furniture/${cur.sprite ?? cur.id}`, { auth: true }),
+      );
       curation = { ...cur, width: fd.width ?? cur.width, depth: fd.depth ?? cur.depth };
     } catch (err) {
       console.warn(`[sync] furnidata de ${cur.id}: ${(err as Error).message}`);

@@ -515,6 +515,41 @@
       }
     },
     {
+      "id": "jira_board",
+      "name": "Quadro de Demandas",
+      "category": "escritório",
+      "width": 1,
+      "depth": 1,
+      "height": 2,
+      "canSit": false,
+      "canWalk": false,
+      "sitHeight": 0,
+      "directions": [0, 2],
+      "revision": 69457,
+      "source": "habboassets",
+      "anchors": {
+        "0": [23.5, 122],
+        "2": [34.5, 122]
+      },
+      "states": [0, 1, 2],
+      "stateAnchors": {},
+      "interaction": "jira",
+      "light": false,
+      "surface": {
+        "0": [
+          [6, 15],
+          [29, 4],
+          [28, 70]
+        ],
+        "2": [
+          [29, 4],
+          [52, 15],
+          [7, 59]
+        ]
+      },
+      "sprite": "uni_c23_whiteboard"
+    },
+    {
       "id": "noticeboard",
       "name": "Mural de Recados",
       "category": "escritório",

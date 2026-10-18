@@ -19,6 +19,7 @@ import * as announcementRoutes from './announcements.js';
 import * as kudosRoutes from './kudos.js';
 import * as mapRoutes from './map.js';
 import * as uploadRoutes from './uploads.js';
+import * as jiraRoutes from './jira.js';
 import { UPLOAD_MAX_BYTES } from '@office/shared';
 import {
   changePassword,
@@ -72,7 +73,8 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
     spotifyRoutes.SpotifyDeps &
     announcementRoutes.AnnouncementDeps &
     kudosRoutes.KudosDeps &
-    uploadRoutes.UploadDeps = {
+    uploadRoutes.UploadDeps &
+    jiraRoutes.JiraDeps = {
     inviteCode: () => svc.settings.inviteCode(),
     adminUsernames: cfg.adminUsernames,
     avatarManifest: svc.avatarManifest,
@@ -97,6 +99,8 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
     uploads: svc.uploads,
     linkPreviews: svc.linkPreviews,
     search: svc.search,
+    jira: svc.jira,
+    jiraPoller: svc.jiraPoller,
   };
   const send = <T>(res: Response, result: Result<T>) =>
     void res.status(result.status).json(result.body);
@@ -395,6 +399,40 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
   app.get(
     '/api/search',
     withCaller((c, req, res) => send(res, uploadRoutes.searchChat(c, req.query, auth))),
+  );
+
+  // Jira Cloud: cada pessoa liga a conta (e-mail + token de API); o quadro junta as demandas.
+  const jiraLimiter = new KeyedRateLimiter(5, 5 / 60);
+  app.get(
+    '/api/jira/status',
+    withCaller((c, _req, res) => send(res, jiraRoutes.jiraStatus(c, auth))),
+  );
+  app.post(
+    '/api/jira/connect',
+    withCaller(async (c, req, res) => {
+      if (!jiraLimiter.tryTake(c.user.id)) {
+        return void res
+          .status(429)
+          .json({ error: 'RATE_LIMIT', message: 'Muitas tentativas. Aguarde um minuto.' });
+      }
+      send(res, await jiraRoutes.jiraConnect(c, req.body, auth));
+    }),
+  );
+  app.put(
+    '/api/jira/settings',
+    withCaller((c, req, res) => send(res, jiraRoutes.jiraSettings(c, req.body, auth))),
+  );
+  app.delete(
+    '/api/jira',
+    withCaller((c, _req, res) => send(res, jiraRoutes.jiraDisconnect(c, auth))),
+  );
+  app.get(
+    '/api/jira/board',
+    withCaller((c, _req, res) => send(res, jiraRoutes.jiraBoard(c, auth))),
+  );
+  app.put(
+    '/api/admin/jira',
+    withCaller((c, req, res) => send(res, admin.setJiraSite(c, req.body, auth))),
   );
 
   // Salas (admins e quem pode editar salas).
