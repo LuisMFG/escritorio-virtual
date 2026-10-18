@@ -48,6 +48,7 @@ import { showAchievementToast } from './ui/badges.js';
 import { exposeForTests } from './e2e.js';
 import { AnnouncementBanner, openAnnouncements } from './ui/announcements.js';
 import { openKudosForm, openKudosWall } from './ui/kudos.js';
+import { FocusController } from './ui/focus.js';
 import { openTeam } from './ui/team.js';
 import { openAdmin } from './ui/admin.js';
 import { openRoomEditor } from './ui/roomEditor.js';
@@ -105,6 +106,8 @@ function snapshot(p: Player): AvatarSnapshot {
     birthday: p.birthday,
     action: p.action,
     z: p.z,
+    focusUntil: p.focusUntil,
+    focusKind: p.focusKind,
   };
 }
 
@@ -202,10 +205,14 @@ async function start(): Promise<void> {
   // Título da aba: "(@2)" para menções vistas com a aba escondida, "(3)" para DMs não lidas.
   let unseenMentions = 0;
   let unreadDms = 0;
+  /** "🍅 18:32 " na aba enquanto o foco roda. */
+  let focusTitle = '';
   const updateTitle = () => {
-    const base = document.title.replace(/^(\(@?\d+\) )+/, '');
+    const base = document.title.replace(/^((\(@?\d+\)|[🍅☕] \d+:\d\d) )+/u, '');
     const prefix =
-      (unseenMentions ? `(@${unseenMentions}) ` : '') + (unreadDms ? `(${unreadDms}) ` : '');
+      (focusTitle ? `${focusTitle} ` : '') +
+      (unseenMentions ? `(@${unseenMentions}) ` : '') +
+      (unreadDms ? `(${unreadDms}) ` : '');
     document.title = prefix + base;
   };
   document.addEventListener('visibilitychange', () => {
@@ -357,6 +364,18 @@ async function start(): Promise<void> {
         goTo: (id) => conn.goTo(id),
         notify: (m) => overlay.notify(m),
       });
+    },
+  });
+  // Modo foco (Pomodoro): botão 🍅 do HUD, contagem e avisos segurados.
+  const focus = new FocusController(hud.focusButton, {
+    start: (minutes, breakMinutes) => connection?.focusStart(minutes, breakMinutes),
+    stop: () => connection?.focusStop(),
+    notify: (m) => overlay.notify(m),
+    systemNotify: (title, body) => notifier.notify(title, body, { tag: 'foco' }),
+    sound: () => sound.mention(),
+    title: (prefix) => {
+      focusTitle = prefix ?? '';
+      updateTitle();
     },
   });
   function showAdmin(): void {
@@ -566,6 +585,8 @@ async function start(): Promise<void> {
                 badges: player.badges,
                 activity: player.activity,
                 activityUrl: player.activityUrl,
+                focusUntil: player.focusUntil,
+                focusKind: player.focusKind,
               },
               at,
             );
@@ -617,6 +638,7 @@ async function start(): Promise<void> {
           cargoColor: p.cargoColor,
           birthday: p.birthday,
           activity: p.activity,
+          focusKind: p.focusUntil > Date.now() ? p.focusKind : '',
         })),
       );
       chat.setPeople(
@@ -723,6 +745,8 @@ async function start(): Promise<void> {
         messages.receive(m);
         if (m.fromUserId === session?.userId || messages.isReading(m.fromUserId)) return;
         const name = online.find((p) => p.userId === m.fromUserId)?.name ?? 'Alguém';
+        // Em foco: sem som nem aviso (entra no resumo do fim).
+        if (focus.focusing) return focus.hold('dms');
         sound.mention();
         if (!messages.isOpen) overlay.notify(`Mensagem de ${name}`);
         notifier.notify(`Mensagem de ${name}`, m.text, {
@@ -788,6 +812,7 @@ async function start(): Promise<void> {
       },
       kudosReceived: ({ kudos: k }) => {
         const info = KUDOS_INFO[k.type];
+        if (focus.focusing) return focus.hold('kudos');
         sound.mention();
         overlay.notify(`${info.emoji} ${k.fromName} te elogiou: “${k.message}”`);
         notifier.notify(`${info.emoji} ${k.fromName} te elogiou`, k.message, {
@@ -827,7 +852,9 @@ async function start(): Promise<void> {
         const fromOther = msg.userId !== session?.userId;
         const repliedToMe = fromOther && msg.replyTo?.userId === session?.userId;
         const mentioned = fromOther && (chat.mentionsMe(msg.text) || repliedToMe);
-        if (mentioned) {
+        if (mentioned && focus.focusing) {
+          focus.hold('mentions');
+        } else if (mentioned) {
           const what = repliedToMe ? 'respondeu você' : 'mencionou você';
           sound.mention();
           overlay.notify(`${msg.name} ${what}`);
@@ -836,7 +863,7 @@ async function start(): Promise<void> {
             unseenMentions++;
             updateTitle();
           }
-        } else if (fromOther) {
+        } else if (fromOther && !focus.focusing) {
           sound.play();
         }
         scene?.say(msg.sessionId, msg.name, msg.text, mentioned);
@@ -872,6 +899,7 @@ async function start(): Promise<void> {
       },
       chatReactions: (msg) => chat.updateReactions(msg.id, msg.reactions),
       pollUpdated: ({ poll }) => chat.updatePoll(poll),
+      focusPhase: (p) => focus.phase(p),
       kicked: (msg) => {
         if (msg.scope === 'room') return overlay.notify(msg.message);
         // Do escritório: volta para a entrada com o aviso.

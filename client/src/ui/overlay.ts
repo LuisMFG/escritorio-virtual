@@ -12,6 +12,8 @@ export interface PersonEntry {
   cargoColor: string;
   birthday: boolean;
   activity: string;
+  /** 'focus' | 'break' | '' */
+  focusKind: string;
 }
 
 export interface OtherRoom {
@@ -124,6 +126,7 @@ export class Overlay {
       if (p.cargo) li.append(cargoPill(p.cargo, p.cargoColor));
       li.title = STATUS_LABELS[p.status as Status] ?? '';
       if (p.isLocal) li.append(tag('você'));
+      if (p.focusKind) li.append(tag(p.focusKind === 'focus' ? '🍅 foco' : '☕ pausa'));
       if (!p.isLocal && (p.status === 'busy' || p.status === 'away')) {
         li.append(tag(STATUS_LABELS[p.status].toLowerCase()));
       }

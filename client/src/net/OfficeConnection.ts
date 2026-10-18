@@ -9,6 +9,7 @@ import {
   type KickedMessage,
   type BoardNote,
   type PollCreate,
+  type FocusPhase,
   type PollUpdated,
   type TttScores,
   type NoteColor,
@@ -57,6 +58,8 @@ interface Handlers {
   chatReactions: (msg: ReactionsUpdate) => void;
   /** Votos ou estado de uma enquete mudaram. */
   pollUpdated: (msg: PollUpdated) => void;
+  /** Fase do próprio modo foco mudou. */
+  focusPhase: (msg: FocusPhase) => void;
   /** Recados de um mural mudaram. */
   boardChanged: (furniId: string) => void;
   wbStroke: (msg: WbStrokeMessage) => void;
@@ -210,6 +213,14 @@ export class OfficeConnection {
     this.room?.send(ClientMessage.Chat, { text, replyToId });
   }
 
+  focusStart(minutes: number, breakMinutes: number): void {
+    this.room?.send(ClientMessage.FocusStart, { minutes, breakMinutes });
+  }
+
+  focusStop(): void {
+    this.room?.send(ClientMessage.FocusStop, {});
+  }
+
   createPoll(poll: Required<PollCreate>): void {
     this.room?.send(ClientMessage.PollCreate, poll);
   }
@@ -260,6 +271,7 @@ export class OfficeConnection {
       this.on.chatReactions(msg),
     );
     room.onMessage(ServerMessage.PollUpdated, (msg: PollUpdated) => this.on.pollUpdated(msg));
+    room.onMessage(ServerMessage.FocusPhase, (msg: FocusPhase) => this.on.focusPhase(msg));
     room.onMessage(ServerMessage.BoardChanged, (m: { furniId: string }) =>
       this.on.boardChanged(m.furniId),
     );

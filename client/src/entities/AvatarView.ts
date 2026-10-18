@@ -1,6 +1,7 @@
 import {
   directionBetween,
   EMOTES,
+  focusLeft,
   STEP_MS,
   type EmoteId,
   tileToScreen,
@@ -51,6 +52,9 @@ export interface AvatarSnapshot {
   cargoColor: string;
   /** Faz aniversário hoje. */
   birthday: boolean;
+  /** Modo foco: fim da fase (epoch ms; 0 = fora) e qual fase. */
+  focusUntil: number;
+  focusKind: string;
 }
 
 interface Step {
@@ -77,6 +81,10 @@ export class AvatarView extends Container {
   private readonly nameTag: Text;
   private readonly cargoTag: Text;
   private readonly cake: Text;
+  /** "🍅 12m" / "☕ 3m" sobre a cabeça durante o foco. */
+  private readonly focusTag: Text;
+  private focusUntil = 0;
+  private focusKind = '';
   private readonly legMask = new Graphics();
   private readonly statusBadge = new Graphics();
   private readonly typingBubble = new Container();
@@ -138,6 +146,20 @@ export class AvatarView extends Container {
     this.cake.anchor.set(0.5, 1);
     this.cake.position.set(-14, -76);
     this.cake.visible = false;
+    this.focusTag = new Text({
+      text: '',
+      resolution: 2,
+      style: {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: 10,
+        fontWeight: '700',
+        fill: 0xffffff,
+        stroke: { color: 0x7f1d1d, width: 3 },
+      },
+    });
+    this.focusTag.anchor.set(0.5, 1);
+    this.focusTag.position.set(16, -76);
+    this.focusTag.visible = false;
     this.legMask.rect(-60, -220, 120, 220 + SIT_CUT_Y).fill(0xffffff);
     this.legMask.visible = false;
     this.statusBadge.visible = false;
@@ -162,6 +184,7 @@ export class AvatarView extends Container {
       this.legMask,
       this.statusBadge,
       this.cake,
+      this.focusTag,
       this.typingBubble,
       this.cargoTag,
       this.nameTag,
@@ -215,6 +238,9 @@ export class AvatarView extends Container {
     this.cargoTag.style.fill = s.cargoColor || 0xffffff;
     this.cargoTag.visible = this.nameVisible && s.cargo !== '';
     this.cake.visible = s.birthday;
+    this.focusUntil = s.focusUntil;
+    this.focusKind = s.focusKind;
+    this.drawFocus();
     this.alpha = s.away ? 0.45 : 1;
     this.setSitting(s.action === 'sit', s.z);
     this.setStatus(s.status);
@@ -260,6 +286,13 @@ export class AvatarView extends Container {
       }
     }
     this.walkTime = this.step ? this.walkTime + dtMs * speed : 0;
+    // O 🍅 conta os minutos (redesenha só quando o texto muda).
+    if (
+      this.focusKind &&
+      Math.floor((this.clock + dtMs) / 1000) !== Math.floor(this.clock / 1000)
+    ) {
+      this.drawFocus();
+    }
     this.clock += dtMs;
     this.updateEmote(dtMs);
     if (this.typingBubble.visible) {
@@ -349,6 +382,18 @@ export class AvatarView extends Container {
       default:
         return { x: 0, y: s < 0.3 ? -Math.round(Math.sin((Math.PI * s) / 0.3) * 4) : 0 };
     }
+  }
+
+  private drawFocus(): void {
+    const on = Boolean(this.focusKind) && this.focusUntil > Date.now();
+    this.focusTag.visible = on;
+    if (!on) return;
+    const text = `${this.focusKind === 'break' ? '☕' : '🍅'} ${focusLeft(this.focusUntil)}`;
+    if (this.focusTag.text !== text) this.focusTag.text = text;
+    this.focusTag.style.stroke = {
+      color: this.focusKind === 'break' ? 0x14532d : 0x7f1d1d,
+      width: 3,
+    };
   }
 
   private setSitting(on: boolean, z: number): void {

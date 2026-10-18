@@ -12,6 +12,8 @@ export interface Hud {
   setUnreadDms(n: number): void;
   /** Contador de avisos da diretoria não lidos. */
   setUnreadAnnouncements(n: number): void;
+  /** Botão 🍅 do modo foco (o controle do foco cuida dele). */
+  readonly focusButton: HTMLButtonElement;
   /** Mostra o "✎ Editar sala" (admins e quem pode editar salas). */
   setCanEditRooms(on: boolean): void;
   /** Mostra o botão Admin (só para admins). */
@@ -128,6 +130,7 @@ export function mountHud(opts: {
   dmBadge.className = 'dm-badge';
   dmBadge.hidden = true;
   dmBtn.append(dmBadge);
+  const focusBtn = actionButton('hud-focus', '🍅', 'Foco', () => undefined);
   const annBtn = actionButton('hud-ann', '📢', 'Avisos', opts.onOpenAnnouncements);
   const annBadge = document.createElement('span');
   annBadge.className = 'dm-badge';
@@ -138,9 +141,10 @@ export function mountHud(opts: {
 
   const actions = document.createElement('div');
   actions.className = 'hud-actions';
-  actions.append(profileBtn, teamBtn, dmBtn, agendaBtn, annBtn, decorBtn, adminBtn);
+  actions.append(profileBtn, teamBtn, dmBtn, agendaBtn, annBtn, focusBtn, decorBtn, adminBtn);
   document.body.append(card, status, zoom, actions, panel);
   return {
+    focusButton: focusBtn,
     setUnreadDms(n) {
       dmBadge.hidden = n === 0;
       dmBadge.textContent = n > 99 ? '99+' : String(n);

@@ -27,6 +27,9 @@ export interface AvatarCardInfo {
   activity: string;
   /** Link da música (linha 🎵). */
   activityUrl: string;
+  /** Modo foco: fim da fase (epoch ms; 0 = fora) e qual fase. */
+  focusUntil: number;
+  focusKind: string;
 }
 
 export interface AvatarCardHandlers {
@@ -88,6 +91,18 @@ export class AvatarCard {
       const p = document.createElement('p');
       p.append(cargoPill(info.cargo, info.cargoColor));
       extra.push(p);
+    }
+    if (info.focusKind && info.focusUntil > Date.now()) {
+      const mins = Math.max(1, Math.ceil((info.focusUntil - Date.now()) / 60_000));
+      extra.push(
+        Object.assign(document.createElement('p'), {
+          className: 'card-focus',
+          textContent:
+            info.focusKind === 'focus'
+              ? `🍅 Em foco · faltam ${mins} min (melhor não interromper)`
+              : `☕ Em pausa · ${mins} min`,
+        }),
+      );
     }
     for (const line of info.activity.split('\n').filter(Boolean)) {
       const p = Object.assign(document.createElement('p'), { className: 'card-activity' });
