@@ -36,7 +36,7 @@ export const furniManifestEntrySchema = z.object({
    * abre o quadro de demandas.
    */
   interaction: z
-    .enum(['toggle', 'coffee', 'board', 'whiteboard', 'tictactoe', 'kudos', 'jira'])
+    .enum(['toggle', 'coffee', 'fridge', 'board', 'whiteboard', 'tictactoe', 'kudos', 'jira'])
     .optional(),
   /** Desenho do Habbo usado (quando o móvel reaproveita a arte de outro; padrão = `id`). */
   sprite: z.string().optional(),

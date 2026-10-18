@@ -46,6 +46,10 @@ export const Player = schema(
     focusUntil: t.float64(),
     /** 'focus' | 'break' | '' */
     focusKind: t.string(),
+    /** Efeito em uso (Fase 34, ids de `EFFECTS`); vazio = nenhum. */
+    effect: t.string(),
+    /** Item na mão (id do Habbo, ex.: 6 = café); 0 = nada. */
+    handItem: t.uint16(),
   },
   'Player',
 );

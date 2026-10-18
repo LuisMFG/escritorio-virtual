@@ -9,6 +9,7 @@ import type { AnnouncementDeps } from './announcements.js';
 import type { KudosDeps } from './kudos.js';
 import type { UploadDeps } from './uploads.js';
 import type { JiraDeps } from './jira.js';
+import type { EffectDeps } from './effects.js';
 import { openDatabase } from '../db/client.js';
 import { createServices } from '../services/index.js';
 import type { MeetingDeps } from './meetings.js';
@@ -23,7 +24,8 @@ export type TestDeps = MeetingDeps &
   AnnouncementDeps &
   KudosDeps &
   UploadDeps &
-  JiraDeps;
+  JiraDeps &
+  EffectDeps;
 
 /** Dependências das rotas sobre um banco em memória (testes). */
 export function makeDeps(): TestDeps {

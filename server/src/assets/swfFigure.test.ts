@@ -1,7 +1,7 @@
 import { PNG } from 'pngjs';
 import { describe, expect, it } from 'vitest';
 import { buildFigureData, type FigureLibInfo } from './figureData.js';
-import { buildFigureSheet, readSwf } from './swfFigure.js';
+import { buildFigureSheet, parseEffectAnimation, readSwf } from './swfFigure.js';
 import { tinySwf } from './testSwf.js';
 
 describe('biblioteca de roupa (SWF → folha)', () => {
@@ -25,6 +25,38 @@ describe('biblioteca de roupa (SWF → folha)', () => {
 
   it('recusa o que não é SWF', () => {
     expect(() => readSwf(Buffer.from('nada aqui'))).toThrow('SWF');
+  });
+});
+
+describe('animação dos efeitos', () => {
+  it('lê camadas (brilho, frente/trás por direção) e quadros com deslocamento', () => {
+    const xml = `<?xml version='1.0'?><animation name="fx.9" desc="Love">
+      <sprite id="fx9_1" ink="33" member="std_fx9_1_1"><direction id="0" dz="1" /><direction id="4" dz="-1" /></sprite>
+      <sprite id="fx9_2" member="std_fx9_2_1" />
+      <frame><fx id="fx9_1" action="Default" frame="0" /></frame>
+      <frame><fx id="fx9_1" frame="1" dx="2" dy="-3" /><fx id="fx9_2" frame="0" /></frame>
+    </animation>`;
+    const anim = parseEffectAnimation(xml);
+    expect(anim.sprites).toEqual([
+      { id: 'fx9_1', member: 'std_fx9_1_1', ink: 33, dz: { '0': 1, '4': -1 } },
+      { id: 'fx9_2', member: 'std_fx9_2_1', ink: 0, dz: {} },
+    ]);
+    expect(anim.frames).toEqual([
+      [{ id: 'fx9_1', frame: 0, dx: 0, dy: 0 }],
+      [
+        { id: 'fx9_1', frame: 1, dx: 2, dy: -3 },
+        { id: 'fx9_2', frame: 0, dx: 0, dy: 0 },
+      ],
+    ]);
+  });
+
+  it('manifesto com aspas duplas também é lido', () => {
+    const swf = readSwf(tinySwf());
+    const quoted = { ...swf, manifest: swf.manifest.replace(/'/g, '"') };
+    expect(buildFigureSheet('hh_test', quoted).sheet.assets.h_std_hr_5_2_0).toEqual({
+      x: -11,
+      y: 39,
+    });
   });
 });
 

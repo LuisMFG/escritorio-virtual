@@ -40,6 +40,8 @@ export const ClientMessage = {
   Posture: 'posture',
   /** `{ dir }`: virar sem sair do lugar (setas do teclado). */
   Turn: 'turn',
+  /** Largar o item da mão (`/largar`). */
+  ItemDrop: 'item.drop',
   /** `{ id }`: apagar mensagem do chat (admin ou quem escreveu). */
   ChatDelete: 'chat.delete',
   /** `{ id, emoji }`: põe ou tira uma reação. */
@@ -93,6 +95,8 @@ export const ServerMessage = {
   Emote: 'emote.played',
   /** Mensagem apagada (`ChatDeletedMessage`): some do histórico de todos. */
   ChatDeleted: 'chat.deleted',
+  /** Efeito por alguns segundos sobre alguém (`EffectFlash`): comemorações. */
+  EffectFlash: 'effect.flash',
   /** Reações de uma mensagem mudaram (`ReactionsUpdate`). */
   ChatReactions: 'chat.reactions',
   /** Um admin tirou você da sala ou do escritório (`KickedMessage`). */

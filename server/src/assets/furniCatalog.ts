@@ -24,7 +24,8 @@ export interface FurniCuration {
   source?: 'habboassets' | 'local';
   directions?: number[];
   anchors?: Record<string, [number, number]>;
-  interaction?: 'toggle' | 'coffee' | 'board' | 'whiteboard' | 'tictactoe' | 'kudos' | 'jira';
+  interaction?:
+    'toggle' | 'coffee' | 'fridge' | 'board' | 'whiteboard' | 'tictactoe' | 'kudos' | 'jira';
   /** Arte de outro móvel do Habbo (padrão = `id`). */
   sprite?: string;
   /** Cantos do papel na PNG (ver `surface` no manifesto). */
@@ -348,7 +349,8 @@ export const FURNI_CURATION: FurniCuration[] = [
     interaction: 'coffee',
   },
   { id: 'bardesk_polyfon', name: 'Balcão', category: 'cozinha', height: 1 },
-  { id: 'fridge', name: 'Geladeira', category: 'cozinha', height: 2, ...TOGGLE },
+  // Abre e entrega uma bebida (Fase 34).
+  { id: 'fridge', name: 'Geladeira', category: 'cozinha', height: 2, interaction: 'fridge' },
   {
     id: 'hc_machine',
     name: 'Máquina de Bebidas',

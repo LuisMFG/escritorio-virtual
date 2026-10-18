@@ -1,4 +1,4 @@
-import type { FigureSheet } from '@office/shared';
+import type { EffectAnimation, FigureSheet } from '@office/shared';
 import { PNG } from 'pngjs';
 import { inflateSync } from 'node:zlib';
 
@@ -18,6 +18,8 @@ interface Bitmap {
 
 interface SwfContents {
   manifest: string;
+  /** Animação dos efeitos (`<animation>`), quando houver. */
+  animation: string;
   /** Nome da classe (`hh_human_hair_h_std_hr_1_2_0`) → imagem. */
   bitmaps: Map<string, Bitmap>;
 }
@@ -32,6 +34,7 @@ export function readSwf(file: Buffer): SwfContents {
   const images = new Map<number, Bitmap>();
   const names = new Map<string, number>();
   let manifest = '';
+  let animation = '';
   while (p + 2 <= body.length) {
     const code = body.readUInt16LE(p);
     p += 2;
@@ -61,6 +64,7 @@ export function readSwf(file: Buffer): SwfContents {
     } else if (type === 87) {
       const text = data.subarray(6).toString('utf8');
       if (text.includes('<manifest')) manifest = text;
+      else if (text.includes('<animation')) animation = text;
     }
   }
   const bitmaps = new Map<string, Bitmap>();
@@ -68,7 +72,7 @@ export function readSwf(file: Buffer): SwfContents {
     const img = images.get(id);
     if (img) bitmaps.set(name, img);
   }
-  return { manifest, bitmaps };
+  return { manifest, animation, bitmaps };
 }
 
 /** DefineBitsLossless(2): formato 3 (paleta) ou 5 (32 bits, ARGB pré-multiplicado no 2). */
@@ -120,7 +124,8 @@ export function buildFigureSheet(
 ): { sheet: FigureSheet; png: Buffer } {
   const offsets = new Map<string, [number, number]>();
   for (const m of swf.manifest.matchAll(
-    /<asset name='([^']+)'[^>]*>\s*<param key='offset' value='(-?\d+),(-?\d+)'/g,
+    // Os manifestos usam aspas simples ou duplas, conforme a biblioteca.
+    /<asset name=["']([^"']+)["'][^>]*>\s*<param key=["']offset["'] value=["'](-?\d+),(-?\d+)["']/g,
   )) {
     offsets.set(m[1]!, [Number(m[2]), Number(m[3])]);
   }
@@ -175,11 +180,50 @@ export function buildFigureSheet(
     sheet.assets[c.name] = { x: ox - c.x0, y: oy - c.y0 };
     sheet.frames[c.name] = { x: c.px, y: c.py, w: c.w, h: c.h };
   }
-  for (const m of swf.manifest.matchAll(/<alias name='([^']+)' link='([^']+)' fliph='(\d)'/g)) {
+  for (const m of swf.manifest.matchAll(
+    /<alias name=["']([^"']+)["'] link=["']([^"']+)["'] fliph=["'](\d)["']/g,
+  )) {
     const [, name, link, flip] = m;
     const target = sheet.assets[link!];
     if (!target || flip === '1' || sheet.assets[name!]) continue;
     sheet.assets[name!] = { ...target, source: link };
   }
   return { sheet, png: PNG.sync.write(png) };
+}
+
+/**
+ * Animação de um efeito do Habbo: camadas (`sprite`: imagem base, brilho aditivo, na frente ou
+ * atrás do corpo por direção) e a sequência de quadros (qual quadro de cada camada, com
+ * deslocamento opcional).
+ */
+export function parseEffectAnimation(xml: string): EffectAnimation {
+  const attr = (tag: string, name: string) => new RegExp(`${name}=["']([^"']*)["']`).exec(tag)?.[1];
+  const sprites: EffectAnimation['sprites'] = [];
+  for (const m of xml.matchAll(/<sprite\b([^>]*?)(?:\/>|>([\s\S]*?)<\/sprite>)/g)) {
+    const id = attr(m[1]!, 'id');
+    const member = attr(m[1]!, 'member');
+    if (!id || !member) continue;
+    const dz: Record<string, number> = {};
+    for (const d of (m[2] ?? '').matchAll(/<direction\b([^>]*)\/?>/g)) {
+      const dir = attr(d[1]!, 'id');
+      if (dir !== undefined) dz[dir] = Number(attr(d[1]!, 'dz') ?? 0);
+    }
+    sprites.push({ id, member, ink: Number(attr(m[1]!, 'ink') ?? 0), dz });
+  }
+  const frames: EffectAnimation['frames'] = [];
+  for (const f of xml.matchAll(/<frame\b[^>]*>([\s\S]*?)<\/frame>/g)) {
+    const layers: EffectAnimation['frames'][number] = [];
+    for (const fx of f[1]!.matchAll(/<fx\b([^>]*)\/?>/g)) {
+      const id = attr(fx[1]!, 'id');
+      if (!id) continue;
+      layers.push({
+        id,
+        frame: Number(attr(fx[1]!, 'frame') ?? 0),
+        dx: Number(attr(fx[1]!, 'dx') ?? 0),
+        dy: Number(attr(fx[1]!, 'dy') ?? 0),
+      });
+    }
+    frames.push(layers);
+  }
+  return { sprites, frames };
 }

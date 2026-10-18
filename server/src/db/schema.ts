@@ -39,6 +39,8 @@ export const users = sqliteTable('users', {
   canEditRooms: integer('can_edit_rooms', { mode: 'boolean' }).notNull().default(false),
   /** Emblemas exibidos no cartão (até 3 ids de conquistas, separados por vírgula). */
   badges: text('badges').notNull().default(''),
+  /** Efeito escolhido para usar (Fase 34); vazio = nenhum. */
+  effect: text('effect').notNull().default(''),
   /** O que aparece quando a pessoa programa: 'hidden' | 'coding' | 'language' | 'project'. */
   codeShare: text('code_share').notNull().default('language'),
   figure: text('figure').notNull(),

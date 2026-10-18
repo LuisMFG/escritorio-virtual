@@ -20,6 +20,7 @@ import * as kudosRoutes from './kudos.js';
 import * as mapRoutes from './map.js';
 import * as uploadRoutes from './uploads.js';
 import * as jiraRoutes from './jira.js';
+import * as effectRoutes from './effects.js';
 import { UPLOAD_MAX_BYTES } from '@office/shared';
 import {
   changePassword,
@@ -74,7 +75,8 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
     announcementRoutes.AnnouncementDeps &
     kudosRoutes.KudosDeps &
     uploadRoutes.UploadDeps &
-    jiraRoutes.JiraDeps = {
+    jiraRoutes.JiraDeps &
+    effectRoutes.EffectDeps = {
     inviteCode: () => svc.settings.inviteCode(),
     adminUsernames: cfg.adminUsernames,
     avatarManifest: svc.avatarManifest,
@@ -433,6 +435,16 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
   app.put(
     '/api/admin/jira',
     withCaller((c, req, res) => send(res, admin.setJiraSite(c, req.body, auth))),
+  );
+
+  // Efeitos (Fase 34): os liberados e o que a pessoa usa.
+  app.get(
+    '/api/effects',
+    withCaller((c, _req, res) => send(res, effectRoutes.myEffects(c, auth))),
+  );
+  app.put(
+    '/api/effects',
+    withCaller((c, req, res) => send(res, effectRoutes.setEffect(c, req.body, auth))),
   );
 
   // Salas (admins e quem pode editar salas).

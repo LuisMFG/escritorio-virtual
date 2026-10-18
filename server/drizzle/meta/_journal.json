@@ -162,6 +162,13 @@
       "when": 1792340218871,
       "tag": "0022_jira",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "6",
+      "when": 1792366476510,
+      "tag": "0023_efeitos",
+      "breakpoints": true
     }
   ]
 }

@@ -5,14 +5,15 @@ import {
   avatarImageUrl,
   clothingSetImageUrl,
   figureSchema,
+  SHEET_FORMAT,
   type FigureData,
   furniImageUrl,
 } from '@office/shared';
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { UpstreamError, type HabboAssetsClient } from './HabboAssetsClient.js';
-import { buildFigureSheet, readSwf } from './swfFigure.js';
-import { readFileSync } from 'node:fs';
+import { buildFigureSheet, parseEffectAnimation, readSwf } from './swfFigure.js';
+import { readFileSync, statSync } from 'node:fs';
 import { ROOT_DIR } from '../config.js';
 
 /** URLs sem revisão fixada podem mudar; o cache em disco delas expira em 1 dia. */
@@ -52,7 +53,7 @@ const classname = z
 export function createAssetRouter(
   client: HabboAssetsClient,
   cacheDir: string,
-  figureData: () => Pick<FigureData, 'libs' | 'swf'> | null = loadFigureData,
+  figureData: () => Pick<FigureData, 'libs' | 'swf' | 'effects'> | null = loadFigureData,
 ): Router {
   const router = Router();
   const inflight = new Map<string, Promise<Buffer>>();
@@ -129,10 +130,11 @@ export function createAssetRouter(
     void serve(res, clothingSetImageUrl(Number(id), q.data), false, CLOTHING_TTL_MS);
   });
 
-  // Bibliotecas de roupa (Fase 31): o SWF original vira folha de sprites + JSON, uma vez só.
+  // Bibliotecas de roupa (Fase 31) e efeitos (Fase 34): o SWF original vira folha de sprites +
+  // JSON, uma vez só (cache em disco e imutável, pela revisão).
   const sheets = new Map<string, Promise<{ png: Buffer; json: Buffer }>>();
-  const sheetFor = (lib: string, revision: number, swf: string) => {
-    const key = `${lib}-${revision}`;
+  const sheetFor = (kind: 'figure' | 'effect', lib: string, revision: number, swf: string) => {
+    const key = `${kind}-v${SHEET_FORMAT}-${lib}-${revision}`;
     let pending = sheets.get(key);
     if (!pending) {
       const base = join(cacheDir, 'figure', key);
@@ -142,8 +144,13 @@ export function createAssetRouter(
           readCached(`${base}.json`, Infinity),
         ]);
         if (png && json) return { png, json };
-        const built = buildFigureSheet(lib, readSwf(await client.fetchSwf(swf)));
-        const out = { png: built.png, json: Buffer.from(JSON.stringify(built.sheet)) };
+        const contents = readSwf(await client.fetchSwf(swf));
+        const built = buildFigureSheet(lib, contents);
+        const sheet =
+          kind === 'effect'
+            ? { ...built.sheet, animation: parseEffectAnimation(contents.animation) }
+            : built.sheet;
+        const out = { png: built.png, json: Buffer.from(JSON.stringify(sheet)) };
         await writeAtomic(`${base}.png`, out.png);
         await writeAtomic(`${base}.json`, out.json);
         return out;
@@ -153,23 +160,21 @@ export function createAssetRouter(
     }
     return pending;
   };
-  router.get('/figure/:file', async (req: Request, res: Response) => {
-    const m = /^([a-z0-9_]{1,60})\.(png|json)$/i.exec(String(req.params.file ?? ''));
+  const sheetRoute = (kind: 'figure' | 'effect') => async (req: Request, res: Response) => {
+    const m = /^([A-Za-z0-9_]{1,60})\.(png|json)$/.exec(String(req.params.file ?? ''));
     const revision = z.coerce.number().int().positive().safeParse(req.query.revision);
-    const figure = figureData();
-    const lib = m?.[1] ?? '';
+    const data = figureData();
+    const name = m?.[1] ?? '';
+    const known =
+      kind === 'figure'
+        ? data && data.swf[name] && { revision: data.libs[name], swf: data.swf[name] }
+        : data?.effects?.[name];
     // Só bibliotecas conhecidas, na revisão dos dados (nada de baixar qualquer coisa da CDN).
-    if (
-      !m ||
-      !revision.success ||
-      !figure ||
-      figure.libs[lib] !== revision.data ||
-      !figure.swf[lib]
-    ) {
+    if (!m || !revision.success || !known || known.revision !== revision.data) {
       return void res.status(400).json({ error: 'Parâmetros inválidos' });
     }
     try {
-      const sheet = await sheetFor(lib, revision.data, figure.swf[lib]);
+      const sheet = await sheetFor(kind, name, revision.data, known.swf!);
       res.setHeader('Content-Type', m[2] === 'png' ? 'image/png' : 'application/json');
       res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
       res.end(m[2] === 'png' ? sheet.png : sheet.json);
@@ -179,26 +184,30 @@ export function createAssetRouter(
         .status(status >= 400 && status < 600 ? status : 502)
         .json({ error: (err as Error).message });
     }
-  });
+  };
+  router.get('/figure/:file', sheetRoute('figure'));
+  router.get('/effect/:file', sheetRoute('effect'));
 
   return router;
 }
 
 /** `figuredata.json` (em dev em client/public; em produção também copiado para client/dist). */
-let figureCache: Pick<FigureData, 'libs' | 'swf'> | null | undefined;
-function loadFigureData(): Pick<FigureData, 'libs' | 'swf'> | null {
-  if (figureCache !== undefined) return figureCache;
+let figureCache: { mtime: number; data: Pick<FigureData, 'libs' | 'swf' | 'effects'> } | null =
+  null;
+/** Relê quando o arquivo muda (rodar o `assets:figure` não exige reiniciar o servidor). */
+function loadFigureData(): Pick<FigureData, 'libs' | 'swf' | 'effects'> | null {
   for (const dir of ['public', 'dist']) {
+    const file = join(ROOT_DIR, 'client', dir, 'assets', 'figure', 'figuredata.json');
     try {
-      figureCache = JSON.parse(
-        readFileSync(join(ROOT_DIR, 'client', dir, 'assets', 'figure', 'figuredata.json'), 'utf8'),
-      ) as FigureData;
-      return figureCache;
+      const mtime = statSync(file).mtimeMs;
+      if (figureCache?.mtime !== mtime) {
+        figureCache = { mtime, data: JSON.parse(readFileSync(file, 'utf8')) as FigureData };
+      }
+      return figureCache.data;
     } catch {
       // tenta a próxima
     }
   }
-  figureCache = null;
   return null;
 }
 

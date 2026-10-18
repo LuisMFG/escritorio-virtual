@@ -10,6 +10,7 @@ import { resolve } from 'node:path';
 import { buildFigureData, FIGURE_LIBRARIES, type FigureLibInfo } from '../src/assets/figureData.js';
 import { HabboAssetsClient } from '../src/assets/HabboAssetsClient.js';
 import { config, ROOT_DIR } from '../src/config.js';
+import { EFFECT_LIBRARIES, HAND_ITEM_LIB } from '@office/shared';
 
 const client = new HabboAssetsClient({ apiKey: config.habboAssetsApiKey, imagerPerMinute: 90 });
 const infos: FigureLibInfo[] = [];
@@ -29,6 +30,25 @@ for (const lib of FIGURE_LIBRARIES) {
   console.log('ok');
 }
 const data = buildFigureData(infos, swf);
+
+// Itens na mão (Fase 34): só o SWF (não tem conjuntos de roupa).
+type LibList = { data: { revisions: { revision: string; url: string }[] } };
+const item = (
+  await client.getJson<LibList>(`/swfs/libraries/clothing/${HAND_ITEM_LIB}`)
+).data.revisions.at(-1)!;
+data.libs[HAND_ITEM_LIB] = Number(item.revision);
+data.swf[HAND_ITEM_LIB] = item.url;
+console.log(`[figure] ${HAND_ITEM_LIB} ok`);
+
+// Efeitos (Fase 34): o servidor converte o SWF de cada um em folha + animação.
+data.effects = {};
+for (const lib of EFFECT_LIBRARIES) {
+  const rev = (await client.getJson<LibList>(`/swfs/libraries/effect/${lib}`)).data.revisions.at(
+    -1,
+  )!;
+  data.effects[lib] = { revision: Number(rev.revision), swf: rev.url };
+  console.log(`[figure] efeito ${lib} ok`);
+}
 const dir = resolve(ROOT_DIR, 'client', 'public', 'assets', 'figure');
 await mkdir(dir, { recursive: true });
 const out = resolve(dir, 'figuredata.json');

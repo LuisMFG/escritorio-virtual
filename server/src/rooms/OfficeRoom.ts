@@ -59,6 +59,11 @@ import {
   turnSchema,
   directionBetween,
   type Posture,
+  CELEBRATIONS,
+  COFFEE_ITEM,
+  FRIDGE_ITEMS,
+  HAND_ITEM_MS,
+  type EffectFlash,
   ERROR_MESSAGES,
   ErrorCode,
   joinOptionsSchema,
@@ -96,6 +101,10 @@ import { PetKeeper } from './PetKeeper.js';
 const TICK_MS = 50;
 /** Segundos que um avatar desconectado espera por reconexão antes de sair da sala. */
 const RECONNECT_SECONDS = 30;
+/** Item na mão de cada pessoa (vale entre salas, até vencer). */
+const HELD = new Map<string, { item: number; until: number }>();
+/** Aniversários já comemorados hoje (`userId:AAAA-MM-DD`). */
+const BIRTHDAY_SHOWN = new Set<string>();
 
 type OfficeClient = Client<{ auth: UserRow }>;
 
@@ -188,6 +197,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     [ClientMessage.Turn]: validate(turnSchema, (client, msg) =>
       this.handleTurn(client as OfficeClient, msg.dir),
     ),
+    [ClientMessage.ItemDrop]: (client: Client) => this.dropHandItem(client.sessionId),
     [ClientMessage.BoardNotes]: (client: Client, input: unknown) => {
       const p = boardRefSchema.safeParse(input);
       return p.success && this.boardFurni(p.data.furniId)
@@ -409,6 +419,8 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       p.focusUntil = state?.until ?? 0;
       p.focusKind = state?.kind ?? '';
     }
+    // Terminou um ciclo de foco (foi para a pausa ou acabou): medalha.
+    if (finished && state?.kind !== 'focus') this.celebrate(userId, 'focus');
     for (const c of this.clients) {
       if (c.auth?.id !== userId) continue;
       c.send(ServerMessage.FocusPhase, {
@@ -519,6 +531,8 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     services().pets.events.on('changed', this.onPetChanged);
     services().activity.events.on('changed', this.onActivity);
     services().focus.events.on('changed', this.onFocus);
+    services().achievements.events.on('unlocked', this.onAchievement);
+    services().kudos.events.on('given', this.onKudos);
   }
 
   override onDispose(): void {
@@ -529,6 +543,9 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     services().pets.events.off('changed', this.onPetChanged);
     services().activity.events.off('changed', this.onActivity);
     services().focus.events.off('changed', this.onFocus);
+    services().achievements.events.off('unlocked', this.onAchievement);
+    services().kudos.events.off('given', this.onKudos);
+    for (const t of this.handTimers.values()) t.clear();
   }
 
   override onAuth(_client: Client, options: unknown): UserRow {
@@ -575,6 +592,15 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       focusKind: services().focus.get(user.id)?.kind ?? '',
     });
     this.state.players.set(client.sessionId, player);
+    // O item na mão vai junto de sala em sala, até vencer.
+    const held = HELD.get(user.id);
+    if (held && held.until > Date.now()) this.giveHandItem(client.sessionId, held.item, held.until);
+    // Aniversário: corações na primeira entrada do dia.
+    const today = new Date().toISOString().slice(0, 10);
+    if (player.birthday && !BIRTHDAY_SHOWN.has(`${user.id}:${today}`)) {
+      BIRTHDAY_SHOWN.add(`${user.id}:${today}`);
+      this.clock.setTimeout(() => this.celebrate(user.id, 'birthday'), 1500);
+    }
     const pet = services().pets.get(user.id);
     if (pet && !this.state.pets.has(user.id)) {
       this.pets.set(user.id, pet, client.sessionId, player.name);
@@ -629,6 +655,8 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     this.gameLimiter.delete(client.sessionId);
     this.pendingUse.delete(client.sessionId);
     this.pendingSit.delete(client.sessionId);
+    this.handTimers.get(client.sessionId)?.clear();
+    this.handTimers.delete(client.sessionId);
     for (const furniId of [...this.state.games.keys()]) this.leaveGame(furniId, client.sessionId);
     this.pets.ownerLeft(client.sessionId, (userId) => this.sessionOf(userId));
     services().presence.remove(client.sessionId);
@@ -698,7 +726,11 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     const f = this.state.furni.get(furniId);
     const def = f && services().furniDefs.get(f.defId);
     if (!player || !f || !def) return;
-    if (def.interaction === 'toggle' || def.interaction === 'coffee') {
+    if (
+      def.interaction === 'toggle' ||
+      def.interaction === 'coffee' ||
+      def.interaction === 'fridge'
+    ) {
       return this.handleUse(client, player, f, def);
     }
     if (!def.canSit && !def.canLay) return;
@@ -806,8 +838,19 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       const i = def.states.indexOf(f.state);
       f.state = def.states[(i + 1) % def.states.length]!;
       services().furni.setState(this.layout.roomId, f.id, f.state);
+    } else if (def.interaction === 'fridge') {
+      // Abre a porta por um instante e entrega uma bebida sorteada.
+      if (def.states.includes(1)) {
+        f.state = 1;
+        this.clock.setTimeout(() => {
+          if (this.state.furni.get(furniId) === f) f.state = 0;
+        }, 2000);
+      }
+      const drink = FRIDGE_ITEMS[Math.floor(Math.random() * FRIDGE_ITEMS.length)]!;
+      this.giveHandItem(sessionId, drink);
     } else if (def.interaction === 'coffee') {
-      this.broadcast(ServerMessage.Emote, { sessionId, emote: 'coffee' } satisfies EmoteMessage);
+      // Uma xícara na mão (o avatar segura e dá uns goles).
+      this.giveHandItem(sessionId, COFFEE_ITEM);
       if (player.userId) services().achievements.unlock(player.userId, 'coffee');
       // A máquina "trabalha" por um instante, se tiver estado para isso.
       if (def.states.includes(1)) {
@@ -856,6 +899,47 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     player.dir = posture === 'sit' ? sitDirection(player.dir) : layDirection(player.dir);
     player.z = floor;
   }
+
+  // ---------- Item na mão e comemorações (Fase 34) ----------
+
+  private readonly handTimers = new Map<string, { clear(): void }>();
+
+  /** Põe um item na mão (some sozinho em `HAND_ITEM_MS`, ou com `/largar`). */
+  private giveHandItem(sessionId: string, item: number, until = Date.now() + HAND_ITEM_MS): void {
+    const player = this.state.players.get(sessionId);
+    if (!player) return;
+    player.handItem = item;
+    HELD.set(player.userId, { item, until });
+    this.handTimers.get(sessionId)?.clear();
+    this.handTimers.set(
+      sessionId,
+      this.clock.setTimeout(() => this.dropHandItem(sessionId), Math.max(0, until - Date.now())),
+    );
+  }
+
+  private dropHandItem(sessionId: string): void {
+    const player = this.state.players.get(sessionId);
+    if (!player) return;
+    player.handItem = 0;
+    HELD.delete(player.userId);
+    this.handTimers.get(sessionId)?.clear();
+    this.handTimers.delete(sessionId);
+  }
+
+  /** Efeito por alguns segundos sobre a pessoa (se ela estiver nesta sala). */
+  private celebrate(userId: string, why: keyof typeof CELEBRATIONS): void {
+    const session = this.sessionOf(userId);
+    if (!session) return;
+    const { effect, ms } = CELEBRATIONS[why];
+    this.broadcast(ServerMessage.EffectFlash, {
+      sessionId: session,
+      effect,
+      ms,
+    } satisfies EffectFlash);
+  }
+
+  private readonly onAchievement = (userId: string): void => this.celebrate(userId, 'achievement');
+  private readonly onKudos = (k: { toUserId: string }): void => this.celebrate(k.toUserId, 'kudos');
 
   /** Virar sem sair do lugar: parado (8 direções) ou sentado no chão (4). */
   private handleTurn(client: OfficeClient, dir: number): void {

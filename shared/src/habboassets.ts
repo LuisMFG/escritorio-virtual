@@ -7,8 +7,19 @@ export const HABBOASSETS_CDN = 'https://cdn.habboassets.com';
 
 /** Folha de sprites (`png`) ou dados (`json`) de uma biblioteca de roupa, convertida pelo servidor. */
 export function figureSheetUrl(lib: string, revision: number, ext: 'png' | 'json'): string {
-  return `/hh/figure/${encodeURIComponent(lib)}.${ext}?revision=${revision}`;
+  return `/hh/figure/${encodeURIComponent(lib)}.${ext}?revision=${revision}&v=${SHEET_FORMAT}`;
 }
+
+/** Folha de um efeito do Habbo (`png`) ou imagens + animação (`json`). */
+export function effectSheetUrl(lib: string, revision: number, ext: 'png' | 'json'): string {
+  return `/hh/effect/${encodeURIComponent(lib)}.${ext}?revision=${revision}&v=${SHEET_FORMAT}`;
+}
+
+/**
+ * Versão do formato das folhas convertidas pelo servidor. Vai na URL: o navegador guarda as
+ * folhas para sempre, então mudar a conversão precisa mudar o endereço.
+ */
+export const SHEET_FORMAT = 2;
 
 /** Base do imager público (PNGs por URL, sem token). */
 export const HABBOASSETS_IMAGER = 'https://www.habboassets.com/imaging';

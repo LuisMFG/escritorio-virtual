@@ -2,6 +2,8 @@ import { defineRoom, defineServer } from '@colyseus/core';
 import { boot, type ColyseusTestServer } from '@colyseus/testing';
 import {
   ClientMessage,
+  COFFEE_ITEM,
+  FRIDGE_ITEMS,
   OFFICE_ROOM,
   OfficeState,
   MEETING,
@@ -73,6 +75,14 @@ async function join(token: string, roomId = RECEPTION.id, ticket?: string) {
 }
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+/** Espera a condição valer (ou falha depois de `ms`). */
+async function waitFor(cond: () => boolean, ms = 2000): Promise<void> {
+  const end = Date.now() + ms;
+  while (!cond()) {
+    if (Date.now() > end) throw new Error('condição não aconteceu a tempo');
+    await wait(50);
+  }
+}
 
 describe('OfficeRoom', () => {
   it('recusa entrar sem token válido', async () => {
@@ -562,18 +572,32 @@ describe('OfficeRoom', () => {
       expect(a.state.furni.get(lamp.id)!.state).toBe(0);
     });
 
-    it('máquina de café: emote ☕ para a sala', async () => {
+    it('máquina de café e geladeira: item na mão para todos verem; /largar solta', async () => {
       const roomId = emptyRoom();
       const m = svc.furni.add(
         roomId,
         { defId: 'sunsetcafe_c20_coffeemachine', x: 2, y: 4, z: 0, rot: 0 },
         owner(),
       );
+      const fridge = svc.furni.add(roomId, { defId: 'fridge', x: 6, y: 4, z: 0, rot: 0 }, owner());
       const a = await join(newUser('Ana').token, roomId);
       const b = await join(newUser('Beto').token, roomId);
-      const emote = b.waitForMessage(ServerMessage.Emote);
+      const held = () => b.state.players.get(a.sessionId)!.handItem;
       a.send(ClientMessage.Interact, { furniId: m.id });
-      expect((await emote) as EmoteMessage).toEqual({ sessionId: a.sessionId, emote: 'coffee' });
+      await waitFor(() => held() === COFFEE_ITEM, STEP_MS * 12);
+      a.send(ClientMessage.ItemDrop, {});
+      await waitFor(() => held() === 0);
+      a.send(ClientMessage.Interact, { furniId: fridge.id });
+      await waitFor(() => (FRIDGE_ITEMS as readonly number[]).includes(held()), STEP_MS * 12);
+    });
+
+    it('comemoração: conquista nova faz o efeito aparecer para a sala', async () => {
+      const ana = newUser('Ana');
+      const a = await join(ana.token);
+      const b = await join(newUser('Beto').token);
+      const flash = b.waitForMessage(ServerMessage.EffectFlash);
+      svc.achievements.unlock(ana.user.id, 'organizer');
+      expect(await flash).toEqual({ sessionId: a.sessionId, effect: 'spotlight', ms: 6000 });
     });
 
     it('mural: prega, lista com nome, só autor ou admin tira', async () => {

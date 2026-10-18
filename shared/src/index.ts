@@ -35,3 +35,4 @@ export * from './jira.js';
 export * from './figureRender.js';
 export * from './avatarAnim.js';
 export * from './posture.js';
+export * from './effects.js';

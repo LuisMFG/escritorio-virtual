@@ -1,6 +1,7 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import {
+  EFFECT_IDS,
   DEFAULT_CARGOS,
   isBirthdayToday,
   parseShowcase,
@@ -26,6 +27,8 @@ export interface PublicProfile {
   canEditRooms: boolean;
   /** Emblemas exibidos (ids separados por vírgula). */
   badges: string;
+  /** Efeito em uso (Fase 34); vazio = nenhum. */
+  effect: string;
 }
 
 export interface NewUser {
@@ -49,6 +52,7 @@ type UserChanges = Partial<
     | 'cargoId'
     | 'bio'
     | 'badges'
+    | 'effect'
     | 'codeShare'
     | 'birthday'
     | 'disabled'
@@ -263,6 +267,7 @@ export class UserService {
       birthday: isBirthdayToday(user.birthday, this.now()),
       canEditRooms: user.role === 'admin' || user.canEditRooms,
       badges: parseShowcase(user.badges).join(','),
+      effect: (EFFECT_IDS as readonly string[]).includes(user.effect) ? user.effect : '',
     };
   }
 

@@ -36,6 +36,8 @@ export interface FigureData {
   sets: Record<string, { p: number; parts: [string, number, 0 | 1, number][]; hide?: string[] }>;
   /** Paleta → cor → hex (`"RRGGBB"`). */
   palettes: Record<string, Record<string, string>>;
+  /** Efeitos (Fase 34): biblioteca → revisão e SWF. */
+  effects?: Record<string, { revision: number; swf: string }>;
 }
 
 /** Folha de uma biblioteca, gerada pelo servidor a partir do SWF (`/hh/figure/{lib}.json`). */
@@ -159,6 +161,8 @@ export interface FigurePose {
   talk?: boolean;
   talkFrame?: number;
   expression?: FigureExpression;
+  /** Item na mão (id do Habbo em `hh_human_item`); aparece carregando ou bebendo. */
+  handItem?: number;
 }
 
 /** Quadros de cada animação no Habbo (o resto tem um só). */
@@ -166,14 +170,16 @@ export const POSE_FRAMES = { wlk: 4, wav: 2, blw: 2, respect: 2, spk: 2 } as con
 
 const LEFT_ARM = new Set(['lh', 'ls', 'lc']);
 const RIGHT_ARM = new Set(['rh', 'rs', 'rc']);
+/** Carregar e beber: o braço direito e o item na mão (`ri`, da biblioteca `hh_human_item`). */
+const RIGHT_ARM_ITEM = new Set(['rh', 'rs', 'rc', 'ri']);
 /** Que braço cada gesto usa. */
 const GESTURE_ARM: Record<FigureGesture, Set<string>> = {
   wav: LEFT_ARM,
   respect: LEFT_ARM,
   sig: LEFT_ARM,
   blw: RIGHT_ARM,
-  drk: RIGHT_ARM,
-  crr: RIGHT_ARM,
+  drk: RIGHT_ARM_ITEM,
+  crr: RIGHT_ARM_ITEM,
 };
 /** Deitado, as expressões têm versões próprias. */
 const LAY_FACE: Record<FigureExpression, string> = {
@@ -227,7 +233,11 @@ export function composeFigure(
   const mirror = wanted >= 4 && wanted <= 6;
   const dir = mirror ? 6 - wanted : wanted;
   const order = ORDER[dir] ?? ORDER[2]!;
-  const sorted = [...parts].sort((a, b) => rank(order, a.type) - rank(order, b.type));
+  const all =
+    pose.handItem && libs.has('hh_human_item')
+      ? [...parts, { type: 'ri', id: pose.handItem, lib: 'hh_human_item', tint: null }]
+      : parts;
+  const sorted = [...all].sort((a, b) => rank(order, a.type) - rank(order, b.type));
   for (const part of sorted) {
     const lib = libs.get(part.lib);
     if (!lib) continue;
@@ -271,6 +281,7 @@ export function poseKey(p: FigurePose): string {
     p.gesture ? (p.gestureFrame ?? 0) : '',
     p.talk ? `t${p.talkFrame ?? 0}` : '',
     p.expression ?? '',
+    p.handItem ?? '',
   ].join('|');
 }
 
