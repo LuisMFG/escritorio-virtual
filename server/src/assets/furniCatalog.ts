@@ -13,6 +13,8 @@ export interface FurniCuration {
   depth?: number;
   height: number;
   canSit?: boolean;
+  /** Camas e afins: deita (Fase 33). */
+  canLay?: boolean;
   canWalk?: boolean;
   sitHeight?: number;
   /**
@@ -32,6 +34,7 @@ export interface FurniCuration {
 }
 
 const SIT = { canSit: true, sitHeight: 0.5 } as const;
+const LAY = { canLay: true } as const;
 const TOGGLE = { interaction: 'toggle' } as const;
 const LIGHT = { interaction: 'toggle', light: true } as const;
 
@@ -92,6 +95,58 @@ export const FURNI_CURATION: FurniCuration[] = [
     ...SIT,
   },
   { id: 'exe_sofa', name: 'Sofá Executivo', category: 'sofás', height: 1, ...SIT },
+  // Fase 33: banqueta, pufe e almofada (sentar) e camas e saco de dormir (deitar).
+  {
+    id: 'bar_chair_armas',
+    name: 'Banqueta de Bar',
+    category: 'cadeiras',
+    width: 1,
+    depth: 1,
+    height: 1,
+    canSit: true,
+    sitHeight: 0.9,
+  },
+  { id: 'pura_mdl1', name: 'Pufe', category: 'sofás', width: 1, depth: 1, height: 1, ...SIT },
+  {
+    id: 'pillow_bronze',
+    name: 'Almofada',
+    category: 'sofás',
+    width: 1,
+    depth: 1,
+    height: 1,
+    canSit: true,
+    sitHeight: 0.2,
+  },
+  {
+    id: 'bed_polyfon',
+    name: 'Cama de Casal',
+    category: 'camas',
+    width: 2,
+    depth: 3,
+    height: 1,
+    sitHeight: 0.5,
+    ...LAY,
+  },
+  {
+    id: 'bed_budget_one',
+    name: 'Cama de Solteiro',
+    category: 'camas',
+    width: 1,
+    depth: 3,
+    height: 1,
+    sitHeight: 0.5,
+    ...LAY,
+  },
+  {
+    id: 'sleepingbag',
+    name: 'Saco de Dormir',
+    category: 'camas',
+    width: 1,
+    depth: 3,
+    height: 1,
+    sitHeight: 0.1,
+    ...LAY,
+  },
   { id: 'table_norja_med', name: 'Mesa Norja', category: 'mesas', width: 2, depth: 2, height: 1 },
   { id: 'table_silo_med', name: 'Mesa Silo', category: 'mesas', width: 2, depth: 2, height: 1 },
   {
@@ -416,6 +471,7 @@ export function buildLocalEntry(cur: FurniCuration): FurniManifestEntry {
     depth: cur.depth ?? 1,
     height: cur.height,
     canSit: cur.canSit ?? false,
+    canLay: cur.canLay ?? false,
     canWalk: cur.canWalk ?? false,
     sitHeight: cur.sitHeight ?? 0,
     directions: cur.directions ?? [0],
@@ -451,6 +507,7 @@ export function buildFurniEntry(
       depth: cur.depth ?? estimated.depth,
       height: cur.height,
       canSit: cur.canSit ?? false,
+      canLay: cur.canLay ?? false,
       canWalk: cur.canWalk ?? false,
       sitHeight: cur.sitHeight ?? 0,
       directions: info.directions,

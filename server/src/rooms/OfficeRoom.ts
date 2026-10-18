@@ -50,7 +50,15 @@ import {
   furniMoveSchema,
   furniPlaceSchema,
   furniRefSchema,
-  nearestSeatTile,
+  nearestFreeSeat,
+  seatTiles,
+  sitDirection,
+  layDirection,
+  bedDirection,
+  postureSchema,
+  turnSchema,
+  directionBetween,
+  type Posture,
   ERROR_MESSAGES,
   ErrorCode,
   joinOptionsSchema,
@@ -173,6 +181,12 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     }),
     [ClientMessage.Emote]: validate(emoteSchema, (client, msg) =>
       this.handleEmote(client as OfficeClient, msg),
+    ),
+    [ClientMessage.Posture]: validate(postureSchema, (client, msg) =>
+      this.handlePosture(client as OfficeClient, msg.posture),
+    ),
+    [ClientMessage.Turn]: validate(turnSchema, (client, msg) =>
+      this.handleTurn(client as OfficeClient, msg.dir),
     ),
     [ClientMessage.BoardNotes]: (client: Client, input: unknown) => {
       const p = boardRefSchema.safeParse(input);
@@ -663,6 +677,15 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       return this.sendError(client, ErrorCode.RateLimit);
     this.pendingSit.delete(client.sessionId);
     this.pendingUse.delete(client.sessionId);
+    // Sentado no chão, clicar num tile do lado só vira para lá (como no Habbo).
+    if (
+      player.action === 'sit' &&
+      !this.onSeat(client.sessionId, player) &&
+      Math.max(Math.abs(msg.x - player.x), Math.abs(msg.y - player.y)) === 1
+    ) {
+      player.dir = sitDirection(directionBetween(player, msg, player.dir));
+      return;
+    }
     const res = this.movement.request(client.sessionId, player, msg);
     if (!res.ok) this.sendError(client, ErrorCode.InvalidMove);
   }
@@ -678,16 +701,23 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     if (def.interaction === 'toggle' || def.interaction === 'coffee') {
       return this.handleUse(client, player, f, def);
     }
-    if (!def.canSit) return;
+    if (!def.canSit && !def.canLay) return;
     if (!this.moveLimiter.tryTake(client.sessionId))
       return this.sendError(client, ErrorCode.RateLimit);
     const from =
       player.nextX !== player.x || player.nextY !== player.y
         ? { x: player.nextX, y: player.nextY }
         : player;
-    const seat = nearestSeatTile(def, toPlaced(f), from);
-    if (this.isTileTaken(seat, client.sessionId)) {
-      return this.sendError(client, ErrorCode.InvalidMove, 'Esse lugar está ocupado.');
+    // O lugar livre mais perto (sofá de dois lugares, cama de casal…).
+    const seat = nearestFreeSeat(seatTiles(def, f), from, (t) =>
+      this.isTileTaken(t, client.sessionId),
+    );
+    if (!seat) {
+      return this.sendError(
+        client,
+        ErrorCode.InvalidMove,
+        def.canLay ? 'A cama está ocupada.' : 'Esse lugar está ocupado.',
+      );
     }
     this.pendingSit.set(client.sessionId, { furniId, seat });
     if (
@@ -795,9 +825,47 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     const f = this.state.furni.get(furniId);
     const def = f && services().furniDefs.get(f.defId);
     if (!player || !f || !def) return;
-    player.action = 'sit';
-    player.dir = f.rot;
+    // Cama: deita no comprimento, cabeça na cabeceira; cadeira e sofá: senta virado como o móvel.
+    player.action = def.canLay ? 'lay' : 'sit';
+    player.dir = def.canLay ? bedDirection(f.rot) : f.rot;
     player.z = f.z + def.sitHeight;
+  }
+
+  /** Está num assento (cadeira, sofá, cama)? Fora disso, sentado/deitado é no chão. */
+  private onSeat(sessionId: string, at: TilePoint): boolean {
+    return Boolean(this.gridFor(sessionId).tile(at.x, at.y)?.seat);
+  }
+
+  /** `/sentar`, `/deitar` (no chão, onde está) e `/levantar`. */
+  private handlePosture(client: OfficeClient, posture: Posture): void {
+    const player = this.state.players.get(client.sessionId);
+    if (!player || !this.moveLimiter.tryTake(client.sessionId)) return;
+    // Andando, primeiro chega (o comando vale parado).
+    if (player.nextX !== player.x || player.nextY !== player.y) return;
+    this.pendingSit.delete(client.sessionId);
+    const floor = this.gridFor(client.sessionId).heightAt(player.x, player.y);
+    if (posture === 'stand') {
+      if (player.action !== 'sit' && player.action !== 'lay') return;
+      player.action = 'idle';
+      player.z = floor;
+      return;
+    }
+    // Em cima de um assento vale o assento (cadeira senta, cama deita); no chão, a pose pedida.
+    if (this.onSeat(client.sessionId, player)) return;
+    player.action = posture;
+    player.dir = posture === 'sit' ? sitDirection(player.dir) : layDirection(player.dir);
+    player.z = floor;
+  }
+
+  /** Virar sem sair do lugar: parado (8 direções) ou sentado no chão (4). */
+  private handleTurn(client: OfficeClient, dir: number): void {
+    const player = this.state.players.get(client.sessionId);
+    if (!player || !this.moveLimiter.tryTake(client.sessionId)) return;
+    if (player.nextX !== player.x || player.nextY !== player.y) return;
+    if (player.action === 'idle') player.dir = dir;
+    else if (player.action === 'sit' && !this.onSeat(client.sessionId, player)) {
+      player.dir = sitDirection(dir);
+    }
   }
 
   // ---------- Enquetes ----------
@@ -885,8 +953,12 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     for (const f of this.state.furni.values()) {
       const def = services().furniDefs.get(f.defId);
       if (!def?.canSit) continue;
-      const seat = nearestSeatTile(def, toPlaced(f), from);
-      if (!touches(tfp, seat) || this.isTileTaken(seat, sessionId)) continue;
+      const seat = nearestFreeSeat(
+        seatTiles(def, f).filter((t) => touches(tfp, t)),
+        from,
+        (t) => this.isTileTaken(t, sessionId),
+      );
+      if (!seat) continue;
       const d = Math.max(Math.abs(seat.x - from.x), Math.abs(seat.y - from.y));
       if (!best || d < best.d) best = { id: f.id, d };
     }

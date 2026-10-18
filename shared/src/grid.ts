@@ -92,7 +92,7 @@ export class RoomGrid implements PathGrid {
             t.standHeight = Math.max(t.standHeight, f.z + def.height);
           } else {
             t.blocked = true;
-            if (def.canSit) t.seat = f;
+            if (def.canSit || def.canLay) t.seat = f;
           }
         }
       }

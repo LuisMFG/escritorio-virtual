@@ -13,6 +13,8 @@ export const furniManifestEntrySchema = z.object({
   depth: z.number().int().min(1).max(10),
   height: z.number().min(0).max(10),
   canSit: z.boolean().default(false),
+  /** Camas, sacos de dormir: deita (a altura vem de `sitHeight`). */
+  canLay: z.boolean().default(false),
   canWalk: z.boolean().default(false),
   sitHeight: z.number().min(0).max(10).default(0),
   directions: z.array(direction).min(1),

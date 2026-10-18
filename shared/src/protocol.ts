@@ -36,6 +36,10 @@ export const ClientMessage = {
   Typing: 'typing',
   /** `{ emote }`: acenar, rir, dançar… */
   Emote: 'emote',
+  /** `{ posture }`: sentar/deitar no chão ou levantar (`/sentar`, `/deitar`, `/levantar`). */
+  Posture: 'posture',
+  /** `{ dir }`: virar sem sair do lugar (setas do teclado). */
+  Turn: 'turn',
   /** `{ id }`: apagar mensagem do chat (admin ou quem escreveu). */
   ChatDelete: 'chat.delete',
   /** `{ id, emoji }`: põe ou tira uma reação. */

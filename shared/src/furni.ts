@@ -11,6 +11,8 @@ export interface FurniDef {
   /** Altura de empilhamento, em unidades de altura. */
   height: number;
   canSit: boolean;
+  /** Camas e afins: deita (Fase 33). */
+  canLay?: boolean;
   /** Tapetes e afins: dá para andar por cima. */
   canWalk: boolean;
   sitHeight: number;
