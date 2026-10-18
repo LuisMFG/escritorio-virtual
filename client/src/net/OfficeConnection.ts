@@ -22,6 +22,7 @@ import {
   type ReactionsUpdate,
   type EmoteId,
   type Posture,
+  type EffectFlash,
   type EmoteMessage,
   type Status,
   type ErrorMessage,
@@ -61,6 +62,8 @@ interface Handlers {
   pollUpdated: (msg: PollUpdated) => void;
   /** Fase do próprio modo foco mudou. */
   focusPhase: (msg: FocusPhase) => void;
+  /** Comemoração: efeito por alguns segundos sobre alguém. */
+  effectFlash: (msg: EffectFlash) => void;
   /** Recados de um mural mudaram. */
   boardChanged: (furniId: string) => void;
   wbStroke: (msg: WbStrokeMessage) => void;
@@ -154,6 +157,11 @@ export class OfficeConnection {
   /** Sentar/deitar no chão ou levantar. */
   posture(posture: Posture): void {
     this.room?.send(ClientMessage.Posture, { posture });
+  }
+
+  /** Largar o item da mão. */
+  dropItem(): void {
+    this.room?.send(ClientMessage.ItemDrop, {});
   }
 
   /**
@@ -294,6 +302,7 @@ export class OfficeConnection {
     );
     room.onMessage(ServerMessage.PollUpdated, (msg: PollUpdated) => this.on.pollUpdated(msg));
     room.onMessage(ServerMessage.FocusPhase, (msg: FocusPhase) => this.on.focusPhase(msg));
+    room.onMessage(ServerMessage.EffectFlash, (msg: EffectFlash) => this.on.effectFlash(msg));
     room.onMessage(ServerMessage.BoardChanged, (m: { furniId: string }) =>
       this.on.boardChanged(m.furniId),
     );

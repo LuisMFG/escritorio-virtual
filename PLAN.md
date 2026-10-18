@@ -963,10 +963,19 @@ Pedido (18/10/2026): prioridade para as **animações dos personagens**, **senta
 - Testes: comandos, direções de cada pose, lugares (sofá, cama nos dois eixos), lugar livre mais perto; na sala, dois no mesmo sofá e o terceiro recusado, deitar na cama (cabeceira e direção), sentar/deitar no chão, virar sentado, clique ao lado só vira, deitado não vira, andar levanta; de ponta a ponta (`e2e/tests/sentar.spec.ts`): dois no sofá, `/levantar`, `/sentar` e `/deitar` vistos pelo outro. Um teste da sala que estourava 5 s com todos os arquivos rodando juntos ganhou 15 s.
 - No navegador: cama de casal e de solteiro (girada) colocadas pelo Decorar na Recepção do banco de desenvolvimento (ficaram lá para testar), deitar nas duas, `/levantar`, `/sentar` no chão e virar com a seta.
 
-#### Fase 34 — Itens na mão e efeitos
+#### Fase 34 — Itens na mão e efeitos ✅ implementada
 - A máquina de café entrega **um copo na mão** (o avatar segura e bebe de vez em quando), e a geladeira entrega uma bebida. Some depois de alguns minutos ou ao clicar em "largar".
 - **Efeitos** sobre o avatar (brilho, aura, raio…) para comemorar conquistas, aniversário, elogio recebido e fim de Pomodoro. No Perfil, cada pessoa escolhe um efeito desbloqueado para usar.
 - **Como testar:** pegar café e ver o copo; ganhar uma conquista e ver o efeito.
+
+**Notas da implementação:**
+- **Itens na mão** (biblioteca `hh_human_item`, ~200 itens): a máquina de café entrega uma xícara (item 6) e a geladeira (interação nova `fridge`, que abre a porta) sorteia água com gás, refrigerante, limonada ou suco. O item fica 5 minutos (vale entre salas) ou até `/largar` / menu 😊. O avatar segura (`crr`) e dá um gole (`drk`) a cada 12 s; o emote ☕ também mostra a xícara. A biblioteca de itens só é baixada quando alguém pega um.
+- **Conversor corrigido:** alguns SWFs (o de itens, por exemplo) escrevem o manifesto com aspas duplas, e o leitor só aceitava simples: a maioria dos itens sumia. Agora aceita as duas; o formato das folhas ganhou versão na URL (`v=2`) para o navegador e o cache do servidor não usarem as antigas.
+- **Efeitos** (bibliotecas de efeito do Habbo): o servidor converte o SWF em folha + **animação** (lida do XML do próprio SWF: camadas, brilho aditivo, frente/atrás do corpo por direção e a sequência de quadros com deslocamentos) em `/hh/effect/{nome}`. No cliente, cada efeito toca a 12 quadros/s sobre o avatar, com o mesmo registro das partes (espelho nas direções 4–6 quando não há desenho próprio).
+- **Escolher no Perfil (✨ Efeitos):** Brilho (todos), Joinha girando (1 elogio recebido), Brilho azul (3 conquistas), Corações (3 elogios), Vaga-lumes (5), Borboletas (8), Auréola (11), Holofote (14) e Raio (17 conquistas). Clicar usa, de novo tira; bloqueados mostram como liberar. Guardado no usuário (`users.effect`) e no estado da sala, então todos veem e as salas atualizam na hora.
+- **Comemorações** (efeito por alguns segundos, para a sala toda): conquista → holofote; elogio recebido → joinha girando; fim de um ciclo de foco → medalha; aniversário → corações na primeira entrada do dia.
+- Testes: animação dos efeitos (camadas, direções, quadros com deslocamento, camada sem fechar a tag), manifesto com aspas duplas, desbloqueio e dicas, `/largar`, API de efeitos (só liberados, avisa as salas, elogios liberam corações), sala (café e geladeira dão item, largar, conquista dispara o holofote) e ponta a ponta (`e2e/tests/efeitos.spec.ts`: Brilho no Perfil visto pelo outro, café na Copa e `/largar`).
+- No navegador: xícara de café na mão na Copa (continua depois de recarregar), Brilho escolhido no Perfil e Corações flutuando em volta do avatar (este colocado pelo banco só para conferir e depois retirado).
 
 #### Fase 35 — Muito mais roupas
 - Catálogo do editor com **todas as roupas usáveis** do Habbo Brasil (milhares, contra 270 hoje): busca por nome, filtros por categoria e gênero, paginação e miniaturas carregadas aos poucos.

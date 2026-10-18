@@ -30,6 +30,7 @@ import { Application, TextureSource } from 'pixi.js';
 import { AssetLoader } from './assets/AssetLoader.js';
 import { AvatarTextureCache, ImagerAvatarRenderer } from './assets/AvatarTextureCache.js';
 import { FigureAvatarRenderer } from './assets/FigureAvatarRenderer.js';
+import { EffectLibrary } from './assets/EffectLibrary.js';
 import { PlaceholderFactory } from './assets/PlaceholderFactory.js';
 import { DEBUG, FORCE_IMAGER, HOUR_OVERRIDE, OFFLINE_ASSETS } from './config.js';
 import type { AvatarSnapshot } from './entities/AvatarView.js';
@@ -112,6 +113,8 @@ function snapshot(p: Player): AvatarSnapshot {
     z: p.z,
     focusUntil: p.focusUntil,
     focusKind: p.focusKind,
+    effect: p.effect,
+    handItem: p.handItem,
   };
 }
 
@@ -148,6 +151,7 @@ async function start(): Promise<void> {
           ),
     ),
     furniDefs: new Map<string, FurniManifestEntry>(furniManifest.items.map((i) => [i.id, i])),
+    effects: new EffectLibrary(!OFFLINE_ASSETS),
   };
 
   /** Prévia do editor quando o imager falha: o avatar provisório em camadas, como imagem. */
@@ -219,6 +223,7 @@ async function start(): Promise<void> {
     react: (id, emoji) => connection?.react(id, emoji),
     emote: (id) => connection?.emote(id),
     posture: (p) => connection?.posture(p),
+    dropItem: () => connection?.dropItem(),
     typing: (on) => connection?.typing(on),
     remove: (id) => connection?.deleteChat(id),
     createPoll: (poll) => connection?.createPoll(poll),
@@ -1006,6 +1011,7 @@ async function start(): Promise<void> {
       chatReactions: (msg) => chat.updateReactions(msg.id, msg.reactions),
       pollUpdated: ({ poll }) => chat.updatePoll(poll),
       focusPhase: (p) => focus.phase(p),
+      effectFlash: (msg) => scene?.flashEffect(msg.sessionId, msg.effect, msg.ms),
       kicked: (msg) => {
         if (msg.scope === 'room') return overlay.notify(msg.message);
         // Do escritório: volta para a entrada com o aviso.

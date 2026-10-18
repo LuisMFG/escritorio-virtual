@@ -5,6 +5,7 @@ import { mountPetSection } from './petSection.js';
 import { mountCodeSection } from './codeSection.js';
 import { mountSpotifySection } from './spotifySection.js';
 import { mountJiraSection } from './jiraSection.js';
+import { mountEffectsSection } from './effectsSection.js';
 import { mountAchievements } from './achievementsSection.js';
 
 export interface ProfileHandlers {
@@ -69,6 +70,7 @@ export function openProfile(session: SessionResponse, on: ProfileHandlers): void
         <section class="profile-code" aria-label="Editores de código"></section>
         <section class="profile-spotify" aria-label="Spotify"></section>
         <section class="profile-jira" aria-label="Jira"></section>
+        <section class="profile-effects" aria-label="Efeitos"></section>
         <details class="profile-password">
           <summary>Trocar senha</summary>
           <form novalidate>
@@ -171,6 +173,7 @@ export function openProfile(session: SessionResponse, on: ProfileHandlers): void
   mountCodeSection($<HTMLElement>('.profile-code'), session.token);
   mountSpotifySection($<HTMLElement>('.profile-spotify'), session.token);
   mountJiraSection($<HTMLElement>('.profile-jira'), session.token);
+  mountEffectsSection($<HTMLElement>('.profile-effects'), session.token);
   const achievementsBox = $<HTMLElement>('.profile-achievements');
   void mountAchievements(achievementsBox, session.token).then(() => {
     if (on.focusAchievements) achievementsBox.scrollIntoView({ block: 'start' });

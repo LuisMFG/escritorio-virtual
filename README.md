@@ -33,6 +33,8 @@ Escritório virtual isométrico para amigos e colegas (até ~10 pessoas online):
 - Andar clicando no piso, com desvio de móveis e outras pessoas, sincronizado em tempo real.
 - Conversar: **Enter** abre o campo de mensagem; a fala aparece em balão sobre o avatar e fica no histórico **Conversa**. Há um som de mensagem opcional (🔔/🔕).
 - Emotes: botão 😊 ao lado do chat ou comandos `/acenar`, `/rir`, `/joinha`, `/coracao`, `/cafe`, `/dancar`, `/mao`, `/sorrir`, `/triste`, `/bravo`, `/surpreso`.
+- **Café e bebidas na mão**: a máquina de café entrega uma xícara e a geladeira uma bebida; o avatar segura e dá uns goles, por 5 minutos ou até `/largar` (também no menu 😊).
+- **Efeitos do Habbo**: no **Perfil → ✨ Efeitos**, escolha um efeito para usar (brilho, corações, vaga-lumes, borboletas, auréola, holofote, raio…), liberados por conquistas e elogios recebidos. Em comemorações aparece um efeito por alguns segundos: holofote na conquista, joinha girando no elogio, medalha no fim do Pomodoro e corações no aniversário.
 - **Avatares animados** como no Habbo: andam com os passos de verdade, sentam com as pernas dobradas, mexem a boca ao falar, piscam, acenam, levantam a mão, mandam beijo, bebem o café e mudam a expressão do rosto. Quem está **Ausente** fecha os olhos e solta um "zZ".
 - Status **Disponível**, **Ocupado** ou **Ausente** no painel de pessoas; fica **Ausente** sozinho após 5 minutos parado.
 - Passe o mouse num avatar para ver o nome; clique para abrir o cartão (status, sala, **Ir até**, **Mencionar**).

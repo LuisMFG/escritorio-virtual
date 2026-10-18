@@ -2,6 +2,7 @@ import {
   canvasFor,
   composeFigure,
   figureSheetUrl,
+  HAND_ITEM_LIB,
   poseKey,
   STAND_CANVAS,
   type FigureCanvas,
@@ -54,7 +55,8 @@ export class FigureAvatarRenderer implements AvatarRenderer {
         resolved.libs.map(async (name) => libs.set(name, await this.loadLib(name, data))),
       );
       if (partsWithoutArt(resolved.parts, libs).length) return null;
-      return new FigurePoser(resolved.parts, libs);
+      // A biblioteca de itens na mão só é baixada quando alguém pega um (café, bebida).
+      return new FigurePoser(resolved.parts, libs, () => this.loadLib(HAND_ITEM_LIB, data));
     } catch (err) {
       console.warn('[avatar] montagem falhou, usando o imager:', (err as Error).message);
       return null;
@@ -111,12 +113,29 @@ const MAX_POSES = 400;
 class FigurePoser implements AvatarPoser {
   private readonly cache = new Map<string, AvatarFrame>();
 
+  private itemLib: 'none' | 'loading' | 'ready' = 'none';
+
   constructor(
     private readonly parts: readonly FigureLayer[],
-    private readonly libs: ReadonlyMap<string, FigureLib>,
+    private readonly libs: Map<string, FigureLib>,
+    private readonly loadItems: () => Promise<FigureLib>,
   ) {}
 
-  frame(pose: FigurePose): AvatarFrame {
+  frame(input: FigurePose): AvatarFrame {
+    let pose = input;
+    if (pose.handItem && this.itemLib !== 'ready') {
+      // Ainda sem a biblioteca de itens: desenha sem o item e baixa (o próximo quadro já vem com ele).
+      if (this.itemLib === 'none') {
+        this.itemLib = 'loading';
+        void this.loadItems()
+          .then((lib) => {
+            this.libs.set(HAND_ITEM_LIB, lib);
+            this.itemLib = 'ready';
+          })
+          .catch(() => (this.itemLib = 'none'));
+      }
+      pose = { ...pose, handItem: undefined };
+    }
     const key = poseKey(pose);
     const hit = this.cache.get(key);
     if (hit) return hit;

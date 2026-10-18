@@ -1,5 +1,10 @@
 import {
   BLINK_MS,
+  COFFEE_ITEM,
+  EFFECT_IDS,
+  SIP_EVERY_MS,
+  SIP_MS,
+  type EffectId,
   directionBetween,
   emotePose,
   EMOTES,
@@ -18,6 +23,10 @@ import {
 import { Container, Graphics, Sprite, Text, type Point } from 'pixi.js';
 import type { AvatarFrame, AvatarFrames, AvatarPoser } from '../assets/AvatarTextureCache.js';
 import { spriteHitTest } from '../assets/hitTest.js';
+import type { EffectLibrary } from '../assets/EffectLibrary.js';
+import { EffectLayer } from './EffectLayer.js';
+
+const isEffect = (id: string): id is EffectId => (EFFECT_IDS as readonly string[]).includes(id);
 
 /** Deslocamento vertical (px) por quarto de passo: o "bob" da caminhada procedural. */
 const BOB_Y = [0, -1, -2, -1];
@@ -73,6 +82,10 @@ export interface AvatarSnapshot {
   /** Modo foco: fim da fase (epoch ms; 0 = fora) e qual fase. */
   focusUntil: number;
   focusKind: string;
+  /** Efeito em uso (id de `EFFECTS`); vazio = nenhum. */
+  effect: string;
+  /** Item na mão (id do Habbo); 0 = nada. */
+  handItem: number;
 }
 
 interface Step {
@@ -100,6 +113,9 @@ export class AvatarView extends Container {
   private talkUntil = 0;
   private blinkAt = nextBlinkDelay();
   private lying = false;
+  private handItem = 0;
+  /** Efeitos do Habbo (em uso e comemorações), quando a cena tem a biblioteca. */
+  private fxLayer: EffectLayer | null = null;
   /** "zZ" sobre a cabeça de quem está ausente (olhos fechados). */
   private readonly sleep: Text;
   private readonly body = new Sprite();
@@ -247,6 +263,19 @@ export class AvatarView extends Container {
     this.applyPosition();
   }
 
+  /** Liga os efeitos (a cena passa a biblioteca). */
+  useEffects(library: EffectLibrary, worn: string): void {
+    this.fxLayer = new EffectLayer(library);
+    this.fxLayer.setWorn(isEffect(worn) ? worn : null);
+    this.addChildAt(this.fxLayer.back, this.getChildIndex(this.body));
+    this.addChildAt(this.fxLayer.front, this.getChildIndex(this.body) + 1);
+  }
+
+  /** Comemoração: efeito por alguns segundos. */
+  flashEffect(id: EffectId, ms: number): void {
+    this.fxLayer?.flashFor(id, ms);
+  }
+
   /** Falou no chat: a boca mexe por um tempo. */
   talk(durationMs: number): void {
     this.talkUntil = this.clock + durationMs;
@@ -297,6 +326,8 @@ export class AvatarView extends Container {
     this.drawFocus();
     this.alpha = s.away ? 0.45 : 1;
     this.lying = s.action === 'lay';
+    this.handItem = s.handItem;
+    this.fxLayer?.setWorn(isEffect(s.effect) ? s.effect : null);
     this.setSitting(s.action === 'sit' || this.lying, s.z);
     this.setStatus(s.status);
     this.typingBubble.visible = s.typing;
@@ -352,6 +383,12 @@ export class AvatarView extends Container {
     this.updateEmote(dtMs);
     if (this.poser) this.applyFrame();
     this.updateSleep();
+    if (this.fxLayer) {
+      this.fxLayer.update(dtMs, this.dir);
+      // As camadas acompanham o corpo (sentado, pulando…).
+      this.fxLayer.back.position.copyFrom(this.body.position);
+      this.fxLayer.front.position.copyFrom(this.body.position);
+    }
     if (this.typingBubble.visible) {
       const active = Math.floor(this.clock / 250) % 3;
       this.typingDots.forEach((d, i) => (d.alpha = i === active ? 1 : 0.35));
@@ -499,6 +536,12 @@ export class AvatarView extends Container {
       pose.posture = 'sit';
     }
     if (this.emote) Object.assign(pose, emotePose(this.emote.id, this.emote.elapsed));
+    // Item na mão: segura o tempo todo e dá um gole de vez em quando (o ☕ também mostra a xícara).
+    const item = this.handItem || (this.emote?.id === 'coffee' ? COFFEE_ITEM : 0);
+    if (item && !this.lying) {
+      pose.handItem = item;
+      if (!pose.gesture) pose.gesture = this.clock % SIP_EVERY_MS < SIP_MS ? 'drk' : 'crr';
+    }
     if (this.step && pose.posture !== 'wlk') pose.posture = 'wlk';
     if (this.clock < this.talkUntil && !pose.talk) {
       pose.talk = true;

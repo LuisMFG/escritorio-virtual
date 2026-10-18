@@ -9,6 +9,7 @@ import {
   tileHeight,
   type DepthBox,
   type EmoteId,
+  type EffectId,
   type FurniManifestEntry,
   type Heightmap,
   type PlacedFurni,
@@ -20,6 +21,7 @@ import {
 } from '@office/shared';
 import { Container, Graphics, Text, type Application, type Point } from 'pixi.js';
 import type { AssetLoader } from '../assets/AssetLoader.js';
+import type { EffectLibrary } from '../assets/EffectLibrary.js';
 import type { AvatarTextureCache } from '../assets/AvatarTextureCache.js';
 import type { PlaceholderFactory } from '../assets/PlaceholderFactory.js';
 import { DEBUG } from '../config.js';
@@ -42,6 +44,8 @@ export interface SceneDeps {
   placeholders: PlaceholderFactory;
   avatars: AvatarTextureCache;
   furniDefs: ReadonlyMap<string, FurniManifestEntry>;
+  /** Efeitos do Habbo (Fase 34). */
+  effects?: EffectLibrary;
 }
 
 export interface SceneActions extends DecorActions {
@@ -306,6 +310,7 @@ export class RoomScene implements DecorHost {
     if (this.avatars.has(id)) return this.updateAvatar(id, snapshot);
     const view = new AvatarView(id, snapshot, isLocal, (x, y) => this.grid.heightAt(x, y));
     this.avatars.set(id, view);
+    if (this.deps.effects) view.useEffects(this.deps.effects, snapshot.effect);
     if (isLocal) this.localId = id;
     this.objects.addChild(view);
     this.loadFrames(view, snapshot.figure);
@@ -328,6 +333,11 @@ export class RoomScene implements DecorHost {
     void this.deps.avatars.poser(figure).then((poser) => {
       if (!view.destroyed && view.figure === figure) view.setPoser(poser);
     });
+  }
+
+  /** Comemoração: efeito por alguns segundos sobre alguém. */
+  flashEffect(sessionId: string, effect: EffectId, ms: number): void {
+    this.avatars.get(sessionId)?.flashEffect(effect, ms);
   }
 
   /** Toca um emote no avatar de quem mandou. */

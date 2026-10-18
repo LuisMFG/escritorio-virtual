@@ -40,7 +40,15 @@ interface Hook {
   tile(x: number, y: number): { x: number; y: number };
   furni(id: string): { x: number; y: number } | null;
   furniList(): { id: string; defId: string; x: number; y: number }[];
-  players(): { id: string; name: string; x: number; y: number; action: string }[];
+  players(): {
+    id: string;
+    name: string;
+    x: number;
+    y: number;
+    action: string;
+    effect: string;
+    handItem: number;
+  }[];
   furniAt(x: number, y: number): string | null;
   leave(): Promise<void>;
 }

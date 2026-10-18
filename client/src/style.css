@@ -4677,3 +4677,48 @@ button.reply-quote:hover {
 .profile-jira .pet-actions {
   align-items: flex-end;
 }
+
+/* ---------- Fase 34: efeitos ---------- */
+
+.effects-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 8px;
+}
+
+.effect-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 6px;
+  border-radius: 10px;
+  border: 1px solid var(--card-border);
+  background: #262a35;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.effect-item:hover:not(:disabled) {
+  background: #2f3442;
+}
+
+.effect-item.using {
+  border-color: #f2c94c;
+  box-shadow: 0 0 0 1px #f2c94c inset;
+}
+
+.effect-item.locked {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.effect-emoji {
+  font-size: 22px;
+}
+
+.effect-item small {
+  font-size: 11px;
+  text-align: center;
+}

@@ -20,7 +20,15 @@ export interface E2EHook {
   /** Ponto da página no meio do desenho de um móvel. */
   furni(id: string): Point | null;
   furniList(): { id: string; defId: string; x: number; y: number }[];
-  players(): { id: string; name: string; x: number; y: number; action: string }[];
+  players(): {
+    id: string;
+    name: string;
+    x: number;
+    y: number;
+    action: string;
+    effect: string;
+    handItem: number;
+  }[];
   /** Que móvel o clique pegaria neste ponto da página (diagnóstico). */
   furniAt(x: number, y: number): string | null;
   /** Sai da sala de verdade (fechar a aba deixaria o avatar parado 30 s esperando reconexão). */
@@ -72,6 +80,8 @@ export function exposeForTests(scene: RoomScene, room: OfficeRoomClient): void {
         x: p.x,
         y: p.y,
         action: p.action,
+        effect: p.effect,
+        handItem: p.handItem,
       })),
   };
   (window as unknown as { __e2e: E2EHook }).__e2e = hook;

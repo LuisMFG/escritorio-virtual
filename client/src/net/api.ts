@@ -22,6 +22,8 @@ import {
   type CodeShare,
   type SpotifyStatus,
   type JiraBoard,
+  type EffectId,
+  type EffectsResponse,
   type JiraConnect,
   type JiraShare,
   type JiraStatus,
@@ -218,6 +220,12 @@ export const announcementApi = {
     request<Ok>('PUT', `/api/announcements/${id}/read`, { token, body: {} }),
   remove: (token: string, id: number) =>
     request<Ok>('DELETE', `/api/announcements/${id}`, { token }),
+};
+
+export const effectsApi = {
+  list: (token: string) => request<EffectsResponse>('GET', '/api/effects', { token }),
+  set: (token: string, effect: EffectId | null) =>
+    request<EffectsResponse>('PUT', '/api/effects', { token, body: { effect } }),
 };
 
 export const jiraApi = {
