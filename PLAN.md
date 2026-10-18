@@ -947,12 +947,21 @@ Pedido (18/10/2026): prioridade para as **animações dos personagens**, **senta
 - Testes: poses (gesto no braço certo, fala vence o sorriso na boca, olhos fechados, beijo, direção 4 com desenho próprio, deitado e espelho, chave de cache), animações (quadros do andar, tempo de fala, piscar, emote → pose, comandos novos). Testes de ponta a ponta mais estáveis: cada teste faz as pessoas saírem das salas antes de fechar (antes ficavam 30 s esperando reconexão), e o ajudante de porta espera ninguém estar em cima dela (um avatar passando pegava o clique).
 - No navegador: sentar no sofá (pernas dobradas, na frente do encosto), andar, `/acenar`, `/mao`, falar e Ausente com olhos fechados e "zZ".
 
-#### Fase 33 — Sentar e deitar em tudo
+#### Fase 33 — Sentar e deitar em tudo ✅ implementada
 - Altura e direção de assento certas por móvel (dados do próprio Habbo). Sofás com vários lugares (cada pessoa num lugar), bancos, banquetas e poltronas.
 - **Deitar** em camas, espreguiçadeiras e pufes. Cama de casal com dois lugares.
 - `/sentar` senta no chão onde estiver, `/levantar` levanta. Clicar no piso levanta e anda.
 - Virar sentado (setas ou clique ao lado) sem levantar.
 - **Como testar:** sentar em cada tipo de assento, deitar numa cama, sentar no chão.
+
+**Notas da implementação:**
+- **Lugares:** cada tile de cadeira e sofá é um lugar; na cama, só a fileira da cabeceira (cama de casal = dois lugares). Clicar senta/deita no **lugar livre mais perto** (antes escolhia o tile mais perto mesmo ocupado e recusava, com o outro lugar livre). Cheio: "Esse lugar está ocupado." / "A cama está ocupada.".
+- **Deitar** (`canLay` no catálogo): deita no comprimento, com a cabeça na cabeceira (cama no eixo y → direção 4; no eixo x → 2, as únicas que o Habbo desenha). Altura da cama pela `sitHeight`. O desenho do Habbo deitado fica todo para trás do ponto dos pés: o avatar inteiro (corpo, nome, selo) é empurrado ao longo da cama, ajuste medido no navegador nas duas direções.
+- **No chão:** `/sentar`, `/deitar` e `/levantar` (e no menu 😊). Sentado arredonda para a direção par anterior (só existem 0/2/4/6); deitado vira para a direita ou a esquerda. Em cima de um assento, vale o assento. Andando, o comando espera parar.
+- **Virar:** setas ← → (fora de campos de texto) mandam `turn`: parado gira de 1 em 1 direção; sentado no chão, de 2 em 2; deitado ou numa cadeira, não vira. Sentado no chão, clicar num tile vizinho só vira para lá (como no Habbo); clicar mais longe levanta e anda.
+- **Catálogo novo:** Banqueta de Bar, Pufe e Almofada (sentar, alturas diferentes) e a categoria **Camas**: Cama de Casal (2×3), Cama de Solteiro (1×3) e Saco de Dormir (1×3).
+- Testes: comandos, direções de cada pose, lugares (sofá, cama nos dois eixos), lugar livre mais perto; na sala, dois no mesmo sofá e o terceiro recusado, deitar na cama (cabeceira e direção), sentar/deitar no chão, virar sentado, clique ao lado só vira, deitado não vira, andar levanta; de ponta a ponta (`e2e/tests/sentar.spec.ts`): dois no sofá, `/levantar`, `/sentar` e `/deitar` vistos pelo outro. Um teste da sala que estourava 5 s com todos os arquivos rodando juntos ganhou 15 s.
+- No navegador: cama de casal e de solteiro (girada) colocadas pelo Decorar na Recepção do banco de desenvolvimento (ficaram lá para testar), deitar nas duas, `/levantar`, `/sentar` no chão e virar com a seta.
 
 #### Fase 34 — Itens na mão e efeitos
 - A máquina de café entrega **um copo na mão** (o avatar segura e bebe de vez em quando), e a geladeira entrega uma bebida. Some depois de alguns minutos ou ao clicar em "largar".

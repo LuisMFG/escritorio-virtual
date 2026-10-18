@@ -6,6 +6,8 @@ import {
   nameKey,
   normalizeChatText,
   parseEmoteCommand,
+  parsePostureCommand,
+  type Posture,
   TYPING_IDLE_MS,
   replyPreviewText,
   type ChatMessage,
@@ -41,6 +43,8 @@ export interface ChatHandlers {
   /** Põe/tira reação numa mensagem. */
   react(id: number, emoji: Reaction): void;
   emote(id: EmoteId): void;
+  /** `/sentar`, `/deitar` (no chão) e `/levantar`. */
+  posture(p: Posture): void;
   typing(on: boolean): void;
   /** Apagar a mensagem (o servidor confere se pode). */
   remove(id: number): void;
@@ -127,6 +131,27 @@ export class ChatPanel {
       b.addEventListener('click', () => {
         this.toggleEmoteMenu(false);
         openPollForm((poll) => this.on.createPoll(poll));
+      });
+      this.emoteMenu.append(b);
+    }
+    // Sentar/deitar no chão e levantar (também `/sentar`, `/deitar`, `/levantar`).
+    for (const [emoji, label, posture, cmd] of [
+      ['🧘', 'Sentar no chão', 'sit', '/sentar'],
+      ['🛌', 'Deitar no chão', 'lay', '/deitar'],
+      ['🧍', 'Levantar', 'stand', '/levantar'],
+    ] as const) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.setAttribute('role', 'menuitem');
+      b.title = `${label} (${cmd})`;
+      b.append(
+        Object.assign(document.createElement('span'), { className: 'emoji', textContent: emoji }),
+        Object.assign(document.createElement('span'), { textContent: label }),
+      );
+      b.addEventListener('click', () => {
+        this.on.posture(posture);
+        this.toggleEmoteMenu(false);
+        this.input.focus();
       });
       this.emoteMenu.append(b);
     }
@@ -292,7 +317,9 @@ export class ChatPanel {
       const file = this.attach.current;
       if (!text && !file) return;
       const emote = file ? null : parseEmoteCommand(text);
+      const posture = file ? null : parsePostureCommand(text);
       if (emote) this.on.emote(emote);
+      else if (posture) this.on.posture(posture);
       else this.on.send(text, this.replyBar.current?.id, file?.id);
       this.attach.clear();
       this.replyBar.set(null);

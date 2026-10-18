@@ -31,6 +31,15 @@ const CARGO_LINE = 12;
 const SIT_DROP = 8;
 /** Com a pose sentada real, quanto o desenho desce para assentar no móvel. */
 const SIT_OFFSET = 0;
+/**
+ * Deitado, o desenho do Habbo fica todo de um lado do ponto dos pés (a cabeça ~60 px para trás):
+ * empurra o corpo ao longo da cama (meio tile de x para cada tile de y, como a grade) e desce.
+ * Direção 2: cama no eixo x; direção 4 (espelho): cama no eixo y.
+ */
+const LAY_OFFSET: Record<number, { x: number; y: number }> = {
+  2: { x: 36, y: 24 },
+  4: { x: -36, y: 24 },
+};
 const SIT_CUT_Y = -2;
 /** Altura do "…" de digitando e do emoji dos emotes. */
 const TYPING_Y = -96;
@@ -535,12 +544,16 @@ export class AvatarView extends Container {
       z = this.heightAt(from.x, from.y) * (1 - t) + this.heightAt(to.x, to.y) * t;
     }
     const p = tileToScreen(x, y, z);
-    this.position.set(Math.round(p.sx), Math.round(p.sy));
+    // Deitado, o avatar inteiro (corpo, nome, selo) vai para cima da cama.
+    const lay =
+      this.poser && !this.step && this.lying ? (LAY_OFFSET[this.dir] ?? LAY_OFFSET[2]!) : null;
+    this.position.set(Math.round(p.sx) + (lay?.x ?? 0), Math.round(p.sy) + (lay?.y ?? 0));
 
     if (this.poser) {
       // Pose real: sem balanço simulado (a dança ainda pula um pouquinho).
       const hop = this.emote?.id === 'dance' && !this.step ? this.emoteOffset().y : 0;
-      this.body.position.set(0, (this.sitting && !this.step ? SIT_OFFSET : 0) + hop);
+      const rest = this.step || this.lying ? 0 : this.sitting ? SIT_OFFSET : 0;
+      this.body.position.set(0, rest + hop);
     } else if (this.step) {
       const quarter = Math.floor((this.walkTime / STEP_MS) * 4) % 4;
       const sway = quarter === 2 ? (this.stepCount % 2 === 0 ? 1 : -1) : 0;

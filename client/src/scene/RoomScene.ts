@@ -520,7 +520,7 @@ export class RoomScene implements DecorHost {
   /** Assento clicado: pixel do desenho da cadeira/sofá, ou o tile dele. */
   private seatAt(global: Point, tile: TilePoint | null): FurniView | null {
     const f = this.pickFurni(global);
-    if (!f?.def.canSit) return null;
+    if (!f?.def.canSit && !f?.def.canLay) return null;
     if (f.hitTest(global)) return f;
     const fp = footprint(f.def, f.placed.x, f.placed.y, f.placed.rot);
     const onTile =

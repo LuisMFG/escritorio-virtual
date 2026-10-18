@@ -218,11 +218,22 @@ async function start(): Promise<void> {
       }),
     react: (id, emoji) => connection?.react(id, emoji),
     emote: (id) => connection?.emote(id),
+    posture: (p) => connection?.posture(p),
     typing: (on) => connection?.typing(on),
     remove: (id) => connection?.deleteChat(id),
     createPoll: (poll) => connection?.createPoll(poll),
     votePoll: (id, option) => connection?.votePoll(id, option),
     closePoll: (id) => connection?.closePoll(id),
+  });
+
+  // Setas ← →: vira o avatar sem sair do lugar (parado ou sentado no chão).
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    const target = e.target as HTMLElement;
+    if (target.closest('input, textarea, select, [contenteditable], [role=dialog]')) return;
+    if (document.querySelector('.modal-backdrop, .login-backdrop')) return;
+    e.preventDefault();
+    connection?.turn(e.key === 'ArrowRight' ? 1 : -1);
   });
 
   // Título da aba: "(@2)" para menções vistas com a aba escondida, "(3)" para DMs não lidas.

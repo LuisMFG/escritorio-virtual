@@ -21,6 +21,7 @@ import {
   type Reaction,
   type ReactionsUpdate,
   type EmoteId,
+  type Posture,
   type EmoteMessage,
   type Status,
   type ErrorMessage,
@@ -148,6 +149,22 @@ export class OfficeConnection {
 
   emote(emote: EmoteId): void {
     this.room?.send(ClientMessage.Emote, { emote });
+  }
+
+  /** Sentar/deitar no chão ou levantar. */
+  posture(posture: Posture): void {
+    this.room?.send(ClientMessage.Posture, { posture });
+  }
+
+  /**
+   * Vira para o lado (setas): parado gira de 1 em 1 direção; sentado no chão, de 2 em 2
+   * (só há pose sentada nas direções pares). Andando ou deitado, não faz nada.
+   */
+  turn(step: 1 | -1): void {
+    const me = this.room?.state.players.get(this.room.sessionId);
+    if (!me || (me.action !== 'idle' && me.action !== 'sit')) return;
+    const by = me.action === 'sit' ? 2 : 1;
+    this.room?.send(ClientMessage.Turn, { dir: (me.dir + step * by + 8) % 8 });
   }
 
   /** Id desta conexão na sala (para reconhecer os próprios traços). */
