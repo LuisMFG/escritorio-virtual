@@ -826,10 +826,18 @@ Escolhido em 17/10/2026, depois do roadmap v3. Ordem pensada assim: primeiro pro
 - **Bug achado pelos testes de ponta a ponta:** na primeira versão, o cavalete da semente ficava em (11,1), na frente da porta do fundo da Recepção. Como é alto, o desenho cobria a porta e o clique para ir à Copa abria o mural. A semente passou para (12,6) e, na cena, **porta agora tem prioridade** sobre móveis desenhados na frente dela (vale também para móveis que as pessoas colocarem).
 - No navegador (com o painel do navegador escondido, os cliques de mouse não chegavam, então usei o gancho de testes `?e2e=1`): Quadro colocado na Recepção (depois movido para (12,6), longe da porta), elogio "Parceria" para o Davi pela Equipe, aviso "Elogio enviado", e o mural aberto pelo cavalete mostrando o cartão.
 
-### Fase 27 — Modo foco (Pomodoro)
+### Fase 27 — Modo foco (Pomodoro) ✅ implementada
 - Timer de foco (25/5 por padrão, ajustável) no HUD. Durante o foco: status Ocupado, placa 🍅 com o tempo restante sobre o avatar e no cartão, e menções/DMs ficam sem som e sem notificação (chegam juntas no fim). Fim do ciclo: aviso e pausa.
 
 **Como testar:** iniciar foco; a outra aba vê 🍅; mandar DM durante o foco (sem som); no fim chega o resumo.
+
+**Notas da implementação:**
+- **Servidor** (`FocusService`, em memória): foco → pausa → fim por pessoa (não por sala, então acompanha quem troca de sala), conferido a cada 2 s. Mensagens `focus.start { minutes, breakMinutes }` (1–120 e 0–30) e `focus.stop`. O estado vai para `Player.focusUntil/focusKind`, e a própria pessoa recebe `focus.phase` a cada mudança (dizendo se terminou sozinho ou se ela parou).
+- **Status:** em vez de trocar o status para "Ocupado" (o que brigaria com o status que a pessoa escolheu e com o ausente automático), o foco aparece como **tag "🍅 foco" / "☕ pausa"** na lista de pessoas, **"🍅 12m"** sobre o avatar e **"🍅 Em foco · faltam N min (melhor não interromper)"** no cartão.
+- **Botão 🍅 Foco** no HUD: escolhas prontas (25+5, 50+10, 90+15) ou tempo livre. Durante o foco mostra a contagem (também com a tela estreita, em que os outros botões ficam só com ícone) e o título da aba vira "🍅 24:59 …". Clicar abre "Parar".
+- **Avisos segurados:** durante o foco, menções, DMs e elogios não tocam som nem mostram aviso ou notificação (a mensagem entra normalmente no chat/conversas). No fim: "🍅 Foco concluído! Pausa de 5 min ☕. Enquanto isso: 2 menções, 1 mensagem." (com som e notificação do sistema); fim da pausa: "☕ A pausa acabou. Bora mais um ciclo?".
+- Testes: `FocusService` (fases, sem pausa, parar), sala (os outros veem, a fase chega à pessoa, entra em outra sala ainda em foco, parar) e ponta a ponta (`e2e/tests/foco.spec.ts`: começar pelo botão, contagem no botão e na aba, tag para o outro, menção segurada, resumo ao parar).
+- No navegador: foco de 1 minuto sem pausa terminou sozinho ("🍅 Foco concluído!", botão e título voltaram); foco 25+5 com o 🍅 sobre o avatar e a tag na lista. Ajuste visto no teste: com a janela estreita a contagem sumia do botão; agora fica.
 
 ### Fase 28 — Minimapa do escritório
 - Botão "🗺️ Mapa": todas as salas como cartões ligados pelas portas, com quem está em cada uma (e quem está em reunião). Clicar na sala vai até ela; clicar numa pessoa vai até a sala dela e anda até perto.
