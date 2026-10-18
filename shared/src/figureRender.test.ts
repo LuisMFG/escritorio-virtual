@@ -3,6 +3,7 @@ import {
   composeFigure,
   FIGURE_WIDTH,
   partsWithoutArt,
+  poseKey,
   resolveFigure,
   type FigureData,
   type FigureLib,
@@ -121,13 +122,106 @@ describe('montagem do avatar', () => {
       ],
     ]);
     const parts = resolveFigure('hd-180-1', DATA).parts;
-    const walk = composeFigure(parts, libs, { direction: 2, action: 'wlk', frame: 1 });
+    const walk = composeFigure(parts, libs, { direction: 2, posture: 'wlk', frame: 1 });
     expect(px(walk, 20, 50)[3]).toBe(255);
     expect(px(walk, 10, 50)[3]).toBe(0);
     expect(px(walk, 30, 50)[3]).toBe(255);
     expect(px(walk, 40, 50)[3]).toBe(0);
-    const sit = composeFigure(parts, libs, { direction: 2, action: 'sit' });
+    const sit = composeFigure(parts, libs, { direction: 2, posture: 'sit' });
     expect(px(sit, 10, 50)[3]).toBe(255);
+  });
+
+  it('gesto no braço certo, fala na cabeça e na boca, expressão nos olhos', () => {
+    const data: FigureData = {
+      ...DATA,
+      partLib: { ...DATA.partLib, 'lh:1': 'body', 'rh:1': 'body', 'ey:1': 'body', 'fc:1': 'body' },
+      sets: {
+        'hd:1': {
+          p: 1,
+          parts: [
+            ['lh', 1, 0, 1],
+            ['rh', 1, 0, 1],
+            ['hd', 1, 0, 1],
+            ['ey', 1, 0, 1],
+            ['fc', 1, 0, 1],
+          ],
+        },
+      },
+    };
+    const at = (x: number) => ({ x: -x, y: 50 });
+    const libs = new Map([
+      [
+        'body',
+        lib({
+          h_std_lh_1_2_0: at(0),
+          h_wav_lh_1_2_1: at(2),
+          h_std_rh_1_2_0: at(4),
+          h_blw_rh_1_2_0: at(6),
+          h_std_hd_1_2_0: at(8),
+          h_spk_hd_1_2_1: at(10),
+          h_std_ey_1_2_0: at(12),
+          h_eyb_ey_1_2_0: at(14),
+          h_std_fc_1_2_0: at(16),
+          h_spk_fc_1_2_1: at(18),
+          h_sml_fc_1_2_0: at(20),
+          // Desenho próprio da direção 4 (sem espelhar) para o aceno.
+          h_wav_lh_1_4_1: at(22),
+        }),
+      ],
+    ]);
+    const parts = resolveFigure('hd-1', data).parts;
+    const on = (out: Uint8ClampedArray, x: number) => px(out, x, 50)[3] === 255;
+    const wave = composeFigure(parts, libs, { direction: 2, gesture: 'wav', gestureFrame: 1 });
+    expect([on(wave, 0), on(wave, 2), on(wave, 4)]).toEqual([false, true, true]);
+    const talk = composeFigure(parts, libs, {
+      direction: 2,
+      talk: true,
+      talkFrame: 1,
+      expression: 'sml',
+    });
+    // Falando, a boca mexe (a fala vence o sorriso); a cabeça usa o quadro de fala.
+    expect([on(talk, 8), on(talk, 10), on(talk, 16), on(talk, 18), on(talk, 20)]).toEqual([
+      false,
+      true,
+      false,
+      true,
+      false,
+    ]);
+    const smile = composeFigure(parts, libs, { direction: 2, expression: 'sml' });
+    expect([on(smile, 16), on(smile, 20)]).toEqual([false, true]);
+    const blink = composeFigure(parts, libs, { direction: 2, expression: 'eyb' });
+    expect([on(blink, 12), on(blink, 14), on(blink, 16)]).toEqual([false, true, true]);
+    const kiss = composeFigure(parts, libs, { direction: 2, gesture: 'blw' });
+    expect([on(kiss, 4), on(kiss, 6)]).toEqual([false, true]);
+    // Direção 4: aceno com desenho próprio fica no lugar (sem espelho); o resto espelha.
+    const wave4 = composeFigure(parts, libs, { direction: 4, gesture: 'wav', gestureFrame: 1 });
+    expect(on(wave4, 22)).toBe(true);
+    expect(on(wave4, FIGURE_WIDTH - 1 - 4)).toBe(true);
+  });
+
+  it('deitado usa a direção 2 (ou o espelho, 4) e a cabeça deitada', () => {
+    const libs = new Map([
+      [
+        'body',
+        lib({
+          h_lay_bd_1_2_0: { x: -5, y: 30 },
+          h_lay_hd_1_2_0: { x: -7, y: 30 },
+          h_std_hd_1_2_0: { x: -9, y: 30 },
+        }),
+      ],
+    ]);
+    const parts = resolveFigure('hd-180-1', DATA).parts;
+    const lay = composeFigure(parts, libs, { direction: 3, posture: 'lay' });
+    expect([px(lay, 5, 70)[3], px(lay, 7, 70)[3], px(lay, 9, 70)[3]]).toEqual([255, 255, 0]);
+    const lay6 = composeFigure(parts, libs, { direction: 6, posture: 'lay' });
+    expect(px(lay6, FIGURE_WIDTH - 1 - 5, 70)[3]).toBe(255);
+  });
+
+  it('chave de cache muda só com o que muda o desenho', () => {
+    expect(poseKey({ direction: 2 })).toBe(
+      poseKey({ direction: 2, posture: 'std', frame: 0, gestureFrame: 3 }),
+    );
+    expect(poseKey({ direction: 2, talk: true })).not.toBe(poseKey({ direction: 2 }));
   });
 
   it('acusa parte sem desenho (para usar o imager)', () => {

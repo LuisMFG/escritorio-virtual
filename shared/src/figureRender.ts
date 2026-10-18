@@ -7,9 +7,22 @@
 /** Tamanho do quadro: o mesmo do imager (64×110), para a cena não mudar nada. */
 export const FIGURE_WIDTH = 64;
 export const FIGURE_HEIGHT = 110;
-/** Ponto de registro das partes no quadro (calibrado contra o imager). */
-const REG_X = 0;
-const REG_Y = 100;
+/** Quadro em que a figura é montada: tamanho e ponto de registro das partes. */
+export interface FigureCanvas {
+  width: number;
+  height: number;
+  regX: number;
+  regY: number;
+}
+/** Em pé, andando, sentado: o quadro do imager (registro calibrado contra ele). */
+export const STAND_CANVAS: FigureCanvas = { width: 64, height: 110, regX: 0, regY: 100 };
+/** Deitado o corpo fica na horizontal: quadro mais largo, com o mesmo eixo do em pé no meio. */
+export const LAY_CANVAS: FigureCanvas = { width: 128, height: 120, regX: 32, regY: 100 };
+
+/** Quadro de cada postura. */
+export function canvasFor(pose: Pick<FigurePose, 'posture'>): FigureCanvas {
+  return pose.posture === 'lay' ? LAY_CANVAS : STAND_CANVAS;
+}
 
 /** Dados de montagem gerados pelo `assets:figure` (`client/public/assets/figure/figuredata.json`). */
 export interface FigureData {
@@ -128,47 +141,137 @@ export function partsWithoutArt(
   });
 }
 
-export interface ComposeOptions {
+/** Postura do corpo inteiro. */
+export type FigurePosture = 'std' | 'wlk' | 'sit' | 'lay';
+/** Gesto de um braço: acenar, beijo, mão levantada, beber, carregar, placa. */
+export type FigureGesture = 'wav' | 'blw' | 'respect' | 'drk' | 'crr' | 'sig';
+/** Expressão do rosto (`eyb` = olhos fechados: piscar ou dormindo). */
+export type FigureExpression = 'sml' | 'sad' | 'agr' | 'srp' | 'eyb';
+
+export interface FigurePose {
   direction: number;
-  /** Pose do Habbo: `std` (em pé), `wlk`, `sit`, `lay`, `wav`… */
-  action?: string;
+  posture?: FigurePosture;
+  /** Quadro da postura (andar tem 4). */
   frame?: number;
+  gesture?: FigureGesture;
+  gestureFrame?: number;
+  /** Falando: boca e cabeça mexem (2 quadros). */
+  talk?: boolean;
+  talkFrame?: number;
+  expression?: FigureExpression;
+}
+
+/** Quadros de cada animação no Habbo (o resto tem um só). */
+export const POSE_FRAMES = { wlk: 4, wav: 2, blw: 2, respect: 2, spk: 2 } as const;
+
+const LEFT_ARM = new Set(['lh', 'ls', 'lc']);
+const RIGHT_ARM = new Set(['rh', 'rs', 'rc']);
+/** Que braço cada gesto usa. */
+const GESTURE_ARM: Record<FigureGesture, Set<string>> = {
+  wav: LEFT_ARM,
+  respect: LEFT_ARM,
+  sig: LEFT_ARM,
+  blw: RIGHT_ARM,
+  drk: RIGHT_ARM,
+  crr: RIGHT_ARM,
+};
+/** Deitado, as expressões têm versões próprias. */
+const LAY_FACE: Record<FigureExpression, string> = {
+  sml: 'lsm',
+  sad: 'lsa',
+  agr: 'lag',
+  srp: 'lsr',
+  eyb: 'ley',
+};
+
+/** Ações a tentar para uma parte (a primeira que tiver desenho vence) e o quadro de cada uma. */
+function actionsFor(type: string, pose: FigurePose): [string, number][] {
+  const posture = pose.posture ?? 'std';
+  const lay = posture === 'lay';
+  const talk = pose.talk ? (pose.talkFrame ?? 0) : -1;
+  const list: [string, number][] = [];
+  if (type === 'ey') {
+    if (pose.expression) list.push([lay ? LAY_FACE[pose.expression] : pose.expression, 0]);
+  } else if (type === 'fc') {
+    if (talk >= 0) list.push([lay ? 'lsp' : 'spk', talk]);
+    if (pose.gesture === 'blw' && !lay) list.push(['blw', 0]);
+    if (pose.expression && pose.expression !== 'eyb') {
+      list.push([lay ? LAY_FACE[pose.expression] : pose.expression, 0]);
+    }
+  } else if (HEAD_PARTS.has(type)) {
+    if (talk >= 0) list.push([lay ? 'lsp' : 'spk', talk]);
+  } else if (pose.gesture && GESTURE_ARM[pose.gesture].has(type)) {
+    list.push([pose.gesture, pose.gestureFrame ?? 0]);
+  }
+  if (HEAD_PARTS.has(type)) list.push([lay ? 'lay' : 'std', 0]);
+  else list.push([posture, pose.frame ?? 0]);
+  list.push(['std', 0]);
+  return list;
 }
 
 /**
- * Monta um quadro 64×110 RGBA. Partes sem desenho para a pose caem para a pose em pé; as
- * direções 4–6 são o espelho de 2–0, como no Habbo.
+ * Monta um quadro 64×110 RGBA na pose pedida. Cada parte usa a imagem da sua ação (gesto,
+ * fala, expressão ou postura) e, sem ela, a pose em pé. As direções 4–6 são o espelho de 2–0,
+ * como no Habbo, a não ser que a parte tenha desenho próprio para a direção (alguns gestos).
  */
 export function composeFigure(
   parts: readonly FigureLayer[],
   libs: ReadonlyMap<string, FigureLib>,
-  opts: ComposeOptions,
+  pose: FigurePose,
+  canvas: FigureCanvas = STAND_CANVAS,
 ): Uint8ClampedArray {
-  const out = new Uint8ClampedArray(FIGURE_WIDTH * FIGURE_HEIGHT * 4);
-  const mirror = opts.direction >= 4 && opts.direction <= 6;
-  const dir = mirror ? 6 - opts.direction : opts.direction;
+  const out = new Uint8ClampedArray(canvas.width * canvas.height * 4);
+  // Deitado só existe de lado (direção 2, e a 4 espelhada).
+  const wanted =
+    pose.posture === 'lay' ? (pose.direction >= 4 && pose.direction <= 6 ? 4 : 2) : pose.direction;
+  const mirror = wanted >= 4 && wanted <= 6;
+  const dir = mirror ? 6 - wanted : wanted;
   const order = ORDER[dir] ?? ORDER[2]!;
-  const action = opts.action ?? 'std';
-  const frame = opts.frame ?? 0;
   const sorted = [...parts].sort((a, b) => rank(order, a.type) - rank(order, b.type));
   for (const part of sorted) {
     const lib = libs.get(part.lib);
     if (!lib) continue;
-    const act = HEAD_PARTS.has(part.type) ? 'std' : action;
-    const key = [
-      `h_${act}_${part.type}_${part.id}_${dir}_${frame}`,
-      `h_${act}_${part.type}_${part.id}_${dir}_0`,
-      `h_std_${part.type}_${part.id}_${dir}_0`,
-    ].find((k) => lib.assets[k]);
-    if (!key) continue;
-    const asset = lib.assets[key]!;
-    const rect = lib.frames[asset.source ?? key] ?? lib.frames[key];
+    let found: { key: string; flip: boolean } | null = null;
+    for (const [act, frame] of actionsFor(part.type, pose)) {
+      const base = `h_${act}_${part.type}_${part.id}_`;
+      const tries: [string, boolean][] = [];
+      if (mirror) tries.push([`${base}${wanted}_${frame}`, false], [`${base}${wanted}_0`, false]);
+      tries.push([`${base}${dir}_${frame}`, mirror], [`${base}${dir}_0`, mirror]);
+      const hit = tries.find(([k]) => lib.assets[k]);
+      if (hit) {
+        found = { key: hit[0], flip: hit[1] };
+        break;
+      }
+    }
+    if (!found) continue;
+    const asset = lib.assets[found.key]!;
+    const rect = lib.frames[asset.source ?? found.key] ?? lib.frames[found.key];
     if (!rect) continue;
-    const left = REG_X - asset.x;
-    const top = REG_Y - asset.y;
-    blit(out, lib, rect, left, top, mirror, part.tint);
+    blit(
+      out,
+      canvas,
+      lib,
+      rect,
+      canvas.regX - asset.x,
+      canvas.regY - asset.y,
+      found.flip,
+      part.tint,
+    );
   }
   return out;
+}
+
+/** Chave de cache de uma pose (só o que muda o desenho). */
+export function poseKey(p: FigurePose): string {
+  return [
+    p.direction,
+    p.posture ?? 'std',
+    p.frame ?? 0,
+    p.gesture ?? '',
+    p.gesture ? (p.gestureFrame ?? 0) : '',
+    p.talk ? `t${p.talkFrame ?? 0}` : '',
+    p.expression ?? '',
+  ].join('|');
 }
 
 function rank(order: string[], type: string): number {
@@ -179,6 +282,7 @@ function rank(order: string[], type: string): number {
 /** Copia um recorte para o quadro, multiplicando pela cor e misturando pela transparência. */
 function blit(
   out: Uint8ClampedArray,
+  canvas: FigureCanvas,
   lib: FigureLib,
   rect: { x: number; y: number; w: number; h: number },
   left: number,
@@ -189,14 +293,15 @@ function blit(
   const src = lib.pixels;
   for (let y = 0; y < rect.h; y++) {
     const dy = top + y;
-    if (dy < 0 || dy >= FIGURE_HEIGHT) continue;
+    if (dy < 0 || dy >= canvas.height) continue;
     for (let x = 0; x < rect.w; x++) {
       const si = ((rect.y + y) * lib.width + rect.x + x) * 4;
       const alpha = src[si + 3]!;
       if (!alpha) continue;
       const mx = left + x;
-      const dx = mirror ? FIGURE_WIDTH - 1 - mx : mx;
-      if (dx < 0 || dx >= FIGURE_WIDTH) continue;
+      // Espelho em volta do centro do quadro em pé (o mesmo eixo em qualquer tamanho de quadro).
+      const dx = mirror ? 2 * canvas.regX + STAND_CANVAS.width - 1 - mx : mx;
+      if (dx < 0 || dx >= canvas.width) continue;
       let r = src[si]!;
       let g = src[si + 1]!;
       let b = src[si + 2]!;
@@ -205,7 +310,7 @@ function blit(
         g = (g * tint[1]) / 255;
         b = (b * tint[2]) / 255;
       }
-      const di = (dy * FIGURE_WIDTH + dx) * 4;
+      const di = (dy * canvas.width + dx) * 4;
       const k = alpha / 255;
       out[di] = r * k + out[di]! * (1 - k);
       out[di + 1] = g * k + out[di + 1]! * (1 - k);

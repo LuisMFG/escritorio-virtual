@@ -35,6 +35,12 @@ export const EMOTES = {
   heart: { emoji: '❤️', label: 'Coração', command: 'coracao', durationMs: 2200 },
   coffee: { emoji: '☕', label: 'Café', command: 'cafe', durationMs: 2500 },
   dance: { emoji: '💃', label: 'Dançar', command: 'dancar', durationMs: 6000 },
+  // Fase 32: expressões do rosto e mão levantada (com o avatar montado, o rosto muda de verdade).
+  hand: { emoji: '✋', label: 'Levantar a mão', command: 'mao', durationMs: 3000 },
+  smile: { emoji: '😊', label: 'Sorrir', command: 'sorrir', durationMs: 3000 },
+  sad: { emoji: '😢', label: 'Triste', command: 'triste', durationMs: 3000 },
+  angry: { emoji: '😠', label: 'Bravo', command: 'bravo', durationMs: 3000 },
+  surprised: { emoji: '😮', label: 'Surpreso', command: 'surpreso', durationMs: 3000 },
 } as const satisfies Record<string, EmoteDef>;
 
 export type EmoteId = keyof typeof EMOTES;
