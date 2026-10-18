@@ -2,6 +2,14 @@ import { HABBO_HOTEL_ID } from './constants.js';
 
 /** Base da API REST (endpoints JSON; mobis exigem token). */
 export const HABBOASSETS_API = 'https://www.habboassets.com/api/v2';
+/** CDN com os arquivos originais do Habbo (SWFs das bibliotecas de roupa). */
+export const HABBOASSETS_CDN = 'https://cdn.habboassets.com';
+
+/** Folha de sprites (`png`) ou dados (`json`) de uma biblioteca de roupa, convertida pelo servidor. */
+export function figureSheetUrl(lib: string, revision: number, ext: 'png' | 'json'): string {
+  return `/hh/figure/${encodeURIComponent(lib)}.${ext}?revision=${revision}`;
+}
+
 /** Base do imager público (PNGs por URL, sem token). */
 export const HABBOASSETS_IMAGER = 'https://www.habboassets.com/imaging';
 

@@ -5,3 +5,4 @@ data
 *.md
 e2e-report
 e2e-results
+client/public/assets/figure/figuredata.json

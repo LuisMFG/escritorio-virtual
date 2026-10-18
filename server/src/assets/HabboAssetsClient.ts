@@ -1,4 +1,9 @@
-import { HABBOASSETS_API, HABBOASSETS_IMAGER, habboApiHeaders } from '@office/shared';
+import {
+  HABBOASSETS_API,
+  HABBOASSETS_CDN,
+  HABBOASSETS_IMAGER,
+  habboApiHeaders,
+} from '@office/shared';
 import { TokenBucket } from '../util/rateLimiter.js';
 
 /** A Cloudflare da HabboAssets recusa User-Agents genéricos de script; nos identificamos. */
@@ -62,6 +67,16 @@ export class HabboAssetsClient {
     if (!contentType.startsWith('image/'))
       throw new UpstreamError(502, 'Resposta do imager não é imagem');
     return { body: Buffer.from(await res.arrayBuffer()), contentType };
+  }
+
+  /** Baixa o SWF de uma biblioteca de roupa da CDN da HabboAssets. */
+  async fetchSwf(url: string): Promise<Buffer> {
+    if (!url.startsWith(`${HABBOASSETS_CDN}/`)) throw new UpstreamError(400, 'URL fora da CDN');
+    const res = await this.request(url, this.imager, { 'User-Agent': USER_AGENT });
+    const body = Buffer.from(await res.arrayBuffer());
+    const sig = body.subarray(0, 3).toString('latin1');
+    if (sig !== 'CWS' && sig !== 'FWS') throw new UpstreamError(502, 'Resposta não é um SWF');
+    return body;
   }
 
   /** GET de JSON no host do imager (ex. `/info/clothing/hh_human_hair`). */

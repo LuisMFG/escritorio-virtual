@@ -1,10 +1,19 @@
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { avatarImageUrl, clothingSetImageUrl, figureSchema, furniImageUrl } from '@office/shared';
+import {
+  avatarImageUrl,
+  clothingSetImageUrl,
+  figureSchema,
+  type FigureData,
+  furniImageUrl,
+} from '@office/shared';
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { UpstreamError, type HabboAssetsClient } from './HabboAssetsClient.js';
+import { buildFigureSheet, readSwf } from './swfFigure.js';
+import { readFileSync } from 'node:fs';
+import { ROOT_DIR } from '../config.js';
 
 /** URLs sem revisão fixada podem mudar; o cache em disco delas expira em 1 dia. */
 const UNPINNED_TTL_MS = 24 * 60 * 60 * 1000;
@@ -40,7 +49,11 @@ const classname = z
  *   GET /hh/avatar.png?figure=…&direction=…
  *   GET /hh/furniture/{classname}.png?revision=…&direction=…
  */
-export function createAssetRouter(client: HabboAssetsClient, cacheDir: string): Router {
+export function createAssetRouter(
+  client: HabboAssetsClient,
+  cacheDir: string,
+  figureData: () => Pick<FigureData, 'libs' | 'swf'> | null = loadFigureData,
+): Router {
   const router = Router();
   const inflight = new Map<string, Promise<Buffer>>();
 
@@ -61,9 +74,10 @@ export function createAssetRouter(client: HabboAssetsClient, cacheDir: string): 
         if (!pending) {
           pending = client
             .fetchImage(upstreamUrl)
-            .then(async (img) => {
-              await writeAtomic(file, img.body);
-              return img.body;
+            .then((i) => i.body)
+            .then(async (body) => {
+              await writeAtomic(file, body);
+              return body;
             })
             .finally(() => inflight.delete(key));
           inflight.set(key, pending);
@@ -115,7 +129,77 @@ export function createAssetRouter(client: HabboAssetsClient, cacheDir: string): 
     void serve(res, clothingSetImageUrl(Number(id), q.data), false, CLOTHING_TTL_MS);
   });
 
+  // Bibliotecas de roupa (Fase 31): o SWF original vira folha de sprites + JSON, uma vez só.
+  const sheets = new Map<string, Promise<{ png: Buffer; json: Buffer }>>();
+  const sheetFor = (lib: string, revision: number, swf: string) => {
+    const key = `${lib}-${revision}`;
+    let pending = sheets.get(key);
+    if (!pending) {
+      const base = join(cacheDir, 'figure', key);
+      pending = (async () => {
+        const [png, json] = await Promise.all([
+          readCached(`${base}.png`, Infinity),
+          readCached(`${base}.json`, Infinity),
+        ]);
+        if (png && json) return { png, json };
+        const built = buildFigureSheet(lib, readSwf(await client.fetchSwf(swf)));
+        const out = { png: built.png, json: Buffer.from(JSON.stringify(built.sheet)) };
+        await writeAtomic(`${base}.png`, out.png);
+        await writeAtomic(`${base}.json`, out.json);
+        return out;
+      })();
+      pending.catch(() => sheets.delete(key));
+      sheets.set(key, pending);
+    }
+    return pending;
+  };
+  router.get('/figure/:file', async (req: Request, res: Response) => {
+    const m = /^([a-z0-9_]{1,60})\.(png|json)$/i.exec(String(req.params.file ?? ''));
+    const revision = z.coerce.number().int().positive().safeParse(req.query.revision);
+    const figure = figureData();
+    const lib = m?.[1] ?? '';
+    // Só bibliotecas conhecidas, na revisão dos dados (nada de baixar qualquer coisa da CDN).
+    if (
+      !m ||
+      !revision.success ||
+      !figure ||
+      figure.libs[lib] !== revision.data ||
+      !figure.swf[lib]
+    ) {
+      return void res.status(400).json({ error: 'Parâmetros inválidos' });
+    }
+    try {
+      const sheet = await sheetFor(lib, revision.data, figure.swf[lib]);
+      res.setHeader('Content-Type', m[2] === 'png' ? 'image/png' : 'application/json');
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      res.end(m[2] === 'png' ? sheet.png : sheet.json);
+    } catch (err) {
+      const status = err instanceof UpstreamError ? err.status : 502;
+      res
+        .status(status >= 400 && status < 600 ? status : 502)
+        .json({ error: (err as Error).message });
+    }
+  });
+
   return router;
+}
+
+/** `figuredata.json` (em dev em client/public; em produção também copiado para client/dist). */
+let figureCache: Pick<FigureData, 'libs' | 'swf'> | null | undefined;
+function loadFigureData(): Pick<FigureData, 'libs' | 'swf'> | null {
+  if (figureCache !== undefined) return figureCache;
+  for (const dir of ['public', 'dist']) {
+    try {
+      figureCache = JSON.parse(
+        readFileSync(join(ROOT_DIR, 'client', dir, 'assets', 'figure', 'figuredata.json'), 'utf8'),
+      ) as FigureData;
+      return figureCache;
+    } catch {
+      // tenta a próxima
+    }
+  }
+  figureCache = null;
+  return null;
 }
 
 function cacheKey(upstreamUrl: string): string {

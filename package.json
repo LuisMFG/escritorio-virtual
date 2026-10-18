@@ -27,7 +27,9 @@
     "assets:sync": "npm run assets:sync -w server --",
     "start": "NODE_ENV=production npm run start -w server",
     "vscode:package": "npm run package -w vscode-extension",
-    "e2e": "npm run build && playwright test -c e2e/playwright.config.ts"
+    "e2e": "npm run build && playwright test -c e2e/playwright.config.ts",
+    "assets:figure": "npm run assets:figure -w server --",
+    "assets:figure-check": "npm run assets:figure-check -w server --"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
