@@ -32,6 +32,7 @@ await server.listen(config.port);
 new MeetingScheduler(services.meetings, services.dms).start();
 services.activity.start();
 services.spotifyPoller.start();
+services.focus.startTimer();
 new BackupScheduler(services.backups).start();
 console.log(`[servidor] escritório no ar em http://localhost:${config.port}`);
 console.log(`[servidor] banco: ${config.databasePath}`);

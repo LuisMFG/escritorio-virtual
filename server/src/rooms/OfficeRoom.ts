@@ -2,6 +2,8 @@ import { randomInt } from 'node:crypto';
 import { CloseCode, Room, ServerError, validate, type Client, type Deferred } from '@colyseus/core';
 import {
   canPlace,
+  focusStartSchema,
+  type FocusPhase,
   parsePollCommand,
   pollCreateSchema,
   pollRefSchema,
@@ -256,6 +258,15 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       services().whiteboards.clear(msg.furniId);
       this.broadcast(ServerMessage.WbCleared, { furniId: msg.furniId });
     }),
+    [ClientMessage.FocusStart]: validate(focusStartSchema, (client, msg) => {
+      const c = client as OfficeClient;
+      if (!c.auth || !this.statusLimiter.tryTake(c.sessionId)) return;
+      services().focus.start(c.auth.id, msg.minutes, msg.breakMinutes);
+    }),
+    [ClientMessage.FocusStop]: (client: Client) => {
+      const c = client as OfficeClient;
+      if (c.auth) services().focus.stop(c.auth.id);
+    },
     [ClientMessage.PollCreate]: validate(pollCreateSchema, (client, msg) =>
       this.createPoll(client as OfficeClient, msg),
     ),
@@ -373,6 +384,27 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     }
   };
 
+  /** Foco de alguém mudou: atualiza o 🍅 dos avatares e avisa a própria pessoa da fase nova. */
+  private readonly onFocus = (
+    userId: string,
+    state: { kind: string; until: number } | null,
+    finished: boolean,
+  ): void => {
+    for (const p of this.state.players.values()) {
+      if (p.userId !== userId) continue;
+      p.focusUntil = state?.until ?? 0;
+      p.focusKind = state?.kind ?? '';
+    }
+    for (const c of this.clients) {
+      if (c.auth?.id !== userId) continue;
+      c.send(ServerMessage.FocusPhase, {
+        kind: (state?.kind as FocusPhase['kind']) ?? null,
+        until: state?.until ?? 0,
+        finished,
+      } satisfies FocusPhase);
+    }
+  };
+
   /** Pet adotado, editado ou solto: aparece, muda ou some nesta sala. */
   private readonly onPetChanged = (userId: string, pet: PetInfo | null): void => {
     const session = this.state.pets.get(userId)?.ownerSession ?? this.sessionOf(userId);
@@ -472,6 +504,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     services().moderation.on('layout', this.onLayout);
     services().pets.events.on('changed', this.onPetChanged);
     services().activity.events.on('changed', this.onActivity);
+    services().focus.events.on('changed', this.onFocus);
   }
 
   override onDispose(): void {
@@ -481,6 +514,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     services().moderation.off('layout', this.onLayout);
     services().pets.events.off('changed', this.onPetChanged);
     services().activity.events.off('changed', this.onActivity);
+    services().focus.events.off('changed', this.onFocus);
   }
 
   override onAuth(_client: Client, options: unknown): UserRow {
@@ -523,6 +557,8 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       typing: false,
       activity: services().activity.text(user.id),
       activityUrl: services().activity.url(user.id),
+      focusUntil: services().focus.get(user.id)?.until ?? 0,
+      focusKind: services().focus.get(user.id)?.kind ?? '',
     });
     this.state.players.set(client.sessionId, player);
     const pet = services().pets.get(user.id);

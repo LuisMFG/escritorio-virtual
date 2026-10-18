@@ -99,6 +99,7 @@ async function startBot(name: string): Promise<void> {
   room.onMessage('error', (e: { message: string }) => console.log(`[bot] ${name}: ${e.message}`));
   room.onMessage('chat.message', () => undefined);
   room.onMessage('poll.updated', () => undefined);
+  room.onMessage('focus.phase', () => undefined);
   room.onMessage('emote.played', () => undefined);
   room.onMessage('room.transfer', () => undefined);
   room.onMessage('chat.deleted', () => undefined);

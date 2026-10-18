@@ -21,6 +21,7 @@ import { BackupService } from './BackupService.js';
 import { AnnouncementService } from './AnnouncementService.js';
 import { PollService } from './PollService.js';
 import { KudosService } from './KudosService.js';
+import { FocusService } from './FocusService.js';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { SpotifyConfig } from '../config.js';
@@ -62,6 +63,7 @@ export interface Services {
   announcements: AnnouncementService;
   polls: PollService;
   kudos: KudosService;
+  focus: FocusService;
   furni: FurniService;
   transfers: TransferRegistry;
   settings: SettingsService;
@@ -116,6 +118,7 @@ export function createServices(
     announcements: new AnnouncementService(db),
     polls: new PollService(db),
     kudos: new KudosService(db),
+    focus: new FocusService(),
     furni: new FurniService(db),
     transfers: new TransferRegistry(),
     settings: new SettingsService(db, defaults),

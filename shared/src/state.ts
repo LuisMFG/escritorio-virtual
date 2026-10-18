@@ -42,6 +42,10 @@ export const Player = schema(
     activity: t.string(),
     /** Link da música que está tocando (linha 🎵 da atividade), se houver. */
     activityUrl: t.string(),
+    /** Modo foco: fim da fase atual (epoch ms; 0 = fora do foco). */
+    focusUntil: t.float64(),
+    /** 'focus' | 'break' | '' */
+    focusKind: t.string(),
   },
   'Player',
 );

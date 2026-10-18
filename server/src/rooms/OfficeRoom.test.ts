@@ -936,4 +936,31 @@ describe('OfficeRoom', () => {
       });
     });
   });
+
+  describe('modo foco', () => {
+    it('quem está na sala vê o 🍅; a própria pessoa recebe a fase', async () => {
+      const ana = newUser('Ana');
+      const a = await join(ana.token);
+      const b = await join(newUser('Beto').token);
+      const phase = a.waitForMessage(ServerMessage.FocusPhase);
+      a.send(ClientMessage.FocusStart, { minutes: 25, breakMinutes: 5 });
+      expect(await phase).toMatchObject({ kind: 'focus', finished: false });
+      await wait(100);
+      const seen = b.state.players.get(a.sessionId)!;
+      expect(seen.focusKind).toBe('focus');
+      expect(seen.focusUntil).toBeGreaterThan(Date.now() + 24 * 60_000);
+
+      // Entra numa sala nova já com o foco (fica com a pessoa, não com a sala).
+      const roomId = svc.rooms.create('Foco', svc.furniDefs).id;
+      const c = await join(ana.token, roomId);
+      expect(c.state.players.get(c.sessionId)!.focusKind).toBe('focus');
+
+      const stopped = a.waitForMessage(ServerMessage.FocusPhase);
+      a.send(ClientMessage.FocusStop, {});
+      expect(await stopped).toMatchObject({ kind: null, finished: false });
+      await wait(100);
+      expect(b.state.players.get(a.sessionId)!.focusUntil).toBe(0);
+      svc.focus.stop(ana.user.id);
+    });
+  });
 });

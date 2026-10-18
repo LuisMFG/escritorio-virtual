@@ -71,6 +71,10 @@ export const ClientMessage = {
   PollVote: 'poll.vote',
   /** `{ pollId }`: encerra (quem criou ou admin). */
   PollClose: 'poll.close',
+  /** `{ minutes, breakMinutes }`: começa um ciclo de foco (Pomodoro). */
+  FocusStart: 'focus.start',
+  /** Para o foco (ou a pausa) agora. */
+  FocusStop: 'focus.stop',
 } as const;
 
 /** Mensagens servidor → cliente. */
@@ -102,6 +106,8 @@ export const ServerMessage = {
   WbCleared: 'wb.cleared',
   /** Votos ou estado de uma enquete mudaram (`PollUpdated`). */
   PollUpdated: 'poll.updated',
+  /** Para a própria pessoa: fase do foco mudou (`FocusPhase`). */
+  FocusPhase: 'focus.phase',
 } as const;
 
 export const ErrorCode = {
