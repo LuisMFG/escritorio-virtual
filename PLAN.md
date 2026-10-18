@@ -888,3 +888,90 @@ Escolhido em 17/10/2026, depois do roadmap v3. Ordem pensada assim: primeiro pro
 2. **Anexos:** até 10 MB por arquivo; imagens, PDF, documentos do Office, texto e zip; guardados no disco do servidor (entram no backup).
 3. **Pomodoro:** 25 min de foco / 5 de pausa por padrão; durante o foco as notificações ficam seguradas e chegam no fim.
 4. **Jira:** ✅ **Jira Cloud** (respondido em 17/10/2026). Cada pessoa conecta com o e-mail da Atlassian e um token de API (guardado criptografado no servidor). Falta o endereço (`suaempresa.atlassian.net`), que pode vir antes da Fase 30.
+
+## 13. Roadmap v5 — avatares vivos e todo o acervo do Habbo
+
+Pedido (18/10/2026): prioridade para as **animações dos personagens**, **sentar (e deitar) nos móveis**, **mais roupas**, **mais móveis** e **todo o conteúdo de assets da API**.
+
+### O que o levantamento mostrou
+- **O imager da HabboAssets só desenha o avatar em pé.** Pedindo `action=sit`, `wlk`, `lay` ou `wav`, ele responde *"Only the standing pose (action=std) is supported"*, e `gesture` (sorriso, triste…) é ignorado. Por isso hoje a caminhada é um balanço feito por código e a pessoa "sentada" é o boneco em pé abaixado.
+- **Os sprites brutos estão na API.** Cada biblioteca de roupa tem um pacote `.nitro` (spritesheet PNG + JSON) com todos os quadros: andar (`wlk`, 4 quadros por direção), sentar (`sit`), deitar (`lay`), acenar (`wav`), falar, piscar, carregar e beber (`crr`/`drk`). Conferido baixando o `hh_human_body`: 236 quadros, com sit/wlk/lay/wav. Com eles dá para **montar o avatar no próprio navegador** (como o cliente do Habbo faz), com todas as poses.
+- **Tamanho do acervo × o que usamos hoje:**
+
+| Conteúdo | Na API | Hoje no escritório |
+|---|---|---|
+| Roupas (bibliotecas) | 3.121 | 9 bibliotecas básicas, 270 peças |
+| Móveis | 18.357 | 57 (curados à mão) |
+| Efeitos (brilho, raio, aura…) | 252 | nenhum |
+| Pets do Habbo | 37 tipos | 4, em pixel art própria |
+| Emblemas | 12.397 | medalhas em CSS |
+| Itens de mão (café, bebidas…) | `hh_human_item` | só o emote ☕ |
+
+- A lista completa de móveis (`/api/v2/furniture`) precisa de um **token gratuito** da HabboAssets (criado na conta do site). O resto (imager, pacotes `.nitro` de roupas, efeitos e pets, emblemas) é público.
+
+### Fases (ordem pela prioridade pedida)
+
+#### Fase 31 — Avatar montado no navegador (base de tudo)
+- O `assets:sync` baixa, das bibliotecas usadas, os `.nitro` e os dados de montagem do Habbo (quais partes cada peça tem, ordem de desenho por direção, posições e paletas de cor). O servidor guarda em cache como hoje.
+- Novo renderizador no cliente: junta as partes (corpo, cabeça, rosto, cabelo, roupas, acessórios) por direção e pose, pintando cada parte com a cor escolhida. Feito do zero, sem copiar código de terceiros.
+- Primeiro só a pose **em pé**, conferida pixel a pixel contra o imager (tem de ficar igual). Se algo falhar, cai para o imager como hoje.
+- **Como testar:** os avatares aparecem iguais aos de hoje, nas 8 direções, com todas as roupas do editor.
+- ⚠️ É a fase mais arriscada. Começa com uma prova rápida (um boneco andando); mostro antes de seguir.
+
+#### Fase 32 — Animações dos personagens
+- **Andar** com os 4 quadros reais do Habbo (pernas e braços), no lugar do balanço.
+- **Sentar** com a pose real (pernas dobradas) e **deitar**.
+- **Falar:** a boca mexe enquanto o balão aparece. **Piscar** sozinho de vez em quando.
+- **Expressões e gestos:** emotes viram animação de verdade: acenar (`wav`), mandar beijo, rir, levantar a mão, e rostos de feliz, triste, bravo e surpreso (`/sorrir`, `/triste`, `/bravo`, `/surpreso`).
+- **Ausente:** depois de um tempo parado, olhos fechados e um "zZ".
+- **Como testar:** andar pela sala, sentar, acenar e falar, e ver as animações nas outras abas.
+
+#### Fase 33 — Sentar e deitar em tudo
+- Altura e direção de assento certas por móvel (dados do próprio Habbo). Sofás com vários lugares (cada pessoa num lugar), bancos, banquetas e poltronas.
+- **Deitar** em camas, espreguiçadeiras e pufes. Cama de casal com dois lugares.
+- `/sentar` senta no chão onde estiver, `/levantar` levanta. Clicar no piso levanta e anda.
+- Virar sentado (setas ou clique ao lado) sem levantar.
+- **Como testar:** sentar em cada tipo de assento, deitar numa cama, sentar no chão.
+
+#### Fase 34 — Itens na mão e efeitos
+- A máquina de café entrega **um copo na mão** (o avatar segura e bebe de vez em quando), e a geladeira entrega uma bebida. Some depois de alguns minutos ou ao clicar em "largar".
+- **Efeitos** sobre o avatar (brilho, aura, raio…) para comemorar conquistas, aniversário, elogio recebido e fim de Pomodoro. No Perfil, cada pessoa escolhe um efeito desbloqueado para usar.
+- **Como testar:** pegar café e ver o copo; ganhar uma conquista e ver o efeito.
+
+#### Fase 35 — Muito mais roupas
+- Catálogo do editor com **todas as roupas usáveis** do Habbo Brasil (milhares, contra 270 hoje): busca por nome, filtros por categoria e gênero, paginação e miniaturas carregadas aos poucos.
+- Roupas **animadas** (as que mexem no Habbo) animando de verdade.
+- **Looks salvos:** até 5 visuais para trocar com um clique.
+- As peças são baixadas só quando alguém usa (cache no servidor), para não pesar.
+- **Como testar:** buscar "terno" e "chapéu", vestir, salvar dois looks e alternar.
+
+#### Fase 36 — Catálogo completo de móveis
+- Com o token gratuito, o servidor lê a lista dos 18 mil móveis com categorias e nomes em português. O catálogo do Decorar ganha busca e as categorias do Habbo, com o tamanho de cada móvel medido sozinho na primeira vez que alguém o usa (sem curadoria à mão).
+- **Móveis de parede:** quadros, janelas, prateleiras, cartazes e relógios presos na parede.
+- Móveis com **cores** (as variações do Habbo) e todos os **estados** (ligar/desligar genérico).
+- Admin pode esconder categorias que não combinam com escritório.
+- **Como testar:** buscar "geladeira", "quadro" e "janela", colocar um na parede e trocar a cor de um sofá.
+
+#### Fase 37 — Móveis animados e interativos
+- Com os `.nitro` dos móveis: **animações** (ventilador girando, lareira, TV, aquário, luzes piscando).
+- Assentos e camas reconhecidos pelos dados do Habbo (qualquer cadeira nova já senta).
+- **Teleportes** do Habbo ligando duas salas (entra num, sai no outro), dado do Habbo que rola de verdade, jukebox.
+- **Como testar:** ligar o ventilador e ver girando; usar um par de teleportes entre a Copa e a Sala do TI.
+
+#### Fase 38 — Pets do Habbo de verdade
+- Troca a pixel art pelos **pets do Habbo** (cachorro, gato, coelho, urso, dragão…, 37 tipos) com as animações deles: andar, sentar, deitar, dormir, comer, pular.
+- Os comandos (`/senta`, `/deita`, `/vem`) continuam; quem já tem pet escolhe a versão nova.
+- **Como testar:** adotar um pet do Habbo, ver andando atrás de você e obedecendo.
+
+#### Fase 39 — Emblemas do Habbo e acabamento
+- Conquistas com **emblemas reais do Habbo** (no lugar das medalhas em CSS), escolhidos um para cada conquista.
+- **Desempenho:** juntar sprites em atlas, pré-carregar a sala, limitar memória com muitas pessoas, e conferir celulares.
+- **Como testar:** abrir o Perfil e ver os emblemas; sala com 15 pessoas andando sem travar.
+
+### Decisões para aprovar antes da Fase 31
+1. **Ordem:** a acima (avatar montado → animações → sentar/deitar → itens/efeitos → roupas → móveis → móveis animados → pets → emblemas).
+2. **Token da HabboAssets:** criar uma conta gratuita em habboassets.com e gerar um token de API (só é preciso a partir da Fase 36). Vai no `.env` como `HABBOASSETS_API_KEY`, só no servidor.
+3. **Roupas:** todas as usáveis, **inclusive** as de clube (HC) e raras? (Sugestão: todas, menos as marcadas como NFT.)
+4. **Móveis:** catálogo inteiro com busca, e o admin esconde categorias? Ou uma seleção de escritório? (Sugestão: inteiro, com categorias de festa/jogos escondidas por padrão.)
+5. **Uso dos gráficos:** continua o mesmo: uso pessoal e privado, escritório fechado por convite, gráficos da Sulake via HabboAssets.
+6. **Fora deste roadmap:** deploy na Oracle e WebRTC continuam adiados.
