@@ -32,7 +32,8 @@ Escritório virtual isométrico para amigos e colegas (até ~10 pessoas online):
 - Montar o visual do avatar (270 peças do Habbo Brasil, cores das paletas reais) ao criar a conta ou em **Perfil → Meu visual**.
 - Andar clicando no piso, com desvio de móveis e outras pessoas, sincronizado em tempo real.
 - Conversar: **Enter** abre o campo de mensagem; a fala aparece em balão sobre o avatar e fica no histórico **Conversa**. Há um som de mensagem opcional (🔔/🔕).
-- Emotes: botão 😊 ao lado do chat ou comandos `/acenar`, `/rir`, `/joinha`, `/coracao`, `/cafe`, `/dancar`.
+- Emotes: botão 😊 ao lado do chat ou comandos `/acenar`, `/rir`, `/joinha`, `/coracao`, `/cafe`, `/dancar`, `/mao`, `/sorrir`, `/triste`, `/bravo`, `/surpreso`.
+- **Avatares animados** como no Habbo: andam com os passos de verdade, sentam com as pernas dobradas, mexem a boca ao falar, piscam, acenam, levantam a mão, mandam beijo, bebem o café e mudam a expressão do rosto. Quem está **Ausente** fecha os olhos e solta um "zZ".
 - Status **Disponível**, **Ocupado** ou **Ausente** no painel de pessoas; fica **Ausente** sozinho após 5 minutos parado.
 - Passe o mouse num avatar para ver o nome; clique para abrir o cartão (status, sala, **Ir até**, **Mencionar**).
 - Menções: digite `@` para escolher alguém da sala; quem é mencionado recebe destaque, aviso e som. Um "•••" mostra quem está digitando.

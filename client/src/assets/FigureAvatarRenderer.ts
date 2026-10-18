@@ -1,8 +1,12 @@
 import {
+  canvasFor,
   composeFigure,
-  FIGURE_HEIGHT,
-  FIGURE_WIDTH,
   figureSheetUrl,
+  poseKey,
+  STAND_CANVAS,
+  type FigureCanvas,
+  type FigureLayer,
+  type FigurePose,
   partsWithoutArt,
   resolveFigure,
   type FigureData,
@@ -11,7 +15,12 @@ import {
 } from '@office/shared';
 import { Texture } from 'pixi.js';
 import { IMAGER_AVATAR_FEET } from '../config.js';
-import type { AvatarFrame, AvatarFrames, AvatarRenderer } from './AvatarTextureCache.js';
+import type {
+  AvatarFrame,
+  AvatarFrames,
+  AvatarPoser,
+  AvatarRenderer,
+} from './AvatarTextureCache.js';
 
 /**
  * Avatar montado no navegador a partir das partes do Habbo (Fase 31): o servidor converte cada
@@ -29,22 +38,26 @@ export class FigureAvatarRenderer implements AvatarRenderer {
   ) {}
 
   async render(figure: string): Promise<AvatarFrames> {
+    const poser = await this.poser(figure);
+    if (!poser) return this.fallback.render(figure);
+    return Array.from({ length: 8 }, (_, direction) => poser.frame({ direction }));
+  }
+
+  /** Posador da figure, ou `null` se ela não dá para montar (aí a cena usa o imager). */
+  async poser(figure: string): Promise<AvatarPoser | null> {
     try {
       const data = await this.loadData();
       const resolved = resolveFigure(figure, data);
-      if (resolved.missing.length) return await this.fallback.render(figure);
+      if (resolved.missing.length) return null;
       const libs = new Map<string, FigureLib>();
       await Promise.all(
         resolved.libs.map(async (name) => libs.set(name, await this.loadLib(name, data))),
       );
-      if (partsWithoutArt(resolved.parts, libs).length) return await this.fallback.render(figure);
-      return Array.from({ length: 8 }, (_, direction): AvatarFrame => {
-        const pixels = composeFigure(resolved.parts, libs, { direction });
-        return { texture: toTexture(pixels), anchor: IMAGER_AVATAR_FEET, source: 'habboassets' };
-      });
+      if (partsWithoutArt(resolved.parts, libs).length) return null;
+      return new FigurePoser(resolved.parts, libs);
     } catch (err) {
       console.warn('[avatar] montagem falhou, usando o imager:', (err as Error).message);
-      return this.fallback.render(figure);
+      return null;
     }
   }
 
@@ -91,13 +104,43 @@ export class FigureAvatarRenderer implements AvatarRenderer {
   }
 }
 
-function toTexture(pixels: Uint8ClampedArray): Texture {
+/** Até quantas poses por avatar ficam guardadas (cada uma é uma textura pequena). */
+const MAX_POSES = 400;
+
+/** Monta cada pose uma vez e guarda a textura (a cena pede a pose a cada quadro). */
+class FigurePoser implements AvatarPoser {
+  private readonly cache = new Map<string, AvatarFrame>();
+
+  constructor(
+    private readonly parts: readonly FigureLayer[],
+    private readonly libs: ReadonlyMap<string, FigureLib>,
+  ) {}
+
+  frame(pose: FigurePose): AvatarFrame {
+    const key = poseKey(pose);
+    const hit = this.cache.get(key);
+    if (hit) return hit;
+    const canvas = canvasFor(pose);
+    const texture = toTexture(composeFigure(this.parts, this.libs, pose, canvas), canvas);
+    // Os pés ficam no mesmo ponto em qualquer quadro (o deitado é só mais largo).
+    const anchor = {
+      x: IMAGER_AVATAR_FEET.x + canvas.regX - STAND_CANVAS.regX,
+      y: IMAGER_AVATAR_FEET.y,
+    };
+    const frame: AvatarFrame = { texture, anchor, source: 'habboassets' };
+    if (this.cache.size >= MAX_POSES) this.cache.delete(this.cache.keys().next().value!);
+    this.cache.set(key, frame);
+    return frame;
+  }
+}
+
+function toTexture(pixels: Uint8ClampedArray, size: FigureCanvas): Texture {
   const canvas = document.createElement('canvas');
-  canvas.width = FIGURE_WIDTH;
-  canvas.height = FIGURE_HEIGHT;
+  canvas.width = size.width;
+  canvas.height = size.height;
   canvas
     .getContext('2d')!
-    .putImageData(new ImageData(new Uint8ClampedArray(pixels), FIGURE_WIDTH, FIGURE_HEIGHT), 0, 0);
+    .putImageData(new ImageData(new Uint8ClampedArray(pixels), size.width, size.height), 0, 0);
   const texture = Texture.from(canvas);
   texture.source.scaleMode = 'nearest';
   return texture;

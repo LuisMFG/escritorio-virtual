@@ -1,4 +1,4 @@
-import { avatarImageUrl } from '@office/shared';
+import { avatarImageUrl, type FigurePose } from '@office/shared';
 import type { Texture } from 'pixi.js';
 import { IMAGER_AVATAR_FEET } from '../config.js';
 import type { AssetLoader, AssetSource, PixelAnchor } from './AssetLoader.js';
@@ -14,12 +14,18 @@ export interface AvatarFrame {
 /** Uma textura por direção (0–7) para uma figure string. */
 export type AvatarFrames = readonly AvatarFrame[];
 
+/** Quadros sob demanda de um avatar montado: qualquer pose (andar, sentar, acenar…). */
+export interface AvatarPoser {
+  frame(pose: FigurePose): AvatarFrame;
+}
+
 /**
- * Fonte das texturas do avatar. Hoje: render parado do imager por direção.
- * Pode ser trocada por um renderer de partes (bibliotecas .nitro) sem mexer na cena.
+ * Fonte das texturas do avatar: as 8 direções em pé e, quando o avatar é montado no navegador
+ * (Fase 31), um "posador" com todas as poses. Pelo imager não há posador (só a pose parada).
  */
 export interface AvatarRenderer {
   render(figure: string): Promise<AvatarFrames>;
+  poser?(figure: string): Promise<AvatarPoser | null>;
 }
 
 export class ImagerAvatarRenderer implements AvatarRenderer {
@@ -63,6 +69,25 @@ export class AvatarTextureCache {
     private readonly renderer: AvatarRenderer,
     private readonly maxEntries = 64,
   ) {}
+
+  private readonly posers = new Map<string, Promise<AvatarPoser | null>>();
+
+  /** Posador da figure (ou `null`: animação simulada sobre as texturas paradas). */
+  poser(figure: string): Promise<AvatarPoser | null> {
+    let hit = this.posers.get(figure);
+    if (hit) {
+      this.posers.delete(figure);
+      this.posers.set(figure, hit);
+      return hit;
+    }
+    hit = this.renderer.poser?.(figure) ?? Promise.resolve(null);
+    this.posers.set(figure, hit);
+    if (this.posers.size > this.maxEntries) {
+      const oldest = this.posers.keys().next().value;
+      if (oldest !== undefined) this.posers.delete(oldest);
+    }
+    return hit;
+  }
 
   get(figure: string): Promise<AvatarFrames> {
     const hit = this.entries.get(figure);

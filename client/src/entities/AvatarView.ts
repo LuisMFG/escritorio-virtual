@@ -1,6 +1,13 @@
 import {
+  BLINK_MS,
   directionBetween,
+  emotePose,
   EMOTES,
+  nextBlinkDelay,
+  poseKey,
+  TALK_FRAME_MS,
+  walkFrame,
+  type FigurePose,
   focusLeft,
   STEP_MS,
   type EmoteId,
@@ -9,7 +16,7 @@ import {
   type TilePoint,
 } from '@office/shared';
 import { Container, Graphics, Sprite, Text, type Point } from 'pixi.js';
-import type { AvatarFrames } from '../assets/AvatarTextureCache.js';
+import type { AvatarFrame, AvatarFrames, AvatarPoser } from '../assets/AvatarTextureCache.js';
 import { spriteHitTest } from '../assets/hitTest.js';
 
 /** Deslocamento vertical (px) por quarto de passo: o "bob" da caminhada procedural. */
@@ -22,6 +29,8 @@ const NAME_Y = -88;
 const CARGO_LINE = 12;
 /** Pose sentada simulada (o imager não tem): desce o corpo e esconde as pernas abaixo do assento. */
 const SIT_DROP = 8;
+/** Com a pose sentada real, quanto o desenho desce para assentar no móvel. */
+const SIT_OFFSET = 0;
 const SIT_CUT_Y = -2;
 /** Altura do "…" de digitando e do emoji dos emotes. */
 const TYPING_Y = -96;
@@ -40,7 +49,7 @@ export interface AvatarSnapshot {
   nextY: number;
   dir: number;
   away: boolean;
-  /** 'idle' | 'walk' | 'sit' */
+  /** 'idle' | 'walk' | 'sit' | 'lay' */
   action: string;
   /** Altura em que o servidor colocou o avatar (assento quando sentado). */
   z: number;
@@ -76,6 +85,14 @@ export class AvatarView extends Container {
   /** Figure das texturas atuais (para recarregar quando a pessoa troca de visual). */
   figure: string;
   private frames: AvatarFrames | null = null;
+  /** Avatar montado (Fase 32): pose real a cada quadro. Sem ele, animação simulada. */
+  private poser: AvatarPoser | null = null;
+  private poseShown = '';
+  private talkUntil = 0;
+  private blinkAt = nextBlinkDelay();
+  private lying = false;
+  /** "zZ" sobre a cabeça de quem está ausente (olhos fechados). */
+  private readonly sleep: Text;
   private readonly body = new Sprite();
   private readonly shadow = new Graphics();
   private readonly nameTag: Text;
@@ -160,6 +177,19 @@ export class AvatarView extends Container {
     this.focusTag.anchor.set(0.5, 1);
     this.focusTag.position.set(16, -76);
     this.focusTag.visible = false;
+    this.sleep = new Text({
+      text: 'z',
+      resolution: 2,
+      style: {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: 11,
+        fontWeight: '700',
+        fill: 0xdbe7ff,
+        stroke: { color: 0x101114, width: 3 },
+      },
+    });
+    this.sleep.anchor.set(0, 1);
+    this.sleep.visible = false;
     this.legMask.rect(-60, -220, 120, 220 + SIT_CUT_Y).fill(0xffffff);
     this.legMask.visible = false;
     this.statusBadge.visible = false;
@@ -185,6 +215,7 @@ export class AvatarView extends Container {
       this.statusBadge,
       this.cake,
       this.focusTag,
+      this.sleep,
       this.typingBubble,
       this.cargoTag,
       this.nameTag,
@@ -196,6 +227,20 @@ export class AvatarView extends Container {
   setFrames(frames: AvatarFrames): void {
     this.frames = frames;
     this.applyFrame();
+  }
+
+  /** Avatar montado: daqui em diante as poses são reais (andar, sentar, gestos, rosto). */
+  setPoser(poser: AvatarPoser | null): void {
+    this.poser = poser;
+    this.poseShown = '';
+    this.setSitting(this.sitting, this.sitZ);
+    this.applyFrame();
+    this.applyPosition();
+  }
+
+  /** Falou no chat: a boca mexe por um tempo. */
+  talk(durationMs: number): void {
+    this.talkUntil = this.clock + durationMs;
   }
 
   /** Tile onde o avatar vai terminar o que já recebeu do servidor. */
@@ -242,7 +287,8 @@ export class AvatarView extends Container {
     this.focusKind = s.focusKind;
     this.drawFocus();
     this.alpha = s.away ? 0.45 : 1;
-    this.setSitting(s.action === 'sit', s.z);
+    this.lying = s.action === 'lay';
+    this.setSitting(s.action === 'sit' || this.lying, s.z);
     this.setStatus(s.status);
     this.typingBubble.visible = s.typing;
 
@@ -295,6 +341,8 @@ export class AvatarView extends Container {
     }
     this.clock += dtMs;
     this.updateEmote(dtMs);
+    if (this.poser) this.applyFrame();
+    this.updateSleep();
     if (this.typingBubble.visible) {
       const active = Math.floor(this.clock / 250) % 3;
       this.typingDots.forEach((d, i) => (d.alpha = i === active ? 1 : 0.35));
@@ -312,7 +360,11 @@ export class AvatarView extends Container {
       maxX: Math.max(a.x, b.x),
       minY: Math.min(a.y, b.y),
       maxY: Math.max(a.y, b.y),
-      z: Math.max(this.heightAt(a.x, a.y), this.heightAt(b.x, b.y)),
+      // Sentado, fica acima do assento (na frente do móvel em que senta, encosto incluso).
+      z:
+        this.sitting && !this.step
+          ? Math.max(this.sitZ, this.heightAt(a.x, a.y)) + 0.01
+          : Math.max(this.heightAt(a.x, a.y), this.heightAt(b.x, b.y)),
     };
   }
 
@@ -399,8 +451,10 @@ export class AvatarView extends Container {
   private setSitting(on: boolean, z: number): void {
     this.sitting = on;
     this.sitZ = z;
-    this.body.mask = on ? this.legMask : null;
-    this.legMask.visible = on;
+    // A pose sentada simulada esconde as pernas; com o avatar montado a pose já é real.
+    const fake = on && !this.poser;
+    this.body.mask = fake ? this.legMask : null;
+    this.legMask.visible = fake;
     this.shadow.visible = !on;
   }
 
@@ -413,8 +467,55 @@ export class AvatarView extends Container {
   }
 
   private applyFrame(): void {
+    if (this.poser) {
+      const pose = this.currentPose();
+      const key = poseKey(pose);
+      if (key === this.poseShown) return;
+      this.poseShown = key;
+      return this.showFrame(this.poser.frame(pose));
+    }
     const frame = this.frames?.[this.dir];
-    if (!frame) return;
+    if (frame) this.showFrame(frame);
+  }
+
+  /** Pose de agora: postura, gesto/expressão do emote, fala, piscar e sono. */
+  private currentPose(): FigurePose {
+    const pose: FigurePose = { direction: this.dir };
+    if (this.step) {
+      pose.posture = 'wlk';
+      pose.frame = walkFrame(this.walkTime);
+    } else if (this.lying) {
+      pose.posture = 'lay';
+    } else if (this.sitting) {
+      pose.posture = 'sit';
+    }
+    if (this.emote) Object.assign(pose, emotePose(this.emote.id, this.emote.elapsed));
+    if (this.step && pose.posture !== 'wlk') pose.posture = 'wlk';
+    if (this.clock < this.talkUntil && !pose.talk) {
+      pose.talk = true;
+      pose.talkFrame = Math.floor(this.clock / TALK_FRAME_MS) % 2;
+    }
+    if (this.status === 'away') {
+      pose.expression = 'eyb';
+    } else if (!pose.expression) {
+      if (this.clock >= this.blinkAt + BLINK_MS) this.blinkAt = this.clock + nextBlinkDelay();
+      if (this.clock >= this.blinkAt) pose.expression = 'eyb';
+    }
+    return pose;
+  }
+
+  /** "z… zZ" subindo sobre quem está ausente. */
+  private updateSleep(): void {
+    const on = this.status === 'away' && Boolean(this.poser);
+    this.sleep.visible = on;
+    if (!on) return;
+    const t = (this.clock % 2400) / 2400;
+    this.sleep.text = t < 0.33 ? 'z' : t < 0.66 ? 'z Z' : 'z Z Z';
+    this.sleep.position.set(10, -78 - Math.round(t * 6));
+    this.sleep.alpha = t > 0.85 ? (1 - t) / 0.15 : 1;
+  }
+
+  private showFrame(frame: AvatarFrame): void {
     this.body.texture = frame.texture;
     this.body.anchor.set(
       frame.anchor.x / frame.texture.width,
@@ -436,7 +537,11 @@ export class AvatarView extends Container {
     const p = tileToScreen(x, y, z);
     this.position.set(Math.round(p.sx), Math.round(p.sy));
 
-    if (this.step) {
+    if (this.poser) {
+      // Pose real: sem balanço simulado (a dança ainda pula um pouquinho).
+      const hop = this.emote?.id === 'dance' && !this.step ? this.emoteOffset().y : 0;
+      this.body.position.set(0, (this.sitting && !this.step ? SIT_OFFSET : 0) + hop);
+    } else if (this.step) {
       const quarter = Math.floor((this.walkTime / STEP_MS) * 4) % 4;
       const sway = quarter === 2 ? (this.stepCount % 2 === 0 ? 1 : -1) : 0;
       this.body.position.set(sway, BOB_Y[quarter]!);

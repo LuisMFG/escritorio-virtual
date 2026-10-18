@@ -4,6 +4,7 @@ import {
   parseHeightmap,
   pointInTile,
   RoomGrid,
+  talkDurationMs,
   tileCorners,
   tileHeight,
   type DepthBox,
@@ -323,6 +324,10 @@ export class RoomScene implements DecorHost {
     void this.deps.avatars.get(figure).then((frames) => {
       if (!view.destroyed && view.figure === figure) view.setFrames(frames);
     });
+    // Avatar montado: poses reais (sem ele, a animação simulada continua).
+    void this.deps.avatars.poser(figure).then((poser) => {
+      if (!view.destroyed && view.figure === figure) view.setPoser(poser);
+    });
   }
 
   /** Toca um emote no avatar de quem mandou. */
@@ -386,6 +391,7 @@ export class RoomScene implements DecorHost {
   say(sessionId: string, name: string, text: string, highlight = false): void {
     const avatar = this.avatars.get(sessionId);
     if (!avatar) return;
+    avatar.talk(talkDurationMs(text));
     const bubble = new ChatBubble(name, text, avatar.isLocal, highlight);
     const gap = 3;
     for (const b of this.bubbles.children as ChatBubble[]) b.targetY -= bubble.stackHeight + gap;

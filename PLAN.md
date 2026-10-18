@@ -929,13 +929,23 @@ Pedido (18/10/2026): prioridade para as **animações dos personagens**, **senta
 - Testes: montagem (cores, ordem, espelho, pose que falta, cabeça em pé, chapéu e cabelo, parte sem desenho), conversão do SWF (corte com deslocamento, transparência, apelidos), dados de montagem e o proxy (converte uma vez, recusa biblioteca/revisão desconhecida). Os de ponta a ponta usam a arte provisória e continuam passando; agora cada teste fecha os navegadores que abriu (antes as contas se acumulavam na Recepção).
 - No navegador: os avatares da sala vêm das folhas montadas (nenhum pedido ao imager de avatar), iguais aos de antes.
 
-#### Fase 32 — Animações dos personagens
+#### Fase 32 — Animações dos personagens ✅ implementada
 - **Andar** com os 4 quadros reais do Habbo (pernas e braços), no lugar do balanço.
 - **Sentar** com a pose real (pernas dobradas) e **deitar**.
 - **Falar:** a boca mexe enquanto o balão aparece. **Piscar** sozinho de vez em quando.
 - **Expressões e gestos:** emotes viram animação de verdade: acenar (`wav`), mandar beijo, rir, levantar a mão, e rostos de feliz, triste, bravo e surpreso (`/sorrir`, `/triste`, `/bravo`, `/surpreso`).
 - **Ausente:** depois de um tempo parado, olhos fechados e um "zZ".
 - **Como testar:** andar pela sala, sentar, acenar e falar, e ver as animações nas outras abas.
+
+**Notas da implementação:**
+- **O que as bibliotecas têm** (levantado nos SWFs): andar (`wlk`, 4 quadros), sentar (`sit`, direções 0 e 2), deitar (`lay`, só a direção 2), falar (`spk`: cabeça e boca, 2 quadros), olhos fechados (`eyb`), sorrir/triste/bravo/surpreso (`sml`/`sad`/`agr`/`srp`, nos olhos e na boca), acenar (`wav`, braço esquerdo, 2 quadros), beijo (`blw`), mão levantada (`respect`), beber (`drk`) e carregar (`crr`). Deitado, o rosto tem versões próprias (`lsm`, `lsa`, `lsp`…).
+- **Pose** (`FigurePose` em `shared/src/figureRender.ts`): postura (em pé, andando, sentado, deitado), gesto, fala e expressão. Cada parte escolhe a imagem certa: braço esquerdo para acenar e levantar a mão, braço direito para beijo e beber, cabeça e boca para falar, olhos para expressões; sem imagem, cai para a postura e depois para em pé. Gestos com desenho próprio nas direções 4–6 usam esse desenho em vez do espelho. Deitado usa um quadro mais largo (128×120) com os pés no mesmo ponto.
+- **Na cena** (`AvatarView`): o renderizador entrega um "posador" que monta cada pose uma vez e guarda a textura (até 400 por avatar); a cada quadro a cena calcula a pose e só troca a textura quando muda. Andar troca 4 quadros por passo; sentado usa a pose real (sai a máscara que escondia as pernas); falar mexe a boca por um tempo proporcional à mensagem (0,8–4 s); pisca a cada 2,5–6 s; **Ausente** fecha os olhos e mostra "z Z Z" subindo. Pelo imager (ou `?offline=1`) continua a animação simulada de antes.
+- **Emotes:** acenar = aceno real; joinha = mão levantada; coração = beijo com sorriso; café = bebendo; rir = sorriso falando; dançar = gira o corpo dando passos no lugar. Novos: `/mao` (levantar a mão), `/sorrir`, `/triste`, `/bravo`, `/surpreso` (também no menu 😊).
+- **Sentado na frente do encosto:** quem senta passa a ficar na frente do móvel no desenho (antes o encosto do sofá aparecia por cima, disfarçado pela pose falsa).
+- **Deitar** já é desenhado (postura `lay`), mas ninguém deita ainda: camas e `/deitar` vêm na Fase 33.
+- Testes: poses (gesto no braço certo, fala vence o sorriso na boca, olhos fechados, beijo, direção 4 com desenho próprio, deitado e espelho, chave de cache), animações (quadros do andar, tempo de fala, piscar, emote → pose, comandos novos). Testes de ponta a ponta mais estáveis: cada teste faz as pessoas saírem das salas antes de fechar (antes ficavam 30 s esperando reconexão), e o ajudante de porta espera ninguém estar em cima dela (um avatar passando pegava o clique).
+- No navegador: sentar no sofá (pernas dobradas, na frente do encosto), andar, `/acenar`, `/mao`, falar e Ausente com olhos fechados e "zZ".
 
 #### Fase 33 — Sentar e deitar em tudo
 - Altura e direção de assento certas por móvel (dados do próprio Habbo). Sofás com vários lugares (cada pessoa num lugar), bancos, banquetas e poltronas.
