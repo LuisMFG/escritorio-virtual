@@ -17,6 +17,7 @@ import * as activityRoutes from './activity.js';
 import * as spotifyRoutes from './spotify.js';
 import * as announcementRoutes from './announcements.js';
 import * as kudosRoutes from './kudos.js';
+import * as mapRoutes from './map.js';
 import {
   changePassword,
   claim,
@@ -317,6 +318,12 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
     withCaller((c, req, res) =>
       send(res, announcementRoutes.deleteAnnouncement(c, Number(id(req)), auth)),
     ),
+  );
+
+  // Minimapa: salas e portas.
+  app.get(
+    '/api/map',
+    withCaller((c, _req, res) => send(res, mapRoutes.officeMap(c, auth))),
   );
 
   // Elogios entre colegas.
