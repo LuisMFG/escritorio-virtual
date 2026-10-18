@@ -18,7 +18,15 @@ export const test = base.extend<{ closePeople: void }>({
     // eslint-disable-next-line no-empty-pattern -- o Playwright exige o objeto de fixtures
     async ({}, use) => {
       await use();
-      await Promise.all(openContexts.splice(0).map((c) => c.close()));
+      await Promise.all(
+        openContexts.splice(0).map(async (c) => {
+          // Sai das salas antes de fechar: sem isso o avatar fica 30 s esperando reconexão.
+          for (const page of c.pages()) {
+            await page.evaluate(() => window.__e2e?.leave()).catch(() => undefined);
+          }
+          await c.close();
+        }),
+      );
     },
     { auto: true },
   ],
@@ -34,6 +42,7 @@ interface Hook {
   furniList(): { id: string; defId: string; x: number; y: number }[];
   players(): { id: string; name: string; x: number; y: number; action: string }[];
   furniAt(x: number, y: number): string | null;
+  leave(): Promise<void>;
 }
 declare global {
   interface Window {
@@ -136,6 +145,18 @@ export async function sendChat(page: Page, text: string): Promise<void> {
 
 /** Anda até a porta (tile) e espera chegar na outra sala. */
 export async function goThroughDoor(page: Page, door: [number, number], roomId: string) {
+  // Outro avatar passando pela porta pegaria o clique (abre o cartão dele): espera liberar.
+  await page.waitForFunction(
+    ([x, y]) => {
+      const hook = window.__e2e!;
+      const me = hook.mySessionId();
+      return hook
+        .players()
+        .every((p) => p.id === me || Math.max(Math.abs(p.x - x!), Math.abs(p.y - y!)) > 1);
+    },
+    door,
+    { timeout: 10_000 },
+  );
   await clickTile(page, door[0], door[1]);
   await waitRoom(page, roomId);
 }

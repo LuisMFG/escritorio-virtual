@@ -18,6 +18,8 @@ test('jira: conectar no Perfil, demanda no cartão e Quadro de Demandas', async 
 
   // Beto clica na Ana e vê a demanda em andamento, com link para o Jira.
   await expect.poll(() => positionOf(beto.page, ana.name)).not.toBeNull();
+  // A atividade chega pelo estado da sala; o cartão mostra o que havia ao abrir.
+  await expect(beto.page.locator('.people-body')).toContainText('📋 E2E-1 · Ajustar relatório');
   const openCard = async () => {
     const pos = await positionOf(beto.page, ana.name);
     const p = await beto.page.evaluate(([x, y]) => window.__e2e!.tile(x!, y!), [pos!.x, pos!.y]);

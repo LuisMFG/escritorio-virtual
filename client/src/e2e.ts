@@ -23,6 +23,8 @@ export interface E2EHook {
   players(): { id: string; name: string; x: number; y: number; action: string }[];
   /** Que móvel o clique pegaria neste ponto da página (diagnóstico). */
   furniAt(x: number, y: number): string | null;
+  /** Sai da sala de verdade (fechar a aba deixaria o avatar parado 30 s esperando reconexão). */
+  leave(): Promise<void>;
 }
 
 /**
@@ -60,6 +62,9 @@ export function exposeForTests(scene: RoomScene, room: OfficeRoomClient): void {
     },
     furniList: () =>
       [...room.state.furni.values()].map((f) => ({ id: f.id, defId: f.defId, x: f.x, y: f.y })),
+    leave: async () => {
+      await room.leave(true);
+    },
     players: () =>
       [...room.state.players.entries()].map(([id, p]) => ({
         id,
