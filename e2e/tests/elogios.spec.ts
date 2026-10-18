@@ -1,5 +1,4 @@
-import { expect, test } from '@playwright/test';
-import { clickFurni, newPerson } from '../helpers.js';
+import { clickFurni, expect, newPerson, test } from '../helpers.js';
 
 test('elogios: elogiar pela Equipe, aviso para quem recebeu, mural no quadro', async ({
   browser,

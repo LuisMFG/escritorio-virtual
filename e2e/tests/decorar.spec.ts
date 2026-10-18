@@ -1,5 +1,4 @@
-import { expect, test } from '@playwright/test';
-import { clickTile, newPerson } from '../helpers.js';
+import { clickTile, expect, newPerson, test } from '../helpers.js';
 
 test('decorar: colocar uma cadeira aparece para os outros', async ({ browser }) => {
   const ana = await newPerson(browser, 'Ana');

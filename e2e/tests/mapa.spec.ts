@@ -1,5 +1,4 @@
-import { expect, test } from '@playwright/test';
-import { goThroughDoor, newPerson, positionOf, waitRoom } from '../helpers.js';
+import { expect, goThroughDoor, newPerson, positionOf, test, waitRoom } from '../helpers.js';
 
 test('mapa: ver quem está em cada sala e ir até alguém de outra sala', async ({ browser }) => {
   const ana = await newPerson(browser, 'Ana');

@@ -1,5 +1,12 @@
-import { expect, test } from '@playwright/test';
-import { clickTile, goThroughDoor, newPerson, positionOf, sendChat } from '../helpers.js';
+import {
+  clickTile,
+  expect,
+  goThroughDoor,
+  newPerson,
+  positionOf,
+  sendChat,
+  test,
+} from '../helpers.js';
 
 test('duas pessoas: andar, conversar e trocar de sala', async ({ browser }) => {
   const ana = await newPerson(browser, 'Ana');

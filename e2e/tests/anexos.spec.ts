@@ -1,5 +1,4 @@
-import { expect, test } from '@playwright/test';
-import { newPerson, openChatHistory } from '../helpers.js';
+import { expect, newPerson, openChatHistory, test } from '../helpers.js';
 
 // PNG 1x1 (vermelho).
 const PNG = Buffer.from(

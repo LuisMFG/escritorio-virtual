@@ -1,5 +1,4 @@
-import { expect, test } from '@playwright/test';
-import { newPerson, openChatHistory, sendChat } from '../helpers.js';
+import { expect, newPerson, openChatHistory, sendChat, test } from '../helpers.js';
 
 test('enquete: criar por comando, votar, trocar o voto, encerrar; anônima pelo menu', async ({
   browser,

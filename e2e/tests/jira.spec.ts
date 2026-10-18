@@ -1,5 +1,4 @@
-import { expect, test } from '@playwright/test';
-import { clickFurni, newPerson, positionOf, waitRoom } from '../helpers.js';
+import { clickFurni, expect, newPerson, positionOf, test, waitRoom } from '../helpers.js';
 
 test('jira: conectar no Perfil, demanda no cartão e Quadro de Demandas', async ({ browser }) => {
   const ana = await newPerson(browser, 'Ana');

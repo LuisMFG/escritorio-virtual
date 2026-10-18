@@ -1,5 +1,4 @@
-import { expect, test } from '@playwright/test';
-import { newPerson, sendChat } from '../helpers.js';
+import { expect, newPerson, sendChat, test } from '../helpers.js';
 
 test('modo foco: os outros veem 🍅, menções ficam seguradas e chegam no resumo', async ({
   browser,

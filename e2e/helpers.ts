@@ -1,4 +1,29 @@
-import { expect, type Browser, type Page } from '@playwright/test';
+import {
+  test as base,
+  expect,
+  type Browser,
+  type BrowserContext,
+  type Page,
+} from '@playwright/test';
+
+/** Navegadores abertos pelo teste atual (fechados no fim: assim as contas saem das salas). */
+const openContexts: BrowserContext[] = [];
+
+/**
+ * `test` dos testes de ponta a ponta: no fim de cada teste fecha os navegadores que ele abriu,
+ * para os avatares não se acumularem na Recepção (e bloquearem portas nos testes seguintes).
+ */
+export const test = base.extend<{ closePeople: void }>({
+  closePeople: [
+    // eslint-disable-next-line no-empty-pattern -- o Playwright exige o objeto de fixtures
+    async ({}, use) => {
+      await use();
+      await Promise.all(openContexts.splice(0).map((c) => c.close()));
+    },
+    { auto: true },
+  ],
+});
+export { expect };
 
 /** O que `window.__e2e` (client/src/e2e.ts) devolve. */
 interface Hook {
@@ -46,6 +71,7 @@ export async function newPerson(
   const name = `${base} ${id}`;
   const username = opts.username ?? `${base.toLowerCase()}.${id}`;
   const context = await browser.newContext();
+  openContexts.push(context);
   const page = await context.newPage();
   await page.goto(APP);
   await page.getByRole('tab', { name: 'Criar conta' }).click();

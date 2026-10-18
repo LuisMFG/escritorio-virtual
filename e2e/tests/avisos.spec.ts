@@ -1,5 +1,4 @@
-import { expect, test } from '@playwright/test';
-import { newPerson, waitRoom } from '../helpers.js';
+import { expect, newPerson, test, waitRoom } from '../helpers.js';
 
 test('avisos: admin publica, quem está online recebe, "Li" some, quem chega depois vê', async ({
   browser,

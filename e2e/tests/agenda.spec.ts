@@ -1,5 +1,4 @@
-import { expect, test } from '@playwright/test';
-import { newPerson } from '../helpers.js';
+import { expect, newPerson, test } from '../helpers.js';
 
 test('agenda: marcar reunião com convidado; o convidado vê na agenda', async ({ browser }) => {
   const ana = await newPerson(browser, 'Ana');

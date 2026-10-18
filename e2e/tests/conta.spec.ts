@@ -1,5 +1,4 @@
-import { expect, test } from '@playwright/test';
-import { APP, newPerson, PASSWORD, waitRoom } from '../helpers.js';
+import { APP, expect, newPerson, PASSWORD, test, waitRoom } from '../helpers.js';
 
 test('cria conta, volta sozinho ao recarregar, sai e entra de novo', async ({ browser }) => {
   const ana = await newPerson(browser, 'Ana');

@@ -1,5 +1,4 @@
-import { expect, test } from '@playwright/test';
-import { clickFurni, goThroughDoor, newPerson } from '../helpers.js';
+import { clickFurni, expect, goThroughDoor, newPerson, test } from '../helpers.js';
 
 test('jogo da velha na Copa: dois jogam até alguém vencer', async ({ browser }) => {
   const ana = await newPerson(browser, 'Ana');
