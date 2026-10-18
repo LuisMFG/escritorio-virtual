@@ -20,6 +20,7 @@ Escritório virtual isométrico para amigos e colegas (até ~10 pessoas online):
 - **Spotify**: conecte sua conta no Perfil e a música que você está ouvindo aparece no seu cartão (“🎵 Música – Artista”, com link). Dá para esconder sem desconectar. Precisa de um app do Spotify configurado; veja [Spotify](#spotify).
 - **Avisos da diretoria**: botão 📢 Avisos. Admins publicam comunicados (normais ou urgentes); aparecem como faixa no topo para todo mundo, inclusive para quem entrar depois, até a pessoa clicar em **Li**. Histórico com “lido por N” para os admins.
 - **Enquetes no chat**: `/enquete Pergunta? | opção 1 | opção 2` ou 😊 → 📊 Enquete (até 6 opções, com nomes ou anônima). Votos ao vivo com barras, dá para trocar o voto, e quem criou encerra.
+- **Elogios**: botão 🙌 Elogiar no cartão do avatar e na Equipe (🙌 Ajudou muito, 💡 Boa ideia, 🚀 Entregou, 🤝 Parceria). A pessoa é avisada na hora, e o elogio vai para o **Quadro de Elogios** da Recepção. Elogiar e ser elogiado destrava conquistas.
 - **Dia e noite** pelo horário de Brasília, com as luzes acesas brilhando à noite (`?hora=21` força a hora para testar), e **som ambiente** opcional por sala (🎵: escritório, cafeteria ou chuva, gerado no próprio navegador).
 - **Reações e respostas**: passe o mouse numa mensagem (sala ou privada) para reagir (👍 ❤️ 😂 😮 😢 🎉) ou responder citando; quem é respondido recebe aviso.
 - **Mensagens privadas**: botão **Mensagens** (ou "Mensagem" no cartão/Equipe) para conversar com qualquer pessoa, em qualquer sala ou offline (ela lê quando voltar). Contador de não lidas, "Visto" e notificações do navegador opcionais (🔔 no painel) para DMs e menções com a aba em segundo plano.
@@ -96,7 +97,7 @@ Opções de URL do cliente: `?offline=1` usa só a arte provisória gerada por c
 `npm run e2e` compila o cliente, sobe o servidor em modo produção na porta 2600 (banco e backups temporários, sem mexer no `npm run dev`) e roda no Chromium os fluxos principais com pessoas de verdade clicando: criar conta e entrar, andar, conversar e trocar de sala, decorar, marcar reunião e jogar o jogo da velha.
 
 - Primeira vez: `npx playwright install chromium`.
-- Rodar só um: `npm run e2e -- jogo`. Testes de hoje: conta, sala, decorar, agenda, jogo da velha, avisos e enquetes. Ver o navegador: `npm run e2e -- --headed`.
+- Rodar só um: `npm run e2e -- jogo`. Testes de hoje: conta, sala, decorar, agenda, jogo da velha, avisos, enquetes e elogios. Ver o navegador: `npm run e2e -- --headed`.
 - Quando falha: `npx playwright show-trace e2e-results/<teste>/trace.zip` mostra passo a passo (tela, cliques, rede). O relatório fica em `e2e-report/`.
 - A cena é um canvas; com `?e2e=1` no endereço, a página expõe `window.__e2e` (onde fica cada tile e móvel na tela e o estado da sala) para os testes clicarem com o mouse no lugar certo. Sem o parâmetro, nada muda.
 

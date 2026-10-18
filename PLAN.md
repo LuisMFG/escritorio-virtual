@@ -811,10 +811,20 @@ Escolhido em 17/10/2026, depois do roadmap v3. Ordem pensada assim: primeiro pro
 - Testes: na sala (comando, votar, trocar, nomes, só quem criou encerra, voto depois de encerrar recusado, histórico com o voto, comando mal formado, anônima sem nomes) e de ponta a ponta (`e2e/tests/enquete.spec.ts`: comando, voto e troca vistos pela outra pessoa, nomes no "title", encerrar e botões desligados, anônima pelo menu).
 - No navegador: criar pelo menu com 3 opções, votar, recarregar e o voto continua marcado, encerrar. Ajuste visto no teste: no chat estreito o "Encerrar" quebrava em duas linhas; o rodapé ficou mais curto.
 
-### Fase 26 — Elogios (kudos)
+### Fase 26 — Elogios (kudos) ✅ implementada
 - Botão "Elogiar" no cartão do avatar e na Equipe: escolhe um tipo (🙌 Ajudou muito, 💡 Boa ideia, 🚀 Entregou, 🤝 Parceria) e escreve uma frase. Vai para um mural na Recepção (móvel novo), avisa a pessoa e conta para conquistas novas ("Querido pela equipe", "Reconhece os colegas").
 
 **Como testar:** elogiar alguém; aparece no mural e chega o aviso; as conquistas destravam.
+
+**Notas da implementação:**
+- Banco: `kudos` (de, para, tipo, frase), migration `0020`. Rotas: `POST /api/kudos` (não dá para elogiar a si mesmo nem conta desativada; até 10 por pessoa a cada 24 h) e `GET /api/kudos` (mural, 60 mais novos; `?para=` filtra os recebidos por alguém).
+- Ao elogiar, o canal global avisa quem recebeu ("🙌 Fulano te elogiou: …", com som e notificação do sistema) e manda todo mundo atualizar o mural aberto.
+- **Conquistas novas** (19 no total): "Reconhece os colegas" (elogiou 5 vezes) e "Querido pela equipe" (recebeu 5).
+- **Quadro de Elogios:** o cavalete `easel_0` da HabboAssets com `interaction: 'kudos'` (a arte do mural comum já é do Mural de Recados). Entra na semente da Recepção (bancos novos); no banco de desenvolvimento foi colocado pelo Decorar. Clicar abre o mural: cartões coloridos por tipo, abas "Todos" e "Recebidos por mim" e "Elogiar alguém…".
+- **Elogiar:** botão "🙌 Elogiar" no cartão do avatar e "🙌" ao lado de "Mensagem" na Equipe. A janela tem os 4 tipos e uma frase de até 200 letras.
+- Testes: unitários (sem autoelogio, pessoa inexistente, frase curta, mural, conquistas, limite diário) e de ponta a ponta (`e2e/tests/elogios.spec.ts`: elogiar pela Equipe, aviso para quem recebeu, mural pelo cavalete com "Recebidos por mim").
+- **Bug achado pelos testes de ponta a ponta:** na primeira versão, o cavalete da semente ficava em (11,1), na frente da porta do fundo da Recepção. Como é alto, o desenho cobria a porta e o clique para ir à Copa abria o mural. A semente passou para (12,6) e, na cena, **porta agora tem prioridade** sobre móveis desenhados na frente dela (vale também para móveis que as pessoas colocarem).
+- No navegador (com o painel do navegador escondido, os cliques de mouse não chegavam, então usei o gancho de testes `?e2e=1`): Quadro colocado na Recepção (depois movido para (12,6), longe da porta), elogio "Parceria" para o Davi pela Equipe, aviso "Elogio enviado", e o mural aberto pelo cavalete mostrando o cartão.
 
 ### Fase 27 — Modo foco (Pomodoro)
 - Timer de foco (25/5 por padrão, ajustável) no HUD. Durante o foco: status Ocupado, placa 🍅 com o tempo restante sobre o avatar e no cartão, e menções/DMs ficam sem som e sem notificação (chegam juntas no fim). Fim do ciclo: aviso e pausa.
