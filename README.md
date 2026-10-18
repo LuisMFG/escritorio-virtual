@@ -23,6 +23,7 @@ Escritório virtual isométrico para amigos e colegas (até ~10 pessoas online):
 - **Elogios**: botão 🙌 Elogiar no cartão do avatar e na Equipe (🙌 Ajudou muito, 💡 Boa ideia, 🚀 Entregou, 🤝 Parceria). A pessoa é avisada na hora, e o elogio vai para o **Quadro de Elogios** da Recepção. Elogiar e ser elogiado destrava conquistas.
 - **Modo foco (Pomodoro)**: botão 🍅 Foco (25+5, 50+10, 90+15 ou o tempo que quiser). Os outros veem 🍅 com os minutos no seu avatar, no cartão e na lista de pessoas. Menções, mensagens e elogios ficam sem som e chegam num resumo no fim. A contagem aparece no botão e no título da aba.
 - **Mapa do escritório**: botão 🗺️ Mapa com todas as salas ligadas pelas portas, quem está em cada uma e as reuniões em andamento. Clicar numa sala leva até ela; clicar numa pessoa leva até a sala dela e anda até perto.
+- **Anexos e busca**: 📎 no chat da sala e nas Mensagens (ou cole um print / arraste o arquivo), até 10 MB: imagens, PDF, Office, texto/CSV e zip. Imagens aparecem em miniatura (clique amplia); links viram clicáveis com prévia do site. 🔎 busca no chat das salas e nas suas conversas.
 - **Dia e noite** pelo horário de Brasília, com as luzes acesas brilhando à noite (`?hora=21` força a hora para testar), e **som ambiente** opcional por sala (🎵: escritório, cafeteria ou chuva, gerado no próprio navegador).
 - **Reações e respostas**: passe o mouse numa mensagem (sala ou privada) para reagir (👍 ❤️ 😂 😮 😢 🎉) ou responder citando; quem é respondido recebe aviso.
 - **Mensagens privadas**: botão **Mensagens** (ou "Mensagem" no cartão/Equipe) para conversar com qualquer pessoa, em qualquer sala ou offline (ela lê quando voltar). Contador de não lidas, "Visto" e notificações do navegador opcionais (🔔 no painel) para DMs e menções com a aba em segundo plano.
@@ -76,6 +77,7 @@ Opções de URL do cliente: `?offline=1` usa só a arte provisória gerada por c
 | `PORT` | `2567` | Porta HTTP/WebSocket |
 | `DATABASE_PATH` | `./data/sqlite.db` | Arquivo SQLite |
 | `ASSET_CACHE_DIR` | `./data/asset-cache` | Cache em disco das imagens da HabboAssets |
+| `UPLOAD_DIR` | `./data/uploads` | Anexos do chat e das mensagens privadas |
 
 ### Scripts
 
@@ -228,6 +230,8 @@ O servidor faz uma cópia do banco **todo dia às 3h** (horário de Brasília) e
 3. Copie o backup: `cp data/backups/escritorio-AAAA-MM-DD-HHMM.db data/sqlite.db`.
 4. Suba de novo (`docker compose start app`). As migrations novas, se houver, são aplicadas sozinhas.
 
+**Anexos:** o backup diário copia só o banco. Os arquivos anexados ficam em `data/uploads/`; para ter tudo, copie essa pasta junto (o `rsync` abaixo com `data/` inteiro em vez de `data/backups/` resolve).
+
 **Levar os backups para fora da VM** (se a máquina sumir, os backups vão junto). Do seu computador, por exemplo uma vez por semana:
 
 ```bash
@@ -238,5 +242,6 @@ rsync -avz usuario@IP-DA-VM:~/escritorio-virtual/data/backups/ ./backups-escrito
 
 - Contas criadas só com o código de convite; senhas com `scrypt` (sal por senha); limite de 10 tentativas de entrada/cadastro por minuto por IP. Cada aparelho tem seu token de sessão, e o banco guarda só o hash. Trocar a senha desconecta os outros aparelhos.
 - Em produção: CSP restrita (sem `eval`), `X-Frame-Options: DENY`, `nosniff`; mensagens WebSocket de no máximo 4 KB; limites por ação (andar, chat, decorar, trocar visual).
+- Anexos: só tipos da lista, com o conteúdo conferido; baixar exige login (e, numa DM, ser uma das duas pessoas); arquivos que não são imagem sempre baixam, nunca abrem como página. A prévia de link nunca acessa endereços internos (rede da VM, metadados da nuvem).
 - Texto do chat sempre exibido como texto puro; visuais e colocações de móveis validados no servidor.
 - Os gráficos são da Sulake/Habbo (via HabboAssets, não afiliada): uso pessoal e privado. Não publique o site de forma aberta.

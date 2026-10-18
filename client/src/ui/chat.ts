@@ -16,6 +16,7 @@ import {
 import type { PollCreate, PollView } from '@office/shared';
 import { openPollForm, pollCard } from './poll.js';
 import { confirmDialog } from './confirm.js';
+import { appendLinkified, AttachmentDraft, attachmentView, linkPreview } from './attachments.js';
 import {
   flashMessage,
   openReactionPicker,
@@ -32,7 +33,11 @@ const TYPING_REFRESH_MS = 3000;
 const MAX_SUGGESTIONS = 5;
 
 export interface ChatHandlers {
-  send(text: string, replyToId?: number): void;
+  send(text: string, replyToId?: number, attachmentId?: string): void;
+  /** Aviso rápido (erro ao anexar). */
+  notify(message: string): void;
+  /** Abre a busca nas conversas. */
+  search(): void;
   /** Põe/tira reação numa mensagem. */
   react(id: number, emoji: Reaction): void;
   emote(id: EmoteId): void;
@@ -70,8 +75,13 @@ export class ChatPanel {
   private typingTimer = 0;
   private suggestionIndex = 0;
   private readonly replyBar = new ReplyBar(() => this.input.focus());
+  private readonly attach: AttachmentDraft;
 
   constructor(private readonly on: ChatHandlers) {
+    this.attach = new AttachmentDraft(
+      (msg) => on.notify(msg),
+      () => this.input.focus(),
+    );
     this.form.className = 'chat-bar';
     this.form.setAttribute('aria-label', 'Enviar mensagem');
 
@@ -155,10 +165,22 @@ export class ChatPanel {
     send.type = 'submit';
     send.className = 'btn-primary';
     send.textContent = 'Enviar';
+    const searchBtn = Object.assign(document.createElement('button'), {
+      type: 'button',
+      className: 'chat-attach-btn',
+      textContent: '🔎',
+      title: 'Buscar nas conversas',
+    });
+    searchBtn.setAttribute('aria-label', 'Buscar nas conversas');
+    searchBtn.addEventListener('click', () => on.search());
     this.form.append(
       this.replyBar.el,
+      this.attach.chip,
       this.emoteBtn,
+      this.attach.button,
+      this.attach.input,
       this.input,
+      searchBtn,
       send,
       this.emoteMenu,
       this.suggestions,
@@ -174,6 +196,7 @@ export class ChatPanel {
     this.renderSummary();
 
     document.body.append(this.history, this.form);
+    this.attach.bind(this.form, this.input);
     this.bindEvents();
   }
 
@@ -264,11 +287,14 @@ export class ChatPanel {
     this.form.addEventListener('submit', (e) => {
       e.preventDefault();
       if (!this.suggestions.hidden && this.pickSuggestion()) return;
+      if (this.attach.uploading) return;
       const text = normalizeChatText(this.input.value);
-      if (!text) return;
-      const emote = parseEmoteCommand(text);
+      const file = this.attach.current;
+      if (!text && !file) return;
+      const emote = file ? null : parseEmoteCommand(text);
       if (emote) this.on.emote(emote);
-      else this.on.send(text, this.replyBar.current?.id);
+      else this.on.send(text, this.replyBar.current?.id, file?.id);
+      this.attach.clear();
       this.replyBar.set(null);
       this.input.value = '';
       this.hideSuggestions();
@@ -457,7 +483,11 @@ export class ChatPanel {
           ? this.textWithMentions(m.text)
           : document.createTextNode(m.text);
     if (m.kind === 'poll') li.classList.add('chat-poll');
-    li.append(time, ' ', name, ' ', body, this.actions(m));
+    li.append(time, ' ', name, ' ', body);
+    if (m.attachment) li.append(attachmentView(m.attachment));
+    const preview = m.kind === 'text' && !m.attachment ? linkPreview(m.text) : null;
+    if (preview) li.append(preview);
+    li.append(this.actions(m));
     li.append(this.chips(m.id, m.reactions));
     return li;
   }
@@ -504,15 +534,24 @@ export class ChatPanel {
     const span = document.createElement('span');
     let last = 0;
     for (const m of findMentions(text, this.names)) {
-      span.append(text.slice(last, m.start));
+      appendLinkified(span, text.slice(last, m.start));
       const mark = document.createElement('mark');
       mark.className = 'mention';
       mark.textContent = text.slice(m.start, m.end);
       span.append(mark);
       last = m.end;
     }
-    span.append(text.slice(last));
+    appendLinkified(span, text.slice(last));
     return span;
+  }
+
+  /** Destaca uma mensagem do histórico (resultado da busca). `false` = não está mais aqui. */
+  showMessage(id: number): boolean {
+    const li = this.log.querySelector<HTMLElement>(`li[data-id="${id}"]`);
+    if (!li) return false;
+    this.history.open = true;
+    flashMessage(li);
+    return true;
   }
 
   private renderSummary(): void {

@@ -13,6 +13,7 @@ import {
 } from '@office/shared';
 import type { LobbyConnection, OnlineInfo } from '../net/LobbyConnection.js';
 import { setAvatarPreview } from './login.js';
+import { appendLinkified, AttachmentDraft, attachmentView, linkPreview } from './attachments.js';
 import { NOTIFY_LABELS, type SystemNotifier } from './notifications.js';
 import {
   flashMessage,
@@ -31,6 +32,8 @@ export interface MessagesDeps {
   notifier: SystemNotifier;
   /** Total de não lidas mudou (contador no botão). */
   unreadChanged: (total: number) => void;
+  /** Aviso rápido (erro ao anexar). */
+  notify: (message: string) => void;
 }
 
 const timeFormat = new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' });
@@ -151,7 +154,7 @@ export class MessagesPanel {
       userId: otherId,
       name: conv?.name ?? this.online.get(otherId)?.name ?? '…',
       figure: conv?.figure ?? '',
-      lastText: m.text,
+      lastText: m.text || (m.attachment ? '📎 Anexo' : ''),
       lastFromMe: mine,
       lastAt: m.ts,
       unread,
@@ -359,12 +362,20 @@ export class MessagesPanel {
       className: 'btn-primary',
       textContent: 'Enviar',
     });
-    form.append(input, send);
+    const attach = new AttachmentDraft(
+      (msg) => this.deps.notify(msg),
+      () => input.focus(),
+    );
+    form.append(attach.button, attach.input, input, send);
+    attach.bind(this.root, input);
     form.addEventListener('submit', (e) => {
       e.preventDefault();
+      if (attach.uploading) return;
       const text = input.value.trim();
-      if (!text) return;
-      this.deps.lobby()?.send(userId, text, this.replyBar.current?.id);
+      const file = attach.current;
+      if (!text && !file) return;
+      this.deps.lobby()?.send(userId, text, this.replyBar.current?.id, file?.id);
+      attach.clear();
       this.replyBar.set(null);
       input.value = '';
       this.draft.delete(userId);
@@ -379,7 +390,7 @@ export class MessagesPanel {
     });
 
     this.replyBar = new ReplyBar(() => input.focus());
-    this.body.replaceChildren(subtitle, list, this.replyBar.el, form);
+    this.body.replaceChildren(subtitle, list, this.replyBar.el, attach.chip, form);
     this.renderChatSubtitle();
     this.renderSeen();
     list.scrollTop = list.scrollHeight;
@@ -416,7 +427,13 @@ export class MessagesPanel {
         replyQuote(m.replyTo, () => flashMessage(list.querySelector(`li[data-id="${target}"]`))),
       );
     }
-    bubble.append(span('dm-text', m.text), span('dm-time', when(m.ts)), this.msgActions(m));
+    const text = span('dm-text', '');
+    appendLinkified(text, m.text);
+    if (m.text) bubble.append(text);
+    if (m.attachment) bubble.append(attachmentView(m.attachment));
+    const preview = m.attachment ? null : linkPreview(m.text);
+    if (preview) bubble.append(preview);
+    bubble.append(span('dm-time', when(m.ts)), this.msgActions(m));
     row.append(bubble, this.chips(m.id, m.reactions));
     list.append(row);
     if (scroll) list.scrollTop = list.scrollHeight;
@@ -477,6 +494,18 @@ export class MessagesPanel {
     const last = this.messages.at(-1);
     if (!last || last.fromUserId !== this.deps.userId || last.readAt === null) return;
     list.append(p('dm-seen', 'Visto'));
+  }
+
+  /** Abre a conversa e destaca a mensagem (resultado da busca). */
+  async showMessage(userId: string, name: string, id: number): Promise<void> {
+    this.root.hidden = false;
+    document.body.classList.add('dm-open');
+    await this.show({ kind: 'chat', userId, name });
+    // Mensagem antiga: carrega páginas anteriores até achar (ou acabar).
+    for (let i = 0; i < 10 && !this.messages.some((m) => m.id === id) && this.hasOlder; i++) {
+      await this.loadOlder(userId);
+    }
+    flashMessage(this.chatList?.querySelector(`li[data-id="${id}"]`) ?? null);
   }
 
   private async loadOlder(userId: string): Promise<void> {

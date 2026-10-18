@@ -852,10 +852,21 @@ Escolhido em 17/10/2026, depois do roadmap v3. Ordem pensada assim: primeiro pro
 - Testes: `layoutMap` (vizinhas à esquerda/acima, sala solta, colisão) e ponta a ponta (`e2e/tests/mapa.spec.ts`: Copa acima da Recepção com o Beto, clicar nele e a Ana termina na Copa do lado dele).
 - No navegador: mapa com as 4 salas do banco de desenvolvimento (inclusive a Sala do TI), "você está aqui" e "ir até" outra pessoa na mesma sala. Ajuste visto no teste: com 3 colunas o mapa passava da largura da janela e cortava a Copa; agora encolhe para caber.
 
-### Fase 29 — Anexos e busca no chat
+### Fase 29 — Anexos e busca no chat ✅ implementada
 - Enviar imagens e arquivos no chat da sala e nas DMs (arrastar, colar print ou botão 📎), até 10 MB, guardados em `data/uploads/` e servidos só para quem está logado. Imagens com miniatura e visualização; links com prévia (título do site). Busca no histórico da sala e das conversas.
 
 **Como testar:** colar um print no chat, a outra aba vê a miniatura; mandar um PDF por DM; buscar uma palavra antiga.
+
+**Notas da implementação:**
+- `POST /api/uploads` recebe o arquivo cru (nome no cabeçalho `X-File-Name`), confere a sessão antes de ler o corpo e aceita só imagens (PNG, JPG, GIF, WebP), PDF, Word/Excel/PowerPoint (antigos e novos), ODT/ODS, TXT/CSV/MD e ZIP. O tipo vale pela extensão, e o começo do arquivo tem de bater (um `.png` que na verdade é outra coisa é recusado). Arquivo em `data/uploads/<id aleatório>` (`UPLOAD_DIR`), registro na tabela `uploads`. Limite de 10 envios por minuto por pessoa.
+- `GET /api/uploads/:id` só com login: anexo de sala qualquer pessoa vê; de DM, só as duas pessoas; ainda não mandado, só quem enviou. Imagens vão `inline`, o resto sempre baixa (`attachment`), com `nosniff` e CSP `sandbox`. O cliente baixa com o token e mostra da memória (`blob:`), então o link do arquivo sozinho não abre nada.
+- A mensagem leva `attachmentId` (só de arquivo que a própria pessoa enviou); texto pode ficar vazio quando tem anexo. Histórico, DMs e "responder" mostram "📎 Anexo" quando não há texto, e o balão sobre o avatar mostra "📎 nome-do-arquivo".
+- Limpeza a cada hora: anexos com mais de um dia que nenhuma mensagem usa (enviados e não mandados, ou de mensagens que saíram do histórico).
+- Prévia de link (`GET /api/link-preview`): o servidor busca a página e lê `og:title`/`<title>`, descrição e nome do site. Proteção para não usar o servidor contra a rede interna: só http/https, sem usuário/senha na URL, todos os IPs do nome têm de ser públicos (bloqueia 127.x, 10.x, 192.168.x, 172.16–31.x, 169.254.x — inclusive o endereço de metadados da nuvem —, IPv6 local etc.), a conexão usa o IP já conferido, no máximo 3 redirecionamentos (cada um conferido de novo), 4 s e 512 KB. Cache de 1 h (falhas, 5 min).
+- Busca (`GET /api/search?q=`, mínimo 2 letras): chat de todas as salas (o que qualquer um vê ao entrar) e as DMs da própria pessoa, pelo texto e pelo nome do anexo, as 50 mais novas. `%` e `_` são procurados como texto.
+- Cliente: 📎 na barra do chat e no painel de Mensagens, colar imagem no campo, arrastar arquivo; faixa "🖼️ nome · tamanho ✕" antes de mandar. Mensagem com miniatura (clique amplia; Esc fecha) ou cartão do arquivo com ícone e "baixar". Links clicáveis (abrem em outra aba) e cartão de prévia. 🔎 abre a busca: resultado da sala atual pisca no histórico; de outra sala, vai para lá; de DM, abre a conversa e pisca a mensagem (carrega páginas antigas se precisar).
+- Testes: anexos (tipos, conteúdo falso, tamanho, nome com caminho, quem pode baixar, limpeza), busca (salas + só as próprias DMs, nome do anexo, curingas), prévia (IPs internos, Open Graph, redirecionamento, cache, esquemas recusados) e ponta a ponta (`e2e/tests/anexos.spec.ts`: imagem na sala vista pelo outro e ampliada, `.exe` recusado, PDF na DM, busca acha as duas e pisca a mensagem).
+- No navegador: print anexado com legenda e link, miniatura carregada, prévia do MDN e busca por "sprint". Ajuste visto no teste: a prévia falhava em todos os sites (o Node pede o endereço em formato de lista ao tentar IPv4 e IPv6 juntos); corrigido e testado com MDN e GitHub, e endereços internos continuam recusados.
 
 ### Fase 30 — Jira (quadro de demandas)
 - Cada pessoa liga a conta do Jira no Perfil. O cartão mostra "📋 PROJ-123 · título" da demanda em andamento atribuída a ela (privacidade como a do editor). Painel na Sala do TI com as demandas da equipe por status, com link para o Jira.

@@ -50,6 +50,7 @@ import { AnnouncementBanner, openAnnouncements } from './ui/announcements.js';
 import { openKudosForm, openKudosWall } from './ui/kudos.js';
 import { FocusController } from './ui/focus.js';
 import { openMinimap } from './ui/minimap.js';
+import { openSearch, setUploadToken } from './ui/attachments.js';
 import { openTeam } from './ui/team.js';
 import { openAdmin } from './ui/admin.js';
 import { openRoomEditor } from './ui/roomEditor.js';
@@ -193,7 +194,21 @@ async function start(): Promise<void> {
 
   const sound = new ChatSound();
   const chat = new ChatPanel({
-    send: (text, replyToId) => connection?.say(text, replyToId),
+    send: (text, replyToId, attachmentId) => connection?.say(text, replyToId, attachmentId),
+    notify: (message) => overlay.notify(message),
+    search: () =>
+      openSearch({
+        openRoomHit: (hit) => {
+          if (hit.where === connection?.currentRoomId && chat.showMessage(hit.id)) return;
+          if (hit.where === connection?.currentRoomId) {
+            overlay.notify('Essa mensagem já saiu do histórico recente da sala.');
+            return;
+          }
+          overlay.notify(`Mensagem na sala ${hit.whereName}. Indo para lá…`);
+          connection?.goTo(hit.where);
+        },
+        openDmHit: (hit) => void messages.showMessage(hit.where, hit.whereName, hit.id),
+      }),
     react: (id, emoji) => connection?.react(id, emoji),
     emote: (id) => connection?.emote(id),
     typing: (on) => connection?.typing(on),
@@ -333,6 +348,7 @@ async function start(): Promise<void> {
     },
     roomName,
     notifier,
+    notify: (message) => overlay.notify(message),
     unreadChanged: (n) => {
       unreadDms = n;
       hud.setUnreadDms(n);
@@ -903,7 +919,12 @@ async function start(): Promise<void> {
         } else if (fromOther && !focus.focusing) {
           sound.play();
         }
-        scene?.say(msg.sessionId, msg.name, msg.text, mentioned);
+        scene?.say(
+          msg.sessionId,
+          msg.name,
+          msg.text || (msg.attachment ? `📎 ${msg.attachment.name}` : ''),
+          mentioned,
+        );
       },
       emote: (msg) => scene?.playEmote(msg.sessionId, msg.emote),
       chatDeleted: (msg) => chat.removeMessage(msg.id),
@@ -957,6 +978,7 @@ async function start(): Promise<void> {
       layoutChanged: (room, layout) => void mountRoom(conn, room, layout),
     });
     session = current;
+    setUploadToken(current.token);
     connection = conn;
     applyRole(current.role, current.canEditRooms);
     await conn.join(roomFromHash(), current.token);

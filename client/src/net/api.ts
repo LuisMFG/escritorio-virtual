@@ -25,6 +25,9 @@ import {
   type Kudos,
   type MapRoom,
   type KudosCreate,
+  type Attachment,
+  type LinkPreview,
+  type SearchHit,
   type AnnouncementCreate,
   type RoomEdit,
   type RoomEditorData,
@@ -158,6 +161,46 @@ export const kudosApi = {
       token,
     }),
   give: (token: string, k: KudosCreate) => request<Kudos>('POST', '/api/kudos', { token, body: k }),
+};
+
+export const uploadApi = {
+  /** Envia o arquivo cru (o nome vai no cabeçalho). */
+  async upload(token: string, file: File): Promise<Attachment> {
+    let res: Response;
+    try {
+      res = await fetch('/api/uploads', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': file.type || 'application/octet-stream',
+          'X-File-Name': encodeURIComponent(file.name),
+        },
+        body: file,
+      });
+    } catch {
+      throw new ApiRequestError(0, { message: 'Não foi possível enviar o arquivo.' });
+    }
+    const body = (await res.json().catch(() => ({}))) as Partial<ApiError> & Attachment;
+    if (res.status === 413)
+      throw new ApiRequestError(413, { message: 'O arquivo passa de 10 MB.' });
+    if (!res.ok)
+      throw new ApiRequestError(res.status, { message: body.message ?? `Erro ${res.status}` });
+    return body;
+  },
+  /** O arquivo (com o token: os anexos não ficam abertos na internet). */
+  async blob(token: string, id: string): Promise<Blob> {
+    const res = await fetch(`/api/uploads/${encodeURIComponent(id)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new ApiRequestError(res.status, { message: 'Arquivo indisponível.' });
+    return res.blob();
+  },
+  preview: (token: string, url: string) =>
+    request<LinkPreview | null>('GET', `/api/link-preview?url=${encodeURIComponent(url)}`, {
+      token,
+    }),
+  search: (token: string, q: string) =>
+    request<SearchHit[]>('GET', `/api/search?q=${encodeURIComponent(q)}`, { token }),
 };
 
 export const announcementApi = {

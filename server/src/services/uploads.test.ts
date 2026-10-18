@@ -112,9 +112,10 @@ describe('busca', () => {
     svc.dms.send(beto.id, ana.id, '', undefined, f.id);
 
     const hits = svc.search.search(ana.id, 'DEPLOY', 50);
-    expect(hits.map((h) => [h.kind, h.whereName, h.text])).toEqual([
-      ['dm', 'beto', '📎 Plano-Deploy.pdf'],
+    // (Mensagens no mesmo milissegundo podem vir em qualquer ordem.)
+    expect(hits.map((h) => [h.kind, h.whereName, h.text]).sort()).toEqual([
       ['dm', 'beto', 'o deploy quebrou'],
+      ['dm', 'beto', '📎 Plano-Deploy.pdf'],
       ['room', RECEPTION.name, 'Deploy da sprint às 15h'],
     ]);
     expect(svc.search.search(ana.id, '%', 50)).toEqual([]);

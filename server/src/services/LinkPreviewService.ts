@@ -43,6 +43,8 @@ const MAX_BYTES = 512 * 1024;
 const TIMEOUT_MS = 4000;
 const MAX_REDIRECTS = 3;
 const CACHE_MS = 60 * 60_000;
+/** Site fora do ar ou sem título: tenta de novo depois de 5 min. */
+const MISS_CACHE_MS = 5 * 60_000;
 
 /** Busca um endereço depois de conferir que todos os IPs dele são públicos (e fixa o IP conferido). */
 export type SafeGet = (
@@ -63,7 +65,11 @@ export const safeGet: SafeGet = async (url) => {
         timeout: TIMEOUT_MS,
         headers: { 'User-Agent': 'EscritorioVirtual/1.0 (previa de link)', Accept: 'text/html' },
         // Usa o IP já conferido (sem uma segunda consulta de DNS que poderia mudar de resposta).
-        lookup: (_host, _opts, cb) => cb(null, pinned.address, pinned.family),
+        // (O Node pede `all: true` quando tenta IPv4 e IPv6 em paralelo.)
+        lookup: ((_host: string, opts: { all?: boolean }, cb: (...args: unknown[]) => void) =>
+          opts.all
+            ? cb(null, [{ address: pinned.address, family: pinned.family }])
+            : cb(null, pinned.address, pinned.family)) as never,
       },
       (res) => {
         let size = 0;
@@ -159,7 +165,7 @@ export class LinkPreviewService {
     if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
     if (url.username || url.password) return null;
     const hit = this.cache.get(url.href);
-    if (hit && this.now() - hit.at < CACHE_MS) return hit.value;
+    if (hit && this.now() - hit.at < (hit.value ? CACHE_MS : MISS_CACHE_MS)) return hit.value;
     let value: LinkPreview | null = null;
     try {
       let current = url;

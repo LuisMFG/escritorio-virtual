@@ -126,8 +126,8 @@ export class LobbyConnection {
     }));
   }
 
-  send(toUserId: string, text: string, replyToId?: number): void {
-    this.room?.send(LobbyClientMessage.DmSend, { toUserId, text, replyToId });
+  send(toUserId: string, text: string, replyToId?: number, attachmentId?: string): void {
+    this.room?.send(LobbyClientMessage.DmSend, { toUserId, text, replyToId, attachmentId });
   }
 
   react(id: number, emoji: Reaction): void {

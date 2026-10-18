@@ -214,8 +214,8 @@ export class OfficeConnection {
     this.room?.send(ClientMessage.ChatDelete, { id });
   }
 
-  say(text: string, replyToId?: number): void {
-    this.room?.send(ClientMessage.Chat, { text, replyToId });
+  say(text: string, replyToId?: number, attachmentId?: string): void {
+    this.room?.send(ClientMessage.Chat, { text, replyToId, attachmentId });
   }
 
   focusStart(minutes: number, breakMinutes: number): void {

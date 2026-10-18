@@ -41,6 +41,7 @@ export default defineConfig({
       INVITE_CODE: 'convite-e2e',
       DATABASE_PATH: join(data, 'e2e.db'),
       BACKUP_DIR: join(data, 'backups'),
+      UPLOAD_DIR: join(data, 'uploads'),
       ASSET_CACHE_DIR: join(data, 'cache'),
       LOGIN_RATE_LIMIT: '1000',
       SPOTIFY_CLIENT_ID: '',
