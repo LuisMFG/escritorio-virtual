@@ -7,6 +7,7 @@ import {
   parseFurniManifest,
   findRoom,
   findAchievement,
+  KUDOS_INFO,
   RECEPTION,
   type FurniManifestEntry,
   ROOMS,
@@ -46,6 +47,7 @@ import { openProfile } from './ui/profile.js';
 import { showAchievementToast } from './ui/badges.js';
 import { exposeForTests } from './e2e.js';
 import { AnnouncementBanner, openAnnouncements } from './ui/announcements.js';
+import { openKudosForm, openKudosWall } from './ui/kudos.js';
 import { openTeam } from './ui/team.js';
 import { openAdmin } from './ui/admin.js';
 import { openRoomEditor } from './ui/roomEditor.js';
@@ -237,6 +239,29 @@ async function start(): Promise<void> {
     () => showAnnouncements(),
     (n) => hud.setUnreadAnnouncements(n),
   );
+  /** Mural de elogios aberto (atualiza quando chega elogio novo). */
+  let kudosWall: ReturnType<typeof openKudosWall> | null = null;
+  function showKudosWall(): void {
+    if (!session) return;
+    kudosWall?.close();
+    kudosWall = openKudosWall({
+      token: session.token,
+      myUserId: session.userId,
+      loadTeam: async () => {
+        await loadTeam();
+        return team?.members ?? [];
+      },
+      praise: (to) => praise(to.userId, to.name),
+    });
+  }
+  function praise(userId: string, name: string): void {
+    if (!session) return;
+    openKudosForm({
+      token: session.token,
+      to: { userId, name },
+      sent: (k) => overlay.notify(`${KUDOS_INFO[k.type].emoji} Elogio enviado para ${k.toName}!`),
+    });
+  }
   function showAnnouncements(): void {
     if (!session) return;
     annPanel?.close();
@@ -392,6 +417,7 @@ async function start(): Promise<void> {
       roomName,
       loaded: (t) => (team = t),
       message: openDm,
+      praise: (userId, name) => praise(userId, name),
     });
   }
   async function logout(all: boolean): Promise<void> {
@@ -427,6 +453,7 @@ async function start(): Promise<void> {
     editAvatar: () => void editAvatar(),
     openProfile: () => showProfile(),
     message: openDm,
+    praise: (userId, name) => praise(userId, name),
     kick: async (userId, name, scope) => {
       if (!session) return;
       if (scope === 'office') {
@@ -497,6 +524,7 @@ async function start(): Promise<void> {
           });
           ttt.update((room.state.games.get(furniId)?.toJSON() as TttView | undefined) ?? null);
         },
+        openKudos: () => showKudosWall(),
         openBoard: (furniId) => {
           const f = room.state.furni.get(furniId);
           const def = f && deps.furniDefs.get(f.defId);
@@ -758,6 +786,15 @@ async function start(): Promise<void> {
         sound.mention();
         if (a.urgent) notifier.notify(`🚨 ${a.title}`, a.body, { tag: `aviso-${a.id}` });
       },
+      kudosReceived: ({ kudos: k }) => {
+        const info = KUDOS_INFO[k.type];
+        sound.mention();
+        overlay.notify(`${info.emoji} ${k.fromName} te elogiou: “${k.message}”`);
+        notifier.notify(`${info.emoji} ${k.fromName} te elogiou`, k.message, {
+          tag: `kudos-${k.id}`,
+        });
+      },
+      kudosChanged: () => kudosWall?.refresh(),
       announcementRemoved: (id) => {
         annBanner.remove(id);
         annPanel?.refresh();

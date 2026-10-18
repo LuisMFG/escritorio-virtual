@@ -22,6 +22,8 @@ import {
   type CodeShare,
   type SpotifyStatus,
   type Announcement,
+  type Kudos,
+  type KudosCreate,
   type AnnouncementCreate,
   type RoomEdit,
   type RoomEditorData,
@@ -145,6 +147,14 @@ export const roomApi = {
 };
 
 /** Agenda de reuniões. */
+export const kudosApi = {
+  wall: (token: string, para?: string) =>
+    request<Kudos[]>('GET', `/api/kudos${para ? `?para=${encodeURIComponent(para)}` : ''}`, {
+      token,
+    }),
+  give: (token: string, k: KudosCreate) => request<Kudos>('POST', '/api/kudos', { token, body: k }),
+};
+
 export const announcementApi = {
   list: (token: string) => request<Announcement[]>('GET', '/api/announcements', { token }),
   unread: (token: string) => request<Announcement[]>('GET', '/api/announcements/unread', { token }),

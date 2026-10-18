@@ -19,6 +19,8 @@ export interface TeamOptions {
   roomName(roomId: string): string;
   /** Abrir conversa privada com alguém. */
   message(userId: string, name: string): void;
+  /** Elogiar alguém. */
+  praise(userId: string, name: string): void;
   /** Recebeu a lista (para o cartão do avatar reaproveitar bio e aniversário). */
   loaded(team: TeamResponse): void;
 }
@@ -155,7 +157,18 @@ export function openTeam(opts: TeamOptions): void {
         close();
         opts.message(m.userId, m.name);
       });
-      li.append(dm);
+      const praise = Object.assign(document.createElement('button'), {
+        type: 'button',
+        className: 'btn-secondary btn-small team-praise',
+        textContent: '🙌',
+        title: `Elogiar ${m.name}`,
+      });
+      praise.setAttribute('aria-label', `Elogiar ${m.name}`);
+      praise.addEventListener('click', () => {
+        close();
+        opts.praise(m.userId, m.name);
+      });
+      li.append(dm, praise);
     }
 
     if (opts.isAdmin) {

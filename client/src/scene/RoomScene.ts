@@ -52,6 +52,8 @@ export interface SceneActions extends DecorActions {
   openWhiteboard(furniId: string): void;
   /** Clique numa mesa de jogos. */
   openGame(furniId: string): void;
+  /** Clique no Quadro de Elogios. */
+  openKudos(): void;
   /** Clique num avatar (abre o cartão). `at` = posição na tela. */
   avatarClick(sessionId: string, at: { x: number; y: number }): void;
 }
@@ -469,6 +471,13 @@ export class RoomScene implements DecorHost {
     const avatar = this.pickAvatar(global);
     if (avatar) return this.actions.avatarClick(avatar.avatarId, { x: global.x, y: global.y });
 
+    // Porta tem prioridade: um móvel alto na frente (cavalete, estante…) não pode "roubar" o
+    // clique de quem quer sair da sala.
+    if (tile && this.layout.doors.some((d) => d.x === tile.x && d.y === tile.y)) {
+      this.flashTarget(tile, 0x7aa7ff);
+      return this.actions.move(tile);
+    }
+
     // Clique num assento (no tile dele ou no desenho, se o tile não dá para andar): sentar.
     const seat = this.seatAt(global, tile);
     if (seat) {
@@ -483,6 +492,7 @@ export class RoomScene implements DecorHost {
         return this.actions.openWhiteboard(usable.placed.id);
       }
       if (usable.def.interaction === 'tictactoe') return this.actions.openGame(usable.placed.id);
+      if (usable.def.interaction === 'kudos') return this.actions.openKudos();
       this.flashTarget({ x: usable.placed.x, y: usable.placed.y }, 0xffd27a);
       return this.actions.interact(usable.placed.id);
     }

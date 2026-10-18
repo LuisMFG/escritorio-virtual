@@ -3974,3 +3974,145 @@ button.reply-quote:hover {
   margin: 8px 0;
   font-size: 13px;
 }
+
+/* ---------- Fase 26: elogios ---------- */
+
+.kudos-form .sheet-body {
+  display: grid;
+  gap: 10px;
+}
+
+.kudos-types {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.kudos-type {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 10px 4px;
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.kudos-type .emoji {
+  font-size: 22px;
+}
+
+.kudos-type[aria-checked='true'] {
+  border-color: var(--warn);
+  color: var(--text);
+  background: rgba(242, 201, 76, 0.12);
+}
+
+.kudos-form textarea {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #3a3f4d;
+  background: #15171d;
+  color: var(--text);
+  font: inherit;
+  resize: vertical;
+}
+
+.kudos-form .btn-primary {
+  justify-self: start;
+}
+
+.kudos-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.kudos-tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.kudos-tabs button {
+  padding: 6px 10px;
+  border: 1px solid var(--card-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.kudos-tabs button[aria-selected='true'] {
+  color: var(--text);
+  border-color: #7aa7ff;
+}
+
+.kudos-picker {
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid #3a3f4d;
+  background: #15171d;
+  color: var(--text);
+  font: inherit;
+}
+
+.kudos-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.kudos-item {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 12px;
+  background: #fdf6e3;
+  color: #2b2620;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.kudos-item header {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.kudos-item .kudos-emoji {
+  font-size: 20px;
+}
+
+.kudos-item .tag {
+  margin-left: auto;
+  background: rgba(0, 0, 0, 0.08);
+  color: #5b4636;
+}
+
+.kudos-item p {
+  margin: 0;
+  font-size: 13px;
+}
+
+.kudos-item small {
+  color: #7a6a58;
+}
+
+.kudos-idea {
+  background: #fef9c3;
+}
+
+.kudos-delivered {
+  background: #dbeafe;
+}
+
+.kudos-partner {
+  background: #dcfce7;
+}
