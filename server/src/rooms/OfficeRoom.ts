@@ -1040,10 +1040,17 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     };
   }
 
-  private handleChat(client: OfficeClient, msg: { text: string; replyToId?: number }): void {
+  private handleChat(
+    client: OfficeClient,
+    msg: { text: string; replyToId?: number; attachmentId?: string },
+  ): void {
     if (!client.auth || !this.state.players.has(client.sessionId)) return;
     if (!this.chatLimiter.tryTake(client.sessionId))
       return this.sendError(client, ErrorCode.RateLimit);
+    // Anexo: só um arquivo que a própria pessoa enviou.
+    if (msg.attachmentId && !services().uploads.owns(msg.attachmentId, client.auth.id)) {
+      return this.sendError(client, ErrorCode.InvalidChat, 'Anexo não encontrado.');
+    }
     // `/enquete Pergunta? | opção 1 | opção 2`: vira enquete (o limite de mensagens já foi gasto).
     const poll = parsePollCommand(msg.text);
     if (poll) {
@@ -1088,6 +1095,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       client.sessionId,
       cmd ? undefined : msg.replyToId,
       kind,
+      cmd || petCmd ? null : (msg.attachmentId ?? null),
     );
     this.broadcast(ServerMessage.Chat, message);
     const player = this.state.players.get(client.sessionId);

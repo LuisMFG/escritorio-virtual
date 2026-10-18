@@ -6,6 +6,7 @@ import type { ReactionSummary, ReplyPreview } from './reactions.js';
 import type { Ambient } from './ambience.js';
 import type { ChatKind } from './games.js';
 import type { PollView } from './polls.js';
+import type { Attachment } from './uploads.js';
 
 /** Nome da sala Colyseus. Cada sala física é uma instância filtrada por `officeRoomId`. */
 export const OFFICE_ROOM = 'office';
@@ -267,7 +268,8 @@ export function normalizeChatText(text: string): string {
   );
 }
 
-export const chatSchema = z.object({
+/** Campos da mensagem (sala ou DM); o texto pode ficar vazio se tiver anexo. */
+export const chatFields = z.object({
   text: z
     .string()
     .max(CHAT_MAX_LENGTH * 4)
@@ -275,11 +277,24 @@ export const chatSchema = z.object({
     .pipe(
       z
         .string()
-        .min(1, 'Mensagem vazia.')
         .max(CHAT_MAX_LENGTH, `A mensagem pode ter no máximo ${CHAT_MAX_LENGTH} caracteres.`),
     ),
   /** Resposta a outra mensagem (da mesma sala ou conversa). */
   replyToId: z.number().int().positive().optional(),
+  /** Anexo já enviado (`POST /api/uploads`) pela mesma pessoa. */
+  attachmentId: z
+    .string()
+    .regex(/^[A-Za-z0-9_-]{16,64}$/)
+    .optional(),
+});
+
+/** Mensagem precisa de texto ou de anexo. */
+export const hasContent = (m: { text: string; attachmentId?: string }) =>
+  m.text.length > 0 || Boolean(m.attachmentId);
+
+export const chatSchema = chatFields.refine(hasContent, {
+  message: 'Mensagem vazia.',
+  path: ['text'],
 });
 export type ChatInput = z.input<typeof chatSchema>;
 
@@ -299,6 +314,8 @@ export interface ChatMessage {
   replyTo: ReplyPreview | null;
   /** Mensagem do tipo `poll`: a enquete (com o voto de quem recebe). */
   poll?: PollView;
+  /** Arquivo ou imagem anexada. */
+  attachment?: Attachment | null;
 }
 
 export interface RoomTransferMessage {

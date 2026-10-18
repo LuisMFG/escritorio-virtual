@@ -18,6 +18,8 @@ import * as spotifyRoutes from './spotify.js';
 import * as announcementRoutes from './announcements.js';
 import * as kudosRoutes from './kudos.js';
 import * as mapRoutes from './map.js';
+import * as uploadRoutes from './uploads.js';
+import { UPLOAD_MAX_BYTES } from '@office/shared';
 import {
   changePassword,
   claim,
@@ -69,7 +71,8 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
     activityRoutes.ActivityDeps &
     spotifyRoutes.SpotifyDeps &
     announcementRoutes.AnnouncementDeps &
-    kudosRoutes.KudosDeps = {
+    kudosRoutes.KudosDeps &
+    uploadRoutes.UploadDeps = {
     inviteCode: () => svc.settings.inviteCode(),
     adminUsernames: cfg.adminUsernames,
     avatarManifest: svc.avatarManifest,
@@ -91,6 +94,9 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
     backups: svc.backups,
     announcements: svc.announcements,
     kudos: svc.kudos,
+    uploads: svc.uploads,
+    linkPreviews: svc.linkPreviews,
+    search: svc.search,
   };
   const send = <T>(res: Response, result: Result<T>) =>
     void res.status(result.status).json(result.body);
@@ -334,6 +340,61 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
   app.post(
     '/api/kudos',
     withCaller((c, req, res) => send(res, kudosRoutes.giveKudos(c, req.body, auth))),
+  );
+
+  // Anexos do chat: envio (corpo cru até 10 MB), download só para quem pode ver a mensagem.
+  const uploadLimiter = new KeyedRateLimiter(10, 10 / 60);
+  app.post(
+    '/api/uploads',
+    // Confere a sessão antes de ler os 10 MB do corpo.
+    (req, res, next) => {
+      if (svc.users.findByToken(getBearerToken(req.headers.authorization ?? ''))) return next();
+      res.status(401).json({ error: 'INVALID_SESSION', message: 'Sessão inválida.' });
+    },
+    express.raw({ type: () => true, limit: UPLOAD_MAX_BYTES }),
+    withCaller((c, req, res) => {
+      if (!uploadLimiter.tryTake(c.user.id)) {
+        return void res
+          .status(429)
+          .json({ error: 'RATE_LIMIT', message: 'Muitos envios. Aguarde um pouco.' });
+      }
+      send(
+        res,
+        uploadRoutes.uploadFile(c, req.get('x-file-name'), req.get('content-type'), req.body, auth),
+      );
+    }),
+  );
+  app.get(
+    '/api/uploads/:id',
+    withCaller((c, req, res) => {
+      const file = uploadRoutes.uploadFor(c, id(req), auth);
+      if (!file.ok) return send(res, file);
+      const { path, name, mime, image } = file.body;
+      res.setHeader('Content-Type', mime);
+      res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+      res.setHeader('Cache-Control', 'private, max-age=86400');
+      // Imagens aparecem no chat; o resto sempre baixa (nunca abre como página).
+      res.attachment(name);
+      if (image)
+        res.setHeader(
+          'Content-Disposition',
+          res.get('Content-Disposition')!.replace(/^attachment/, 'inline'),
+        );
+      res.sendFile(path);
+    }),
+  );
+  const previewLimiter = new KeyedRateLimiter(30, 30 / 60);
+  app.get(
+    '/api/link-preview',
+    withCaller(async (c, req, res) => {
+      if (!previewLimiter.tryTake(c.user.id))
+        return void res.status(429).json({ error: 'RATE_LIMIT', message: 'Aguarde.' });
+      send(res, await uploadRoutes.linkPreview(c, req.query, auth));
+    }),
+  );
+  app.get(
+    '/api/search',
+    withCaller((c, req, res) => send(res, uploadRoutes.searchChat(c, req.query, auth))),
   );
 
   // Salas (admins e quem pode editar salas).

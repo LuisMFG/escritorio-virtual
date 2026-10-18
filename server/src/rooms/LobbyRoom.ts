@@ -52,7 +52,13 @@ export class LobbyRoom extends Room<{ state: LobbyState; client: LobbyClient }> 
 
   override messages = {
     [LobbyClientMessage.DmSend]: validate(dmSendSchema, (client, msg) =>
-      this.handleSend(client as LobbyClient, msg.toUserId, msg.text, msg.replyToId),
+      this.handleSend(
+        client as LobbyClient,
+        msg.toUserId,
+        msg.text,
+        msg.replyToId,
+        msg.attachmentId,
+      ),
     ),
     [LobbyClientMessage.DmReact]: validate(reactSchema, (client, msg) => {
       const me = (client as LobbyClient).auth;
@@ -239,6 +245,7 @@ export class LobbyRoom extends Room<{ state: LobbyState; client: LobbyClient }> 
     toUserId: string,
     text: string,
     replyToId?: number,
+    attachmentId?: string,
   ): void {
     const from = client.auth;
     if (!from) return;
@@ -252,7 +259,10 @@ export class LobbyRoom extends Room<{ state: LobbyState; client: LobbyClient }> 
         'Não dá para mandar mensagem para essa pessoa.',
       );
     }
-    const message = services().dms.send(from.id, to.id, text, replyToId);
+    if (attachmentId && !services().uploads.owns(attachmentId, from.id)) {
+      return this.sendError(client, ErrorCode.NotFound, 'Anexo não encontrado.');
+    }
+    const message = services().dms.send(from.id, to.id, text, replyToId, attachmentId ?? null);
     services().achievements.unlock(from.id, 'first_dm');
     const targets = new Set([...this.clientsOf(from.id), ...this.clientsOf(to.id)]);
     for (const c of targets) c.send(LobbyServerMessage.DmMessage, message);

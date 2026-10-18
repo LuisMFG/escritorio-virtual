@@ -56,6 +56,7 @@ const testConfig: Config = {
   isProduction: false,
   backupDir: '/tmp/escritorio-teste-backups',
   backupKeep: 7,
+  uploadDir: '/tmp/escritorio-teste-uploads',
   loginRateLimit: 10,
 };
 

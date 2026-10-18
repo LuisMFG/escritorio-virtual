@@ -12,6 +12,7 @@ import { and, desc, eq, inArray, isNull, lt, lte, or } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import { directMessages, dmReactions, users, type DirectMessageRow } from '../db/schema.js';
 import { summarizeReactions, toggleReaction } from './reactions.js';
+import { attachmentsOf } from './UploadService.js';
 
 /** Mensagens privadas entre duas pessoas (SQLite). */
 export class DmService {
@@ -21,7 +22,13 @@ export class DmService {
   ) {}
 
   /** `replyToId` só vale se a mensagem respondida for desta conversa. */
-  send(fromUserId: string, toUserId: string, text: string, replyToId?: number): DirectMessage {
+  send(
+    fromUserId: string,
+    toUserId: string,
+    text: string,
+    replyToId?: number,
+    attachmentId: string | null = null,
+  ): DirectMessage {
     const reply = replyToId ? this.find(replyToId) : undefined;
     const inPair =
       reply &&
@@ -32,6 +39,7 @@ export class DmService {
         fromUserId,
         toUserId,
         text,
+        attachmentId,
         replyToId: inPair ? reply.id : null,
         createdAt: this.now(),
       })
@@ -91,10 +99,15 @@ export class DmService {
         { id: m.id, userId: m.fromUserId, name, text: replyPreviewText(m.text) },
       ]),
     );
+    const files = attachmentsOf(
+      this.db,
+      rows.map((r) => r.attachmentId),
+    );
     return rows.map((r) => ({
       ...toMessage(r),
       reactions: reactions.get(r.id) ?? [],
       replyTo: (r.replyToId && replies.get(r.replyToId)) || null,
+      attachment: (r.attachmentId && files.get(r.attachmentId)) || null,
     }));
   }
 
@@ -131,7 +144,7 @@ export class DmService {
           userId: other,
           name: person.name,
           figure: person.figure,
-          lastText: last.text,
+          lastText: last.text || (last.attachmentId ? '📎 Anexo' : ''),
           lastFromMe: last.fromUserId === userId,
           lastAt: last.createdAt.getTime(),
           unread,

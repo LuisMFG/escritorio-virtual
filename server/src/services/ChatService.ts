@@ -13,6 +13,7 @@ import { and, desc, eq, inArray, lt } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import { chatMessages, chatReactions, type ChatMessageRow, type UserRow } from '../db/schema.js';
 import { summarizeReactions, toggleReaction } from './reactions.js';
+import { attachmentsOf } from './UploadService.js';
 
 /** Histórico de chat por sala no SQLite (guarda só as últimas `CHAT_KEEP_PER_ROOM`). */
 export class ChatService {
@@ -32,6 +33,7 @@ export class ChatService {
     sessionId = '',
     replyToId?: number,
     kind: ChatKind = 'text',
+    attachmentId: string | null = null,
   ): ChatMessage {
     const reply = replyToId ? this.find(replyToId) : undefined;
     const row = this.db
@@ -42,6 +44,7 @@ export class ChatService {
         nameSnapshot: user.name,
         text,
         kind,
+        attachmentId,
         replyToId: reply?.roomId === roomId ? reply.id : null,
         createdAt: this.now(),
       })
@@ -97,6 +100,10 @@ export class ChatService {
               { id: r.id, userId: r.userId, name: r.nameSnapshot, text: replyPreviewText(r.text) },
             ]),
     );
+    const files = attachmentsOf(
+      this.db,
+      rows.map((r) => r.attachmentId),
+    );
     return rows.map((row) => ({
       id: row.id,
       roomId: row.roomId,
@@ -108,6 +115,7 @@ export class ChatService {
       ts: row.createdAt.getTime(),
       reactions: reactions.get(row.id) ?? [],
       replyTo: (row.replyToId && replies.get(row.replyToId)) || null,
+      attachment: (row.attachmentId && files.get(row.attachmentId)) || null,
     }));
   }
 

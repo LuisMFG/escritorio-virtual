@@ -33,5 +33,6 @@ export interface ReactionsUpdate {
 export const REPLY_PREVIEW_MAX = 120;
 
 export function replyPreviewText(text: string): string {
+  if (!text) return '📎 Anexo';
   return text.length > REPLY_PREVIEW_MAX ? `${text.slice(0, REPLY_PREVIEW_MAX)}…` : text;
 }

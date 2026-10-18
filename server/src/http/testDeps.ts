@@ -7,6 +7,7 @@ import type { ActivityDeps } from './activity.js';
 import type { SpotifyDeps } from './spotify.js';
 import type { AnnouncementDeps } from './announcements.js';
 import type { KudosDeps } from './kudos.js';
+import type { UploadDeps } from './uploads.js';
 import { openDatabase } from '../db/client.js';
 import { createServices } from '../services/index.js';
 import type { MeetingDeps } from './meetings.js';
@@ -19,14 +20,21 @@ export type TestDeps = MeetingDeps &
   ActivityDeps &
   SpotifyDeps &
   AnnouncementDeps &
-  KudosDeps;
+  KudosDeps &
+  UploadDeps;
 
 /** Dependências das rotas sobre um banco em memória (testes). */
 export function makeDeps(): TestDeps {
-  const svc = createServices(openDatabase(':memory:'), { inviteCode: 'segredo' }, undefined, {
-    dir: mkdtempSync(join(tmpdir(), 'escritorio-teste-backups-')),
-    keep: 7,
-  });
+  const svc = createServices(
+    openDatabase(':memory:'),
+    { inviteCode: 'segredo' },
+    undefined,
+    {
+      dir: mkdtempSync(join(tmpdir(), 'escritorio-teste-backups-')),
+      keep: 7,
+    },
+    mkdtempSync(join(tmpdir(), 'escritorio-teste-uploads-')),
+  );
   return {
     inviteCode: () => svc.settings.inviteCode(),
     adminUsernames: [],
@@ -49,6 +57,9 @@ export function makeDeps(): TestDeps {
     backups: svc.backups,
     announcements: svc.announcements,
     kudos: svc.kudos,
+    uploads: svc.uploads,
+    linkPreviews: svc.linkPreviews,
+    search: svc.search,
   };
 }
 

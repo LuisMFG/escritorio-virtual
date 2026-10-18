@@ -14,6 +14,7 @@ const services = createServices(
   { inviteCode: config.inviteCode },
   config.spotify,
   { dir: config.backupDir, keep: config.backupKeep },
+  config.uploadDir,
 );
 if (config.spotify) console.log('[spotify] integração ligada');
 setServices(services);
@@ -34,6 +35,8 @@ services.activity.start();
 services.spotifyPoller.start();
 services.focus.startTimer();
 new BackupScheduler(services.backups).start();
+// Anexos enviados e nunca mandados (ou de mensagens que saíram do histórico): limpa a cada hora.
+setInterval(() => services.uploads.cleanup(), 60 * 60_000).unref();
 console.log(`[servidor] escritório no ar em http://localhost:${config.port}`);
 console.log(`[servidor] banco: ${config.databasePath}`);
 console.log(

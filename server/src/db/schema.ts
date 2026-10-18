@@ -162,6 +162,8 @@ export const chatMessages = sqliteTable(
     }),
     /** 'text' | 'dice' | 'coin' | 'game' (resultados sorteados pelo servidor). */
     kind: text('kind').notNull().default('text'),
+    /** Anexo (Fase 29). */
+    attachmentId: text('attachment_id'),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   },
   (t) => [index('chat_messages_room_id_idx').on(t.roomId, t.id)],
@@ -182,6 +184,8 @@ export const directMessages = sqliteTable(
     replyToId: integer('reply_to_id').references((): AnySQLiteColumn => directMessages.id, {
       onDelete: 'set null',
     }),
+    /** Anexo (Fase 29). */
+    attachmentId: text('attachment_id'),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
     /** Quando quem recebeu abriu a conversa (null = não lida). */
     readAt: integer('read_at', { mode: 'timestamp_ms' }),
@@ -478,6 +482,19 @@ export const kudos = sqliteTable(
   },
   (t) => [index('kudos_created_idx').on(t.createdAt), index('kudos_to_idx').on(t.toUserId)],
 );
+
+/** Arquivos enviados no chat e nas DMs (Fase 29). O conteúdo fica em `data/uploads/<id>`. */
+export const uploads = sqliteTable('uploads', {
+  /** Aleatório e difícil de adivinhar (também é o nome do arquivo no disco). */
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id),
+  name: text('name').notNull(),
+  mime: text('mime').notNull(),
+  size: integer('size').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+});
 
 export type UserRow = typeof users.$inferSelect;
 export type DirectMessageRow = typeof directMessages.$inferSelect;

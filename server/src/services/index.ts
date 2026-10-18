@@ -22,6 +22,9 @@ import { AnnouncementService } from './AnnouncementService.js';
 import { PollService } from './PollService.js';
 import { KudosService } from './KudosService.js';
 import { FocusService } from './FocusService.js';
+import { UploadService } from './UploadService.js';
+import { LinkPreviewService } from './LinkPreviewService.js';
+import { SearchService } from './SearchService.js';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { SpotifyConfig } from '../config.js';
@@ -64,6 +67,9 @@ export interface Services {
   polls: PollService;
   kudos: KudosService;
   focus: FocusService;
+  uploads: UploadService;
+  linkPreviews: LinkPreviewService;
+  search: SearchService;
   furni: FurniService;
   transfers: TransferRegistry;
   settings: SettingsService;
@@ -78,6 +84,7 @@ export function createServices(
   defaults = { inviteCode: 'convite' },
   spotifyConfig?: SpotifyConfig,
   backup = { dir: join(tmpdir(), 'escritorio-backups'), keep: 7 },
+  uploadDir = join(tmpdir(), 'escritorio-uploads'),
 ): Services {
   const users = new UserService(db);
   users.seedCargos();
@@ -119,6 +126,9 @@ export function createServices(
     polls: new PollService(db),
     kudos: new KudosService(db),
     focus: new FocusService(),
+    uploads: new UploadService(db, uploadDir),
+    linkPreviews: new LinkPreviewService(),
+    search: new SearchService(db),
     furni: new FurniService(db),
     transfers: new TransferRegistry(),
     settings: new SettingsService(db, defaults),

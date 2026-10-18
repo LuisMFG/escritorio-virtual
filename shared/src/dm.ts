@@ -1,6 +1,7 @@
 import { schema, t, type SchemaType } from '@colyseus/schema';
 import { z } from 'zod';
-import { chatSchema } from './protocol.js';
+import { chatFields, hasContent } from './protocol.js';
+import type { Attachment } from './uploads.js';
 import type { ReactionSummary, ReplyPreview } from './reactions.js';
 
 /**
@@ -34,7 +35,9 @@ export const LobbyServerMessage = {
 
 const userId = z.string().min(1).max(64);
 
-export const dmSendSchema = chatSchema.extend({ toUserId: userId });
+export const dmSendSchema = chatFields
+  .extend({ toUserId: userId })
+  .refine(hasContent, { message: 'Mensagem vazia.', path: ['text'] });
 export const dmHistorySchema = z.object({
   withUserId: userId,
   beforeId: z.number().int().positive().optional(),
@@ -56,6 +59,8 @@ export interface DirectMessage {
   readAt: number | null;
   reactions: ReactionSummary[];
   replyTo: ReplyPreview | null;
+  /** Arquivo ou imagem anexada. */
+  attachment?: Attachment | null;
 }
 
 export interface DmConversation {

@@ -57,6 +57,8 @@ export interface Config {
   spotify?: SpotifyConfig;
   /** Pasta dos backups diários do banco (Fase 22). */
   backupDir: string;
+  /** Pasta dos anexos do chat (Fase 29). */
+  uploadDir: string;
   /** Quantos backups guardar. */
   backupKeep: number;
   /** Tentativas de entrada/cadastro por minuto por IP (os testes de ponta a ponta sobem isso). */
@@ -77,6 +79,7 @@ export const config: Config = {
   isProduction,
   spotify: spotify(Number(process.env.PORT ?? 2567)),
   backupDir: fromRoot(process.env.BACKUP_DIR ?? './data/backups'),
+  uploadDir: fromRoot(process.env.UPLOAD_DIR ?? './data/uploads'),
   backupKeep: Math.max(1, Number(process.env.BACKUP_KEEP ?? 7) || 7),
   loginRateLimit: Math.max(1, Number(process.env.LOGIN_RATE_LIMIT ?? 10) || 10),
 };
