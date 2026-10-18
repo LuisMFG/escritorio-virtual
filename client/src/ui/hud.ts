@@ -32,6 +32,7 @@ export function mountHud(opts: {
   onOpenMessages: () => void;
   onOpenAgenda: () => void;
   onOpenAnnouncements: () => void;
+  onOpenMap: () => void;
   onEditRoom: () => void;
   ambient: AmbientSound;
   onToggleDecor: () => void;
@@ -131,6 +132,7 @@ export function mountHud(opts: {
   dmBadge.hidden = true;
   dmBtn.append(dmBadge);
   const focusBtn = actionButton('hud-focus', '🍅', 'Foco', () => undefined);
+  const mapBtn = actionButton('hud-map', '🗺️', 'Mapa', opts.onOpenMap);
   const annBtn = actionButton('hud-ann', '📢', 'Avisos', opts.onOpenAnnouncements);
   const annBadge = document.createElement('span');
   annBadge.className = 'dm-badge';
@@ -141,7 +143,17 @@ export function mountHud(opts: {
 
   const actions = document.createElement('div');
   actions.className = 'hud-actions';
-  actions.append(profileBtn, teamBtn, dmBtn, agendaBtn, annBtn, focusBtn, decorBtn, adminBtn);
+  actions.append(
+    profileBtn,
+    teamBtn,
+    dmBtn,
+    mapBtn,
+    agendaBtn,
+    annBtn,
+    focusBtn,
+    decorBtn,
+    adminBtn,
+  );
   document.body.append(card, status, zoom, actions, panel);
   return {
     focusButton: focusBtn,

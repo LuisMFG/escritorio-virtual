@@ -23,6 +23,7 @@ import {
   type SpotifyStatus,
   type Announcement,
   type Kudos,
+  type MapRoom,
   type KudosCreate,
   type AnnouncementCreate,
   type RoomEdit,
@@ -147,6 +148,10 @@ export const roomApi = {
 };
 
 /** Agenda de reuniões. */
+export const mapApi = {
+  get: (token: string) => request<MapRoom[]>('GET', '/api/map', { token }),
+};
+
 export const kudosApi = {
   wall: (token: string, para?: string) =>
     request<Kudos[]>('GET', `/api/kudos${para ? `?para=${encodeURIComponent(para)}` : ''}`, {

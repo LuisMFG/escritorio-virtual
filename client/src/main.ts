@@ -49,6 +49,7 @@ import { exposeForTests } from './e2e.js';
 import { AnnouncementBanner, openAnnouncements } from './ui/announcements.js';
 import { openKudosForm, openKudosWall } from './ui/kudos.js';
 import { FocusController } from './ui/focus.js';
+import { openMinimap } from './ui/minimap.js';
 import { openTeam } from './ui/team.js';
 import { openAdmin } from './ui/admin.js';
 import { openRoomEditor } from './ui/roomEditor.js';
@@ -269,6 +270,33 @@ async function start(): Promise<void> {
       sent: (k) => overlay.notify(`${KUDOS_INFO[k.type].emoji} Elogio enviado para ${k.toName}!`),
     });
   }
+  /** Minimapa aberto (atualiza com a presença) e quem estamos indo encontrar. */
+  let minimap: ReturnType<typeof openMinimap> | null = null;
+  let approach: string | null = null;
+  function showMap(): void {
+    if (!session || !connection) return;
+    const conn = connection;
+    minimap?.close();
+    minimap = openMinimap({
+      token: session.token,
+      myUserId: session.userId,
+      currentRoomId: () => conn.currentRoomId,
+      people: () => online,
+      meetingOf: (id) => roomList.find((r) => r.id === id)?.meeting ?? '',
+      goToRoom: (id) => conn.goTo(id),
+      goToPerson: (p) => {
+        if (p.roomId === conn.currentRoomId) return approachPerson(p.userId);
+        approach = p.userId;
+        conn.goTo(p.roomId);
+      },
+    });
+  }
+  /** Anda até perto de alguém da sala atual (o servidor escolhe o tile livre mais perto). */
+  function approachPerson(userId: string): void {
+    const room = connection?.currentRoom;
+    const target = room && [...room.state.players.values()].find((p) => p.userId === userId);
+    if (target) connection?.move({ x: target.x, y: target.y });
+  }
   function showAnnouncements(): void {
     if (!session) return;
     annPanel?.close();
@@ -336,6 +364,7 @@ async function start(): Promise<void> {
     onOpenAdmin: () => showAdmin(),
     onOpenMessages: () => messages.toggle(),
     onOpenAnnouncements: () => showAnnouncements(),
+    onOpenMap: () => showMap(),
     onOpenAgenda: () => {
       if (!session || !connection) return;
       const conn = connection;
@@ -719,6 +748,12 @@ async function start(): Promise<void> {
       }),
     );
 
+    // Veio pelo mapa para encontrar alguém: anda até perto da pessoa.
+    if (approach) {
+      const who = approach;
+      approach = null;
+      setTimeout(() => approachPerson(who), 300);
+    }
     const chatHistory = (await room.request(ClientMessage.GetChatHistory)) as ChatMessage[];
     if (scene === s) chat.setHistory(chatHistory, session?.userId ?? '');
   }
@@ -759,11 +794,13 @@ async function start(): Promise<void> {
       error: (e) => overlay.notify(e.message),
       people: (list) => {
         online = list;
+        minimap?.refresh();
         messages.setOnline(list);
         refreshOtherRooms();
       },
       rooms: (list) => {
         roomList = list;
+        minimap?.refresh();
         refreshOtherRooms();
         scene?.setBusyRooms(busyRooms());
       },

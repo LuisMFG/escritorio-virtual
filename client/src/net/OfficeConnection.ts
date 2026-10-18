@@ -113,6 +113,11 @@ export class OfficeConnection {
     return this.roomId;
   }
 
+  /** Sala Colyseus atual (para ler o estado: quem está onde). */
+  get currentRoom(): OfficeRoomClient | null {
+    return this.room;
+  }
+
   move(msg: MoveMessage): void {
     this.room?.send(ClientMessage.Move, msg);
   }
