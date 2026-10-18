@@ -911,12 +911,23 @@ Pedido (18/10/2026): prioridade para as **animações dos personagens**, **senta
 
 ### Fases (ordem pela prioridade pedida)
 
-#### Fase 31 — Avatar montado no navegador (base de tudo)
+#### Fase 31 — Avatar montado no navegador (base de tudo) ✅ implementada
 - O `assets:sync` baixa, das bibliotecas usadas, os `.nitro` e os dados de montagem do Habbo (quais partes cada peça tem, ordem de desenho por direção, posições e paletas de cor). O servidor guarda em cache como hoje.
 - Novo renderizador no cliente: junta as partes (corpo, cabeça, rosto, cabelo, roupas, acessórios) por direção e pose, pintando cada parte com a cor escolhida. Feito do zero, sem copiar código de terceiros.
 - Primeiro só a pose **em pé**, conferida pixel a pixel contra o imager (tem de ficar igual). Se algo falhar, cai para o imager como hoje.
 - **Como testar:** os avatares aparecem iguais aos de hoje, nas 8 direções, com todas as roupas do editor.
 - ⚠️ É a fase mais arriscada. Começa com uma prova rápida (um boneco andando); mostro antes de seguir.
+
+**Notas da implementação:**
+- **Prova primeiro:** um boneco montado a partir dos pacotes `.nitro` já saiu quase igual ao imager, com andar, sentar e acenar (aprovada em 18/10/2026).
+- **SWF em vez de `.nitro`:** conferindo várias figuras, os cabelos saíam fora do lugar (a franja de um cabelo feminino 5 px para o lado). O motivo: o `.nitro` derivado corta as bordas transparentes das imagens sem corrigir os deslocamentos. O servidor passou a usar o **SWF original** de cada biblioteca: lê as imagens, os nomes e o manifesto, corta as bordas corrigindo o deslocamento junto e gera uma folha de sprites + JSON (`/hh/figure/{lib}.png` e `.json`, com cache em disco e imutáveis). Assim não ficou nenhum ajuste "mágico".
+- **Dados de montagem** (`npm run assets:figure` → `client/public/assets/figure/figuredata.json`, 49 KB): de cada biblioteca, as partes de cada roupa (com cor e camadas que esconde, como o chapéu esconder o cabelo grande), em que biblioteca está cada parte (o mapa do Habbo às vezes omite uma; ela fica com as irmãs do conjunto), as paletas e o SWF da revisão. O servidor só converte bibliotecas que estão nesses dados, na revisão deles.
+- **Montagem** (`shared/src/figureRender.ts`, sem DOM): para cada parte, a imagem da pose/direção/quadro (sem ela, a pose em pé), pintada multiplicando pela cor e empilhada na ordem do Habbo por direção (de frente, de lado com os dois braços por cima e de costas com o braço direito atrás); direções 4–6 são o espelho de 2–0. Cabeça fica em pé enquanto o corpo anda ou senta. Cabelo: a parte grande (`hrb`); com chapéu, a curta (`hr`).
+- **Reserva:** roupa que os dados não conhecem, ou parte sem desenho nas bibliotecas carregadas (ex.: bochecha corada que mora em outra biblioteca), usa o imager como antes. `?imager=1` força o imager para comparar; `?offline=1` continua com a arte provisória.
+- **Conferência** (`npm run assets:figure-check`): monta figuras conhecidas e aleatórias do editor nas 8 direções e compara com o imager. Resultado: média de **44 pixels diferentes de 7.040** em 34 figuras; o que sobra são sombras de lentes de óculos e fios de cabelo sob alguns chapéus.
+- O editor de visual, a Equipe e os cartões continuam usando o imager para os rostinhos (na pose em pé fica igual).
+- Testes: montagem (cores, ordem, espelho, pose que falta, cabeça em pé, chapéu e cabelo, parte sem desenho), conversão do SWF (corte com deslocamento, transparência, apelidos), dados de montagem e o proxy (converte uma vez, recusa biblioteca/revisão desconhecida). Os de ponta a ponta usam a arte provisória e continuam passando; agora cada teste fecha os navegadores que abriu (antes as contas se acumulavam na Recepção).
+- No navegador: os avatares da sala vêm das folhas montadas (nenhum pedido ao imager de avatar), iguais aos de antes.
 
 #### Fase 32 — Animações dos personagens
 - **Andar** com os 4 quadros reais do Habbo (pernas e braços), no lugar do balanço.

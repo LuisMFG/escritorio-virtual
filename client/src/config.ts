@@ -2,6 +2,8 @@ const params = new URLSearchParams(location.search);
 
 /** Força a arte provisória gerada por código (sem chamar a HabboAssets). Use `?offline=1`. */
 export const OFFLINE_ASSETS = params.has('offline') || import.meta.env.VITE_OFFLINE_ASSETS === '1';
+/** Avatar pelo imager (como antes da Fase 31), em vez de montado no navegador. Use `?imager=1`. */
+export const FORCE_IMAGER = params.has('imager');
 
 /** Desenha footprints e caixas de profundidade por cima da cena. Use `?debug=1`. */
 export const DEBUG = params.has('debug');

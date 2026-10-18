@@ -12,7 +12,9 @@ Desde a Fase 2 as imagens passam pelo proxy do servidor (`/hh/avatar.png`, `/hh/
 
 | Recurso | Endpoint | Onde é usado |
 |---|---|---|
-| Avatar (pose em pé, 8 direções) | `/imaging/avatar.png?figure=…&direction=0-7` | `client/src/assets/AvatarTextureCache.ts` |
+| Avatar montado no navegador (Fase 31) | SWFs originais das bibliotecas `hh_human_*` na CDN (`cdn.habboassets.com/images.habbo.com/gordon/…`), listados em `/api/v2/swfs/libraries/clothing/{lib}`; o servidor converte cada um em folha de sprites (`/hh/figure/{lib}.png` e `.json`) | `client/src/assets/FigureAvatarRenderer.ts`, `shared/src/figureRender.ts` |
+| Dados de montagem (partes de cada roupa, onde estão, paletas) | `/imaging/info/clothing/{lib}` (`figuredata` e `figuremap`) | `server/scripts/figure-sync.ts` → `client/public/assets/figure/figuredata.json` |
+| Avatar pelo imager (reserva, e `?imager=1`) | `/imaging/avatar.png?figure=…&direction=0-7` | `client/src/assets/AvatarTextureCache.ts` |
 | Miniaturas de roupa (peça no boneco "fantasma") | `/imaging/clothing/set/{id}.png?direction=2` | `client/src/ui/avatarEditor.ts` |
 | Catálogo de roupas e paletas (dados) | `/imaging/info/clothing/hh_human_*` | `server/scripts/assets-sync.ts` → `client/public/assets/avatar/manifest.json` |
 | Mobis (render por direção, revisão fixada) | `/imaging/furniture/{classname}.png?revision=…&direction=…` | `client/src/entities/FurniView.ts` |

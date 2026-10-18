@@ -29,8 +29,9 @@ import {
 import { Application, TextureSource } from 'pixi.js';
 import { AssetLoader } from './assets/AssetLoader.js';
 import { AvatarTextureCache, ImagerAvatarRenderer } from './assets/AvatarTextureCache.js';
+import { FigureAvatarRenderer } from './assets/FigureAvatarRenderer.js';
 import { PlaceholderFactory } from './assets/PlaceholderFactory.js';
-import { DEBUG, HOUR_OVERRIDE, OFFLINE_ASSETS } from './config.js';
+import { DEBUG, FORCE_IMAGER, HOUR_OVERRIDE, OFFLINE_ASSETS } from './config.js';
 import type { AvatarSnapshot } from './entities/AvatarView.js';
 import { isSessionError, OfficeConnection, type OfficeRoomClient } from './net/OfficeConnection.js';
 import { adminApi, announcementApi, api, ApiRequestError, jiraApi } from './net/api.js';
@@ -138,8 +139,13 @@ async function start(): Promise<void> {
   const deps: SceneDeps = {
     loader,
     placeholders,
+    // Avatar montado no navegador (Fase 31); `?imager=1` volta ao imager, para comparar.
     avatars: new AvatarTextureCache(
-      new ImagerAvatarRenderer(loader, placeholders, avatarManifest.imager),
+      OFFLINE_ASSETS || FORCE_IMAGER
+        ? new ImagerAvatarRenderer(loader, placeholders, avatarManifest.imager)
+        : new FigureAvatarRenderer(
+            new ImagerAvatarRenderer(loader, placeholders, avatarManifest.imager),
+          ),
     ),
     furniDefs: new Map<string, FurniManifestEntry>(furniManifest.items.map((i) => [i.id, i])),
   };

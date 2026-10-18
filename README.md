@@ -97,6 +97,8 @@ Opções de URL do cliente: `?offline=1` usa só a arte provisória gerada por c
 | `npm start` | Servidor em modo produção (serve o `client/dist`) |
 | `npm run bot` | Robôs de teste |
 | `npm run assets:sync` | Regera os manifestos de roupas e móveis a partir da HabboAssets |
+| `npm run assets:figure` | Regera os dados para montar o avatar no navegador (`client/public/assets/figure/figuredata.json`); rode depois do `assets:sync` |
+| `npm run assets:figure-check` | Confere o avatar montado contra o imager (várias figuras, 8 direções) e grava as piores comparações em `data/figure-check/` |
 | `npm run db:generate` | Gera migration SQL após mudar `server/src/db/schema.ts` |
 | `npm run vscode:package` | Gera a extensão do VS Code em `client/public/downloads/escritorio-atividade.vsix` |
 
