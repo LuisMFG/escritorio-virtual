@@ -22,7 +22,7 @@ export interface FurniCuration {
   source?: 'habboassets' | 'local';
   directions?: number[];
   anchors?: Record<string, [number, number]>;
-  interaction?: 'toggle' | 'coffee' | 'board' | 'whiteboard' | 'tictactoe';
+  interaction?: 'toggle' | 'coffee' | 'board' | 'whiteboard' | 'tictactoe' | 'kudos';
   /** Cantos do papel na PNG (ver `surface` no manifesto). */
   surface?: Record<string, [[number, number], [number, number], [number, number]]>;
   /** Emite luz quando ligado. */
@@ -101,6 +101,16 @@ export const FURNI_CURATION: FurniCuration[] = [
     height: 1,
   },
   { id: 'exe_table', name: 'Mesa Executiva', category: 'mesas', height: 1 },
+  {
+    // Cavalete com quadro: abre o mural de elogios da equipe (Fase 26).
+    id: 'easel_0',
+    name: 'Quadro de Elogios',
+    category: 'escritório',
+    width: 1,
+    depth: 1,
+    height: 2,
+    interaction: 'kudos',
+  },
   {
     // Mesa redonda que vira mesa de jogos: o tabuleiro é desenhado pela cena em cima dela.
     id: 'table_plasto_round',

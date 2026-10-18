@@ -1,5 +1,8 @@
 import { CloseCode, Room, ServerError, validate, type Client } from '@colyseus/core';
 import {
+  KudosMessage,
+  type Kudos,
+  type KudosNotice,
   AnnouncementMessage,
   type Announcement,
   type AnnouncementNotice,
@@ -152,6 +155,14 @@ export class LobbyRoom extends Room<{ state: LobbyState; client: LobbyClient }> 
     this.broadcast(AnnouncementMessage.Removed, { id });
   };
 
+  /** Elogio novo: avisa quem recebeu e manda todo mundo atualizar o mural. */
+  private readonly onKudos = (kudos: Kudos): void => {
+    for (const c of this.clientsOf(kudos.toUserId)) {
+      c.send(KudosMessage.Received, { kudos } satisfies KudosNotice);
+    }
+    this.broadcast(KudosMessage.Changed, {});
+  };
+
   /** Conquista nova: aviso para a pessoa (em todas as abas). */
   private readonly onUnlocked = (userId: string, def: AchievementDef): void => {
     for (const c of this.clientsOf(userId)) {
@@ -182,6 +193,7 @@ export class LobbyRoom extends Room<{ state: LobbyState; client: LobbyClient }> 
     services().activity.events.on('changed', this.syncPeople);
     services().announcements.events.on('created', this.onAnnouncement);
     services().announcements.events.on('removed', this.onAnnouncementRemoved);
+    services().kudos.events.on('given', this.onKudos);
   }
 
   override onDispose(): void {
@@ -198,6 +210,7 @@ export class LobbyRoom extends Room<{ state: LobbyState; client: LobbyClient }> 
     services().activity.events.off('changed', this.syncPeople);
     services().announcements.events.off('created', this.onAnnouncement);
     services().announcements.events.off('removed', this.onAnnouncementRemoved);
+    services().kudos.events.off('given', this.onKudos);
   }
 
   override onAuth(_client: Client, options: unknown): UserRow {

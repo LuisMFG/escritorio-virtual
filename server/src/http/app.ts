@@ -16,6 +16,7 @@ import * as achievementRoutes from './achievements.js';
 import * as activityRoutes from './activity.js';
 import * as spotifyRoutes from './spotify.js';
 import * as announcementRoutes from './announcements.js';
+import * as kudosRoutes from './kudos.js';
 import {
   changePassword,
   claim,
@@ -66,7 +67,8 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
     achievementRoutes.AchievementDeps &
     activityRoutes.ActivityDeps &
     spotifyRoutes.SpotifyDeps &
-    announcementRoutes.AnnouncementDeps = {
+    announcementRoutes.AnnouncementDeps &
+    kudosRoutes.KudosDeps = {
     inviteCode: () => svc.settings.inviteCode(),
     adminUsernames: cfg.adminUsernames,
     avatarManifest: svc.avatarManifest,
@@ -87,6 +89,7 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
     spotifyPoller: svc.spotifyPoller,
     backups: svc.backups,
     announcements: svc.announcements,
+    kudos: svc.kudos,
   };
   const send = <T>(res: Response, result: Result<T>) =>
     void res.status(result.status).json(result.body);
@@ -314,6 +317,16 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
     withCaller((c, req, res) =>
       send(res, announcementRoutes.deleteAnnouncement(c, Number(id(req)), auth)),
     ),
+  );
+
+  // Elogios entre colegas.
+  app.get(
+    '/api/kudos',
+    withCaller((c, req, res) => send(res, kudosRoutes.kudosWall(c, req.query, auth))),
+  );
+  app.post(
+    '/api/kudos',
+    withCaller((c, req, res) => send(res, kudosRoutes.giveKudos(c, req.body, auth))),
   );
 
   // Salas (admins e quem pode editar salas).

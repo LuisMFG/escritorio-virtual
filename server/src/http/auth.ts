@@ -19,7 +19,7 @@ import type { UserRow } from '../db/schema.js';
 import type { PresenceRegistry } from '../services/PresenceRegistry.js';
 import type { UserService } from '../services/UserService.js';
 
-export type HttpStatus = 200 | 400 | 401 | 403 | 404 | 409;
+export type HttpStatus = 200 | 400 | 401 | 403 | 404 | 409 | 429;
 export type Result<T> =
   { ok: true; status: 200; body: T } | { ok: false; status: HttpStatus; body: ApiError };
 

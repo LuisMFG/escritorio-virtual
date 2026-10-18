@@ -460,6 +460,25 @@ export const pollVotes = sqliteTable(
   (t) => [primaryKey({ columns: [t.pollId, t.userId] })],
 );
 
+/** Elogios entre colegas (Fase 26). */
+export const kudos = sqliteTable(
+  'kudos',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    fromUserId: text('from_user_id')
+      .notNull()
+      .references(() => users.id),
+    toUserId: text('to_user_id')
+      .notNull()
+      .references(() => users.id),
+    /** 'help' | 'idea' | 'delivered' | 'partner' */
+    type: text('type').notNull(),
+    message: text('message').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [index('kudos_created_idx').on(t.createdAt), index('kudos_to_idx').on(t.toUserId)],
+);
+
 export type UserRow = typeof users.$inferSelect;
 export type DirectMessageRow = typeof directMessages.$inferSelect;
 export type CargoRow = typeof cargos.$inferSelect;

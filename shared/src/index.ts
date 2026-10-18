@@ -27,3 +27,4 @@ export * from './achievements.js';
 export * from './activity.js';
 export * from './announcements.js';
 export * from './polls.js';
+export * from './kudos.js';

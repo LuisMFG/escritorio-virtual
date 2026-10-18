@@ -60,6 +60,8 @@ export const RECEPTION: RoomDefinition = {
     { id: 'r-shelves', defId: 'shelves_norja', x: 1, y: 2, z: 0, rot: 2 },
     { id: 'r-cactus-1', defId: 'plant_big_cactus', x: 1, y: 1, z: 0, rot: 0 },
     { id: 'r-cactus-2', defId: 'plant_big_cactus', x: 12, y: 1, z: 0, rot: 0 },
+    // Quadro de Elogios (Fase 26). Longe das portas: alto, ele cobriria o clique numa porta atrás.
+    { id: 'r-kudos', defId: 'easel_0', x: 12, y: 6, z: 0, rot: 6 },
   ],
 };
 

@@ -9,6 +9,8 @@ export const ACHIEVEMENT_STATS = [
   'meetings',
   'streak',
   'rooms',
+  'kudosGiven',
+  'kudosReceived',
 ] as const;
 export type AchievementStat = (typeof ACHIEVEMENT_STATS)[number];
 
@@ -165,6 +167,24 @@ export const ACHIEVEMENTS: readonly AchievementDef[] = [
     description: 'Adotou um pet.',
     emoji: '🐾',
     color: '#d97706',
+  },
+  {
+    id: 'recognizer',
+    name: 'Reconhece os colegas',
+    description: 'Elogiou 5 vezes alguém da equipe.',
+    emoji: '👏',
+    color: '#f472b6',
+    stat: 'kudosGiven',
+    goal: 5,
+  },
+  {
+    id: 'beloved',
+    name: 'Querido pela equipe',
+    description: 'Recebeu 5 elogios.',
+    emoji: '💖',
+    color: '#e11d48',
+    stat: 'kudosReceived',
+    goal: 5,
   },
 ];
 

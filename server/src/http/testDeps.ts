@@ -6,6 +6,7 @@ import type { AchievementDeps } from './achievements.js';
 import type { ActivityDeps } from './activity.js';
 import type { SpotifyDeps } from './spotify.js';
 import type { AnnouncementDeps } from './announcements.js';
+import type { KudosDeps } from './kudos.js';
 import { openDatabase } from '../db/client.js';
 import { createServices } from '../services/index.js';
 import type { MeetingDeps } from './meetings.js';
@@ -17,7 +18,8 @@ export type TestDeps = MeetingDeps &
   AchievementDeps &
   ActivityDeps &
   SpotifyDeps &
-  AnnouncementDeps;
+  AnnouncementDeps &
+  KudosDeps;
 
 /** Dependências das rotas sobre um banco em memória (testes). */
 export function makeDeps(): TestDeps {
@@ -46,6 +48,7 @@ export function makeDeps(): TestDeps {
     spotifyPoller: svc.spotifyPoller,
     backups: svc.backups,
     announcements: svc.announcements,
+    kudos: svc.kudos,
   };
 }
 
