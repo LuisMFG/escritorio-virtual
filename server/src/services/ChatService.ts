@@ -129,6 +129,17 @@ export class ChatService {
       .offset(CHAT_KEEP_PER_ROOM - 1)
       .get();
     if (cutoff) {
+      // Respostas guardadas que citam mensagens que vão sair: a citação some (bancos antigos não
+      // têm o ON DELETE SET NULL na coluna, e a exclusão falharia).
+      const old = this.db
+        .select({ id: chatMessages.id })
+        .from(chatMessages)
+        .where(and(eq(chatMessages.roomId, roomId), lt(chatMessages.id, cutoff.id)));
+      this.db
+        .update(chatMessages)
+        .set({ replyToId: null })
+        .where(inArray(chatMessages.replyToId, old))
+        .run();
       this.db
         .delete(chatMessages)
         .where(and(eq(chatMessages.roomId, roomId), lt(chatMessages.id, cutoff.id)))

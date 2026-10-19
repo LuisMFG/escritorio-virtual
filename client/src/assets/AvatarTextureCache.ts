@@ -19,6 +19,10 @@ export interface AvatarPoser {
   frame(pose: FigurePose): AvatarFrame;
   /** Veste alguma roupa animada (a cena avança `clothingFrame`). */
   readonly animated?: boolean;
+  /** Poses guardadas agora (diagnóstico de memória). */
+  readonly size?: number;
+  /** Saiu do cache: libera as texturas. */
+  dispose?(): void;
 }
 
 /**
@@ -86,9 +90,18 @@ export class AvatarTextureCache {
     this.posers.set(figure, hit);
     if (this.posers.size > this.maxEntries) {
       const oldest = this.posers.keys().next().value;
-      if (oldest !== undefined) this.posers.delete(oldest);
+      if (oldest !== undefined) {
+        void this.posers.get(oldest)!.then((p) => p?.dispose?.());
+        this.posers.delete(oldest);
+      }
     }
     return hit;
+  }
+
+  /** Quantas poses estão guardadas, somando todas as figuras (diagnóstico). */
+  async poseCount(): Promise<number> {
+    const posers = await Promise.all(this.posers.values());
+    return posers.reduce((n, p) => n + (p?.size ?? 0), 0);
   }
 
   get(figure: string): Promise<AvatarFrames> {

@@ -106,8 +106,18 @@ export class FigureAvatarRenderer implements AvatarRenderer {
   }
 }
 
-/** Até quantas poses por avatar ficam guardadas (cada uma é uma textura pequena). */
-const MAX_POSES = 400;
+/**
+ * Até quantas poses por figura ficam guardadas (cada uma é uma textura de ~30 KB na GPU). Andar
+ * nas 8 direções, parado, piscando e falando cabem com folga; as menos usadas saem (LRU).
+ */
+export const MAX_POSES = 160;
+/** Espera antes de liberar uma textura descartada (pode estar na tela neste quadro). */
+const RELEASE_DELAY_MS = 2000;
+
+/** Libera a textura da GPU um pouco depois (Fase 39: sem isso a memória só crescia). */
+function releaseLater(texture: Texture): void {
+  setTimeout(() => texture.destroy(true), RELEASE_DELAY_MS);
+}
 
 /** Monta cada pose uma vez e guarda a textura (a cena pede a pose a cada quadro). */
 class FigurePoser implements AvatarPoser {
@@ -141,7 +151,12 @@ class FigurePoser implements AvatarPoser {
     }
     const key = poseKey(pose);
     const hit = this.cache.get(key);
-    if (hit) return hit;
+    if (hit) {
+      // Reinsere: a ordem do Map vira "menos usada primeiro".
+      this.cache.delete(key);
+      this.cache.set(key, hit);
+      return hit;
+    }
     const canvas = canvasFor(pose);
     const texture = toTexture(composeFigure(this.parts, this.libs, pose, canvas), canvas);
     // Os pés ficam no mesmo ponto em qualquer quadro (o deitado é só mais largo).
@@ -150,9 +165,24 @@ class FigurePoser implements AvatarPoser {
       y: IMAGER_AVATAR_FEET.y,
     };
     const frame: AvatarFrame = { texture, anchor, source: 'habboassets' };
-    if (this.cache.size >= MAX_POSES) this.cache.delete(this.cache.keys().next().value!);
+    if (this.cache.size >= MAX_POSES) {
+      const oldest = this.cache.keys().next().value!;
+      releaseLater(this.cache.get(oldest)!.texture);
+      this.cache.delete(oldest);
+    }
     this.cache.set(key, frame);
     return frame;
+  }
+
+  /** Poses guardadas (diagnóstico). */
+  get size(): number {
+    return this.cache.size;
+  }
+
+  /** A figura saiu do cache: libera todas as texturas. */
+  dispose(): void {
+    for (const f of this.cache.values()) releaseLater(f.texture);
+    this.cache.clear();
   }
 }
 

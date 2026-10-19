@@ -31,6 +31,20 @@ describe('ChatService', () => {
     ]);
   });
 
+  it('a limpeza do histórico apaga mensagens citadas por respostas que ficam', () => {
+    const { chat, ana, beto } = setup();
+    const first = chat.add('reception', ana, 'pergunta');
+    for (let i = 0; i < CHAT_KEEP_PER_ROOM - 2; i++) chat.add('reception', ana, `msg ${i}`);
+    // A resposta chega no fim; as próximas empurram a pergunta para fora do histórico.
+    const reply = chat.add('reception', beto, 'resposta', undefined, first.id);
+    expect(() => {
+      for (let i = 0; i < 3; i++) chat.add('reception', ana, `depois ${i}`);
+    }).not.toThrow();
+    const kept = chat.recent('reception', CHAT_KEEP_PER_ROOM);
+    expect(kept.some((m) => m.id === first.id)).toBe(false);
+    expect(kept.find((m) => m.id === reply.id)?.replyTo).toBeNull();
+  });
+
   it('separa por sala', () => {
     const { chat, ana } = setup();
     chat.add('reception', ana, 'na recepção');

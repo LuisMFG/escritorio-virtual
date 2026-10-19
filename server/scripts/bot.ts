@@ -29,7 +29,7 @@ import { config } from '../src/config.js';
 import { loadAvatarManifest } from '../src/services/RoomRepository.js';
 
 const [baseName = 'Robô', countArg = '1'] = process.argv.slice(2);
-const count = Math.max(1, Math.min(9, Number(countArg) || 1));
+const count = Math.max(1, Math.min(20, Number(countArg) || 1));
 const endpoint = `http://localhost:${config.port}`;
 const map = parseHeightmap(RECEPTION.heightmap);
 const avatarManifest = loadAvatarManifest();
@@ -59,12 +59,20 @@ function randomTile() {
 const BOT_PASSWORD = 'robo-de-teste';
 
 async function post(path: string, body: unknown) {
-  const res = await fetch(`${endpoint}${path}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  return { res, body: (await res.json()) as SessionResponse & { message?: string } };
+  for (;;) {
+    const res = await fetch(`${endpoint}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    // Limite de entradas por minuto (LOGIN_RATE_LIMIT): espera e tenta de novo.
+    if (res.status === 429) {
+      console.log('[bot] muitas entradas seguidas; esperando 15 s…');
+      await new Promise((r) => setTimeout(r, 15_000));
+      continue;
+    }
+    return { res, body: (await res.json()) as SessionResponse & { message?: string } };
+  }
 }
 
 /** Entra com a conta do robô; se ainda não existe, cria. */
@@ -98,6 +106,8 @@ async function startBot(name: string): Promise<void> {
   console.log(`[bot] ${name} entrou (${room.sessionId})`);
   room.onMessage('error', (e: { message: string }) => console.log(`[bot] ${name}: ${e.message}`));
   room.onMessage('chat.message', () => undefined);
+  // Mensagens que o robô ignora (efeitos, conquistas…).
+  room.onMessage('*', () => undefined);
   room.onMessage('poll.updated', () => undefined);
   room.onMessage('focus.phase', () => undefined);
   room.onMessage('emote.played', () => undefined);
