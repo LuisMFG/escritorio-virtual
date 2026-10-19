@@ -19,8 +19,8 @@ export class FurniDefStore {
     const token = this.token();
     if (!token) return;
     try {
-      for (const d of await furniApi.measured(token))
-        if (!this.defs.has(d.id)) this.defs.set(d.id, d);
+      // As do servidor valem mais (as curadas podem ter passado a ser desenhadas por camadas).
+      for (const d of await furniApi.measured(token)) this.defs.set(d.id, d);
     } catch {
       // Sem rede: os móveis que faltarem são buscados quando aparecerem.
     }

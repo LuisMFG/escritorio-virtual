@@ -26,16 +26,20 @@ function alphaAt(tex: Texture, x: number, y: number): number {
 
 function readPixels(tex: Texture): { w: number; data: Uint8ClampedArray } | null {
   const resource = tex.source.resource as CanvasImageSource | undefined;
-  if (!(resource instanceof HTMLImageElement) && !(resource instanceof HTMLCanvasElement)) {
-    return null;
-  }
+  const drawable =
+    resource instanceof HTMLImageElement ||
+    resource instanceof HTMLCanvasElement ||
+    (typeof ImageBitmap !== 'undefined' && resource instanceof ImageBitmap);
+  if (!drawable) return null;
   try {
     const canvas = document.createElement('canvas');
     canvas.width = tex.width;
     canvas.height = tex.height;
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) return null;
-    ctx.drawImage(resource, 0, 0);
+    // Recorte de uma folha (móveis por camadas): só o pedaço da textura.
+    const f = tex.frame;
+    ctx.drawImage(resource, f.x, f.y, tex.width, tex.height, 0, 0, tex.width, tex.height);
     return { w: tex.width, data: ctx.getImageData(0, 0, tex.width, tex.height).data };
   } catch {
     return null;

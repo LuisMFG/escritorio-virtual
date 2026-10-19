@@ -39,9 +39,17 @@ export interface DecorHost {
   createGhost(defId: string, x: number, y: number, rot: number): FurniView;
 }
 
+/** Móvel selecionado no modo decorar. */
+export interface DecorSelection {
+  id: string;
+  name: string;
+  defId: string;
+  interaction?: string;
+}
+
 export interface DecorListener {
   onPickChange(defId: string | null): void;
-  onSelectionChange(selected: { id: string; name: string; defId: string } | null): void;
+  onSelectionChange(selected: DecorSelection | null): void;
   onError(message: string): void;
 }
 
@@ -324,7 +332,14 @@ export class DecorMode {
     this.selectedId = id;
     const f = id ? this.host.furniView(id) : undefined;
     this.listener.onSelectionChange(
-      f ? { id: f.placed.id, name: f.def.name, defId: f.placed.defId } : null,
+      f
+        ? {
+            id: f.placed.id,
+            name: f.def.name,
+            defId: f.placed.defId,
+            interaction: f.def.interaction,
+          }
+        : null,
     );
     this.redraw();
   }

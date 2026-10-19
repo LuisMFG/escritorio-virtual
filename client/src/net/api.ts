@@ -27,6 +27,7 @@ import {
   type EffectsResponse,
   type FurniConfigResponse,
   type FurniManifestEntry,
+  type TeleportInfo,
   type JiraConnect,
   type JiraShare,
   type JiraStatus,
@@ -242,6 +243,15 @@ export const furniApi = {
     request<FurniConfigResponse>('PUT', '/api/admin/furni-categories', {
       token,
       body: { hidden },
+    }),
+};
+
+export const teleportApi = {
+  list: (token: string) => request<TeleportInfo[]>('GET', '/api/teleports', { token }),
+  link: (token: string, id: string, targetId: string | null) =>
+    request<TeleportInfo[]>('PUT', `/api/teleports/${encodeURIComponent(id)}/link`, {
+      token,
+      body: { targetId },
     }),
 };
 

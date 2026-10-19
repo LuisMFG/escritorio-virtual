@@ -4929,3 +4929,13 @@ button.reply-quote:hover {
   font-size: 26px;
   opacity: 0.6;
 }
+
+.decor-teleport {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding-top: 4px;
+  border-top: 1px solid #3a3f4d;
+}

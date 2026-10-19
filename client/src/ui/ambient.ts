@@ -17,6 +17,8 @@ export class AmbientSound {
   private master: GainNode | null = null;
   private stopCurrent: (() => void) | null = null;
   private ambient: Ambient = 'none';
+  /** Jukebox ligada na sala (Fase 37): toca música no lugar do ambiente. */
+  private jukebox = false;
   private saved: Saved;
 
   constructor() {
@@ -70,6 +72,17 @@ export class AmbientSound {
     this.apply();
   }
 
+  /** Alguma jukebox da sala está ligada? */
+  setJukebox(on: boolean): void {
+    if (on === this.jukebox) return;
+    this.jukebox = on;
+    this.apply();
+  }
+
+  get jukeboxOn(): boolean {
+    return this.jukebox;
+  }
+
   private save(): void {
     try {
       localStorage.setItem(KEY, JSON.stringify(this.saved));
@@ -81,7 +94,7 @@ export class AmbientSound {
   private apply(): void {
     this.stopCurrent?.();
     this.stopCurrent = null;
-    if (!this.saved.on || this.ambient === 'none') return;
+    if (!this.saved.on || (this.ambient === 'none' && !this.jukebox)) return;
     if (!this.ctx) {
       this.ctx = new AudioContext();
       this.master = this.ctx.createGain();
@@ -89,7 +102,9 @@ export class AmbientSound {
     }
     void this.ctx.resume();
     this.master!.gain.value = this.saved.volume * 0.35;
-    this.stopCurrent = GENERATORS[this.ambient](this.ctx, this.master!);
+    this.stopCurrent = this.jukebox
+      ? jukeboxMusic(this.ctx, this.master!)
+      : GENERATORS[this.ambient as Exclude<Ambient, 'none'>](this.ctx, this.master!);
   }
 }
 
@@ -248,3 +263,71 @@ const GENERATORS: Record<Exclude<Ambient, 'none'>, Generator> = {
     };
   },
 };
+
+/** Acordes do loop da jukebox (lo-fi: Dó7M, Lá m7, Ré m7, Sol7), em Hz. */
+const CHORDS = [
+  [261.63, 329.63, 392.0, 493.88],
+  [220.0, 261.63, 329.63, 392.0],
+  [293.66, 349.23, 440.0, 523.25],
+  [196.0, 246.94, 293.66, 349.23],
+];
+
+/**
+ * Música da jukebox, gerada na hora: acordes suaves, baixo, batida e um arpejo, 84 batidas por
+ * minuto (como o resto do som ambiente, sem arquivos de áudio).
+ */
+function jukeboxMusic(ctx: AudioContext, out: AudioNode): () => void {
+  const beat = 60 / 84;
+  const level = gain(ctx, 0.9);
+  level.connect(out);
+  let next = ctx.currentTime + 0.1;
+  let bar = 0;
+  const note = (freq: number, t: number, dur: number, vol: number, type: OscillatorType) => {
+    const o = ctx.createOscillator();
+    o.type = type;
+    o.frequency.value = freq;
+    const env = gain(ctx, 0);
+    env.gain.setValueAtTime(0, t);
+    env.gain.linearRampToValueAtTime(vol, t + 0.03);
+    env.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(env).connect(level);
+    o.start(t);
+    o.stop(t + dur + 0.05);
+  };
+  const hit = (t: number, freq: number, dur: number, vol: number) => {
+    const n = noise(ctx, 'white');
+    const env = gain(ctx, 0);
+    env.gain.setValueAtTime(vol, t);
+    env.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    n.connect(filter(ctx, freq > 1000 ? 'highpass' : 'lowpass', freq))
+      .connect(env)
+      .connect(level);
+    n.start(t);
+    n.stop(t + dur + 0.05);
+  };
+  // Agenda um compasso (4 batidas) por vez, sempre um pouco à frente.
+  const schedule = () => {
+    while (next < ctx.currentTime + 1.5) {
+      const chord = CHORDS[bar % CHORDS.length]!;
+      for (const f of chord) note(f, next, beat * 4, 0.05, 'triangle');
+      note(chord[0]! / 2, next, beat * 1.5, 0.16, 'sine');
+      note(chord[0]! / 2, next + beat * 2, beat * 1.5, 0.14, 'sine');
+      for (let i = 0; i < 4; i++) {
+        const t = next + i * beat;
+        if (i % 2 === 0) note(55, t, 0.25, 0.3, 'sine');
+        else hit(t, 1800, 0.12, 0.12);
+        hit(t + beat / 2, 6000, 0.05, 0.05);
+        note(chord[(i + bar) % 4]! * 2, t + beat / 2, beat * 0.6, 0.03, 'sine');
+      }
+      next += beat * 4;
+      bar++;
+    }
+  };
+  schedule();
+  const timer = window.setInterval(schedule, 500);
+  return () => {
+    clearInterval(timer);
+    level.gain.setTargetAtTime(0, ctx.currentTime, 0.1);
+    window.setTimeout(() => level.disconnect(), 400);
+  };
+}

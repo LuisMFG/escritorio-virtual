@@ -22,6 +22,8 @@ export interface E2EHook {
   /** Que ponto de parede o modo decorar pegaria aqui (diagnóstico). */
   wallAt(x: number, y: number): { x: number; y: number; rot: number; h: number } | null;
   furniZ(id: string): number | null;
+  /** Imagens das camadas que o móvel mostra agora (`null` = imagem estática do imager). */
+  furniFrame(id: string): string | null;
   /** Ponto da página no meio do desenho de um móvel. */
   furni(id: string): Point | null;
   furniList(): { id: string; defId: string; x: number; y: number }[];
@@ -69,6 +71,7 @@ export function exposeForTests(scene: RoomScene, room: OfficeRoomClient): void {
       return scene.pickWall(new PixiPoint(x - r.left, y - r.top));
     },
     furniZ: (id) => room.state.furni.get(id)?.z ?? null,
+    furniFrame: (id) => scene.furniView(id)?.layeredFrame ?? null,
     furni: (id) => {
       const view = scene.furniView(id);
       if (!view) return null;
@@ -100,5 +103,7 @@ export function exposeForTests(scene: RoomScene, room: OfficeRoomClient): void {
         figure: p.figure,
       })),
   };
-  (window as unknown as { __e2e: E2EHook }).__e2e = hook;
+  (window as unknown as { __e2e: E2EHook; __e2eScene: RoomScene }).__e2e = hook;
+  // Diagnóstico no console (só com ?e2e=1).
+  (window as unknown as { __e2eScene: RoomScene }).__e2eScene = scene;
 }

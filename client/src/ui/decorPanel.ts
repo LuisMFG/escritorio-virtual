@@ -8,7 +8,9 @@ import {
   type CatalogItem,
   type FurniCatalog,
   type FurniManifestEntry,
+  type TeleportInfo,
 } from '@office/shared';
+import type { DecorSelection } from '../scene/DecorMode.js';
 import { ThumbQueue } from './thumbQueue.js';
 
 export interface DecorPanelHandlers {
@@ -22,6 +24,9 @@ export interface DecorPanelHandlers {
   prepare(defId: string): Promise<boolean>;
   /** O catálogo completo e as categorias escondidas pelo admin. */
   loadCatalog(): Promise<{ catalog: FurniCatalog; hidden: string[] }>;
+  /** Teleportes de todas as salas e ligar/desligar (Fase 37). */
+  teleports(): Promise<TeleportInfo[]>;
+  linkTeleport(id: string, targetId: string | null): Promise<TeleportInfo[]>;
 }
 
 /** Aba "Escritório": os móveis curados do manifesto (os de sempre). */
@@ -57,7 +62,7 @@ export class DecorPanel {
   private query = '';
   private shown = DECOR_PAGE;
   private picked: string | null = null;
-  private selected: { id: string; name: string; defId: string } | null = null;
+  private selected: DecorSelection | null = null;
   private preparing: string | null = null;
   private catalog: CatalogItem[] = [];
   private hidden = new Set<string>();
@@ -151,7 +156,7 @@ export class DecorPanel {
     }
   }
 
-  setSelected(selected: { id: string; name: string; defId: string } | null): void {
+  setSelected(selected: DecorSelection | null): void {
     this.selected = selected;
     if (!this.picked) this.renderSelected();
   }
@@ -185,6 +190,74 @@ export class DecorPanel {
       this.button('Girar (R)', () => this.on.rotate()),
       this.button('Remover', () => this.on.remove()),
     );
+    if (sel.interaction === 'teleport') this.status.append(this.teleportBox(sel.id));
+  }
+
+  /** Ligar este teleporte a outro (em qualquer sala). */
+  private teleportBox(id: string): HTMLElement {
+    const box = document.createElement('div');
+    box.className = 'decor-teleport';
+    box.append(
+      Object.assign(document.createElement('span'), {
+        className: 'muted',
+        textContent: 'Carregando…',
+      }),
+    );
+    const render = (list: TeleportInfo[]) => {
+      if (this.selected?.id !== id) return;
+      const me = list.find((t) => t.id === id);
+      const label = (t: TeleportInfo) => `${t.roomName} · ${t.name} (${t.x}, ${t.y})`;
+      const target = me?.linkedTo ? list.find((t) => t.id === me.linkedTo) : undefined;
+      const info = Object.assign(document.createElement('span'), {
+        textContent: target ? `🌀 Ligado a: ${label(target)}` : '🌀 Teleporte solto',
+      });
+      const others = list.filter((t) => t.id !== id);
+      const select = document.createElement('select');
+      select.className = 'decor-category';
+      select.setAttribute('aria-label', 'Ligar a');
+      select.append(
+        ...others.map((t) =>
+          Object.assign(document.createElement('option'), {
+            value: t.id,
+            textContent: label(t),
+            selected: t.id === me?.linkedTo,
+          }),
+        ),
+      );
+      const act = (targetId: string | null) => {
+        box.replaceChildren(
+          Object.assign(document.createElement('span'), { className: 'muted', textContent: '…' }),
+        );
+        this.on.linkTeleport(id, targetId).then(render, (err: Error) => {
+          box.replaceChildren(
+            Object.assign(document.createElement('span'), {
+              className: 'decor-error',
+              textContent: err.message,
+            }),
+          );
+        });
+      };
+      const children: HTMLElement[] = [info];
+      if (others.length) {
+        children.push(
+          select,
+          this.button('Ligar', () => act(select.value)),
+        );
+      } else {
+        children.push(
+          Object.assign(document.createElement('span'), {
+            className: 'muted',
+            textContent: 'Coloque outro teleporte (nesta ou em outra sala) para ligar.',
+          }),
+        );
+      }
+      if (target) children.push(this.button('Desligar', () => act(null)));
+      box.replaceChildren(...children);
+    };
+    this.on
+      .teleports()
+      .then(render, () => box.replaceChildren('Não consegui carregar os teleportes.'));
+    return box;
   }
 
   /** Carrega o catálogo completo na primeira vez (o painel funciona sem ele). */

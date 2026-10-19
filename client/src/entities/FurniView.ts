@@ -1,4 +1,9 @@
 import {
+  animationFor,
+  baseClassname,
+  furniSprites,
+  FURNI_FPS,
+  isAnimated,
   footprint,
   furniImageUrl,
   renderDirection,
@@ -13,6 +18,10 @@ import { Container, Graphics, Matrix, Sprite, Texture, type Point } from 'pixi.j
 import type { AssetLoader } from '../assets/AssetLoader.js';
 import { spriteHitTest } from '../assets/hitTest.js';
 import type { PlaceholderFactory } from '../assets/PlaceholderFactory.js';
+import type { FurniVisualLibrary, LoadedFurniVisual } from '../assets/FurniVisualLibrary.js';
+
+/** Estado em que o dado está rolando (255 no estado da sala; animação -1 do Habbo). */
+export const DICE_ROLLING = 255;
 
 /** Sprite de um móvel posicionado. O ponto de origem é o vértice de baixo do footprint. */
 export class FurniView extends Container {
@@ -26,12 +35,26 @@ export class FurniView extends Container {
   /** Tabuleiro do jogo da velha deitado no tampo (mesa de jogos). */
   private gameBoard: Graphics | null = null;
   private game: { board: string; line: number[] } | null = null;
+  /** Desenho por camadas do Habbo (Fase 37), quando o móvel tem e carregou. */
+  private layered: {
+    lib: LoadedFurniVisual;
+    layer: Container;
+    sprites: Sprite[];
+    clickable: boolean[];
+  } | null = null;
+  private layeredFailed = false;
+  private animKey = '';
+  private animStart = 0;
+  private lastTick = -1;
+  /** Imagens das camadas no quadro atual (`null` = imagem estática); para os testes. */
+  layeredFrame: string | null = null;
 
   constructor(
     public placed: PlacedFurni,
     readonly def: FurniManifestEntry,
     private readonly loader: AssetLoader,
     private readonly placeholders: PlaceholderFactory,
+    private readonly visuals?: FurniVisualLibrary,
   ) {
     super();
     this.label = `furni:${placed.id}`;
@@ -52,6 +75,7 @@ export class FurniView extends Container {
 
   /** Carrega a textura da direção e do estado atuais (só se mudaram). */
   async load(): Promise<void> {
+    if (await this.loadLayered()) return;
     const { def, placed } = this;
     const dir = renderDirection(def, placed.rot);
     const state = this.state;
@@ -87,6 +111,95 @@ export class FurniView extends Container {
     this.loadedDir = dir;
     this.placeSurface();
     this.drawGameBoard();
+  }
+
+  /** Usa o desenho por camadas, se o móvel tiver um (carrega na primeira vez). */
+  private async loadLayered(): Promise<boolean> {
+    const { def } = this;
+    if (!def.animated || !def.revision || def.wall || !this.visuals || this.layeredFailed) {
+      return false;
+    }
+    if (!this.layered) {
+      const lib = await this.visuals.load(baseClassname(def.sprite ?? def.id), def.revision);
+      if (this.destroyed) return true;
+      if (!lib) {
+        this.layeredFailed = true;
+        return false;
+      }
+      if (!this.layered) {
+        const layer = new Container();
+        this.addChildAt(layer, 0);
+        this.layered = { lib, layer, sprites: [], clickable: [] };
+        this.sprite.visible = false;
+      }
+    }
+    this.drawLayered(true);
+    return true;
+  }
+
+  /** Cor da variação: `classname*N` → N; sem ela, a do manifesto ou a padrão (0). */
+  private get colorIndex(): number {
+    const m = /\*(\d+)$/.exec(this.def.id);
+    return m ? Number(m[1]) : (this.def.color ?? 0);
+  }
+
+  /** Animação do estado atual (o dado rolando usa a -1). */
+  private get animation(): number {
+    const v = this.layered!.lib.visual;
+    const s = this.placed.state ?? 0;
+    if (s === DICE_ROLLING && v.animations['-1']) return -1;
+    return animationFor(v, s);
+  }
+
+  /** Avança a animação (chamado a cada quadro pela cena). */
+  animate(): void {
+    if (this.layered) this.drawLayered(false);
+  }
+
+  private drawLayered(force: boolean): void {
+    const l = this.layered!;
+    const v = l.lib.visual;
+    const dir = renderDirection(this.def, this.placed.rot);
+    const anim = this.animation;
+    const color = this.colorIndex;
+    const key = `${dir}:${anim}:${color}`;
+    const now = performance.now();
+    if (key !== this.animKey) {
+      this.animKey = key;
+      this.animStart = now;
+      force = true;
+    }
+    if (!force && !isAnimated(v, anim)) return;
+    const tick = Math.floor(((now - this.animStart) * FURNI_FPS) / 1000);
+    if (!force && tick === this.lastTick) return;
+    this.lastTick = tick;
+    // Origem do Habbo: vértice de cima do tile do móvel; o container fica no vértice da frente.
+    const fp = this.footprint;
+    const o = tileToScreen(this.placed.x, this.placed.y);
+    const c = tileToScreen(fp.maxX, fp.maxY);
+    const ox = o.sx - c.sx;
+    const oy = o.sy - c.sy - TILE_H;
+    const list = furniSprites(v, dir, anim, tick, color);
+    this.layeredFrame = list.map((s) => s.image).join(',');
+    while (l.sprites.length < list.length) {
+      const sp = new Sprite();
+      l.layer.addChild(sp);
+      l.sprites.push(sp);
+    }
+    l.clickable.length = list.length;
+    l.sprites.forEach((sp, i) => {
+      const s = list[i];
+      sp.visible = Boolean(s);
+      if (!s) return;
+      const tex = l.lib.textures.get(s.image)!;
+      sp.texture = tex;
+      sp.scale.x = s.flip ? -1 : 1;
+      sp.position.set(ox + s.x + (s.flip ? tex.width : 0), oy + s.y);
+      sp.alpha = s.alpha / 255;
+      sp.blendMode = s.ink === 33 ? 'add' : 'normal';
+      sp.tint = s.tint ?? 0xffffff;
+      l.clickable[i] = !s.ignoreMouse;
+    });
   }
 
   /** Mostra a partida no tampo da mesa (`null` tira). */
@@ -212,7 +325,7 @@ export class FurniView extends Container {
 
   /** Ponto (na cena) de onde sai a luz: perto do topo do desenho. */
   get glowPoint(): { x: number; y: number } {
-    const h = this.sprite.texture.height || 64;
+    const h = (this.layered ? this.layered.layer.height : this.sprite.texture.height) || 64;
     return { x: this.x, y: this.y - h * 0.7 };
   }
 
@@ -225,7 +338,12 @@ export class FurniView extends Container {
 
   /** O ponto de tela cai num pixel visível do desenho deste móvel? */
   hitTest(global: Point): boolean {
-    return this.visible && spriteHitTest(this.sprite, global);
+    if (!this.visible) return false;
+    if (this.layered) {
+      const l = this.layered;
+      return l.sprites.some((sp, i) => l.clickable[i] && spriteHitTest(sp, global));
+    }
+    return spriteHitTest(this.sprite, global);
   }
 
   get footprint() {

@@ -41,6 +41,7 @@ import {
   api,
   ApiRequestError,
   furniApi,
+  teleportApi,
   jiraApi,
   looksApi,
 } from './net/api.js';
@@ -51,6 +52,7 @@ import { openAvatarEditor } from './ui/avatarEditor.js';
 import { ChatPanel } from './ui/chat.js';
 import { DecorPanel } from './ui/decorPanel.js';
 import { FurniDefStore } from './assets/FurniDefStore.js';
+import { FurniVisualLibrary } from './assets/FurniVisualLibrary.js';
 import { mountHud } from './ui/hud.js';
 import { IdleWatcher } from './ui/idle.js';
 import { showClaim, showLogin } from './ui/login.js';
@@ -168,6 +170,7 @@ async function start(): Promise<void> {
     furniDefs: furniStore.defs,
     requestDef: (id) => furniStore.ensure(id),
     effects: new EffectLibrary(!OFFLINE_ASSETS),
+    furniVisuals: new FurniVisualLibrary(!OFFLINE_ASSETS),
   };
 
   /** Prévia do editor quando o imager falha: o avatar provisório em camadas, como imagem. */
@@ -426,6 +429,9 @@ async function start(): Promise<void> {
       },
       close: () => setDecorating(false),
       prepare: async (defId) => Boolean(await furniStore.ensure(defId)),
+      teleports: () => (session ? teleportApi.list(session.token) : Promise.resolve([])),
+      linkTeleport: (id, targetId) =>
+        session ? teleportApi.link(session.token, id, targetId) : Promise.resolve([]),
       loadCatalog: async () => {
         const [catalog, config] = await Promise.all([
           furniStore.catalog(),
@@ -809,12 +815,21 @@ async function start(): Promise<void> {
         refreshPeople();
       }),
     );
+    // Jukebox ligada na sala (Fase 37): a música toca para quem está com o som ligado.
+    const refreshJukebox = () =>
+      ambient.setJukebox(
+        [...room.state.furni.values()].some(
+          (f) => f.state > 0 && deps.furniDefs.get(f.defId)?.interaction === 'jukebox',
+        ),
+      );
+    ambient.setJukebox(false);
     wbStrokes.clear();
     jiraFurni.clear();
     whiteboard?.close();
     keep(
       cb.onAdd('furni', (f, id) => {
         s.setFurni(id, placed(f));
+        refreshJukebox();
         const interaction = deps.furniDefs.get(f.defId)?.interaction;
         if (interaction === 'whiteboard') void loadWhiteboard(id);
         if (interaction === 'jira') {
@@ -822,12 +837,18 @@ async function start(): Promise<void> {
           if (jiraCanvas) s.setWhiteboardThumb(id, jiraCanvas);
           else void refreshJiraThumbs();
         }
-        keep(cb.onChange(f, () => s.setFurni(id, placed(f))));
+        keep(
+          cb.onChange(f, () => {
+            s.setFurni(id, placed(f));
+            refreshJukebox();
+          }),
+        );
       }),
     );
     keep(
       cb.onRemove('furni', (_f, id) => {
         s.removeFurni(id);
+        refreshJukebox();
         jiraFurni.delete(id);
       }),
     );

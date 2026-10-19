@@ -25,6 +25,7 @@ import {
 import { Container, Graphics, Text, type Application, type Point } from 'pixi.js';
 import type { AssetLoader } from '../assets/AssetLoader.js';
 import type { EffectLibrary } from '../assets/EffectLibrary.js';
+import type { FurniVisualLibrary } from '../assets/FurniVisualLibrary.js';
 import type { AvatarTextureCache } from '../assets/AvatarTextureCache.js';
 import type { PlaceholderFactory } from '../assets/PlaceholderFactory.js';
 import { DEBUG } from '../config.js';
@@ -49,6 +50,8 @@ export interface SceneDeps {
   furniDefs: ReadonlyMap<string, FurniManifestEntry>;
   /** Efeitos do Habbo (Fase 34). */
   effects?: EffectLibrary;
+  /** Móveis por camadas e animados (Fase 37). */
+  furniVisuals?: FurniVisualLibrary;
   /** Busca a definição de um móvel do catálogo completo que ainda não está em `furniDefs`. */
   requestDef?: (defId: string) => Promise<FurniManifestEntry | null>;
 }
@@ -213,7 +216,13 @@ export class RoomScene implements DecorHost {
         return;
       }
       this.waitingDef.delete(id);
-      const view = new FurniView(placed, def, this.deps.loader, this.deps.placeholders);
+      const view = new FurniView(
+        placed,
+        def,
+        this.deps.loader,
+        this.deps.placeholders,
+        this.deps.furniVisuals,
+      );
       this.furni.set(id, view);
       (def.wall ? this.wallItems : this.objects).addChild(view);
       if (this.games.has(id)) view.setGame(this.games.get(id)!);
@@ -287,6 +296,7 @@ export class RoomScene implements DecorHost {
       def,
       this.deps.loader,
       this.deps.placeholders,
+      this.deps.furniVisuals,
     );
     ghost.alpha = 0.65;
     ghost.zIndex = GHOST_Z;
@@ -460,6 +470,7 @@ export class RoomScene implements DecorHost {
   // ---------- Ciclo ----------
 
   update(dtMs: number): void {
+    for (const f of this.furni.values()) f.animate();
     for (const a of this.avatars.values()) a.update(dtMs);
     for (const p of this.pets.values()) p.update(dtMs);
     for (const b of [...this.bubbles.children] as ChatBubble[]) {
