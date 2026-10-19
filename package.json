@@ -29,7 +29,8 @@
     "vscode:package": "npm run package -w vscode-extension",
     "e2e": "npm run build && playwright test -c e2e/playwright.config.ts",
     "assets:figure": "npm run assets:figure -w server --",
-    "assets:figure-check": "npm run assets:figure-check -w server --"
+    "assets:figure-check": "npm run assets:figure-check -w server --",
+    "assets:furni": "npm run assets:furni -w server --"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

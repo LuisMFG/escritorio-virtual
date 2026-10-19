@@ -9,7 +9,8 @@
     "bot": "tsx scripts/bot.ts",
     "assets:sync": "tsx scripts/assets-sync.ts",
     "assets:figure": "tsx scripts/figure-sync.ts",
-    "assets:figure-check": "tsx scripts/figure-check.ts"
+    "assets:figure-check": "tsx scripts/figure-check.ts",
+    "assets:furni": "tsx scripts/furni-sync.ts"
   },
   "dependencies": {
     "@colyseus/core": "0.18.19",
