@@ -11,6 +11,8 @@ import type { UploadDeps } from './uploads.js';
 import type { JiraDeps } from './jira.js';
 import type { EffectDeps } from './effects.js';
 import type { LookDeps } from './looks.js';
+import type { FurniDeps } from './furni.js';
+import type { CatalogItem, FurniManifestEntry } from '@office/shared';
 import { openDatabase } from '../db/client.js';
 import { createServices } from '../services/index.js';
 import type { MeetingDeps } from './meetings.js';
@@ -27,10 +29,16 @@ export type TestDeps = MeetingDeps &
   UploadDeps &
   JiraDeps &
   EffectDeps &
-  LookDeps;
+  LookDeps &
+  FurniDeps;
 
 /** Dependências das rotas sobre um banco em memória (testes). */
-export function makeDeps(): TestDeps {
+export function makeDeps(
+  opts: {
+    measureFurni?: (item: CatalogItem, id: string) => Promise<FurniManifestEntry>;
+    catalogFile?: string;
+  } = {},
+): TestDeps {
   const svc = createServices(
     openDatabase(':memory:'),
     { inviteCode: 'segredo' },
@@ -40,6 +48,7 @@ export function makeDeps(): TestDeps {
       keep: 7,
     },
     mkdtempSync(join(tmpdir(), 'escritorio-teste-uploads-')),
+    opts,
   );
   return {
     inviteCode: () => svc.settings.inviteCode(),
@@ -53,6 +62,7 @@ export function makeDeps(): TestDeps {
     moderation: svc.moderation,
     furni: svc.furni,
     furniDefs: svc.furniDefs,
+    furniCatalog: svc.furniCatalog,
     meetings: svc.meetings,
     pets: svc.pets,
     achievements: svc.achievements,

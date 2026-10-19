@@ -9,6 +9,8 @@ import { createServices, setServices } from './services/index.js';
 import { MeetingScheduler } from './services/MeetingScheduler.js';
 import { BackupScheduler } from './services/BackupService.js';
 import { loadSecretKey } from './util/secretBox.js';
+import { HabboAssetsClient } from './assets/HabboAssetsClient.js';
+import { imagerMeasure } from './services/FurniDefService.js';
 
 const services = createServices(
   openDatabase(config.databasePath),
@@ -16,7 +18,10 @@ const services = createServices(
   config.spotify,
   { dir: config.backupDir, keep: config.backupKeep },
   config.uploadDir,
-  { secretKey: loadSecretKey(config.secretKey, config.secretKeyFile) },
+  {
+    secretKey: loadSecretKey(config.secretKey, config.secretKeyFile),
+    measureFurni: imagerMeasure(new HabboAssetsClient(), config.assetCacheDir),
+  },
 );
 if (config.spotify) console.log('[spotify] integração ligada');
 setServices(services);

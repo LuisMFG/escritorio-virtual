@@ -1,4 +1,5 @@
-import type { AvatarManifest, FurniManifestEntry } from '@office/shared';
+import type { AvatarManifest, CatalogItem, FurniManifestEntry } from '@office/shared';
+import { FurniDefService } from './FurniDefService.js';
 import type { Db } from '../db/client.js';
 import { ChatService } from './ChatService.js';
 import { FurniService } from './FurniService.js';
@@ -82,6 +83,8 @@ export interface Services {
   audit: AuditService;
   moderation: EventEmitter<ModerationEvents>;
   furniDefs: ReadonlyMap<string, FurniManifestEntry>;
+  /** Catálogo completo: mede e guarda móveis novos na primeira vez (Fase 36). */
+  furniCatalog: FurniDefService;
   avatarManifest: AvatarManifest;
 }
 
@@ -91,7 +94,13 @@ export function createServices(
   spotifyConfig?: SpotifyConfig,
   backup = { dir: join(tmpdir(), 'escritorio-backups'), keep: 7 },
   uploadDir = join(tmpdir(), 'escritorio-uploads'),
-  opts: { secretKey?: Buffer; http?: typeof fetch } = {},
+  opts: {
+    secretKey?: Buffer;
+    http?: typeof fetch;
+    /** Mede um móvel do catálogo (no servidor: pelo imager). */
+    measureFurni?: (item: CatalogItem, id: string) => Promise<FurniManifestEntry>;
+    catalogFile?: string;
+  } = {},
 ): Services {
   const users = new UserService(db);
   users.seedCargos();
@@ -118,6 +127,12 @@ export function createServices(
   pets.events.on('changed', (userId, pet) => {
     if (pet) achievements.unlock(userId, 'pet_owner');
   });
+  const furniCatalog = new FurniDefService(
+    db,
+    loadFurniDefs(),
+    opts.measureFurni ?? (() => Promise.reject(new Error('Medição de móveis não configurada.'))),
+    opts.catalogFile,
+  );
   return {
     db,
     users,
@@ -150,7 +165,8 @@ export function createServices(
     settings,
     audit: new AuditService(db),
     moderation,
-    furniDefs: loadFurniDefs(),
+    furniDefs: furniCatalog.defs,
+    furniCatalog,
     avatarManifest: loadAvatarManifest(),
   };
 }

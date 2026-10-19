@@ -13,6 +13,8 @@ export interface FurniDef {
   canSit: boolean;
   /** Camas e afins: deita (Fase 33). */
   canLay?: boolean;
+  /** Vai na parede (quadros, janelas…): não ocupa o piso (Fase 36). */
+  wall?: boolean;
   /** Tapetes e afins: dá para andar por cima. */
   canWalk: boolean;
   sitHeight: number;

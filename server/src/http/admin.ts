@@ -72,6 +72,7 @@ export function overview(caller: Caller, deps: AdminDeps): Result<AdminOverview>
     inviteCode: deps.settings.inviteCode(),
     jiraSite: deps.settings.jiraSite(),
     jiraSiteLocked: deps.settings.jiraSiteLocked,
+    hiddenFurniCategories: deps.settings.hiddenCategories(),
     rooms: deps.rooms.list(),
     cargos: t.body.cargos,
     users: t.body.members.map((m) => ({

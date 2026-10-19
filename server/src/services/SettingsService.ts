@@ -1,3 +1,4 @@
+import { CATALOG_CATEGORY_IDS, DEFAULT_HIDDEN_CATEGORIES } from '@office/shared';
 import { eq } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import { settings } from '../db/schema.js';
@@ -41,5 +42,24 @@ export class SettingsService {
 
   setJiraSite(site: string | null): void {
     this.set('jira_site', site ?? '');
+  }
+
+  /** Categorias do catálogo de móveis escondidas (festa e jogos, por padrão). */
+  hiddenCategories(): string[] {
+    const raw = this.get('hidden_furni_categories');
+    if (raw === undefined) return [...DEFAULT_HIDDEN_CATEGORIES];
+    try {
+      const list = JSON.parse(raw) as unknown;
+      return Array.isArray(list) ? list.filter((c) => CATALOG_CATEGORY_IDS.includes(c)) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  setHiddenCategories(list: string[]): void {
+    this.set(
+      'hidden_furni_categories',
+      JSON.stringify([...new Set(list.filter((c) => CATALOG_CATEGORY_IDS.includes(c)))]),
+    );
   }
 }

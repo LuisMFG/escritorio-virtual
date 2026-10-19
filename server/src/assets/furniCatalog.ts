@@ -15,6 +15,8 @@ export interface FurniCuration {
   canSit?: boolean;
   /** Camas e afins: deita (Fase 33). */
   canLay?: boolean;
+  /** Móvel de parede (Fase 36). */
+  wall?: boolean;
   canWalk?: boolean;
   sitHeight?: number;
   /**
@@ -474,6 +476,7 @@ export function buildLocalEntry(cur: FurniCuration): FurniManifestEntry {
     height: cur.height,
     canSit: cur.canSit ?? false,
     canLay: cur.canLay ?? false,
+    wall: cur.wall ?? false,
     canWalk: cur.canWalk ?? false,
     sitHeight: cur.sitHeight ?? 0,
     directions: cur.directions ?? [0],
@@ -510,6 +513,7 @@ export function buildFurniEntry(
       height: cur.height,
       canSit: cur.canSit ?? false,
       canLay: cur.canLay ?? false,
+      wall: cur.wall ?? false,
       canWalk: cur.canWalk ?? false,
       sitHeight: cur.sitHeight ?? 0,
       directions: info.directions,

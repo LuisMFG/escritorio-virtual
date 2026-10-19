@@ -401,6 +401,13 @@ export const spotifyLinks = sqliteTable('spotify_links', {
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 });
 
+/** Móveis do catálogo completo já medidos (Fase 36): a definição pronta, em JSON. */
+export const furniDefs = sqliteTable('furni_defs', {
+  id: text('id').primaryKey(),
+  json: text('json').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+});
+
 /** Looks salvos de cada pessoa (Fase 35): até 5 visuais para trocar com um clique. */
 export const userLooks = sqliteTable(
   'user_looks',

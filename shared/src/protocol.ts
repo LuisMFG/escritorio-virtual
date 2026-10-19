@@ -28,6 +28,8 @@ export const ClientMessage = {
   FurniMove: 'furni.move',
   /** Modo decorar: `{ furniId }`. */
   FurniRemove: 'furni.remove',
+  /** Modo decorar: outra cor do mesmo móvel `{ furniId, defId }`. */
+  FurniColor: 'furni.color',
   /** Clique num móvel fora do modo decorar (sentar): `{ furniId }`. */
   Interact: 'interact',
   /** `{ status }`: Disponível / Ocupado / Ausente. */
@@ -137,6 +139,7 @@ export const ErrorCode = {
   NotFound: 'NOT_FOUND',
   AccountDisabled: 'ACCOUNT_DISABLED',
   DecorLocked: 'DECOR_LOCKED',
+  Unavailable: 'UNAVAILABLE',
 } as const;
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];
 
@@ -159,6 +162,7 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
   NOT_FOUND: 'Não encontrado.',
   ACCOUNT_DISABLED: 'Esta conta foi desativada por um administrador.',
   DECOR_LOCKED: 'A decoração desta sala está travada por um administrador.',
+  UNAVAILABLE: 'Serviço indisponível agora. Tente de novo.',
 };
 
 export const NAME_MIN = 2;
@@ -228,13 +232,27 @@ export type MoveMessage = z.infer<typeof moveSchema>;
 const furniId = z.string().min(1).max(40);
 const rotation = z.union([z.literal(0), z.literal(2), z.literal(4), z.literal(6)]);
 
+/** Itens de parede: altura acima do piso (unidades de altura). */
+const wallHeight = z.number().min(0).max(4).optional();
+const defId = z.string().min(1).max(80);
+
 export const furniPlaceSchema = z.object({
-  defId: z.string().min(1).max(80),
+  defId,
   x: tileCoord,
   y: tileCoord,
   rot: rotation,
+  z: wallHeight,
 });
-export const furniMoveSchema = z.object({ furniId, x: tileCoord, y: tileCoord, rot: rotation });
+export const furniMoveSchema = z.object({
+  furniId,
+  x: tileCoord,
+  y: tileCoord,
+  rot: rotation,
+  z: wallHeight,
+});
+/** Trocar a cor de um móvel (outra variação do mesmo móvel do Habbo). */
+export const furniColorSchema = z.object({ furniId, defId });
+export type FurniColorMessage = z.infer<typeof furniColorSchema>;
 export const furniRefSchema = z.object({ furniId });
 export type FurniPlaceMessage = z.infer<typeof furniPlaceSchema>;
 export type FurniMoveMessage = z.infer<typeof furniMoveSchema>;

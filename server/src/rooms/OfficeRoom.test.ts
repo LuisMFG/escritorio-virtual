@@ -17,6 +17,9 @@ import {
   type RoomTransferMessage,
   type ErrorMessage,
   type RoomLayoutMessage,
+  type FurniManifestEntry,
+  hasWall,
+  parseHeightmap,
 } from '@office/shared';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import type { Config } from '../config.js';
@@ -304,6 +307,52 @@ describe('OfficeRoom', () => {
       a.send(ClientMessage.FurniPlace, { defId: 'plant_yukka', x: 11, y: 9, rot: 3 });
       await wait(200);
       expect(a.state.furni.size).toBe(before);
+    });
+
+    it('catálogo completo: parede, troca de cor e categorias escondidas', async () => {
+      const defs = svc.furniDefs as Map<string, FurniManifestEntry>;
+      const base = defs.get('plant_yukka')!;
+      // Móveis "já medidos" (a medição de verdade usa o imager).
+      defs.set('quadro_t', { ...base, id: 'quadro_t', wall: true, height: 0, directions: [2, 4] });
+      defs.set('quadro_t*2', {
+        ...base,
+        id: 'quadro_t*2',
+        wall: true,
+        height: 0,
+        directions: [2, 4],
+      });
+      defs.set('vaso_t*3', { ...base, id: 'vaso_t*3' });
+      const a = await join(newUser('Ana').token);
+      const ctx = { map: parseHeightmap(RECEPTION.heightmap), doors: RECEPTION.doors };
+      let spot = { x: 0, y: 0 };
+      for (let x = 1; x < 20 && !spot.x; x++) if (hasWall(ctx, x, 1, 2)) spot = { x, y: 1 };
+      expect(spot.x).toBeGreaterThan(0);
+
+      a.send(ClientMessage.FurniPlace, { defId: 'quadro_t', ...spot, rot: 0, z: 1 });
+      const err = (await a.waitForMessage(ServerMessage.Error)) as ErrorMessage;
+      expect(err.message).toBe('Isso vai na parede.');
+      a.send(ClientMessage.FurniPlace, { defId: 'quadro_t', ...spot, rot: 2, z: 1.5 });
+      await waitFor(() => [...a.state.furni.values()].some((f) => f.defId === 'quadro_t'));
+      const pic = [...a.state.furni.values()].find((f) => f.defId === 'quadro_t')!;
+      expect(pic.z).toBe(1.5);
+
+      // Outra cor do mesmo móvel: troca no lugar; de outro móvel, não.
+      a.send(ClientMessage.FurniColor, { furniId: pic.id, defId: 'vaso_t*3' });
+      expect(((await a.waitForMessage(ServerMessage.Error)) as ErrorMessage).message).toMatch(
+        /não é desse móvel/,
+      );
+      a.send(ClientMessage.FurniColor, { furniId: pic.id, defId: 'quadro_t*2' });
+      await waitFor(() => a.state.furni.get(pic.id)?.defId === 'quadro_t*2');
+      expect(svc.furni.list(RECEPTION.id).find((f) => f.id === pic.id)?.defId).toBe('quadro_t*2');
+
+      // Categoria escondida pelo admin: não coloca (os curados continuam liberados).
+      svc.settings.setHiddenCategories(['plant']);
+      a.send(ClientMessage.FurniPlace, { defId: 'plant_yukka', x: 11, y: 9, rot: 0 });
+      await waitFor(() => Boolean(furniAt(a, 11, 9)));
+      svc.settings.setHiddenCategories(['games']);
+      a.send(ClientMessage.FurniRemove, { furniId: pic.id });
+      a.send(ClientMessage.FurniRemove, { furniId: furniAt(a, 11, 9)!.id });
+      await wait(200);
     });
 
     it('a sala recriada carrega os móveis do banco', async () => {

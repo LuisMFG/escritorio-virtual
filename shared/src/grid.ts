@@ -82,7 +82,8 @@ export class RoomGrid implements PathGrid {
     }
     for (const f of furni) {
       const def = defs.get(f.defId);
-      if (!def) continue;
+      // Itens de parede não ocupam o piso.
+      if (!def || def.wall) continue;
       const fp = footprint(def, f.x, f.y, f.rot);
       for (let y = fp.minY; y <= fp.maxY; y++) {
         for (let x = fp.minX; x <= fp.maxX; x++) {

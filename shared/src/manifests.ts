@@ -15,6 +15,8 @@ export const furniManifestEntrySchema = z.object({
   canSit: z.boolean().default(false),
   /** Camas, sacos de dormir: deita (a altura vem de `sitHeight`). */
   canLay: z.boolean().default(false),
+  /** Vai na parede (Fase 36): posicionado num ponto da parede, não num tile. */
+  wall: z.boolean().default(false),
   canWalk: z.boolean().default(false),
   sitHeight: z.number().min(0).max(10).default(0),
   directions: z.array(direction).min(1),

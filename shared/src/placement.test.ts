@@ -5,7 +5,9 @@ import { parseHeightmap } from './grid.js';
 import { parseFurniManifest } from './manifests.js';
 import {
   canPlace,
+  hasWall,
   MAX_FURNI_PER_ROOM,
+  WALL_HEIGHT,
   nearestSeatTile,
   type PlacementContext,
 } from './placement.js';
@@ -164,4 +166,47 @@ describe('salas iniciais', () => {
       }
     },
   );
+});
+
+describe('itens de parede (Fase 36)', () => {
+  const wallDefs = new Map<string, FurniDef>([
+    ...defs,
+    ['quadro', def({ id: 'quadro', height: 0, wall: true, directions: [2, 4] })],
+  ]);
+  const wctx = (furni: PlacedFurni[] = []) => ctx(furni, { defs: wallDefs });
+
+  it('hasWall: parede onde o vizinho de trás não existe, nunca na abertura da porta', () => {
+    const c = wctx();
+    expect(hasWall(c, 3, 0, 2)).toBe(true); // fundo (y-1 fora)
+    expect(hasWall(c, 3, 1, 2)).toBe(false);
+    expect(hasWall(c, 1, 0, 4)).toBe(true); // lateral (x-1 = 'x')
+    expect(hasWall(c, 1, 2, 4)).toBe(false); // ao lado da porta: é a abertura
+    expect(hasWall(c, 0, 2, 4)).toBe(false); // a porta não tem parede
+  });
+
+  it('vai só na parede, com altura dentro dela, e não ocupa o piso', () => {
+    expect(canPlace(wctx(), { defId: 'quadro', x: 3, y: 0, rot: 2, z: 1.5 })).toEqual({
+      ok: true,
+      z: 1.5,
+    });
+    expect(canPlace(wctx(), { defId: 'quadro', x: 3, y: 1, rot: 2, z: 1 }).ok).toBe(false);
+    expect(canPlace(wctx(), { defId: 'quadro', x: 3, y: 0, rot: 0, z: 1 }).ok).toBe(false);
+    expect(canPlace(wctx(), { defId: 'quadro', x: 3, y: 0, rot: 2, z: WALL_HEIGHT + 1 }).ok).toBe(
+      false,
+    );
+    // Altura absoluta = piso + altura na parede (degrau de altura 1 em (5,4)).
+    const step = ctx([], {
+      defs: wallDefs,
+      map: parseHeightmap(['x00011', 'x00011']),
+    });
+    expect(canPlace(step, { defId: 'quadro', x: 4, y: 0, rot: 2, z: 1 })).toEqual({
+      ok: true,
+      z: 2,
+    });
+    // Um bloco no mesmo tile não impede o quadro, e o quadro não impede o bloco.
+    const withBlock = wctx([f('b', 'bloco', 3, 0)]);
+    expect(canPlace(withBlock, { defId: 'quadro', x: 3, y: 0, rot: 2, z: 1 }).ok).toBe(true);
+    const withPicture = wctx([{ ...f('q', 'quadro', 3, 0, 2), z: 1 }]);
+    expect(canPlace(withPicture, { defId: 'bloco', x: 3, y: 0, rot: 0 }).ok).toBe(true);
+  });
 });

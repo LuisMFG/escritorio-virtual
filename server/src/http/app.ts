@@ -22,6 +22,7 @@ import * as uploadRoutes from './uploads.js';
 import * as jiraRoutes from './jira.js';
 import * as effectRoutes from './effects.js';
 import * as lookRoutes from './looks.js';
+import * as furniRoutes from './furni.js';
 import { UPLOAD_MAX_BYTES } from '@office/shared';
 import {
   changePassword,
@@ -78,7 +79,8 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
     uploadRoutes.UploadDeps &
     jiraRoutes.JiraDeps &
     effectRoutes.EffectDeps &
-    lookRoutes.LookDeps = {
+    lookRoutes.LookDeps &
+    furniRoutes.FurniDeps = {
     inviteCode: () => svc.settings.inviteCode(),
     adminUsernames: cfg.adminUsernames,
     avatarManifest: svc.avatarManifest,
@@ -90,6 +92,7 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
     moderation: svc.moderation,
     furni: svc.furni,
     furniDefs: svc.furniDefs,
+    furniCatalog: svc.furniCatalog,
     meetings: svc.meetings,
     pets: svc.pets,
     achievements: svc.achievements,
@@ -438,6 +441,35 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
   app.put(
     '/api/admin/jira',
     withCaller((c, req, res) => send(res, admin.setJiraSite(c, req.body, auth))),
+  );
+
+  // Catálogo completo de móveis (Fase 36): definições medidas na primeira vez que alguém usa.
+  // Medir custa ~4 imagens no imager: 20 móveis novos por minuto por pessoa.
+  const furniLimiter = new KeyedRateLimiter(20, 20 / 60);
+  app.get(
+    '/api/furni/config',
+    withCaller((_c, _req, res) => send(res, furniRoutes.furniConfig(auth))),
+  );
+  app.get(
+    '/api/furni/defs',
+    withCaller((_c, _req, res) => send(res, furniRoutes.measuredDefs(auth))),
+  );
+  app.get(
+    '/api/furni/defs/:id',
+    withCaller(async (c, req, res) => {
+      const defId = String(req.params.id).slice(0, 80);
+      if (!svc.furniDefs.has(defId) && !furniLimiter.tryTake(c.user.id)) {
+        return void res.status(429).json({
+          error: 'RATE_LIMIT',
+          message: 'Muitos móveis novos de uma vez. Aguarde um pouco.',
+        });
+      }
+      send(res, await furniRoutes.furniDef(defId, auth));
+    }),
+  );
+  app.put(
+    '/api/admin/furni-categories',
+    withCaller((c, req, res) => send(res, furniRoutes.setHiddenCategories(c, req.body, auth))),
   );
 
   // Efeitos (Fase 34): os liberados e o que a pessoa usa.

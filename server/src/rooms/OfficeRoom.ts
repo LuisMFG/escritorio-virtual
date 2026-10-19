@@ -81,6 +81,9 @@ import {
   type EmoteRequest,
   type ErrorMessage,
   type FurniMoveMessage,
+  type FurniColorMessage,
+  furniColorSchema,
+  baseClassname,
   type FurniPlaceMessage,
   type PlacedFurni,
   type PlacementRequest,
@@ -173,6 +176,9 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     ),
     [ClientMessage.FurniMove]: validate(furniMoveSchema, (client, msg) =>
       this.handleFurniMove(client as OfficeClient, msg),
+    ),
+    [ClientMessage.FurniColor]: validate(furniColorSchema, (client, msg) =>
+      this.handleColor(client as OfficeClient, msg),
     ),
     [ClientMessage.FurniRemove]: validate(furniRefSchema, (client, msg) =>
       this.handleRemove(client as OfficeClient, msg.furniId),
@@ -1092,8 +1098,23 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
 
   // ---------- Decorar ----------
 
-  private handlePlace(client: OfficeClient, msg: FurniPlaceMessage): void {
+  private async handlePlace(client: OfficeClient, msg: FurniPlaceMessage): Promise<void> {
     if (!client.auth || !this.canEdit(client)) return;
+    const catalog = services().furniCatalog;
+    const blocked = catalog.blockedReason(msg.defId, services().settings.hiddenCategories());
+    if (blocked) return this.sendError(client, ErrorCode.InvalidPlacement, blocked);
+    // Móvel do catálogo completo usado pela primeira vez: mede antes (Fase 36).
+    if (!services().furniDefs.has(msg.defId)) {
+      const def = await catalog.ensure(msg.defId).catch(() => null);
+      if (!def) {
+        return this.sendError(
+          client,
+          ErrorCode.InvalidPlacement,
+          'Não consegui preparar esse móvel agora. Tente de novo.',
+        );
+      }
+      if (!this.state.players.has(client.sessionId)) return;
+    }
     const res = canPlace(this.placementContext(), msg);
     if (!res.ok) return this.sendError(client, ErrorCode.InvalidPlacement, res.reason);
     const placed = services().furni.add(
@@ -1103,6 +1124,30 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     );
     this.state.furni.set(placed.id, toFurni(placed));
     services().achievements.bump(client.auth.id, 'furni');
+  }
+
+  /** Outra cor do mesmo móvel (variação `classname*N` do Habbo), no mesmo lugar. */
+  private async handleColor(client: OfficeClient, msg: FurniColorMessage): Promise<void> {
+    if (!this.canEdit(client)) return;
+    const f = this.state.furni.get(msg.furniId);
+    if (!f || f.defId === msg.defId) return;
+    if (baseClassname(f.defId) !== baseClassname(msg.defId)) {
+      return this.sendError(client, ErrorCode.InvalidPlacement, 'Essa cor não é desse móvel.');
+    }
+    const def = await services()
+      .furniCatalog.ensure(msg.defId)
+      .catch(() => null);
+    const old = services().furniDefs.get(f.defId);
+    if (!def || !old || this.state.furni.get(msg.furniId) !== f) {
+      return this.sendError(client, ErrorCode.InvalidPlacement, 'Não consegui trocar a cor agora.');
+    }
+    if (def.width !== old.width || def.depth !== old.depth || def.wall !== old.wall) {
+      return this.sendError(client, ErrorCode.InvalidPlacement, 'Essa cor tem outro tamanho.');
+    }
+    const state = def.states.includes(f.state) ? f.state : 0;
+    services().furni.setDef(this.layout.roomId, f.id, msg.defId, state);
+    f.defId = msg.defId;
+    f.state = state;
   }
 
   private handleFurniMove(client: OfficeClient, msg: FurniMoveMessage): void {
@@ -1118,6 +1163,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       x: msg.x,
       y: msg.y,
       rot: msg.rot,
+      z: msg.z,
       ignoreId: f.id,
     };
     const res = canPlace(this.placementContext(), req);
@@ -1159,8 +1205,8 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
 
   private someoneSeatedOn(f: Furni): boolean {
     const def = services().furniDefs.get(f.defId);
-    // Tapete não tem ninguém "sentado": quem está em cima pode continuar lá.
-    if (!def || def.canWalk) return false;
+    // Tapete e itens de parede não têm ninguém "sentado": quem está ali pode continuar.
+    if (!def || def.canWalk || def.wall) return false;
     const fp = footprint(def, f.x, f.y, f.rot);
     return [...this.state.players.values()].some(
       (p) => p.x >= fp.minX && p.x <= fp.maxX && p.y >= fp.minY && p.y <= fp.maxY,

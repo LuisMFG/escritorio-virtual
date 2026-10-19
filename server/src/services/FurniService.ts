@@ -37,6 +37,15 @@ export class FurniService {
       .run();
   }
 
+  /** Troca a variação (cor) do móvel. */
+  setDef(roomId: string, id: string, defId: string, state: number): void {
+    this.db
+      .update(roomFurni)
+      .set({ defId, state, updatedAt: this.now() })
+      .where(and(eq(roomFurni.roomId, roomId), eq(roomFurni.id, id)))
+      .run();
+  }
+
   update(roomId: string, id: string, changes: Pick<PlacedFurni, 'x' | 'y' | 'z' | 'rot'>): void {
     this.db
       .update(roomFurni)

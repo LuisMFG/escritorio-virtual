@@ -176,6 +176,13 @@
       "when": 1792368231810,
       "tag": "0024_looks",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1792374002274,
+      "tag": "0025_moveis",
+      "breakpoints": true
     }
   ]
 }

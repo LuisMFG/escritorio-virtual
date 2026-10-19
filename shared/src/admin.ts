@@ -61,6 +61,8 @@ export interface AdminOverview {
   /** Endereço do Jira Cloud (`null` = desligado) e se veio do `.env` (não muda pelo painel). */
   jiraSite: string | null;
   jiraSiteLocked: boolean;
+  /** Categorias do catálogo de móveis escondidas (Fase 36). */
+  hiddenFurniCategories: string[];
   rooms: AdminRoom[];
   users: AdminUser[];
   cargos: CargoInfo[];
