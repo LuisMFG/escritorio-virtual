@@ -23,6 +23,7 @@ import {
   type SpotifyStatus,
   type JiraBoard,
   type EffectId,
+  type SavedLook,
   type EffectsResponse,
   type JiraConnect,
   type JiraShare,
@@ -220,6 +221,14 @@ export const announcementApi = {
     request<Ok>('PUT', `/api/announcements/${id}/read`, { token, body: {} }),
   remove: (token: string, id: number) =>
     request<Ok>('DELETE', `/api/announcements/${id}`, { token }),
+};
+
+export const looksApi = {
+  list: (token: string) => request<SavedLook[]>('GET', '/api/looks', { token }),
+  save: (token: string, slot: number, look: { figure: string; gender: 'M' | 'F' }) =>
+    request<SavedLook[]>('PUT', `/api/looks/${slot}`, { token, body: look }),
+  remove: (token: string, slot: number) =>
+    request<SavedLook[]>('DELETE', `/api/looks/${slot}`, { token }),
 };
 
 export const effectsApi = {

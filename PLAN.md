@@ -977,12 +977,24 @@ Pedido (18/10/2026): prioridade para as **animações dos personagens**, **senta
 - Testes: animação dos efeitos (camadas, direções, quadros com deslocamento, camada sem fechar a tag), manifesto com aspas duplas, desbloqueio e dicas, `/largar`, API de efeitos (só liberados, avisa as salas, elogios liberam corações), sala (café e geladeira dão item, largar, conquista dispara o holofote) e ponta a ponta (`e2e/tests/efeitos.spec.ts`: Brilho no Perfil visto pelo outro, café na Copa e `/largar`).
 - No navegador: xícara de café na mão na Copa (continua depois de recarregar), Brilho escolhido no Perfil e Corações flutuando em volta do avatar (este colocado pelo banco só para conferir e depois retirado).
 
-#### Fase 35 — Muito mais roupas
+#### Fase 35 — Muito mais roupas ✅ implementada
 - Catálogo do editor com **todas as roupas usáveis** do Habbo Brasil (milhares, contra 270 hoje): busca por nome, filtros por categoria e gênero, paginação e miniaturas carregadas aos poucos.
 - Roupas **animadas** (as que mexem no Habbo) animando de verdade.
 - **Looks salvos:** até 5 visuais para trocar com um clique.
 - As peças são baixadas só quando alguém usa (cache no servidor), para não pesar.
 - **Como testar:** buscar "terno" e "chapéu", vestir, salvar dois looks e alternar.
+
+**Notas da implementação:**
+- **Catálogo:** `npm run assets:figure` lê a lista de bibliotecas de roupa da HabboAssets e o `/imaging/info/clothing/{lib}` de cada uma (2.279 bibliotecas sem NFT, com cache em disco por revisão; a primeira vez levou uns 10 minutos, depois segundos). Resultado: **2.416 peças** no editor (antes 270) em 12 categorias: pele, cabelo (294), chapéu (440), **acessório de cabeça** (199, novo), óculos, **máscara** (97, nova), blusa (534), casaco, acessório, **cinto** (50, novo), calça e sapatos. `figuredata.json` com 2.607 conjuntos (0,9 MB) e o manifesto do editor (0,45 MB). Só entram peças que dá para montar.
+- **Paleta por peça:** no catálogo inteiro algumas peças usam outra paleta que a da categoria; elas guardam a sua, e a validação, o editor e a montagem usam a da peça.
+- **Bibliotecas de cada parte:** se a biblioteca da própria peça declara a parte, vale a dela (a básica às vezes lista partes que o SWF dela não tem). Mangas declaradas sem desenho (comuns no Habbo) são ignoradas; parte de rosto ou de corpo sem desenho continua usando o imager.
+- **Editor:** busca em português (dicionário das palavras dos nomes das bibliotecas, com palavras compostas: "swimsuit" é maiô, não terno), filtro Todas / Grátis / Do clube (HC), 60 peças por vez com "Mostrar mais", selo HC e ✨ nas animadas. Miniaturas: peças do catálogo completo pela prévia estática da CDN (`/hh/clothing/preview/…`, sem a cota de renders do imager); básicas, pelo imager. Carregam 3 de cada vez, para não segurar as outras chamadas da página (o navegador abre só 6 conexões por servidor).
+- **Roupas animadas:** a pose em pé dessas peças tem vários quadros (ex.: 8 na ovelhinha que pula sobre a cabeça); o avatar alterna a 8 quadros por segundo.
+- **Looks salvos:** até 5 por pessoa (tabela `user_looks`), no editor: 💾 guarda o visual atual no slot, clicar usa, × apaga. Visual validado como no editor.
+- O `assets:sync` passou a cuidar só dos móveis (antes regeraria o catálogo de roupas só com as 9 bibliotecas básicas).
+- **Conferência** (`assets:figure-check` com peças aleatórias do catálogo novo): média de 115–160 px diferentes de 7.040, contando um caso raro de acessório com brilho (o halo sai escuro) e diferenças de ordem em algumas máscaras.
+- Testes: busca (tradução, palavras compostas), roupa animada (quadros pelo total da peça), catálogo completo (todas as bibliotecas, paleta própria, revisão, animação), prévia da CDN (só biblioteca e revisão conhecidas), looks (5 slots, troca, validação, apagar) e ponta a ponta (`e2e/tests/roupas.spec.ts`: buscar "terno", vestir, guardar no look 1 e o outro vê a peça nova). Achado no teste: a lista de looks que chegava depois apagava o look recém-guardado da tela; corrigido.
+- No navegador: editor com as 12 abas, "terno" achando só o terno risca de giz, acessório animado vestido e look guardado (desfeitos depois, na sua conta).
 
 #### Fase 36 — Catálogo completo de móveis
 - Com o token gratuito, o servidor lê a lista dos 18 mil móveis com categorias e nomes em português. O catálogo do Decorar ganha busca e as categorias do Habbo, com o tamanho de cada móvel medido sozinho na primeira vez que alguém o usa (sem curadoria à mão).

@@ -35,7 +35,7 @@ import { PlaceholderFactory } from './assets/PlaceholderFactory.js';
 import { DEBUG, FORCE_IMAGER, HOUR_OVERRIDE, OFFLINE_ASSETS } from './config.js';
 import type { AvatarSnapshot } from './entities/AvatarView.js';
 import { isSessionError, OfficeConnection, type OfficeRoomClient } from './net/OfficeConnection.js';
-import { adminApi, announcementApi, api, ApiRequestError, jiraApi } from './net/api.js';
+import { adminApi, announcementApi, api, ApiRequestError, jiraApi, looksApi } from './net/api.js';
 import { forgetToken, loadSession, rememberSession, saveSession } from './net/storage.js';
 import { RoomScene, type SceneDeps } from './scene/RoomScene.js';
 import { AvatarCard } from './ui/avatarCard.js';
@@ -532,6 +532,12 @@ async function start(): Promise<void> {
         figure: session.figure,
         gender: session.gender,
         fallbackPreview,
+        thumbnails: !OFFLINE_ASSETS,
+        looks: {
+          load: () => looksApi.list(session!.token),
+          save: (slot, c) => looksApi.save(session!.token, slot, c),
+          remove: (slot) => looksApi.remove(session!.token, slot),
+        },
       });
       if (!choice) return;
       // O servidor valida e propaga pelo estado; erros chegam como aviso.

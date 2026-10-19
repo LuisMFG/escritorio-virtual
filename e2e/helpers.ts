@@ -48,6 +48,7 @@ interface Hook {
     action: string;
     effect: string;
     handItem: number;
+    figure: string;
   }[];
   furniAt(x: number, y: number): string | null;
   leave(): Promise<void>;

@@ -1,6 +1,12 @@
 import {
   avatarImageUrl,
+  clothingPreviewUrl,
+  clothingSearchText,
   clothingSetImageUrl,
+  LOOK_SLOTS,
+  matchesSearch,
+  type AvatarSet,
+  type SavedLook,
   findCategory,
   findSet,
   parseFigure,
@@ -24,7 +30,19 @@ export interface AvatarEditorOptions extends AvatarChoice {
   /** Prévia gerada por código quando o imager não responde (data URL). */
   fallbackPreview: (figure: string, dir: number) => Promise<string>;
   saveLabel?: string;
+  /** Miniaturas das peças (desligadas no modo sem internet, `?offline=1`). */
+  thumbnails?: boolean;
+  /** Looks salvos (só com sessão; no cadastro não aparece). */
+  looks?: {
+    load(): Promise<SavedLook[]>;
+    save(slot: number, choice: AvatarChoice): Promise<SavedLook[]>;
+    remove(slot: number): Promise<SavedLook[]>;
+  };
 }
+
+/** Peças por "página" (o resto aparece em "Mostrar mais"). */
+const PAGE = 60;
+type ClubFilter = 'all' | 'free' | 'club';
 
 const PREVIEW_DEBOUNCE_MS = 250;
 
@@ -40,6 +58,29 @@ function loadWithFallback(img: HTMLImageElement, urls: string[], onFail: () => v
     }
   };
   img.src = queue.shift()!;
+}
+
+/**
+ * Miniaturas 3 de cada vez: o navegador abre só 6 conexões por servidor, e 60 miniaturas novas
+ * de uma vez (o servidor ainda buscando na CDN) atrasariam as outras chamadas da página.
+ */
+const thumbQueue: (() => void)[] = [];
+let thumbsLoading = 0;
+function queueThumb(img: HTMLImageElement, urls: string[], onFail: () => void): void {
+  const start = () => {
+    thumbsLoading++;
+    const done = () => {
+      thumbsLoading--;
+      thumbQueue.shift()?.();
+    };
+    img.addEventListener('load', done, { once: true });
+    loadWithFallback(img, urls, () => {
+      done();
+      onFail();
+    });
+  };
+  if (thumbsLoading < 3) start();
+  else thumbQueue.push(start);
 }
 
 function el<K extends keyof HTMLElementTagNameMap>(
@@ -65,6 +106,21 @@ export function openAvatarEditor(opts: AvatarEditorOptions): Promise<AvatarChoic
   let dir = 3;
   let activeType = manifest.categories[0]!.type;
   let previewTimer = 0;
+  let query = '';
+  let club: ClubFilter = 'all';
+  let shown = PAGE;
+  let looks: SavedLook[] = [];
+  let looksVersion = 0;
+  const searchText = new Map<string, string>();
+  const textOf = (cat: AvatarCategory, set: AvatarSet) => {
+    const key = `${cat.type}:${set.id}`;
+    let t = searchText.get(key);
+    if (t === undefined) {
+      t = clothingSearchText(set.library, cat.label, set.id);
+      searchText.set(key, t);
+    }
+    return t;
+  };
   const opener = document.activeElement as HTMLElement | null;
 
   // ---------- Estrutura ----------
@@ -105,6 +161,28 @@ export function openAvatarEditor(opts: AvatarEditorOptions): Promise<AvatarChoic
   tabs.setAttribute('aria-label', 'Categorias');
   const setsGrid = el('div', { className: 'editor-sets' });
   setsGrid.setAttribute('role', 'listbox');
+  const search = el('input', {
+    type: 'search',
+    className: 'editor-search',
+    placeholder: 'Buscar (ex.: terno, boné, asas)',
+  });
+  search.setAttribute('aria-label', 'Buscar peças');
+  const clubSelect = el('select', { className: 'editor-club' });
+  clubSelect.setAttribute('aria-label', 'Filtrar peças');
+  for (const [v, label] of [
+    ['all', 'Todas'],
+    ['free', 'Grátis'],
+    ['club', 'Do clube (HC)'],
+  ] as const)
+    clubSelect.append(new Option(label, v));
+  const countInfo = el('small', { className: 'muted editor-count' });
+  const toolbar = el('div', { className: 'editor-toolbar' }, [search, clubSelect, countInfo]);
+  const moreBtn = el('button', {
+    type: 'button',
+    className: 'btn-link editor-more',
+    textContent: 'Mostrar mais',
+  });
+  const looksBox = el('div', { className: 'editor-looks' });
   const colorsBox = el('div', { className: 'editor-colors' });
   const errorBox = el('p', { className: 'editor-error', hidden: true });
   errorBox.setAttribute('role', 'alert');
@@ -131,8 +209,9 @@ export function openAvatarEditor(opts: AvatarEditorOptions): Promise<AvatarChoic
         el('div', { className: 'editor-rotate' }, [rotateLeft, rotateRight]),
         genderGroup,
         randomBtn,
+        looksBox,
       ]),
-      el('section', { className: 'editor-pick' }, [tabs, setsGrid, colorsBox]),
+      el('section', { className: 'editor-pick' }, [tabs, toolbar, setsGrid, moreBtn, colorsBox]),
     ]),
     errorBox,
     el('footer', { className: 'editor-foot' }, [cancelBtn, saveBtn]),
@@ -188,6 +267,7 @@ export function openAvatarEditor(opts: AvatarEditorOptions): Promise<AvatarChoic
         tab.tabIndex = c.type === activeType ? 0 : -1;
         tab.addEventListener('click', () => {
           activeType = c.type;
+          shown = PAGE;
           renderAll();
         });
         return tab;
@@ -196,6 +276,8 @@ export function openAvatarEditor(opts: AvatarEditorOptions): Promise<AvatarChoic
   }
 
   function renderSets(): void {
+    // Miniaturas da lista anterior que ainda não começaram não interessam mais.
+    thumbQueue.length = 0;
     const cat = category();
     const selected = currentPart(cat.type)?.setId ?? null;
     const items: HTMLButtonElement[] = [];
@@ -210,22 +292,41 @@ export function openAvatarEditor(opts: AvatarEditorOptions): Promise<AvatarChoic
       none.addEventListener('click', () => update(withPart(figure, manifest, cat.type, null)));
       items.push(none);
     }
-    for (const set of cat.sets.filter((s) => setFitsGender(s, gender))) {
+    const matching = cat.sets.filter(
+      (s) =>
+        setFitsGender(s, gender) &&
+        (club === 'all' || (club === 'free' ? s.club === 0 : s.club > 0)) &&
+        (!query || matchesSearch(textOf(cat, s), query)),
+    );
+    // A peça escolhida aparece sempre, mesmo fora da página.
+    const page = matching.slice(0, shown);
+    const chosen = matching.find((s) => s.id === selected);
+    if (chosen && !page.includes(chosen)) page.unshift(chosen);
+    countInfo.textContent = `${matching.length} ${matching.length === 1 ? 'peça' : 'peças'}`;
+    moreBtn.hidden = matching.length <= shown;
+    moreBtn.textContent = `Mostrar mais (${matching.length - shown})`;
+    for (const set of page) {
       const img = el('img', { alt: '', loading: 'lazy', width: 34, height: 84 });
       const btn = el('button', { type: 'button', className: 'set-item' }, [img]);
-      btn.title = `${cat.label} #${set.id}`;
+      btn.title =
+        set.library && !set.library.startsWith('hh_human_')
+          ? `${set.library.replace(/^.*?_[MFU]_/, '').replace(/_/g, ' ')} (#${set.id})`
+          : `${cat.label} #${set.id}`;
       btn.setAttribute('aria-label', `${cat.label} ${set.id}`);
       btn.setAttribute('role', 'option');
       btn.setAttribute('aria-selected', String(set.id === selected));
-      loadWithFallback(
-        img,
-        [
-          clothingSetImageUrl(set.id, { direction: 2 }, '/hh'),
-          clothingSetImageUrl(set.id, { direction: 2 }),
-        ],
-        () =>
-          btn.replaceChildren(el('span', { className: 'set-fallback', textContent: `#${set.id}` })),
-      );
+      if (set.club > 0) btn.classList.add('set-club');
+      if (set.animated) btn.classList.add('set-animated');
+      // Catálogo completo: prévia estática da CDN; peças básicas: o imager.
+      const thumbs = [
+        ...(set.rev && set.library ? [clothingPreviewUrl(set.library, set.id, set.rev)] : []),
+        clothingSetImageUrl(set.id, { direction: 2 }, '/hh'),
+        clothingSetImageUrl(set.id, { direction: 2 }),
+      ];
+      const noThumb = () =>
+        btn.replaceChildren(el('span', { className: 'set-fallback', textContent: `#${set.id}` }));
+      if (opts.thumbnails === false) noThumb();
+      else queueThumb(img, thumbs, noThumb);
       btn.addEventListener('click', () => update(withPart(figure, manifest, cat.type, set.id)));
       items.push(btn);
     }
@@ -247,7 +348,7 @@ export function openAvatarEditor(opts: AvatarEditorOptions): Promise<AvatarChoic
       );
       return;
     }
-    const palette = manifest.palettes[cat.palette] ?? [];
+    const palette = manifest.palettes[set.palette ?? cat.palette] ?? [];
     const rows = Array.from({ length: set.colors }, (_, i) => {
       const swatches = palette.map((c) => {
         const b = el('button', { type: 'button', className: 'swatch' });
@@ -269,6 +370,64 @@ export function openAvatarEditor(opts: AvatarEditorOptions): Promise<AvatarChoic
       ]);
     });
     colorsBox.replaceChildren(...rows);
+  }
+
+  function renderLooks(): void {
+    if (!opts.looks) return;
+    const slots = Array.from({ length: LOOK_SLOTS }, (_, slot) => {
+      const look = looks.find((l) => l.slot === slot);
+      const box = el('div', { className: `look-slot${look ? '' : ' empty'}` });
+      const apply = el('button', { type: 'button', className: 'look-apply' });
+      apply.setAttribute('aria-label', look ? `Usar look ${slot + 1}` : `Look ${slot + 1} vazio`);
+      apply.disabled = !look;
+      if (look) {
+        const img = el('img', { alt: '', width: 32, height: 55, loading: 'lazy' });
+        img.src = avatarImageUrl(look.figure, { direction: 2, headDirection: 2 }, '/hh');
+        apply.append(img);
+        apply.addEventListener('click', () => {
+          if (look.gender !== gender) {
+            gender = look.gender;
+            renderGender();
+          }
+          update(look.figure);
+        });
+      } else apply.append(el('span', { textContent: String(slot + 1) }));
+      const save = el('button', { type: 'button', className: 'look-save', textContent: '💾' });
+      save.title = 'Guardar o visual atual aqui';
+      save.setAttribute('aria-label', `Guardar no look ${slot + 1}`);
+      save.addEventListener('click', async () => {
+        const res = validateFigure(figure, gender, manifest);
+        if (!res.ok) {
+          errorBox.hidden = false;
+          errorBox.textContent = res.error;
+          return;
+        }
+        looksVersion++;
+        try {
+          looks = await opts.looks!.save(slot, { figure: res.figure, gender });
+          renderLooks();
+        } catch (err) {
+          errorBox.hidden = false;
+          errorBox.textContent = (err as Error).message;
+        }
+      });
+      box.append(apply, save);
+      if (look) {
+        const del = el('button', { type: 'button', className: 'look-del', textContent: '×' });
+        del.setAttribute('aria-label', `Apagar look ${slot + 1}`);
+        del.addEventListener('click', async () => {
+          looksVersion++;
+          looks = await opts.looks!.remove(slot);
+          renderLooks();
+        });
+        box.append(del);
+      }
+      return box;
+    });
+    looksBox.replaceChildren(
+      el('strong', { textContent: 'Looks salvos' }),
+      el('div', { className: 'look-row' }, slots),
+    );
   }
 
   function renderAll(): void {
@@ -306,6 +465,38 @@ export function openAvatarEditor(opts: AvatarEditorOptions): Promise<AvatarChoic
     });
   }
   randomBtn.addEventListener('click', () => update(randomFigure(manifest, gender)));
+  let searchTimer = 0;
+  search.addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    searchTimer = window.setTimeout(() => {
+      query = search.value.trim();
+      shown = PAGE;
+      renderSets();
+    }, 150);
+  });
+  search.addEventListener('keydown', (e) => e.stopPropagation());
+  clubSelect.addEventListener('change', () => {
+    club = clubSelect.value as ClubFilter;
+    shown = PAGE;
+    renderSets();
+  });
+  moreBtn.addEventListener('click', () => {
+    shown += PAGE;
+    renderSets();
+  });
+  if (opts.looks) {
+    const version = looksVersion;
+    void opts.looks
+      .load()
+      .then((l) => {
+        // Se a pessoa já guardou ou apagou um look, esta resposta está velha.
+        if (version !== looksVersion) return;
+        looks = l;
+        renderLooks();
+      })
+      .catch(() => undefined);
+    renderLooks();
+  }
   tabs.addEventListener('keydown', (e) => {
     if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
     const i = manifest.categories.findIndex((c) => c.type === activeType);

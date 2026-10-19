@@ -18,7 +18,8 @@ Desde a Fase 2 as imagens passam pelo proxy do servidor (`/hh/avatar.png`, `/hh/
 | Efeitos do avatar (Fase 34) | SWFs das bibliotecas de efeito (`/api/v2/swfs/libraries/effect/{nome}`), com a animação no próprio SWF; o servidor converte em `/hh/effect/{nome}.png` e `.json` | `client/src/assets/EffectLibrary.ts`, `client/src/entities/EffectLayer.ts` |
 | Avatar pelo imager (reserva, e `?imager=1`) | `/imaging/avatar.png?figure=…&direction=0-7` | `client/src/assets/AvatarTextureCache.ts` |
 | Miniaturas de roupa (peça no boneco "fantasma") | `/imaging/clothing/set/{id}.png?direction=2` | `client/src/ui/avatarEditor.ts` |
-| Catálogo de roupas e paletas (dados) | `/imaging/info/clothing/hh_human_*` | `server/scripts/assets-sync.ts` → `client/public/assets/avatar/manifest.json` |
+| Catálogo de roupas e paletas (dados) | lista `/api/v2/swfs/libraries?kind=clothing` + `/imaging/info/clothing/{lib}` de cada biblioteca (todas, menos NFT) | `server/scripts/figure-sync.ts` → `client/public/assets/avatar/manifest.json` |
+| Miniaturas das roupas do catálogo completo | prévias estáticas da CDN `derived/clothing/{lib}/{rev}/set_{id}.png` (pelo servidor em `/hh/clothing/preview/…`) | `client/src/ui/avatarEditor.ts` |
 | Mobis (render por direção, revisão fixada) | `/imaging/furniture/{classname}.png?revision=…&direction=…` | `client/src/entities/FurniView.ts` |
 
 ### Mobis do catálogo (`client/public/assets/furni/manifest.json`)

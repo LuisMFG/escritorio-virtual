@@ -29,7 +29,7 @@ Escritório virtual isométrico para amigos e colegas (até ~10 pessoas online):
 - **Reações e respostas**: passe o mouse numa mensagem (sala ou privada) para reagir (👍 ❤️ 😂 😮 😢 🎉) ou responder citando; quem é respondido recebe aviso.
 - **Mensagens privadas**: botão **Mensagens** (ou "Mensagem" no cartão/Equipe) para conversar com qualquer pessoa, em qualquer sala ou offline (ela lê quando voltar). Contador de não lidas, "Visto" e notificações do navegador opcionais (🔔 no painel) para DMs e menções com a aba em segundo plano.
 - **Admin** (só administradores): promover/rebaixar, cargos (criar, renomear, cor, ordem), senha temporária, desativar conta, tirar alguém da sala ou do escritório, trocar o código de convite, travar a decoração por sala e ver o registro de ações. Mensagens do chat podem ser apagadas por quem escreveu ou por um admin (🗑 no histórico).
-- Montar o visual do avatar (270 peças do Habbo Brasil, cores das paletas reais) ao criar a conta ou em **Perfil → Meu visual**.
+- Montar o visual do avatar ao criar a conta ou em **Perfil → Meu visual**: **todas as roupas usáveis do Habbo Brasil** (mais de 2.400 peças em 12 categorias, menos as NFT), com busca em português ("terno", "boné", "asas"), filtro de peças grátis ou do clube, roupas animadas (✨) e **5 looks salvos** para trocar com um clique.
 - Andar clicando no piso, com desvio de móveis e outras pessoas, sincronizado em tempo real.
 - Conversar: **Enter** abre o campo de mensagem; a fala aparece em balão sobre o avatar e fica no histórico **Conversa**. Há um som de mensagem opcional (🔔/🔕).
 - Emotes: botão 😊 ao lado do chat ou comandos `/acenar`, `/rir`, `/joinha`, `/coracao`, `/cafe`, `/dancar`, `/mao`, `/sorrir`, `/triste`, `/bravo`, `/surpreso`.
@@ -99,8 +99,8 @@ Opções de URL do cliente: `?offline=1` usa só a arte provisória gerada por c
 | `npm run build` | Build de produção do cliente (`client/dist`) |
 | `npm start` | Servidor em modo produção (serve o `client/dist`) |
 | `npm run bot` | Robôs de teste |
-| `npm run assets:sync` | Regera os manifestos de roupas e móveis a partir da HabboAssets |
-| `npm run assets:figure` | Regera os dados para montar o avatar no navegador (`client/public/assets/figure/figuredata.json`); rode depois do `assets:sync` |
+| `npm run assets:sync` | Regera o manifesto de móveis a partir da HabboAssets |
+| `npm run assets:figure` | Regera o catálogo completo de roupas (`client/public/assets/avatar/manifest.json`) e os dados para montar o avatar (`client/public/assets/figure/figuredata.json`), com itens na mão e efeitos. Lê ~2.300 bibliotecas da HabboAssets (com cache em disco: a primeira vez leva uns 10 minutos, depois segundos) |
 | `npm run assets:figure-check` | Confere o avatar montado contra o imager (várias figuras, 8 direções) e grava as piores comparações em `data/figure-check/` |
 | `npm run db:generate` | Gera migration SQL após mudar `server/src/db/schema.ts` |
 | `npm run vscode:package` | Gera a extensão do VS Code em `client/public/downloads/escritorio-atividade.vsix` |

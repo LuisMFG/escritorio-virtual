@@ -28,6 +28,7 @@ export interface E2EHook {
     action: string;
     effect: string;
     handItem: number;
+    figure: string;
   }[];
   /** Que móvel o clique pegaria neste ponto da página (diagnóstico). */
   furniAt(x: number, y: number): string | null;
@@ -82,6 +83,7 @@ export function exposeForTests(scene: RoomScene, room: OfficeRoomClient): void {
         action: p.action,
         effect: p.effect,
         handItem: p.handItem,
+        figure: p.figure,
       })),
   };
   (window as unknown as { __e2e: E2EHook }).__e2e = hook;

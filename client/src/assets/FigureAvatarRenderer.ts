@@ -114,6 +114,9 @@ class FigurePoser implements AvatarPoser {
   private readonly cache = new Map<string, AvatarFrame>();
 
   private itemLib: 'none' | 'loading' | 'ready' = 'none';
+  get animated(): boolean {
+    return this.parts.some((p) => p.animated);
+  }
 
   constructor(
     private readonly parts: readonly FigureLayer[],

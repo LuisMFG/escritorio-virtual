@@ -536,6 +536,8 @@ export class AvatarView extends Container {
       pose.posture = 'sit';
     }
     if (this.emote) Object.assign(pose, emotePose(this.emote.id, this.emote.elapsed));
+    // Roupa animada: 8 quadros por segundo (começa em 1; 0 = parada).
+    if (this.poser?.animated) pose.clothingFrame = 1 + Math.floor(this.clock / 125);
     // Item na mão: segura o tempo todo e dá um gole de vez em quando (o ☕ também mostra a xícara).
     const item = this.handItem || (this.emote?.id === 'coffee' ? COFFEE_ITEM : 0);
     if (item && !this.lying) {

@@ -4722,3 +4722,121 @@ button.reply-quote:hover {
   font-size: 11px;
   text-align: center;
 }
+
+/* ---------- Fase 35: catálogo completo de roupas e looks ---------- */
+
+.editor-toolbar {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin: 8px 0 6px;
+}
+
+.editor-search {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid #3a3f4d;
+  background: #15171d;
+  color: var(--text);
+  font: inherit;
+}
+
+.editor-club {
+  padding: 6px;
+  border-radius: 8px;
+  border: 1px solid #3a3f4d;
+  background: #15171d;
+  color: var(--text);
+}
+
+.editor-count {
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.editor-more {
+  display: block;
+  margin: 6px auto 0;
+}
+
+.editor-more[hidden] {
+  display: none;
+}
+
+.set-item.set-club::after {
+  content: 'HC';
+  position: absolute;
+  top: 2px;
+  right: 3px;
+  font-size: 9px;
+  font-weight: 700;
+  color: #f2c94c;
+}
+
+.set-item.set-animated::before {
+  content: '✨';
+  position: absolute;
+  top: 2px;
+  left: 3px;
+  font-size: 9px;
+}
+
+.set-item {
+  position: relative;
+}
+
+.editor-looks {
+  margin-top: 10px;
+  width: 100%;
+  font-size: 12px;
+}
+
+.look-row {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.look-slot {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.look-apply {
+  width: 100%;
+  height: 58px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  border: 1px solid var(--card-border);
+  background: #15171d;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.look-apply:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.look-save,
+.look-del {
+  border: none;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.look-del {
+  position: absolute;
+  top: -4px;
+  right: -2px;
+  color: var(--muted);
+}

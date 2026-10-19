@@ -1,3 +1,4 @@
+import { OFFLINE_ASSETS } from '../config.js';
 import {
   avatarImageUrl,
   NAME_MAX,
@@ -101,6 +102,7 @@ export function showLogin(opts: LoginOptions): Promise<SessionResponse> {
       figure,
       gender,
       fallbackPreview: opts.fallbackPreview,
+      thumbnails: !OFFLINE_ASSETS,
       saveLabel: 'Usar este visual',
     });
     if (!choice) return;

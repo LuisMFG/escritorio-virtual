@@ -152,7 +152,9 @@ export function buildLayeredAvatar(
       const set = findSet(category, part.setId);
       const colorId = part.colors[0] ?? set?.defaultColors[0];
       const hex =
-        colorId !== undefined ? paletteHex(manifest, category.palette, colorId) : undefined;
+        colorId !== undefined
+          ? paletteHex(manifest, set?.palette ?? category.palette, colorId)
+          : undefined;
       return { part, layer: category.layer, spec, tint: hex ? hexToNumber(hex) : NEUTRAL };
     })
     .filter((l) => l !== null)
