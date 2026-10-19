@@ -157,7 +157,8 @@ export function curationFor(item: CatalogItem, id: string): FurniCuration {
     height: item.wall ? 0 : Math.min(10, Math.max(0, item.h)),
     canSit: Boolean(item.sit),
     canLay: Boolean(item.lay),
-    canWalk: Boolean(item.walk),
+    // Teleporte no Habbo "dá para pisar" (a pessoa entra nele); aqui é sólido e se usa clicando.
+    canWalk: Boolean(item.walk) && item.x !== 'teleport',
     wall: Boolean(item.wall),
     // Senta/deita na metade da altura (como as cadeiras curadas: altura 1, assento 0,5).
     sitHeight: item.sit || item.lay ? Math.min(1, Math.max(0.1, Math.round(item.h * 5) / 10)) : 0,
@@ -178,7 +179,8 @@ export function withVisual(
     Boolean(item?.a) &&
     !def.surface &&
     !OVERLAY_INTERACTIONS.has(def.interaction ?? '');
-  return def.animated === animated ? def : { ...def, animated };
+  const canWalk = def.canWalk && def.interaction !== 'teleport';
+  return def.animated === animated && def.canWalk === canWalk ? def : { ...def, animated, canWalk };
 }
 
 /** Mede pelo imager, com o tamanho e as capacidades do catálogo. */

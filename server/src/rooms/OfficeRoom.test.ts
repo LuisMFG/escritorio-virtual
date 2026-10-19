@@ -376,7 +376,7 @@ describe('OfficeRoom', () => {
         await waitFor(() => a.state.furni.get(dice.id)!.state === 255);
         const chat = (await a.waitForMessage(ServerMessage.Chat, 3000)) as ChatMessage;
         expect(chat.text).toMatch(/tirou [1-6] no dado/);
-      await waitFor(() => a.state.furni.get(dice.id)!.state !== 255);
+        await waitFor(() => a.state.furni.get(dice.id)!.state !== 255);
         expect(a.state.furni.get(dice.id)!.state).toBeGreaterThanOrEqual(1);
         expect(a.state.furni.get(dice.id)!.state).toBeLessThanOrEqual(6);
 
@@ -402,7 +402,7 @@ describe('OfficeRoom', () => {
         const other = svc.furni.add(
           MEETING.id,
           { defId: 'tele_t', x: 3, y: 3, z: 0, rot: 0 },
-          ana.id,
+          ana.user.id,
         );
         svc.furni.link(far.id, other.id);
         await wait(600);
@@ -415,6 +415,9 @@ describe('OfficeRoom', () => {
         const b = await join(ana.token, MEETING.id, transfer.ticket);
         const there = b.state.players.get(b.sessionId)!;
         expect(Math.abs(there.x - 3) <= 1 && Math.abs(there.y - 3) <= 1).toBe(true);
+        // Não deixa móveis para os próximos testes.
+        for (const id of [dice.id, near.id, far.id]) svc.furni.remove(RECEPTION.id, id);
+        svc.furni.remove(MEETING.id, other.id);
       },
     );
 
