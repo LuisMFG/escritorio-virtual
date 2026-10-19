@@ -401,6 +401,23 @@ export const spotifyLinks = sqliteTable('spotify_links', {
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 });
 
+/** Looks salvos de cada pessoa (Fase 35): até 5 visuais para trocar com um clique. */
+export const userLooks = sqliteTable(
+  'user_looks',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id),
+    /** 0 a 4. */
+    slot: integer('slot').notNull(),
+    figure: text('figure').notNull(),
+    /** 'M' | 'F' */
+    gender: text('gender').notNull(),
+    savedAt: integer('saved_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.slot] })],
+);
+
 /** Conta do Jira Cloud de cada pessoa (Fase 30). O token de API fica criptografado. */
 export const jiraLinks = sqliteTable('jira_links', {
   userId: text('user_id')

@@ -169,6 +169,13 @@
       "when": 1792366476510,
       "tag": "0023_efeitos",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1792368231810,
+      "tag": "0024_looks",
+      "breakpoints": true
     }
   ]
 }

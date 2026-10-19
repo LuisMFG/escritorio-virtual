@@ -21,6 +21,7 @@ import * as mapRoutes from './map.js';
 import * as uploadRoutes from './uploads.js';
 import * as jiraRoutes from './jira.js';
 import * as effectRoutes from './effects.js';
+import * as lookRoutes from './looks.js';
 import { UPLOAD_MAX_BYTES } from '@office/shared';
 import {
   changePassword,
@@ -76,7 +77,8 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
     kudosRoutes.KudosDeps &
     uploadRoutes.UploadDeps &
     jiraRoutes.JiraDeps &
-    effectRoutes.EffectDeps = {
+    effectRoutes.EffectDeps &
+    lookRoutes.LookDeps = {
     inviteCode: () => svc.settings.inviteCode(),
     adminUsernames: cfg.adminUsernames,
     avatarManifest: svc.avatarManifest,
@@ -103,6 +105,7 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
     search: svc.search,
     jira: svc.jira,
     jiraPoller: svc.jiraPoller,
+    db: svc.db,
   };
   const send = <T>(res: Response, result: Result<T>) =>
     void res.status(result.status).json(result.body);
@@ -445,6 +448,22 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
   app.put(
     '/api/effects',
     withCaller((c, req, res) => send(res, effectRoutes.setEffect(c, req.body, auth))),
+  );
+
+  // Looks salvos (Fase 35): até 5 visuais por pessoa.
+  app.get(
+    '/api/looks',
+    withCaller((c, _req, res) => send(res, lookRoutes.myLooks(c, auth))),
+  );
+  app.put(
+    '/api/looks/:slot',
+    withCaller((c, req, res) =>
+      send(res, lookRoutes.saveLook(c, Number(req.params.slot), req.body, auth)),
+    ),
+  );
+  app.delete(
+    '/api/looks/:slot',
+    withCaller((c, req, res) => send(res, lookRoutes.deleteLook(c, Number(req.params.slot), auth))),
   );
 
   // Salas (admins e quem pode editar salas).

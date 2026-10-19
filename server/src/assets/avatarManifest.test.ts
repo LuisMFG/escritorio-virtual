@@ -121,3 +121,34 @@ describe('buildAvatarManifest', () => {
     ).toThrow(/não baixada/);
   });
 });
+
+describe('catálogo completo (Fase 35)', () => {
+  it('junta peças de todas as bibliotecas (`*`), com paleta própria, revisão e animação', () => {
+    const extra = new Map(infos);
+    extra.set('shirt_M_suit', {
+      library: 'shirt_M_suit',
+      latest: '9',
+      revisions: [
+        {
+          revision: '9',
+          sets: [
+            { id: 6462, type: 'ch', gender: 'M', club: 0, colors: 1, palette: 1, animated: true },
+          ],
+        },
+      ],
+      palettes: { '1': [palette(1, 'FFCB98')] },
+    });
+    const all = curation.map((c) => ({ ...c, libraries: ['*'] }));
+    const m = buildAvatarManifest(extra, all, { M: 'hd-180-1.ch-210-66', F: 'hd-600-2.ch-630-62' });
+    const ch = m.categories.find((c) => c.type === 'ch')!;
+    expect(ch.palette).toBe('3');
+    expect(ch.sets.find((s) => s.id === 6462)).toMatchObject({
+      library: 'shirt_M_suit',
+      rev: 9,
+      palette: '1',
+      animated: true,
+    });
+    // As básicas não levam revisão (a miniatura vem do imager).
+    expect(ch.sets.find((s) => s.id === 210)?.rev).toBeUndefined();
+  });
+});

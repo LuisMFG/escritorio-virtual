@@ -33,7 +33,10 @@ export interface FigureData {
   /** `tipo:id` da parte → biblioteca onde está o desenho. */
   partLib: Record<string, string>;
   /** `tipo:idDoConjunto` → paleta, partes `[tipo, id, pintável (0/1), índice da cor]` e camadas que esconde. */
-  sets: Record<string, { p: number; parts: [string, number, 0 | 1, number][]; hide?: string[] }>;
+  sets: Record<
+    string,
+    { p: number; parts: [string, number, 0 | 1, number][]; hide?: string[]; /** animada */ a?: 1 }
+  >;
   /** Paleta → cor → hex (`"RRGGBB"`). */
   palettes: Record<string, Record<string, string>>;
   /** Efeitos (Fase 34): biblioteca → revisão e SWF. */
@@ -79,6 +82,8 @@ export interface FigureLayer {
   lib: string;
   /** Cor de multiplicar (`[r, g, b]`) ou `null` para o desenho original (olhos, por exemplo). */
   tint: [number, number, number] | null;
+  /** Roupa animada: a pose em pé tem vários quadros que se alternam (Fase 35). */
+  animated?: boolean;
 }
 
 /**
@@ -118,7 +123,13 @@ export function resolveFigure(
       const colorId = colorable ? (colors[colorIndex - 1] ?? colors[0]) : undefined;
       const hex =
         colorId !== undefined ? data.palettes[String(set.p)]?.[String(colorId)] : undefined;
-      parts.push({ type, id, lib, tint: hex ? hexRgb(hex) : null });
+      parts.push({
+        type,
+        id,
+        lib,
+        tint: hex ? hexRgb(hex) : null,
+        ...(set.a ? { animated: true } : {}),
+      });
     }
   }
   return { parts, libs: [...new Set(parts.map((p) => p.lib))], missing };
@@ -138,9 +149,28 @@ export function partsWithoutArt(
   libs: ReadonlyMap<string, FigureLib>,
 ): FigureLayer[] {
   return parts.filter((p) => {
+    // Mangas declaradas sem desenho são comuns (o Habbo simplesmente não desenha).
+    if (SLEEVES.has(p.type)) return false;
     const lib = libs.get(p.lib);
-    return !lib || ![0, 1, 2, 3, 7].some((d) => lib.assets[`h_std_${p.type}_${p.id}_${d}_0`]);
+    // Basta existir em alguma pose: há partes que só aparecem em algumas (manga só ao acenar).
+    return !lib || !partsIn(lib).has(`${p.type}_${p.id}`);
   });
+}
+
+const SLEEVES = new Set(['ls', 'rs', 'lc', 'rc']);
+const partIndex = new WeakMap<FigureLib, Set<string>>();
+/** Partes (`tipo_id`) que a biblioteca desenha em qualquer pose. */
+function partsIn(lib: FigureLib): Set<string> {
+  let set = partIndex.get(lib);
+  if (!set) {
+    set = new Set();
+    for (const name of Object.keys(lib.assets)) {
+      const m = /^h_[a-z]+_([a-z]+)_(\d+)_/.exec(name);
+      if (m) set.add(`${m[1]}_${m[2]}`);
+    }
+    partIndex.set(lib, set);
+  }
+  return set;
 }
 
 /** Postura do corpo inteiro. */
@@ -163,6 +193,8 @@ export interface FigurePose {
   expression?: FigureExpression;
   /** Item na mão (id do Habbo em `hh_human_item`); aparece carregando ou bebendo. */
   handItem?: number;
+  /** Quadro das roupas animadas (cresce sem parar; cada peça usa o resto pelo seu total). */
+  clothingFrame?: number;
 }
 
 /** Quadros de cada animação no Habbo (o resto tem um só). */
@@ -242,7 +274,12 @@ export function composeFigure(
     const lib = libs.get(part.lib);
     if (!lib) continue;
     let found: { key: string; flip: boolean } | null = null;
-    for (const [act, frame] of actionsFor(part.type, pose)) {
+    for (const [act, f] of actionsFor(part.type, pose)) {
+      // Roupa animada: na pose em pé, o quadro da animação (pelo total de quadros da peça).
+      const frame =
+        part.animated && act === 'std' && f === 0 && pose.clothingFrame
+          ? pose.clothingFrame % animFrames(lib, part, dir)
+          : f;
       const base = `h_${act}_${part.type}_${part.id}_`;
       const tries: [string, boolean][] = [];
       if (mirror) tries.push([`${base}${wanted}_${frame}`, false], [`${base}${wanted}_0`, false]);
@@ -282,7 +319,15 @@ export function poseKey(p: FigurePose): string {
     p.talk ? `t${p.talkFrame ?? 0}` : '',
     p.expression ?? '',
     p.handItem ?? '',
+    p.clothingFrame ?? '',
   ].join('|');
+}
+
+/** Quantos quadros a pose em pé da peça tem (roupas animadas). */
+function animFrames(lib: FigureLib, part: FigureLayer, dir: number): number {
+  let n = 1;
+  while (n < 32 && lib.assets[`h_std_${part.type}_${part.id}_${dir}_${n}`]) n++;
+  return n;
 }
 
 function rank(order: string[], type: string): number {

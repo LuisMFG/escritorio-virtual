@@ -5,6 +5,7 @@ import {
   avatarImageUrl,
   clothingSetImageUrl,
   figureSchema,
+  HABBOASSETS_CDN,
   SHEET_FORMAT,
   type FigureData,
   furniImageUrl,
@@ -186,6 +187,34 @@ export function createAssetRouter(
     }
   };
   router.get('/figure/:file', sheetRoute('figure'));
+
+  // Prévia de uma roupa (Fase 35): arquivo estático da CDN, por biblioteca e revisão conhecidas.
+  router.get('/clothing/preview/:lib/:file', async (req: Request, res: Response) => {
+    const lib = String(req.params.lib ?? '');
+    const m = /^set_(\d{1,6})\.png$/.exec(String(req.params.file ?? ''));
+    const revision = z.coerce.number().int().positive().safeParse(req.query.revision);
+    const data = figureData();
+    if (!m || !revision.success || !data?.swf[lib] || data.libs[lib] !== revision.data) {
+      return void res.status(400).json({ error: 'Parâmetros inválidos' });
+    }
+    const url = `${HABBOASSETS_CDN}/derived/clothing/${lib}/${revision.data}/set_${m[1]}.png`;
+    const file = cacheFileFor(cacheDir, url);
+    try {
+      let body = await readCached(file, Infinity);
+      if (!body) {
+        body = await client.fetchCdnImage(url);
+        await writeAtomic(file, body);
+      }
+      res.setHeader('Content-Type', 'image/png');
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      res.end(body);
+    } catch (err) {
+      const status = err instanceof UpstreamError ? err.status : 502;
+      res
+        .status(status >= 400 && status < 600 ? status : 502)
+        .json({ error: (err as Error).message });
+    }
+  });
   router.get('/effect/:file', sheetRoute('effect'));
 
   return router;

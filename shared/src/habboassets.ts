@@ -10,6 +10,11 @@ export function figureSheetUrl(lib: string, revision: number, ext: 'png' | 'json
   return `/hh/figure/${encodeURIComponent(lib)}.${ext}?revision=${revision}&v=${SHEET_FORMAT}`;
 }
 
+/** Miniatura de uma roupa do catálogo completo (prévia estática da CDN, pelo servidor). */
+export function clothingPreviewUrl(lib: string, setId: number, revision: number): string {
+  return `/hh/clothing/preview/${encodeURIComponent(lib)}/set_${setId}.png?revision=${revision}`;
+}
+
 /** Folha de um efeito do Habbo (`png`) ou imagens + animação (`json`). */
 export function effectSheetUrl(lib: string, revision: number, ext: 'png' | 'json'): string {
   return `/hh/effect/${encodeURIComponent(lib)}.${ext}?revision=${revision}&v=${SHEET_FORMAT}`;

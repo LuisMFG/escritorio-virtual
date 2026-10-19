@@ -1,8 +1,10 @@
 /**
  * Sincroniza os assets curados com a HabboAssets API (hotel Brasil).
  *
- *   npm run assets:sync              # regenera os manifestos do avatar e dos móveis
- *   npm run assets:sync -- --thumbs  # e pré-baixa as miniaturas das roupas para o cache do servidor
+ *   npm run assets:sync              # regenera o manifesto dos móveis
+ *   npm run assets:sync -- --thumbs  # e pré-baixa as miniaturas das roupas básicas
+ *
+ * O catálogo de roupas (e os dados de montagem do avatar) vêm do `npm run assets:figure`.
  *
  * Os manifestos gerados devem ser revisados e versionados no git. Imagens baixadas ficam em
  * data/asset-cache (o mesmo cache do proxy /hh).
@@ -17,16 +19,12 @@ import { resolve } from 'node:path';
 import {
   clothingSetImageUrl,
   furniImageUrl,
+  parseAvatarManifest,
   parseFurniManifest,
   type FurniManifestEntry,
 } from '@office/shared';
 import { PNG } from 'pngjs';
 import { cacheFileFor, writeAtomic } from '../src/assets/AssetProxy.js';
-import {
-  AVATAR_CURATION,
-  buildAvatarManifest,
-  type ClothingInfo,
-} from '../src/assets/avatarManifest.js';
 import {
   analyzeRender,
   buildFurniEntry,
@@ -44,31 +42,21 @@ const client = new HabboAssetsClient({
   imagerPerMinute: 90,
 });
 
-const libraries = [...new Set(AVATAR_CURATION.flatMap((c) => c.libraries))];
-const infos = new Map<string, ClothingInfo>();
-for (const lib of libraries) {
-  process.stdout.write(`[sync] biblioteca ${lib}… `);
-  infos.set(lib, await client.getImagerJson<ClothingInfo>(`/info/clothing/${lib}`));
-  console.log('ok');
-}
-
-const manifest = buildAvatarManifest(infos);
-const out = resolve(ROOT_DIR, 'client', 'public', 'assets', 'avatar', 'manifest.json');
-const comment =
-  'Gerado por `npm run assets:sync` a partir de /imaging/info/clothing/* da HabboAssets (hotel 2). ' +
-  'Curadoria em server/src/assets/avatarManifest.ts. Não editar à mão: rode o script de novo.';
-await writeFile(out, `${JSON.stringify({ $comment: comment, ...manifest }, null, 2)}\n`);
-const total = manifest.categories.reduce((n, c) => n + c.sets.length, 0);
-console.log(
-  `[sync] manifesto do avatar: ${manifest.categories.length} categorias, ${total} peças → ${out}`,
+// Roupas: o catálogo completo é gerado pelo `npm run assets:figure` (Fase 35). Aqui só se lê
+// o manifesto para pré-baixar as miniaturas das peças básicas (as outras vêm da CDN).
+const manifest = parseAvatarManifest(
+  JSON.parse(
+    await readFile(resolve(ROOT_DIR, 'client/public/assets/avatar/manifest.json'), 'utf8'),
+  ),
 );
+const total = manifest.categories.reduce((n, c) => n + c.sets.filter((s) => !s.rev).length, 0);
 
 if (withThumbs) {
   let done = 0;
   let fetched = 0;
   let failed = 0;
   for (const category of manifest.categories) {
-    for (const set of category.sets) {
+    for (const set of category.sets.filter((x) => !x.rev)) {
       const url = clothingSetImageUrl(set.id, { direction: 2 });
       const file = cacheFileFor(config.assetCacheDir, url);
       done++;

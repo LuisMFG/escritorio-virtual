@@ -217,6 +217,32 @@ describe('montagem do avatar', () => {
     expect(px(lay6, FIGURE_WIDTH - 1 - 5, 70)[3]).toBe(255);
   });
 
+  it('roupa animada alterna os quadros da pose em pé', () => {
+    const data: FigureData = {
+      ...DATA,
+      partLib: { ...DATA.partLib, 'he:7': 'body' },
+      sets: { ...DATA.sets, 'he:900': { p: 1, parts: [['he', 7, 0, 1]], a: 1 } },
+    };
+    const libs = new Map([
+      [
+        'body',
+        lib({
+          h_std_he_7_2_0: { x: 0, y: 50 },
+          h_std_he_7_2_1: { x: -2, y: 50 },
+          h_std_he_7_2_2: { x: -4, y: 50 },
+        }),
+      ],
+    ]);
+    const parts = resolveFigure('he-900', data).parts;
+    expect(parts[0]!.animated).toBe(true);
+    const at = (clothingFrame: number) => {
+      const out = composeFigure(parts, libs, { direction: 2, clothingFrame });
+      return [0, 2, 4].findIndex((x) => px(out, x, 50)[3] === 255);
+    };
+    // 3 quadros: 1 → 1, 2 → 2, 3 → 0, 4 → 1.
+    expect([at(1), at(2), at(3), at(4)]).toEqual([1, 2, 0, 1]);
+  });
+
   it('chave de cache muda só com o que muda o desenho', () => {
     expect(poseKey({ direction: 2 })).toBe(
       poseKey({ direction: 2, posture: 'std', frame: 0, gestureFrame: 3 }),

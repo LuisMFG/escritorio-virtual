@@ -40,6 +40,8 @@ export interface HabboAssetsClientOptions {
 export class HabboAssetsClient {
   private readonly rest: TokenBucket;
   private readonly imager: TokenBucket;
+  /** Arquivos estáticos da CDN (prévias de roupa, SWFs): sem a cota de renders do imager. */
+  private readonly cdn = new TokenBucket(30, 10);
   private readonly fetchFn: typeof fetch;
   /** Serializa a espera por fichas para requisições concorrentes não estourarem o limite. */
   private queue: Promise<void> = Promise.resolve();
@@ -67,6 +69,19 @@ export class HabboAssetsClient {
     if (!contentType.startsWith('image/'))
       throw new UpstreamError(502, 'Resposta do imager não é imagem');
     return { body: Buffer.from(await res.arrayBuffer()), contentType };
+  }
+
+  /** Imagem estática da CDN (ex.: prévia de uma roupa, `derived/clothing/{lib}/{rev}/set_{id}.png`). */
+  async fetchCdnImage(url: string): Promise<Buffer> {
+    if (!url.startsWith(`${HABBOASSETS_CDN}/`)) throw new UpstreamError(400, 'URL fora da CDN');
+    const res = await this.request(url, this.cdn, {
+      'User-Agent': USER_AGENT,
+      Accept: 'image/png',
+    });
+    if (!(res.headers.get('content-type') ?? '').startsWith('image/')) {
+      throw new UpstreamError(404, 'Prévia indisponível');
+    }
+    return Buffer.from(await res.arrayBuffer());
   }
 
   /** Baixa o SWF de uma biblioteca de roupa da CDN da HabboAssets. */

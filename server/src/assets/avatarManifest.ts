@@ -22,6 +22,7 @@ export interface ClothingInfo {
       palette: number;
       defaultColors?: number[];
       wearable?: boolean;
+      animated?: boolean;
     }[];
   }[];
   palettes?: Record<string, { id: number; hex: string; club: number; selectable: boolean }[]>;
@@ -60,6 +61,21 @@ export const AVATAR_CURATION: CategoryCuration[] = [
   { type: 'sh', label: 'Sapatos', required: false, layer: 2, libraries: ['hh_human_shoe'] },
 ];
 
+/**
+ * Catálogo completo (Fase 35): as mesmas categorias e mais acessório de cabeça, máscara e
+ * cinto, com peças de **todas** as bibliotecas de roupa (`*`), menos as NFT.
+ */
+export const FULL_CATALOG: CategoryCuration[] = [
+  { ...AVATAR_CURATION[0]!, libraries: ['*'] },
+  ...AVATAR_CURATION.slice(1, 3).map((c) => ({ ...c, libraries: ['*'] })),
+  { type: 'he', label: 'Acessório de cabeça', required: false, layer: 9, libraries: ['*'] },
+  ...AVATAR_CURATION.slice(3, 4).map((c) => ({ ...c, libraries: ['*'] })),
+  { type: 'fa', label: 'Máscara', required: false, layer: 7, libraries: ['*'] },
+  ...AVATAR_CURATION.slice(4, 7).map((c) => ({ ...c, libraries: ['*'] })),
+  { type: 'wa', label: 'Cinto', required: false, layer: 4, libraries: ['*'] },
+  ...AVATAR_CURATION.slice(7).map((c) => ({ ...c, libraries: ['*'] })),
+];
+
 export const AVATAR_DEFAULTS = {
   M: 'hd-180-1.hr-100-61.ch-210-66.lg-270-82.sh-290-80',
   F: 'hd-600-1.hr-515-33.ch-630-73.lg-695-82.sh-725-64',
@@ -77,14 +93,18 @@ export function buildAvatarManifest(
   for (const cur of curation) {
     const sets = new Map<number, AvatarCategory['sets'][number]>();
     const paletteVotes = new Map<number, number>();
-    for (const library of cur.libraries) {
+    const libraries = cur.libraries.includes('*') ? [...infos.keys()] : cur.libraries;
+    const perSet = new Map<number, number>();
+    for (const library of libraries) {
       const info = infos.get(library);
       if (!info) throw new Error(`Biblioteca não baixada: ${library}`);
       const rev = info.revisions.find((r) => r.revision === info.latest) ?? info.revisions[0];
       for (const s of rev?.sets ?? []) {
         if (s.type !== cur.type || s.wearable === false) continue;
         if (cur.genders && !cur.genders.includes(s.gender)) continue;
+        if (sets.has(s.id)) continue;
         paletteVotes.set(s.palette, (paletteVotes.get(s.palette) ?? 0) + 1);
+        perSet.set(s.id, s.palette);
         sets.set(s.id, {
           id: s.id,
           gender: s.gender,
@@ -92,6 +112,8 @@ export function buildAvatarManifest(
           defaultColors: (s.defaultColors ?? []).slice(0, 2),
           club: s.club,
           library,
+          ...(library.startsWith('hh_human_') ? {} : { rev: Number(info.latest) }),
+          ...(s.animated ? { animated: true } : {}),
         });
       }
       for (const [pid, colors] of Object.entries(info.palettes ?? {})) {
@@ -102,6 +124,11 @@ export function buildAvatarManifest(
     }
     if (sets.size === 0) throw new Error(`Nenhuma peça encontrada para ${cur.type}`);
     const palette = [...paletteVotes].sort((a, b) => b[1] - a[1])[0]![0];
+    // Peças com outra paleta guardam a sua (as cores são validadas e pintadas por ela).
+    for (const set of sets.values()) {
+      const own = perSet.get(set.id);
+      if (own !== undefined && own !== palette) set.palette = String(own);
+    }
     categories.push({
       type: cur.type,
       label: cur.label,
@@ -112,7 +139,12 @@ export function buildAvatarManifest(
     });
   }
 
-  const usedPalettes = new Set(categories.map((c) => c.palette));
+  const usedPalettes = new Set(
+    categories.flatMap((c) => [
+      c.palette,
+      ...c.sets.flatMap((s) => (s.palette ? [s.palette] : [])),
+    ]),
+  );
   const manifest = parseAvatarManifest({
     version: 1,
     hotelId: HABBO_HOTEL_ID,

@@ -96,6 +96,12 @@ export const avatarSetSchema = z.object({
   club: z.number().int().min(0).default(0),
   /** Biblioteca de roupa de origem na HabboAssets (para miniaturas e auditoria). */
   library: z.string().optional(),
+  /** Paleta própria, quando difere da categoria (catálogo completo, Fase 35). */
+  palette: z.string().optional(),
+  /** Revisão da biblioteca (miniatura da CDN: `set_{id}.png`). */
+  rev: z.number().int().positive().optional(),
+  /** Roupa animada (mexe sozinha no Habbo). */
+  animated: z.boolean().optional(),
 });
 
 export const avatarCategorySchema = z.object({

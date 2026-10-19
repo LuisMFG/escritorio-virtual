@@ -75,7 +75,7 @@ export function validateFigure(
     if (part.colors.length > Math.max(1, set.colors)) {
       return { ok: false, error: `Cores demais em ${category.label} #${part.setId}.` };
     }
-    const allowed = paletteColorIds(manifest, category.palette);
+    const allowed = paletteColorIds(manifest, set.palette ?? category.palette);
     if (part.colors.some((c) => !allowed.includes(c))) {
       return { ok: false, error: `Cor inválida em ${category.label}.` };
     }
@@ -96,7 +96,7 @@ export function initialColors(
 ): number[] {
   const n = set.colors;
   if (n === 0) return [];
-  const palette = paletteColorIds(manifest, category.palette);
+  const palette = paletteColorIds(manifest, set.palette ?? category.palette);
   const colors = set.defaultColors.filter((c) => palette.includes(c)).slice(0, n);
   while (colors.length < n && palette.length > 0)
     colors.push(palette[colors.length % palette.length]!);
@@ -117,7 +117,7 @@ export function withPart(
     const set = category && findSet(category, setId);
     if (!category || !set) return figure;
     const previous = parseFigure(figure).find((p) => p.type === type)?.colors ?? [];
-    const palette = paletteColorIds(manifest, category.palette);
+    const palette = paletteColorIds(manifest, set.palette ?? category.palette);
     let chosen = (colors ?? previous).filter((c) => palette.includes(c)).slice(0, set.colors);
     if (chosen.length < set.colors) chosen = initialColors(set, manifest, category);
     parts.push({ type, setId, colors: chosen });
@@ -159,7 +159,7 @@ export function randomFigure(
     const sets = category.sets.filter((s) => setFitsGender(s, gender));
     if (sets.length === 0 || (!category.required && random() < 0.5)) continue;
     const set = pick(sets);
-    const palette = paletteColorIds(manifest, category.palette);
+    const palette = paletteColorIds(manifest, set.palette ?? category.palette);
     const colors = Array.from({ length: set.colors }, () => pick(palette));
     parts.push({ type: category.type, setId: set.id, colors });
   }

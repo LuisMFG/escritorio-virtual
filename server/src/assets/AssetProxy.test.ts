@@ -14,6 +14,10 @@ let close: () => void;
 
 beforeAll(async () => {
   const client = {
+    fetchCdnImage: async (url: string) => {
+      expect(url).toBe('https://cdn.habboassets.com/derived/clothing/shirt_M_suit/9/set_6462.png');
+      return Buffer.from('png');
+    },
     fetchSwf: async (url: string) => {
       downloads++;
       expect(url).toBe('https://cdn.habboassets.com/x/hh_test.swf');
@@ -24,8 +28,11 @@ beforeAll(async () => {
   app.use(
     '/hh',
     createAssetRouter(client, mkdtempSync(join(tmpdir(), 'esc-assets-')), () => ({
-      libs: { hh_test: 7 },
-      swf: { hh_test: 'https://cdn.habboassets.com/x/hh_test.swf' },
+      libs: { hh_test: 7, shirt_M_suit: 9 },
+      swf: {
+        hh_test: 'https://cdn.habboassets.com/x/hh_test.swf',
+        shirt_M_suit: 'https://cdn.habboassets.com/x/shirt_M_suit.swf',
+      },
     })),
   );
   const server = app.listen(0);
@@ -44,6 +51,18 @@ describe('proxy das bibliotecas de roupa', () => {
     expect(png.headers.get('content-type')).toBe('image/png');
     expect(png.headers.get('cache-control')).toContain('immutable');
     expect(downloads).toBe(1);
+  });
+
+  it('prévia de roupa da CDN: só biblioteca e revisão conhecidas', async () => {
+    const ok = await fetch(`${base}/clothing/preview/shirt_M_suit/set_6462.png?revision=9`);
+    expect(ok.status).toBe(200);
+    expect(ok.headers.get('content-type')).toBe('image/png');
+    for (const path of [
+      'shirt_M_suit/set_6462.png?revision=8',
+      'outra/set_1.png?revision=9',
+      'shirt_M_suit/set_x.png?revision=9',
+    ])
+      expect((await fetch(`${base}/clothing/preview/${path}`)).status, path).toBe(400);
   });
 
   it('só bibliotecas conhecidas, na revisão dos dados', async () => {
