@@ -3,6 +3,8 @@ import {
   footprint,
   tileCorners,
   tileHeight,
+  WALL_PX,
+  type FurniColorMessage,
   type FurniManifestEntry,
   type FurniMoveMessage,
   type FurniPlaceMessage,
@@ -12,11 +14,13 @@ import {
 } from '@office/shared';
 import type { Graphics, Point } from 'pixi.js';
 import type { FurniView } from '../entities/FurniView.js';
+import type { WallSpot } from './RoomScene.js';
 
 export interface DecorActions {
   placeFurni(msg: FurniPlaceMessage): void;
   moveFurni(msg: FurniMoveMessage): void;
   removeFurni(furniId: string): void;
+  colorFurni(msg: FurniColorMessage): void;
 }
 
 /** O que o modo decorar precisa da cena. */
@@ -27,6 +31,8 @@ export interface DecorHost {
   readonly overlay: Graphics;
   pickTile(global: Point): TilePoint | null;
   pickFurni(global: Point): FurniView | null;
+  /** Ponto de parede sob o ponteiro (itens de parede). */
+  pickWall(global: Point): WallSpot | null;
   furniView(id: string): FurniView | undefined;
   placementContext(): PlacementContext;
   /** Cria um móvel "fantasma" semitransparente por cima de tudo. */
@@ -35,7 +41,7 @@ export interface DecorHost {
 
 export interface DecorListener {
   onPickChange(defId: string | null): void;
-  onSelectionChange(selected: { id: string; name: string } | null): void;
+  onSelectionChange(selected: { id: string; name: string; defId: string } | null): void;
   onError(message: string): void;
 }
 
@@ -50,9 +56,14 @@ interface Ghost {
   defId: string;
   rot: number;
   tile: TilePoint | null;
+  /** Itens de parede: altura acima do piso. */
+  h?: number;
   ok: boolean;
   reason?: string;
 }
+
+/** Onde o fantasma está: tile (piso) ou ponto de parede. */
+type Target = { tile: TilePoint; rot?: number; h?: number } | null;
 
 /**
  * Modo "editar sala": escolher no catálogo e clicar para colocar, clicar num móvel para
@@ -100,7 +111,7 @@ export class DecorMode {
     this.picking = {
       view: this.host.createGhost(defId, -99, -99, def.directions[0] ?? 0),
       defId,
-      rot: 0,
+      rot: def.wall ? 2 : 0,
       tile: null,
       ok: false,
     };
@@ -109,9 +120,13 @@ export class DecorMode {
   }
 
   rotate(): void {
+    // Item de parede vira junto com a parede: arraste para a outra parede.
+    const wallPick = this.picking && this.host.defs.get(this.picking.defId)?.wall;
+    const sel = this.selectedId ? this.host.furniView(this.selectedId) : undefined;
+    if (wallPick || (!this.picking && sel?.def.wall)) return;
     if (this.picking) {
       this.picking.rot = (this.picking.rot + 2) % 8;
-      this.updateGhost(this.picking, this.picking.tile, undefined);
+      this.updateGhost(this.picking, this.retarget(this.picking), undefined);
       return;
     }
     const f = this.selectedId ? this.host.furniView(this.selectedId) : undefined;
@@ -138,9 +153,25 @@ export class DecorMode {
     if (this.drag?.furniId === furniId) this.cancelDrag();
   }
 
+  /** Troca a cor do móvel selecionado (outra variação do mesmo móvel). */
+  setColor(defId: string): void {
+    const f = this.selectedId ? this.host.furniView(this.selectedId) : undefined;
+    if (f && f.placed.defId !== defId) this.actions.colorFurni({ furniId: f.placed.id, defId });
+  }
+
+  /** Móvel selecionado agora (`null` = nenhum). */
+  get selected(): string | null {
+    return this.selectedId;
+  }
+
+  /** Seleciona de novo um móvel recriado (trocou de cor). */
+  reselect(furniId: string): void {
+    if (this.active) this.select(furniId);
+  }
+
   /** Algo mudou na sala (móvel/avatar): recalcula verde/vermelho. */
   refresh(): void {
-    if (this.picking) this.updateGhost(this.picking, this.picking.tile, undefined);
+    if (this.picking) this.updateGhost(this.picking, this.retarget(this.picking), undefined);
     this.redraw();
   }
 
@@ -163,11 +194,11 @@ export class DecorMode {
 
   pointerMove(global: Point): void {
     if (!this.active) return;
-    const tile = this.host.pickTile(global);
     if (this.picking) {
-      this.updateGhost(this.picking, tile, undefined);
+      this.updateGhost(this.picking, this.targetAt(this.picking.defId, global), undefined);
       return;
     }
+    const tile = this.host.pickTile(global);
     const d = this.drag;
     if (!d) return;
     const f = this.host.furniView(d.furniId);
@@ -184,7 +215,8 @@ export class DecorMode {
       f.alpha = 0.3;
       this.select(d.furniId);
     }
-    const origin = tile ? { x: tile.x - d.grab.x, y: tile.y - d.grab.y } : null;
+    if (f.def.wall) return this.updateGhost(d.ghost, this.targetAt(f.def.id, global), d.furniId);
+    const origin = tile ? { tile: { x: tile.x - d.grab.x, y: tile.y - d.grab.y } } : null;
     this.updateGhost(d.ghost, origin, d.furniId);
   }
 
@@ -207,6 +239,7 @@ export class DecorMode {
         x: g.tile.x,
         y: g.tile.y,
         rot: g.rot as 0 | 2 | 4 | 6,
+        z: g.h,
       });
     } else if (g.tile && g.reason) {
       this.listener.onError(g.reason);
@@ -219,14 +252,18 @@ export class DecorMode {
     if (!this.active) return;
     if (this.picking) {
       const g = this.picking;
-      this.updateGhost(g, this.host.pickTile(global), undefined);
-      if (!g.tile) return;
+      this.updateGhost(g, this.targetAt(g.defId, global), undefined);
+      if (!g.tile) {
+        if (this.host.defs.get(g.defId)?.wall) this.listener.onError('Isso vai na parede.');
+        return;
+      }
       if (!g.ok) return this.listener.onError(g.reason ?? 'Não dá para colocar aí.');
       this.actions.placeFurni({
         defId: g.defId,
         x: g.tile.x,
         y: g.tile.y,
         rot: g.rot as 0 | 2 | 4 | 6,
+        z: g.h,
       });
       return;
     }
@@ -235,8 +272,26 @@ export class DecorMode {
 
   // ---------- Interno ----------
 
-  private updateGhost(g: Ghost, tile: TilePoint | null, ignoreId: string | undefined): void {
+  /** Alvo sob o ponteiro: ponto de parede para itens de parede, tile para o resto. */
+  private targetAt(defId: string, global: Point): Target {
+    if (this.host.defs.get(defId)?.wall) {
+      const spot = this.host.pickWall(global);
+      return spot ? { tile: { x: spot.x, y: spot.y }, rot: spot.rot, h: spot.h } : null;
+    }
+    const tile = this.host.pickTile(global);
+    return tile ? { tile } : null;
+  }
+
+  /** O alvo atual do fantasma (para recalcular sem mexer o ponteiro). */
+  private retarget(g: Ghost): Target {
+    return g.tile ? { tile: g.tile, h: g.h } : null;
+  }
+
+  private updateGhost(g: Ghost, target: Target, ignoreId: string | undefined): void {
+    const tile = target?.tile ?? null;
     g.tile = tile;
+    if (target?.rot !== undefined) g.rot = target.rot;
+    g.h = target?.h;
     if (!tile) {
       g.view.visible = false;
       g.ok = false;
@@ -248,6 +303,7 @@ export class DecorMode {
       x: tile.x,
       y: tile.y,
       rot: g.rot,
+      z: g.h,
       ignoreId,
     });
     g.ok = res.ok;
@@ -258,7 +314,7 @@ export class DecorMode {
       defId: g.defId,
       x: tile.x,
       y: tile.y,
-      z: res.ok ? res.z : 0,
+      z: res.ok ? res.z : (tileHeight(this.host.map, tile.x, tile.y) ?? 0) + (g.h ?? 0),
       rot: g.rot,
     });
     this.redraw();
@@ -267,7 +323,9 @@ export class DecorMode {
   private select(id: string | null): void {
     this.selectedId = id;
     const f = id ? this.host.furniView(id) : undefined;
-    this.listener.onSelectionChange(f ? { id: f.placed.id, name: f.def.name } : null);
+    this.listener.onSelectionChange(
+      f ? { id: f.placed.id, name: f.def.name, defId: f.placed.defId } : null,
+    );
     this.redraw();
   }
 
@@ -313,6 +371,16 @@ export class DecorMode {
     color: number,
     fill: boolean,
   ): void {
+    if (def.wall) {
+      // Item de parede: destaca a face da parede daquele tile.
+      const z = tileHeight(this.host.map, at.x, at.y) ?? 0;
+      const [top, right, , left] = tileCorners(at.x, at.y, z);
+      const [a, b] = rot === 4 ? [left, top] : [top, right];
+      const pts = [a.sx, a.sy, b.sx, b.sy, b.sx, b.sy - WALL_PX, a.sx, a.sy - WALL_PX];
+      if (fill) g.poly(pts).fill({ color, alpha: 0.25 });
+      g.poly(pts, true).stroke({ width: 2, color, alpha: 0.9 });
+      return;
+    }
     const fp = footprint(def, at.x, at.y, rot);
     for (let y = fp.minY; y <= fp.maxY; y++) {
       for (let x = fp.minX; x <= fp.maxX; x++) {

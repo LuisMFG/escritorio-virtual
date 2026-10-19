@@ -1,7 +1,10 @@
 import {
   depthOrder,
   footprint,
+  hasWall,
   parseHeightmap,
+  WALL_PX,
+  Z_UNIT,
   pointInTile,
   RoomGrid,
   talkDurationMs,
@@ -46,6 +49,16 @@ export interface SceneDeps {
   furniDefs: ReadonlyMap<string, FurniManifestEntry>;
   /** Efeitos do Habbo (Fase 34). */
   effects?: EffectLibrary;
+  /** Busca a definição de um móvel do catálogo completo que ainda não está em `furniDefs`. */
+  requestDef?: (defId: string) => Promise<FurniManifestEntry | null>;
+}
+
+/** Ponto escolhido numa parede: tile, lado (2 ou 4) e altura acima do piso. */
+export interface WallSpot {
+  x: number;
+  y: number;
+  rot: 2 | 4;
+  h: number;
 }
 
 export interface SceneActions extends DecorActions {
@@ -78,6 +91,10 @@ export class RoomScene implements DecorHost {
   readonly overlay = new Graphics({ label: 'decor-overlay' });
   private grid: RoomGrid;
   private readonly objects = new Container({ label: 'objects', sortableChildren: true });
+  /** Itens de parede (quadros, janelas): atrás de tudo que está no piso. */
+  private readonly wallItems = new Container({ label: 'wall-items' });
+  /** Móveis cuja definição ainda está chegando do servidor. */
+  private readonly waitingDef = new Map<string, PlacedFurni>();
   private readonly hover = new Graphics({ label: 'hover' });
   private readonly target = new Graphics({ label: 'target' });
   private readonly debugLayer = new Graphics({ label: 'debug' });
@@ -124,6 +141,7 @@ export class RoomScene implements DecorHost {
     const room: RoomDefinition = { ...layout, id: layout.roomId, furni: [] };
     this.world.addChild(
       drawRoom(this.map, room),
+      this.wallItems,
       this.hover,
       this.target,
       this.overlay,
@@ -166,19 +184,40 @@ export class RoomScene implements DecorHost {
 
   /** Cria ou atualiza um móvel a partir do estado do servidor. */
   setFurni(id: string, placed: PlacedFurni): void {
-    const existing = this.furni.get(id);
+    let existing = this.furni.get(id);
+    // Trocou de cor (outra definição): recria o desenho (e continua selecionado).
+    const reselect = Boolean(
+      existing && existing.def.id !== placed.defId && this.decor.selected === id,
+    );
+    if (existing && existing.def.id !== placed.defId) {
+      this.removeFurni(id);
+      existing = undefined;
+    }
     if (existing) {
       existing.update(placed);
     } else {
       const def = this.deps.furniDefs.get(placed.defId);
       if (!def) {
-        console.warn(`[sala] móvel sem definição no manifesto: ${placed.defId}`);
+        // Móvel do catálogo completo que este navegador ainda não conhece: busca e desenha.
+        if (!this.deps.requestDef) {
+          console.warn(`[sala] móvel sem definição no manifesto: ${placed.defId}`);
+          return;
+        }
+        this.waitingDef.set(id, placed);
+        void this.deps.requestDef(placed.defId).then((d) => {
+          const waiting = this.waitingDef.get(id);
+          if (!d || !waiting || waiting.defId !== d.id || this.world.destroyed) return;
+          this.waitingDef.delete(id);
+          this.setFurni(id, waiting);
+        });
         return;
       }
+      this.waitingDef.delete(id);
       const view = new FurniView(placed, def, this.deps.loader, this.deps.placeholders);
       this.furni.set(id, view);
-      this.objects.addChild(view);
+      (def.wall ? this.wallItems : this.objects).addChild(view);
       if (this.games.has(id)) view.setGame(this.games.get(id)!);
+      if (reselect) this.decor.reselect(id);
       void view.load().then(() => this.drawGlows());
     }
     this.onFurniChanged();
@@ -228,6 +267,7 @@ export class RoomScene implements DecorHost {
   }
 
   removeFurni(id: string): void {
+    this.waitingDef.delete(id);
     const view = this.furni.get(id);
     if (!view) return;
     this.furni.delete(id);
@@ -274,13 +314,17 @@ export class RoomScene implements DecorHost {
   pickFurni(global: Point): FurniView | null {
     const views = [...this.furni.values()];
     const drawn = views
-      .filter((f) => !f.def.canWalk && f.hitTest(global))
+      .filter((f) => !f.def.canWalk && !f.def.wall && f.hitTest(global))
       .sort((a, b) => b.zIndex - a.zIndex)[0];
     if (drawn) return drawn;
+    // Itens de parede ficam atrás de tudo que está no piso.
+    const onWall = views.find((f) => f.def.wall && f.hitTest(global));
+    if (onWall) return onWall;
     const tile = this.pickTile(global);
     if (!tile) return null;
     const onTile = views
       .filter((f) => {
+        if (f.def.wall) return false;
         const fp = f.footprint;
         return tile.x >= fp.minX && tile.x <= fp.maxX && tile.y >= fp.minY && tile.y <= fp.maxY;
       })
@@ -441,7 +485,9 @@ export class RoomScene implements DecorHost {
 
   /** Reordena só quando alguma caixa muda (avatar troca de tile, móvel muda, alguém sai). */
   private sortDepth(): void {
-    const boxes: DepthBox[] = [...this.furni.values()].map((f) => f.depthBox);
+    const boxes: DepthBox[] = [...this.furni.values()]
+      .filter((f) => !f.def.wall)
+      .map((f) => f.depthBox);
     for (const a of this.avatars.values()) boxes.push(a.depthBox);
     for (const p of this.pets.values()) boxes.push(p.depthBox);
     const key = boxes
@@ -478,6 +524,31 @@ export class RoomScene implements DecorHost {
       }
     }
     return best;
+  }
+
+  /**
+   * Ponto de parede sob o ponteiro: a face de parede (do piso até o topo) que contém o ponto,
+   * com a altura em unidades de altura (de 4 em 4 px).
+   */
+  pickWall(global: Point): WallSpot | null {
+    const p = this.world.toLocal(global);
+    const ctx = { map: this.map, doors: this.layout.doors };
+    for (let y = 0; y < this.map.height; y++) {
+      for (let x = 0; x < this.map.width; x++) {
+        const z = tileHeight(this.map, x, y);
+        if (z === null) continue;
+        const [top, right, , left] = tileCorners(x, y, z);
+        for (const rot of [2, 4] as const) {
+          const [a, b] = rot === 2 ? [top, right] : [left, top];
+          if (p.x < a.sx || p.x > b.sx || !hasWall(ctx, x, y, rot)) continue;
+          const edgeY = a.sy + ((p.x - a.sx) * (b.sy - a.sy)) / (b.sx - a.sx);
+          const px = edgeY - p.y;
+          if (px < 0 || px > WALL_PX) continue;
+          return { x, y, rot, h: Math.round(px / 4) * (4 / Z_UNIT) };
+        }
+      }
+    }
+    return null;
   }
 
   private handleTap(global: Point): void {

@@ -39,6 +39,8 @@ interface Hook {
   mySessionId(): string;
   tile(x: number, y: number): { x: number; y: number };
   furni(id: string): { x: number; y: number } | null;
+  wall(x: number, y: number, rot: 2 | 4, h: number): { x: number; y: number };
+  furniZ(id: string): number | null;
   furniList(): { id: string; defId: string; x: number; y: number }[];
   players(): {
     id: string;

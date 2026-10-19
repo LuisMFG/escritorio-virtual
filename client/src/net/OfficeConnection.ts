@@ -27,6 +27,7 @@ import {
   type Status,
   type ErrorMessage,
   type FurniMoveMessage,
+  type FurniColorMessage,
   type FurniPlaceMessage,
   type JoinOptions,
   type MoveMessage,
@@ -136,6 +137,10 @@ export class OfficeConnection {
 
   moveFurni(msg: FurniMoveMessage): void {
     this.room?.send(ClientMessage.FurniMove, msg);
+  }
+
+  colorFurni(msg: FurniColorMessage): void {
+    this.room?.send(ClientMessage.FurniColor, msg);
   }
 
   removeFurni(furniId: string): void {

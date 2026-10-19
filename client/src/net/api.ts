@@ -25,6 +25,8 @@ import {
   type EffectId,
   type SavedLook,
   type EffectsResponse,
+  type FurniConfigResponse,
+  type FurniManifestEntry,
   type JiraConnect,
   type JiraShare,
   type JiraStatus,
@@ -229,6 +231,18 @@ export const looksApi = {
     request<SavedLook[]>('PUT', `/api/looks/${slot}`, { token, body: look }),
   remove: (token: string, slot: number) =>
     request<SavedLook[]>('DELETE', `/api/looks/${slot}`, { token }),
+};
+
+export const furniApi = {
+  config: (token: string) => request<FurniConfigResponse>('GET', '/api/furni/config', { token }),
+  measured: (token: string) => request<FurniManifestEntry[]>('GET', '/api/furni/defs', { token }),
+  def: (token: string, id: string) =>
+    request<FurniManifestEntry>('GET', `/api/furni/defs/${encodeURIComponent(id)}`, { token }),
+  setHidden: (token: string, hidden: string[]) =>
+    request<FurniConfigResponse>('PUT', '/api/admin/furni-categories', {
+      token,
+      body: { hidden },
+    }),
 };
 
 export const effectsApi = {

@@ -4,6 +4,7 @@ import {
   renderDirection,
   tileToScreen,
   TILE_H,
+  TILE_W,
   type DepthBox,
   type FurniManifestEntry,
   type PlacedFurni,
@@ -241,6 +242,13 @@ export class FurniView extends Container {
   }
 
   private updatePosition(): void {
+    if (this.def.wall) {
+      // Item de parede: o centro da imagem vai no meio da aresta do tile, na altura `z`.
+      const p = tileToScreen(this.placed.x, this.placed.y, this.placed.z);
+      const side = this.placed.rot === 4 ? -1 : 1;
+      this.position.set(p.sx + (side * TILE_W) / 4, p.sy - TILE_H / 4);
+      return;
+    }
     const fp = this.footprint;
     const p = tileToScreen(fp.maxX, fp.maxY, this.placed.z);
     this.position.set(p.sx, p.sy + TILE_H / 2);

@@ -1,5 +1,6 @@
 import {
   AUDIT_LABELS,
+  CATALOG_CATEGORIES,
   formatLastSeen,
   RECEPTION,
   type AdminOverview,
@@ -7,7 +8,7 @@ import {
   type AuditEntry,
   type BackupList,
 } from '@office/shared';
-import { adminApi } from '../net/api.js';
+import { adminApi, furniApi } from '../net/api.js';
 import { confirmDialog } from './confirm.js';
 import { setAvatarPreview } from './login.js';
 import { cargoPill } from './profile.js';
@@ -16,6 +17,8 @@ export interface AdminOptions {
   token: string;
   userId: string;
   roomName(roomId: string): string;
+  /** As categorias de móveis escondidas mudaram (o painel de decorar atualiza). */
+  onFurniCategories?(hidden: string[]): void;
 }
 
 type Tab = 'people' | 'cargos' | 'settings' | 'backups' | 'audit';
@@ -477,6 +480,35 @@ export function openAdmin(opts: AdminOptions): void {
       );
     });
 
+    // Catálogo completo de móveis (Fase 36): categorias liberadas para decorar.
+    const cats = el('ul', 'admin-furni-cats');
+    cats.setAttribute('aria-label', 'Categorias de móveis');
+    const hidden = new Set(d.hiddenFurniCategories);
+    for (const [id, label] of Object.entries(CATALOG_CATEGORIES)) {
+      const li = document.createElement('li');
+      const lab = document.createElement('label');
+      const box = Object.assign(document.createElement('input'), {
+        type: 'checkbox',
+        checked: !hidden.has(id),
+      });
+      box.dataset.category = id;
+      box.addEventListener('change', () => {
+        const list = [...cats.querySelectorAll<HTMLInputElement>('input[data-category]')]
+          .filter((b) => !b.checked)
+          .map((b) => b.dataset.category!);
+        void act(
+          async () => {
+            const res = await furniApi.setHidden(opts.token, list);
+            opts.onFurniCategories?.(res.hiddenCategories);
+          },
+          box.checked ? `${label}: liberada no catálogo.` : `${label}: escondida do catálogo.`,
+        );
+      });
+      lab.append(box, ` ${label}`);
+      li.append(lab);
+      cats.append(li);
+    }
+
     return [
       el('h3', 'admin-section', 'Código de convite'),
       el(
@@ -496,6 +528,13 @@ export function openAdmin(opts: AdminOptions): void {
           : 'Endereço do Jira da empresa. Vazio desliga. Cada pessoa conecta a própria conta no Perfil (e-mail + token de API).',
       ),
       jiraForm,
+      el('h3', 'admin-section', 'Catálogo de móveis'),
+      el(
+        'p',
+        'muted',
+        'Categorias que aparecem no Decorar. Jogos, música, pets e extras começam escondidos. Os móveis já colocados ficam onde estão.',
+      ),
+      cats,
     ];
   }
 

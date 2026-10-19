@@ -1,4 +1,4 @@
-import { tileHeight, tileToScreen } from '@office/shared';
+import { TILE_H, TILE_W, tileHeight, tileToScreen } from '@office/shared';
 import { Point as PixiPoint } from 'pixi.js';
 import type { OfficeRoomClient } from './net/OfficeConnection.js';
 import type { RoomScene } from './scene/RoomScene.js';
@@ -17,6 +17,11 @@ export interface E2EHook {
   mySessionId(): string;
   /** Ponto da página (px) no meio de um tile, para clicar com o mouse de verdade. */
   tile(x: number, y: number): Point;
+  /** Ponto da página numa parede: meio da aresta do tile (lado 2 ou 4), `h` acima do piso. */
+  wall(x: number, y: number, rot: 2 | 4, h: number): Point;
+  /** Que ponto de parede o modo decorar pegaria aqui (diagnóstico). */
+  wallAt(x: number, y: number): { x: number; y: number; rot: number; h: number } | null;
+  furniZ(id: string): number | null;
   /** Ponto da página no meio do desenho de um móvel. */
   furni(id: string): Point | null;
   furniList(): { id: string; defId: string; x: number; y: number }[];
@@ -55,6 +60,15 @@ export function exposeForTests(scene: RoomScene, room: OfficeRoomClient): void {
       const c = tileToScreen(x, y, tileHeight(scene.map, x, y) ?? 0);
       return toPage({ x: c.sx, y: c.sy });
     },
+    wall: (x, y, rot, h) => {
+      const c = tileToScreen(x, y, (tileHeight(scene.map, x, y) ?? 0) + h);
+      return toPage({ x: c.sx + ((rot === 4 ? -1 : 1) * TILE_W) / 4, y: c.sy - TILE_H / 4 });
+    },
+    wallAt: (x, y) => {
+      const r = canvas();
+      return scene.pickWall(new PixiPoint(x - r.left, y - r.top));
+    },
+    furniZ: (id) => room.state.furni.get(id)?.z ?? null,
     furni: (id) => {
       const view = scene.furniView(id);
       if (!view) return null;

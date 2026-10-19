@@ -19,6 +19,7 @@ import {
   type AvatarManifest,
   type Gender,
 } from '@office/shared';
+import { loadWithFallback, ThumbQueue } from './thumbQueue.js';
 
 export interface AvatarChoice {
   figure: string;
@@ -46,42 +47,7 @@ type ClubFilter = 'all' | 'free' | 'club';
 
 const PREVIEW_DEBOUNCE_MS = 250;
 
-/** Imagem que tenta várias URLs em ordem e chama `onFail` se todas falharem. */
-function loadWithFallback(img: HTMLImageElement, urls: string[], onFail: () => void): void {
-  const queue = [...urls];
-  img.onerror = () => {
-    const next = queue.shift();
-    if (next) img.src = next;
-    else {
-      img.onerror = null;
-      onFail();
-    }
-  };
-  img.src = queue.shift()!;
-}
-
-/**
- * Miniaturas 3 de cada vez: o navegador abre só 6 conexões por servidor, e 60 miniaturas novas
- * de uma vez (o servidor ainda buscando na CDN) atrasariam as outras chamadas da página.
- */
-const thumbQueue: (() => void)[] = [];
-let thumbsLoading = 0;
-function queueThumb(img: HTMLImageElement, urls: string[], onFail: () => void): void {
-  const start = () => {
-    thumbsLoading++;
-    const done = () => {
-      thumbsLoading--;
-      thumbQueue.shift()?.();
-    };
-    img.addEventListener('load', done, { once: true });
-    loadWithFallback(img, urls, () => {
-      done();
-      onFail();
-    });
-  };
-  if (thumbsLoading < 3) start();
-  else thumbQueue.push(start);
-}
+const thumbQueue = new ThumbQueue();
 
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -277,7 +243,7 @@ export function openAvatarEditor(opts: AvatarEditorOptions): Promise<AvatarChoic
 
   function renderSets(): void {
     // Miniaturas da lista anterior que ainda não começaram não interessam mais.
-    thumbQueue.length = 0;
+    thumbQueue.clear();
     const cat = category();
     const selected = currentPart(cat.type)?.setId ?? null;
     const items: HTMLButtonElement[] = [];
@@ -326,7 +292,7 @@ export function openAvatarEditor(opts: AvatarEditorOptions): Promise<AvatarChoic
       const noThumb = () =>
         btn.replaceChildren(el('span', { className: 'set-fallback', textContent: `#${set.id}` }));
       if (opts.thumbnails === false) noThumb();
-      else queueThumb(img, thumbs, noThumb);
+      else thumbQueue.load(img, thumbs, noThumb);
       btn.addEventListener('click', () => update(withPart(figure, manifest, cat.type, set.id)));
       items.push(btn);
     }

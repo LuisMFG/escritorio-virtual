@@ -35,13 +35,22 @@ import { PlaceholderFactory } from './assets/PlaceholderFactory.js';
 import { DEBUG, FORCE_IMAGER, HOUR_OVERRIDE, OFFLINE_ASSETS } from './config.js';
 import type { AvatarSnapshot } from './entities/AvatarView.js';
 import { isSessionError, OfficeConnection, type OfficeRoomClient } from './net/OfficeConnection.js';
-import { adminApi, announcementApi, api, ApiRequestError, jiraApi, looksApi } from './net/api.js';
+import {
+  adminApi,
+  announcementApi,
+  api,
+  ApiRequestError,
+  furniApi,
+  jiraApi,
+  looksApi,
+} from './net/api.js';
 import { forgetToken, loadSession, rememberSession, saveSession } from './net/storage.js';
 import { RoomScene, type SceneDeps } from './scene/RoomScene.js';
 import { AvatarCard } from './ui/avatarCard.js';
 import { openAvatarEditor } from './ui/avatarEditor.js';
 import { ChatPanel } from './ui/chat.js';
 import { DecorPanel } from './ui/decorPanel.js';
+import { FurniDefStore } from './assets/FurniDefStore.js';
 import { mountHud } from './ui/hud.js';
 import { IdleWatcher } from './ui/idle.js';
 import { showClaim, showLogin } from './ui/login.js';
@@ -137,6 +146,12 @@ async function start(): Promise<void> {
     fetchJson('/assets/avatar/manifest.json').then(parseAvatarManifest),
   ]);
 
+  let session: SessionResponse | undefined;
+  // Móveis: os curados do manifesto mais os do catálogo completo, buscados quando aparecem.
+  const furniStore = new FurniDefStore(
+    new Map<string, FurniManifestEntry>(furniManifest.items.map((i) => [i.id, i])),
+    () => session?.token,
+  );
   const loader = new AssetLoader(OFFLINE_ASSETS);
   const placeholders = new PlaceholderFactory(app.renderer, avatarManifest);
   const deps: SceneDeps = {
@@ -150,7 +165,8 @@ async function start(): Promise<void> {
             new ImagerAvatarRenderer(loader, placeholders, avatarManifest.imager),
           ),
     ),
-    furniDefs: new Map<string, FurniManifestEntry>(furniManifest.items.map((i) => [i.id, i])),
+    furniDefs: furniStore.defs,
+    requestDef: (id) => furniStore.ensure(id),
     effects: new EffectLibrary(!OFFLINE_ASSETS),
   };
 
@@ -160,7 +176,6 @@ async function start(): Promise<void> {
 
   let scene: RoomScene | undefined;
   let connection: OfficeConnection | undefined;
-  let session: SessionResponse | undefined;
   // Status: o escolhido pela pessoa e o "ausente" automático por inatividade.
   // O escolhido fica salvo no navegador (sobrevive ao recarregar a página).
   let manualStatus: Status = loadStatus();
@@ -396,12 +411,31 @@ async function start(): Promise<void> {
     decorPanel.show(on);
     hud.setDecorating(on);
   };
-  const decorPanel = new DecorPanel(furniManifest.items, {
-    pick: (defId) => scene?.decor.pick(defId),
-    rotate: () => scene?.decor.rotate(),
-    remove: () => scene?.decor.removeSelected(),
-    close: () => setDecorating(false),
-  });
+  const decorPanel = new DecorPanel(
+    furniManifest.items,
+    {
+      pick: (defId) => scene?.decor.pick(defId),
+      rotate: () => scene?.decor.rotate(),
+      remove: () => scene?.decor.removeSelected(),
+      color: (defId) => {
+        // A definição da cor nova precisa existir antes do estado chegar com ela.
+        void furniStore.ensure(defId).then((d) => {
+          if (d) scene?.decor.setColor(defId);
+          else overlay.notify('Não consegui trocar a cor agora.');
+        });
+      },
+      close: () => setDecorating(false),
+      prepare: async (defId) => Boolean(await furniStore.ensure(defId)),
+      loadCatalog: async () => {
+        const [catalog, config] = await Promise.all([
+          furniStore.catalog(),
+          session ? furniApi.config(session.token) : Promise.resolve({ hiddenCategories: [] }),
+        ]);
+        return { catalog, hidden: config.hiddenCategories };
+      },
+    },
+    !OFFLINE_ASSETS,
+  );
   const hud = mountHud({
     getCamera: () => scene?.camera,
     loader,
@@ -462,6 +496,7 @@ async function start(): Promise<void> {
       token: session.token,
       userId: session.userId,
       roomName,
+      onFurniCategories: (hidden) => decorPanel.setHidden(hidden),
     });
   }
   /** Papel mudou (um admin promoveu/rebaixou você): ajusta o que aparece. */
@@ -654,6 +689,7 @@ async function start(): Promise<void> {
         placeFurni: (msg) => connection.placeFurni(msg),
         moveFurni: (msg) => connection.moveFurni(msg),
         removeFurni: (furniId) => connection.removeFurni(furniId),
+        colorFurni: (msg) => connection.colorFurni(msg),
         avatarClick: (sessionId, at) => {
           const info = s.avatarInfo(sessionId);
           const player = room.state.players.get(sessionId);
@@ -1039,6 +1075,7 @@ async function start(): Promise<void> {
     });
     session = current;
     setUploadToken(current.token);
+    await furniStore.loadMeasured();
     connection = conn;
     applyRole(current.role, current.canEditRooms);
     await conn.join(roomFromHash(), current.token);
