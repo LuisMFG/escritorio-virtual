@@ -24,6 +24,15 @@ export interface E2EHook {
   furniZ(id: string): number | null;
   /** Imagens das camadas que o móvel mostra agora (`null` = imagem estática do imager). */
   furniFrame(id: string): string | null;
+  /** Pets na sala (espécie, paleta, cor e ação). */
+  pets(): {
+    owner: string;
+    name: string;
+    species: string;
+    color: number;
+    tint: string;
+    action: string;
+  }[];
   /** Ponto da página no meio do desenho de um móvel. */
   furni(id: string): Point | null;
   furniList(): { id: string; defId: string; x: number; y: number }[];
@@ -72,6 +81,15 @@ export function exposeForTests(scene: RoomScene, room: OfficeRoomClient): void {
     },
     furniZ: (id) => room.state.furni.get(id)?.z ?? null,
     furniFrame: (id) => scene.furniView(id)?.layeredFrame ?? null,
+    pets: () =>
+      [...room.state.pets.values()].map((p) => ({
+        owner: p.ownerName,
+        name: p.name,
+        species: p.species,
+        color: p.color,
+        tint: p.tint,
+        action: p.action,
+      })),
     furni: (id) => {
       const view = scene.furniView(id);
       if (!view) return null;

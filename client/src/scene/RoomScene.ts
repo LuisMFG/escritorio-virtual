@@ -427,7 +427,12 @@ export class RoomScene implements DecorHost {
   setPet(id: string, snapshot: PetSnapshot): void {
     const view = this.pets.get(id);
     if (view) return view.applySnapshot(snapshot);
-    const pet = new PetView(id, snapshot, (x, y) => this.grid.heightAt(x, y));
+    const pet = new PetView(
+      id,
+      snapshot,
+      (x, y) => this.grid.heightAt(x, y),
+      this.deps.furniVisuals,
+    );
     this.pets.set(id, pet);
     this.objects.addChild(pet);
   }

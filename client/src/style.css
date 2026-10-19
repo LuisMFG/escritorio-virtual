@@ -3440,7 +3440,8 @@ button.reply-quote:hover {
   display: grid;
   place-items: center;
   width: 84px;
-  height: 72px;
+  min-height: 72px;
+  overflow: hidden;
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.06);
 }
@@ -3480,6 +3481,7 @@ button.reply-quote:hover {
 
 .pet-colors {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
@@ -4938,4 +4940,47 @@ button.reply-quote:hover {
   width: 100%;
   padding-top: 4px;
   border-top: 1px solid #3a3f4d;
+}
+
+.pet-species-select {
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid #3a3f4d;
+  background: #1f2330;
+  color: var(--text);
+  font: inherit;
+}
+
+.pet-patterns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.pet-patterns[hidden] {
+  display: none;
+}
+
+.pet-pattern {
+  min-width: 28px;
+  padding: 3px 6px;
+  border-radius: 6px;
+  border: 1px solid #3a3f4d;
+  background: #262a35;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.pet-pattern[aria-checked='true'] {
+  border-color: #3fbf6f;
+  color: var(--text);
+}
+
+.pet-habbo-preview {
+  display: grid;
+  place-items: center;
+  image-rendering: pixelated;
 }
