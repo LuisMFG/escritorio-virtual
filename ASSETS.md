@@ -21,10 +21,14 @@ Desde a Fase 2 as imagens passam pelo proxy do servidor (`/hh/avatar.png`, `/hh/
 | Catálogo de roupas e paletas (dados) | lista `/api/v2/swfs/libraries?kind=clothing` + `/imaging/info/clothing/{lib}` de cada biblioteca (todas, menos NFT) | `server/scripts/figure-sync.ts` → `client/public/assets/avatar/manifest.json` |
 | Miniaturas das roupas do catálogo completo | prévias estáticas da CDN `derived/clothing/{lib}/{rev}/set_{id}.png` (pelo servidor em `/hh/clothing/preview/…`) | `client/src/ui/avatarEditor.ts` |
 | Mobis (render por direção, revisão fixada) | `/imaging/furniture/{classname}.png?revision=…&direction=…` | `client/src/entities/FurniView.ts` |
+| Catálogo completo de móveis (Fase 36) | `/api/v2/furniture` (com token; nome em português, categoria, tamanho, lógica, variações de cor) | `server/scripts/furni-sync.ts` → `client/public/assets/furni/catalog.json` |
+| Medição de um móvel do catálogo (na primeira vez que alguém usa) | `/imaging/info/furniture/{classname}` + renders de cada direção e estado | `server/src/assets/measureFurni.ts`, `server/src/services/FurniDefService.ts` |
+| Miniaturas do Decorar (catálogo completo e cores) | `/imaging/furniture/{classname}.png` (tamanho normal; o `size=32` falha em muitos móveis) | `client/src/ui/decorPanel.ts` |
+
 
 ### Mobis do catálogo (`client/public/assets/furni/manifest.json`)
 
-28 móveis do Habbo Brasil, listados em `server/src/assets/furniCatalog.ts` (classname, nome em português e categoria). Revisões, direções, âncoras e tamanhos medidos são gravados pelo `npm run assets:sync`. Renders: `/imaging/furniture/{classname}.png?revision=…&direction=…`; miniaturas do catálogo: o mesmo com `size=32`.
+28 móveis do Habbo Brasil, listados em `server/src/assets/furniCatalog.ts` (classname, nome em português e categoria). Revisões, direções, âncoras e tamanhos medidos são gravados pelo `npm run assets:sync`. Renders: `/imaging/furniture/{classname}.png?revision=…&direction=…`; miniaturas do Decorar: o mesmo render, reduzido.
 
 ## Arte provisória gerada por código
 

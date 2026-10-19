@@ -41,7 +41,7 @@ Escritório virtual isométrico para amigos e colegas (até ~10 pessoas online):
 - Menções: digite `@` para escolher alguém da sala; quem é mencionado recebe destaque, aviso e som. Um "•••" mostra quem está digitando.
 - Salas ligadas por portas: começa com **Recepção**, **Sala de reunião** e **Copa**; dá para abrir direto numa sala pela URL (`#/meeting`). Admins (e quem eles liberarem) criam e editam salas em **✎ Editar sala**: nome, cores, formato do piso (inclusive em L), entrada e portas — a porta de volta aparece sozinha na outra sala.
 - Sentar e deitar: clique numa cadeira, sofá, banqueta, pufe ou almofada para sentar (sofá de dois lugares cabe duas pessoas) e numa cama ou saco de dormir para deitar (cama de casal, dois). No chão: `/sentar`, `/deitar` e `/levantar` (ou pelo menu 😊). As setas ← → viram o avatar sem sair do lugar; sentado no chão, clicar num tile do lado também vira.
-- Decorar: botão **Decorar** → escolha um móvel no catálogo e clique no piso. Clique num móvel para selecionar, arraste para mover, **R** gira, **Delete** remove, **Esc** cancela. Tudo fica salvo.
+- Decorar: botão **Decorar** → escolha um móvel e clique no piso. Além dos móveis do escritório, o **catálogo completo do Habbo** (mais de 8.600 móveis) com busca e categorias: quadros, janelas e prateleiras vão **na parede** (aponte a parede e clique), móveis com **cores** trocam de cor no lugar e os que ligam/desligam funcionam com um clique. Clique num móvel para selecionar, arraste para mover, **R** gira, **Delete** remove, **Esc** cancela. Tudo fica salvo. Admins escolhem quais categorias aparecem (jogos e festa começam escondidos).
 
 ## Rodar localmente
 
@@ -77,7 +77,7 @@ Opções de URL do cliente: `?offline=1` usa só a arte provisória gerada por c
 |---|---|---|
 | `INVITE_CODE` | `convite` em dev; **obrigatória** em produção | Código pedido para criar conta (valor inicial: depois um admin pode trocar pelo painel) |
 | `ADMIN_USERNAMES` | vazio | Usuários (login) sempre administradores, separados por vírgula. Vazio: a primeira conta criada vira admin |
-| `HABBOASSETS_API_KEY` | vazio | Token gratuito da HabboAssets (só no servidor), usado pelo `assets:sync` para ler dados de móveis |
+| `HABBOASSETS_API_KEY` | vazio | Token gratuito da HabboAssets (só no servidor), usado pelo `assets:furni` para gerar o catálogo completo de móveis |
 | `PORT` | `2567` | Porta HTTP/WebSocket |
 | `DATABASE_PATH` | `./data/sqlite.db` | Arquivo SQLite |
 | `ASSET_CACHE_DIR` | `./data/asset-cache` | Cache em disco das imagens da HabboAssets |
@@ -99,7 +99,8 @@ Opções de URL do cliente: `?offline=1` usa só a arte provisória gerada por c
 | `npm run build` | Build de produção do cliente (`client/dist`) |
 | `npm start` | Servidor em modo produção (serve o `client/dist`) |
 | `npm run bot` | Robôs de teste |
-| `npm run assets:sync` | Regera o manifesto de móveis a partir da HabboAssets |
+| `npm run assets:sync` | Regera o manifesto dos móveis curados do escritório a partir da HabboAssets |
+| `npm run assets:furni` | Regera o catálogo completo de móveis (`client/public/assets/furni/catalog.json`) pela API da HabboAssets; precisa de `HABBOASSETS_API_KEY`. Cada móvel é medido no imager só quando alguém usa pela primeira vez |
 | `npm run assets:figure` | Regera o catálogo completo de roupas (`client/public/assets/avatar/manifest.json`) e os dados para montar o avatar (`client/public/assets/figure/figuredata.json`), com itens na mão e efeitos. Lê ~2.300 bibliotecas da HabboAssets (com cache em disco: a primeira vez leva uns 10 minutos, depois segundos) |
 | `npm run assets:figure-check` | Confere o avatar montado contra o imager (várias figuras, 8 direções) e grava as piores comparações em `data/figure-check/` |
 | `npm run db:generate` | Gera migration SQL após mudar `server/src/db/schema.ts` |
@@ -177,7 +178,7 @@ npm run assets:sync -- --thumbs
 
 - Roupas: a curadoria (categorias e bibliotecas `hh_human_*`) fica em `server/src/assets/avatarManifest.ts`. `--thumbs` pré-baixa as miniaturas do editor.
 - Móveis: liste o classname, o nome e a categoria em português em `server/src/assets/furniCatalog.ts`. O script baixa os renders e mede a âncora (onde o móvel encosta no piso) e o tamanho a partir das imagens. Se souber o tamanho, informe `width`/`depth`, que têm prioridade.
-- Com `HABBOASSETS_API_KEY`, o script também tenta ler nome e tamanho da furnidata (esse caminho ainda não foi testado com um token real).
+- Catálogo completo: `npm run assets:furni` (com `HABBOASSETS_API_KEY`) gera `client/public/assets/furni/catalog.json`. As definições medidas na primeira vez que alguém usa um móvel ficam no banco (`furni_defs`).
 
 **Arte própria ou CC0.** Para um móvel que não vem da HabboAssets:
 

@@ -901,7 +901,7 @@ Pedido (18/10/2026): prioridade para as **animações dos personagens**, **senta
 | Conteúdo | Na API | Hoje no escritório |
 |---|---|---|
 | Roupas (bibliotecas) | 3.121 | 9 bibliotecas básicas, 270 peças |
-| Móveis | 18.357 | 57 (curados à mão) |
+| Móveis | 18.357 | 57 (curados à mão); 8.683 desde a Fase 36 |
 | Efeitos (brilho, raio, aura…) | 252 | nenhum |
 | Pets do Habbo | 37 tipos | 4, em pixel art própria |
 | Emblemas | 12.397 | medalhas em CSS |
@@ -996,12 +996,23 @@ Pedido (18/10/2026): prioridade para as **animações dos personagens**, **senta
 - Testes: busca (tradução, palavras compostas), roupa animada (quadros pelo total da peça), catálogo completo (todas as bibliotecas, paleta própria, revisão, animação), prévia da CDN (só biblioteca e revisão conhecidas), looks (5 slots, troca, validação, apagar) e ponta a ponta (`e2e/tests/roupas.spec.ts`: buscar "terno", vestir, guardar no look 1 e o outro vê a peça nova). Achado no teste: a lista de looks que chegava depois apagava o look recém-guardado da tela; corrigido.
 - No navegador: editor com as 12 abas, "terno" achando só o terno risca de giz, acessório animado vestido e look guardado (desfeitos depois, na sua conta).
 
-#### Fase 36 — Catálogo completo de móveis
+#### Fase 36 — Catálogo completo de móveis ✅ implementada
 - Com o token gratuito, o servidor lê a lista dos 18 mil móveis com categorias e nomes em português. O catálogo do Decorar ganha busca e as categorias do Habbo, com o tamanho de cada móvel medido sozinho na primeira vez que alguém o usa (sem curadoria à mão).
 - **Móveis de parede:** quadros, janelas, prateleiras, cartazes e relógios presos na parede.
 - Móveis com **cores** (as variações do Habbo) e todos os **estados** (ligar/desligar genérico).
 - Admin pode esconder categorias que não combinam com escritório.
 - **Como testar:** buscar "geladeira", "quadro" e "janela", colocar um na parede e trocar a cor de um sofá.
+
+**Notas da implementação:**
+- **Catálogo:** `npm run assets:furni` lê a lista da API v2 (com o token, ~18 mil móveis, cache de um dia) e grava `client/public/assets/furni/catalog.json` (1 MB, versionado): **8.683 móveis** (12.067 contando as cores) com nome em português, categoria, tamanho, se senta/deita/anda por cima e se liga/desliga. Ficam de fora os que não são móveis de verdade (créditos, wired, presentes, roupas, anúncios, testes) e as cópias NFT. As variações de cor (`classname*N`) viram um item com as cores.
+- **Sob demanda:** o catálogo só tem os dados básicos. Na primeira vez que alguém escolhe um móvel, o servidor mede no imager (direções, âncora de cada direção, estados que o imager desenha) e guarda a definição no banco (tabela `furni_defs`, migration `0025_moveis`); as próximas vezes são imediatas. Leva 1–3 s (até ~10 s nos que têm muitos estados). Os navegadores buscam a definição quando veem um móvel novo (`GET /api/furni/defs/:id`, 20 móveis novos por minuto por pessoa).
+- **Painel do Decorar:** busca em português (nome ou classname, sem acento) em tudo, categorias do Habbo com a contagem (Escritório = os 62 curados de sempre; **Parede** = os 582 itens de parede), 60 por vez com "Mostrar mais", miniaturas 3 de cada vez (a mesma fila do editor de roupas, agora em `client/src/ui/thumbQueue.ts`).
+- **Parede:** item de parede fica num tile com parede atrás (lado 2 = parede do fundo-direita, 4 = esquerda; a abertura das portas não conta), com a altura escolhida pelo mouse (de 4 em 4 px, até o topo da parede). O centro da imagem vai no ponto da parede; não ocupa o piso nem atrapalha o caminho. Arrastar move pela parede (inclusive para a outra parede).
+- **Cores:** escolhendo ou selecionando um móvel com cores aparecem as miniaturas de cada cor; clicar troca no lugar (mensagem `furni.color`, só entre cores do mesmo móvel e do mesmo tamanho).
+- **Estados:** os que ligam/desligam no Habbo usam o toggle genérico (clique fora do Decorar anda até o móvel e passa para o próximo estado), inclusive na parede (persiana da janela abre e fecha).
+- **Categorias escondidas:** Admin → Convite e salas → Catálogo de móveis. Jogos, música, pets, sons e extras começam escondidos; o servidor recusa colocar de categoria escondida (os curados sempre valem; os já colocados ficam).
+- Testes: regras de parede (onde tem parede, porta, altura, não ocupa o piso), busca e categorias, serviço de definições (mede uma vez só mesmo com pedidos simultâneos, falha vira 502 e tenta de novo), categorias escondidas (só admin muda), sala (quadro na parede, troca de cor só do mesmo móvel, categoria escondida) e ponta a ponta (`e2e/tests/catalogo.spec.ts`: jogo escondido não aparece na busca, quadro na parede visto pelo outro, que busca a definição, e troca de cor). O servidor dos testes de ponta a ponta mede sem o imager (`FURNI_MEASURE=offline`). Achado no teste: com dezenas de miniaturas carregando, o pedido da cor nova ficava esperando conexão; agora entram 3 por vez.
+- No navegador: quadro grande na parede do fundo, janela que abre/fecha a persiana, poltrona trocada para rosa e a categoria Jogos liberada e escondida de novo (deixei o quadro, a janela e a poltrona na Recepção para você ver).
 
 #### Fase 37 — Móveis animados e interativos
 - Com os `.nitro` dos móveis: **animações** (ventilador girando, lareira, TV, aquário, luzes piscando).
