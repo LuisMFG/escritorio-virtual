@@ -1032,10 +1032,18 @@ Pedido (18/10/2026): prioridade para as **animações dos personagens**, **senta
 - Testes: quadros das animações (repetição, voltas, sorteio), montagem dos sprites (sombra, deslocamento, espelhado, ink, alpha, cor, quadro que falta), leitura da visualização e dos assets do SWF, teleportes (lista, ligar dos dois lados, religar, sala travada, remover desfaz), sala (dado rola e para; teleporte solto avisa, na mesma sala e para outra sala) e ponta a ponta (`e2e/tests/interativos.spec.ts`: dado visto no chat do outro, ligar dois teleportes pelo painel e atravessar).
 - No navegador: lareira acesa crepitando, Holo-Dado rolando e parando no 1, par de Portas Teleporte ligado pelo painel e atravessado, Rádio HC ligado (com Música liberada só para o teste e escondida de novo). Deixei a lareira, o dado, os teleportes e o rádio na Recepção.
 
-#### Fase 38 — Pets do Habbo de verdade
+#### Fase 38 — Pets do Habbo de verdade ✅ implementada
 - Troca a pixel art pelos **pets do Habbo** (cachorro, gato, coelho, urso, dragão…, 37 tipos) com as animações deles: andar, sentar, deitar, dormir, comer, pular.
 - Os comandos (`/senta`, `/deita`, `/vem`) continuam; quem já tem pet escolhe a versão nova.
 - **Como testar:** adotar um pet do Habbo, ver andando atrás de você e obedecendo.
+
+**Notas da implementação:**
+- **Catálogo:** `npm run assets:pets` lê as 37 bibliotecas de pet da HabboAssets e grava `client/public/assets/pets/pets.json` com **33 tipos** (nome em português, revisão, paletas e posturas). Ficam de fora a pedra de 1º de abril, o monstro-caixa, a planta que não anda e o cavalo (pinta corpo e crina com paletas separadas).
+- **Desenho:** o mesmo sistema de camadas dos móveis animados (Fase 37), agora com deslocamento por direção em cada quadro, 8 direções, posturas (`std`, `mv`, `sit`, `lay`…) e gestos. O servidor converte o SWF do pet já com a paleta escolhida (`/hh/pet/{tipo}.png|json?revision&palette`); a paleta troca cada pixel pela cor do índice no canal verde, como o `paletteMap` do Habbo (as paletas têm 768 ou 772 bytes). A cor escolhida multiplica as partes pintáveis.
+- **Na sala:** andando usa `mv` (os dragões voam!), sentado `sit`, deitado `lay` (ou o que o tipo tiver), e ao obedecer faz uma carinha feliz (gesto `sml`) por alguns segundos. Sem internet, cai na arte própria mais parecida.
+- **Perfil → Meu pet:** espécie numa lista com "Pets do Habbo" e "Desenhados" (os 4 de antes continuam), padrão da pelagem (até 35) e 12 cores, com prévia ao vivo. Quem tem um pet desenhado vê o aviso da novidade e troca em Editar. Banco: coluna `pets.tint` (migration `0027_pets_habbo`); a espécie do Habbo fica como `hh:{tipo}` e a paleta em `color`.
+- Testes: espécie e cor (tipo conhecido, cor padrão, pelagem antiga limitada), postura de cada ação com o que o tipo tiver, API de pets com pet do Habbo, leitura de deslocamento por quadro/posturas/gestos/paleta e ponta a ponta (`e2e/tests/pets.spec.ts`: adotar no Perfil com padrão e cor, o outro vê e ele senta). Achado no teste: o pet criado na sala vinha sem a cor; corrigido.
+- No navegador: a Bolota (gata desenhada da Ana) virou o Gato do Habbo, padrão 3, cor caramelo; anda atrás da Ana e senta com `/senta`. Para voltar à desenhada: Perfil → Meu pet → Editar → Desenhados → Gato.
 
 #### Fase 39 — Emblemas do Habbo e acabamento
 - Conquistas com **emblemas reais do Habbo** (no lugar das medalhas em CSS), escolhidos um para cada conquista.

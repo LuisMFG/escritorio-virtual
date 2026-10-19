@@ -14,7 +14,7 @@ Escritório virtual isométrico para amigos e colegas (até ~10 pessoas online):
 - **Quadro branco**: clique no cavalete da Sala de reunião para desenhar junto com quem estiver na sala (pincel, borracha, texto, cores, desfazer). O desenho fica salvo e aparece em miniatura no próprio móvel.
 - **Agenda de reuniões**: botão 📅 Agenda para marcar reunião (sala, horário, duração e convidados), responder Vou/Não vou e cancelar. Lembrete 5 min antes (aviso, notificação e DM) com "Ir para a sala"; durante a reunião a porta da sala mostra "🔴 Em reunião".
 - **Mini-jogos**: jogo da velha na Mesa de Jogos da Copa (duas pessoas sentam e jogam, o resto da sala assiste, com placar) e `/dado` e `/moeda` no chat, sorteados pelo servidor.
-- **Pets**: adote um bichinho no Perfil (cachorro, gato, coelho ou pintinho). Ele segue você entre as salas, passeia quando você para e obedece `/senta`, `/deita` e `/vem` no chat.
+- **Pets**: adote um bichinho no Perfil: **33 pets do Habbo** (cachorro, gato, urso, leão, dragão, macaco, sapo…, com padrão de pelagem e cor) ou os 4 desenhados (cachorro, gato, coelho e pintinho). Ele segue você entre as salas, passeia quando você para e obedece `/senta`, `/deita` e `/vem` no chat.
 - **Conquistas**: 17 conquistas (conversar, decorar, explorar as salas, jogar, ir às reuniões…) com aviso ao desbloquear. No Perfil você escolhe até 3 emblemas para aparecer no seu cartão.
 - **Status do editor de código**: com a extensão do VS Code ou do Visual Studio, seu cartão mostra “💻 Codando em C# no Visual Studio” enquanto você programa. No Perfil você escolhe o que aparece (nada, só “Codando”, a linguagem ou também o projeto). Veja [Extensões dos editores](#extensões-dos-editores).
 - **Spotify**: conecte sua conta no Perfil e a música que você está ouvindo aparece no seu cartão (“🎵 Música – Artista”, com link). Dá para esconder sem desconectar. Precisa de um app do Spotify configurado; veja [Spotify](#spotify).
@@ -101,6 +101,7 @@ Opções de URL do cliente: `?offline=1` usa só a arte provisória gerada por c
 | `npm run bot` | Robôs de teste |
 | `npm run assets:sync` | Regera o manifesto dos móveis curados do escritório a partir da HabboAssets |
 | `npm run assets:furni` | Regera o catálogo completo de móveis (`client/public/assets/furni/catalog.json`) pela API da HabboAssets; precisa de `HABBOASSETS_API_KEY`. Cada móvel é medido no imager só quando alguém usa pela primeira vez |
+| `npm run assets:pets` | Regera o catálogo dos pets do Habbo (`client/public/assets/pets/pets.json`): tipos, paletas e posturas, lendo os SWFs da HabboAssets |
 | `npm run assets:figure` | Regera o catálogo completo de roupas (`client/public/assets/avatar/manifest.json`) e os dados para montar o avatar (`client/public/assets/figure/figuredata.json`), com itens na mão e efeitos. Lê ~2.300 bibliotecas da HabboAssets (com cache em disco: a primeira vez leva uns 10 minutos, depois segundos) |
 | `npm run assets:figure-check` | Confere o avatar montado contra o imager (várias figuras, 8 direções) e grava as piores comparações em `data/figure-check/` |
 | `npm run db:generate` | Gera migration SQL após mudar `server/src/db/schema.ts` |
