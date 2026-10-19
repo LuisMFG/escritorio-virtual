@@ -23,6 +23,8 @@ Desde a Fase 2 as imagens passam pelo proxy do servidor (`/hh/avatar.png`, `/hh/
 | Mobis (render por direção, revisão fixada) | `/imaging/furniture/{classname}.png?revision=…&direction=…` | `client/src/entities/FurniView.ts` |
 | Catálogo completo de móveis (Fase 36) | `/api/v2/furniture` (com token; nome em português, categoria, tamanho, lógica, variações de cor) | `server/scripts/furni-sync.ts` → `client/public/assets/furni/catalog.json` |
 | Medição de um móvel do catálogo (na primeira vez que alguém usa) | `/imaging/info/furniture/{classname}` + renders de cada direção e estado | `server/src/assets/measureFurni.ts`, `server/src/services/FurniDefService.ts` |
+| Móveis por camadas e animados (Fase 37) | SWF original `cdn.habboassets.com/images.habbo.com/dcr/hof_furni/{revisão}/{classname}.swf` (imagens + `_visualization` + `_assets`); o servidor converte em `/hh/furni/{classname}.png` e `.json` | `server/src/assets/furniVisual.ts`, `shared/src/furniVisual.ts`, `client/src/assets/FurniVisualLibrary.ts` |
+| Música da jukebox | gerada no navegador (WebAudio), sem arquivos | `client/src/ui/ambient.ts` |
 | Miniaturas do Decorar (catálogo completo e cores) | `/imaging/furniture/{classname}.png` (tamanho normal; o `size=32` falha em muitos móveis) | `client/src/ui/decorPanel.ts` |
 
 

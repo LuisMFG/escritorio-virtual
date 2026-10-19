@@ -1014,11 +1014,23 @@ Pedido (18/10/2026): prioridade para as **animações dos personagens**, **senta
 - Testes: regras de parede (onde tem parede, porta, altura, não ocupa o piso), busca e categorias, serviço de definições (mede uma vez só mesmo com pedidos simultâneos, falha vira 502 e tenta de novo), categorias escondidas (só admin muda), sala (quadro na parede, troca de cor só do mesmo móvel, categoria escondida) e ponta a ponta (`e2e/tests/catalogo.spec.ts`: jogo escondido não aparece na busca, quadro na parede visto pelo outro, que busca a definição, e troca de cor). O servidor dos testes de ponta a ponta mede sem o imager (`FURNI_MEASURE=offline`). Achado no teste: com dezenas de miniaturas carregando, o pedido da cor nova ficava esperando conexão; agora entram 3 por vez.
 - No navegador: quadro grande na parede do fundo, janela que abre/fecha a persiana, poltrona trocada para rosa e a categoria Jogos liberada e escondida de novo (deixei o quadro, a janela e a poltrona na Recepção para você ver).
 
-#### Fase 37 — Móveis animados e interativos
+#### Fase 37 — Móveis animados e interativos ✅ implementada
 - Com os `.nitro` dos móveis: **animações** (ventilador girando, lareira, TV, aquário, luzes piscando).
 - Assentos e camas reconhecidos pelos dados do Habbo (qualquer cadeira nova já senta).
 - **Teleportes** do Habbo ligando duas salas (entra num, sai no outro), dado do Habbo que rola de verdade, jukebox.
 - **Como testar:** ligar o ventilador e ver girando; usar um par de teleportes entre a Copa e a Sala do TI.
+
+**Notas da implementação:**
+- **Móveis por camadas:** em vez do `.nitro`, o servidor usa o SWF original de cada móvel (`dcr/hof_furni/{revisão}/{classname}.swf`, o mesmo caminho das roupas e efeitos): imagens de 64 px numa folha, mais as camadas, ajustes por direção, animações por estado e cores das variações (`/hh/furni/{classname}.png|json`, cache em disco; só móveis conhecidos). O navegador monta o desenho a cada quadro (24 por segundo, como o Habbo) com a origem no vértice de cima do tile do móvel; ink ADD vira brilho somado, alpha e cores pintam as camadas. Conferido contra o imager em 4 direções (inclusive as espelhadas).
+- **Quais:** os que o Habbo anima (`furniture_animated`, ~5.300 do catálogo e 21 dos curados: lareira, TVs, luminárias, computadores, geladeira, cafeteira…). Os outros, os de parede e os que desenham por cima (quadro branco, mesa de jogos, murais) continuam com a imagem do imager. Sem internet (`?offline=1`) também.
+- **Luzes:** a luminária acesa agora soma o brilho do próprio Habbo (antes o imager achatava num disco escuro e ela ficava sempre "apagada" no desenho); o brilho da noite continua.
+- **Dado** (categoria Dados, 5 modelos): clicar anda até ele, rola (animação do Habbo) e para no número sorteado pelo servidor, com "🎲 tirou N no dado" no chat da sala.
+- **Teleportes** (categoria Teleportes, 47 modelos): no Decorar, selecione um e escolha o outro na lista (de qualquer sala) → **Ligar** / **Desligar**. Clicar anda até ele, a porta abre e a pessoa aparece do lado do outro (na outra sala, como passar por uma porta). Tabela `teleport_links` (migration `0026_teleportes`); remover um teleporte desfaz a ligação. São sólidos (no Habbo "dá para pisar").
+- **Jukebox** (categoria Música, que começa escondida — o admin libera): clicar liga/desliga; ligada, toca para todos na sala uma música gerada no navegador (acordes, baixo e batida), para quem está com o 🎵 ligado.
+- **Assentos e camas** já vinham dos dados do Habbo desde a Fase 36.
+- **Clique por pixel** passou a funcionar com as imagens carregadas como ImageBitmap (antes valia a caixa inteira da imagem, e um móvel grande podia "roubar" o clique do vizinho).
+- Testes: quadros das animações (repetição, voltas, sorteio), montagem dos sprites (sombra, deslocamento, espelhado, ink, alpha, cor, quadro que falta), leitura da visualização e dos assets do SWF, teleportes (lista, ligar dos dois lados, religar, sala travada, remover desfaz), sala (dado rola e para; teleporte solto avisa, na mesma sala e para outra sala) e ponta a ponta (`e2e/tests/interativos.spec.ts`: dado visto no chat do outro, ligar dois teleportes pelo painel e atravessar).
+- No navegador: lareira acesa crepitando, Holo-Dado rolando e parando no 1, par de Portas Teleporte ligado pelo painel e atravessado, Rádio HC ligado (com Música liberada só para o teste e escondida de novo). Deixei a lareira, o dado, os teleportes e o rádio na Recepção.
 
 #### Fase 38 — Pets do Habbo de verdade
 - Troca a pixel art pelos **pets do Habbo** (cachorro, gato, coelho, urso, dragão…, 37 tipos) com as animações deles: andar, sentar, deitar, dormir, comer, pular.
