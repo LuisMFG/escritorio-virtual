@@ -26,6 +26,16 @@ export function effectSheetUrl(lib: string, revision: number, ext: 'png' | 'json
  */
 export const SHEET_FORMAT = 2;
 
+/** Folha + dados de desenho por camadas de um móvel (Fase 37), pelo proxy do servidor. */
+export function furniVisualUrl(classname: string, revision: number, ext: 'png' | 'json'): string {
+  return `/hh/furni/${encodeURIComponent(classname)}.${ext}?revision=${revision}&v=${SHEET_FORMAT}`;
+}
+
+/** SWF original de um móvel na CDN. */
+export function furniSwfUrl(classname: string, revision: number): string {
+  return `${HABBOASSETS_CDN}/images.habbo.com/dcr/hof_furni/${revision}/${classname}.swf`;
+}
+
 /** Base do imager público (PNGs por URL, sem token). */
 export const HABBOASSETS_IMAGER = 'https://www.habboassets.com/imaging';
 

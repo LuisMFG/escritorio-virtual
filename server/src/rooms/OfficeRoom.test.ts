@@ -355,6 +355,69 @@ describe('OfficeRoom', () => {
       await wait(200);
     });
 
+    it(
+      'dado rola e para num número; teleporte leva para o outro lado',
+      { timeout: 20_000 },
+      async () => {
+        const defs = svc.furniDefs as Map<string, FurniManifestEntry>;
+        const base = defs.get('plant_yukka')!;
+        defs.set('dado_t', { ...base, id: 'dado_t', interaction: 'dice' });
+        defs.set('tele_t', { ...base, id: 'tele_t', interaction: 'teleport', states: [0, 1] });
+        const ana = newUser('Ana');
+        const a = await join(ana.token);
+        const me = () => a.state.players.get(a.sessionId)!;
+
+        // Dado do lado de quem joga: rola (255) e para entre 1 e 6, com a mensagem no chat.
+        const p0 = me();
+        a.send(ClientMessage.FurniPlace, { defId: 'dado_t', x: p0.x + 1, y: p0.y, rot: 0 });
+        await waitFor(() => [...a.state.furni.values()].some((f) => f.defId === 'dado_t'));
+        const dice = [...a.state.furni.values()].find((f) => f.defId === 'dado_t')!;
+        a.send(ClientMessage.Interact, { furniId: dice.id });
+        await waitFor(() => a.state.furni.get(dice.id)!.state === 255);
+        const chat = (await a.waitForMessage(ServerMessage.Chat, 3000)) as ChatMessage;
+        expect(chat.text).toMatch(/tirou [1-6] no dado/);
+      await waitFor(() => a.state.furni.get(dice.id)!.state !== 255);
+        expect(a.state.furni.get(dice.id)!.state).toBeGreaterThanOrEqual(1);
+        expect(a.state.furni.get(dice.id)!.state).toBeLessThanOrEqual(6);
+
+        // Teleporte solto avisa; ligado na mesma sala, a pessoa aparece do lado do outro.
+        a.send(ClientMessage.FurniPlace, { defId: 'tele_t', x: p0.x, y: p0.y + 1, rot: 0 });
+        a.send(ClientMessage.FurniPlace, { defId: 'tele_t', x: 11, y: 8, rot: 0 });
+        await waitFor(
+          () => [...a.state.furni.values()].filter((f) => f.defId === 'tele_t').length === 2,
+        );
+        const [t1, t2] = [...a.state.furni.values()].filter((f) => f.defId === 'tele_t');
+        const near = t1!.x === p0.x ? t1! : t2!;
+        const far = near === t1 ? t2! : t1!;
+        a.send(ClientMessage.Interact, { furniId: near.id });
+        const err = (await a.waitForMessage(ServerMessage.Error)) as ErrorMessage;
+        expect(err.message).toMatch(/não está ligado/);
+        svc.furni.link(near.id, far.id);
+        await wait(600);
+        a.send(ClientMessage.Interact, { furniId: near.id });
+        await waitFor(() => a.state.furni.get(near.id)!.state === 1);
+        await waitFor(() => Math.abs(me().x - far.x) <= 1 && Math.abs(me().y - far.y) <= 1, 4000);
+
+        // Ligado a um teleporte em outra sala: troca de sala com ticket.
+        const other = svc.furni.add(
+          MEETING.id,
+          { defId: 'tele_t', x: 3, y: 3, z: 0, rot: 0 },
+          ana.id,
+        );
+        svc.furni.link(far.id, other.id);
+        await wait(600);
+        a.send(ClientMessage.Interact, { furniId: far.id });
+        const transfer = (await a.waitForMessage(
+          ServerMessage.RoomTransfer,
+          4000,
+        )) as RoomTransferMessage;
+        expect(transfer.targetRoomId).toBe(MEETING.id);
+        const b = await join(ana.token, MEETING.id, transfer.ticket);
+        const there = b.state.players.get(b.sessionId)!;
+        expect(Math.abs(there.x - 3) <= 1 && Math.abs(there.y - 3) <= 1).toBe(true);
+      },
+    );
+
     it('a sala recriada carrega os móveis do banco', async () => {
       const ana = newUser('Ana');
       const a = await join(ana.token);

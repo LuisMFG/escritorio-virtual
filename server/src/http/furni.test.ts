@@ -52,6 +52,7 @@ const fakeMeasure = async (item: CatalogItem, id: string): Promise<FurniManifest
     states: [],
     stateAnchors: {},
     light: false,
+    animated: false,
   };
 };
 

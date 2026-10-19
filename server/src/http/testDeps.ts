@@ -12,6 +12,7 @@ import type { JiraDeps } from './jira.js';
 import type { EffectDeps } from './effects.js';
 import type { LookDeps } from './looks.js';
 import type { FurniDeps } from './furni.js';
+import type { TeleportDeps } from './teleports.js';
 import type { CatalogItem, FurniManifestEntry } from '@office/shared';
 import { openDatabase } from '../db/client.js';
 import { createServices } from '../services/index.js';
@@ -30,7 +31,8 @@ export type TestDeps = MeetingDeps &
   JiraDeps &
   EffectDeps &
   LookDeps &
-  FurniDeps;
+  FurniDeps &
+  TeleportDeps;
 
 /** Dependências das rotas sobre um banco em memória (testes). */
 export function makeDeps(

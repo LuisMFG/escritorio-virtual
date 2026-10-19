@@ -9,7 +9,7 @@ import { inflateSync } from 'node:zlib';
  * fora do lugar (cabelos, principalmente).
  */
 
-interface Bitmap {
+export interface Bitmap {
   width: number;
   height: number;
   /** RGBA não pré-multiplicado. */
@@ -22,6 +22,8 @@ interface SwfContents {
   animation: string;
   /** Nome da classe (`hh_human_hair_h_std_hr_1_2_0`) → imagem. */
   bitmaps: Map<string, Bitmap>;
+  /** Nome da classe → texto dos dados binários (XMLs dos móveis: `_assets`, `_visualization`…). */
+  binaries: Map<string, string>;
 }
 
 /** Lê as tags do SWF que interessam: imagens sem perda, nomes das classes e o manifesto. */
@@ -32,6 +34,7 @@ export function readSwf(file: Buffer): SwfContents {
   const nbits = body[0]! >> 3;
   let p = Math.ceil((5 + nbits * 4) / 8) + 4;
   const images = new Map<number, Bitmap>();
+  const texts = new Map<number, string>();
   const names = new Map<string, number>();
   let manifest = '';
   let animation = '';
@@ -63,16 +66,20 @@ export function readSwf(file: Buffer): SwfContents {
       }
     } else if (type === 87) {
       const text = data.subarray(6).toString('utf8');
+      texts.set(data.readUInt16LE(0), text);
       if (text.includes('<manifest')) manifest = text;
       else if (text.includes('<animation')) animation = text;
     }
   }
   const bitmaps = new Map<string, Bitmap>();
+  const binaries = new Map<string, string>();
   for (const [name, id] of names) {
     const img = images.get(id);
     if (img) bitmaps.set(name, img);
+    const text = texts.get(id);
+    if (text !== undefined) binaries.set(name, text);
   }
-  return { manifest, animation, bitmaps };
+  return { manifest, animation, bitmaps, binaries };
 }
 
 /** DefineBitsLossless(2): formato 3 (paleta) ou 5 (32 bits, ARGB pré-multiplicado no 2). */
@@ -130,8 +137,7 @@ export function buildFigureSheet(
     offsets.set(m[1]!, [Number(m[2]), Number(m[3])]);
   }
   const prefix = `${lib}_`;
-  type Cut = { name: string; img: Bitmap; x0: number; y0: number; w: number; h: number };
-  const cuts: Cut[] = [];
+  const cuts: SheetCut[] = [];
   for (const [cls, img] of swf.bitmaps) {
     if (!cls.startsWith(prefix)) continue;
     const name = cls.slice(prefix.length);
@@ -151,34 +157,12 @@ export function buildFigureSheet(
     if (x1 < 0) continue;
     cuts.push({ name, img, x0, y0, w: x1 - x0 + 1, h: y1 - y0 + 1 });
   }
-  // Empacota em prateleiras de até 1024 px de largura (mais altas primeiro).
-  cuts.sort((a, b) => b.h - a.h);
-  const WIDTH = 1024;
-  let x = 0;
-  let y = 0;
-  let shelf = 0;
-  const placed: (Cut & { px: number; py: number })[] = [];
+  const { png, frames } = packBitmaps(cuts);
+  const sheet: FigureSheet = { assets: {}, frames };
   for (const c of cuts) {
-    if (x + c.w > WIDTH) {
-      x = 0;
-      y += shelf + 1;
-      shelf = 0;
-    }
-    placed.push({ ...c, px: x, py: y });
-    x += c.w + 1;
-    shelf = Math.max(shelf, c.h);
-  }
-  const png = new PNG({ width: WIDTH, height: Math.max(1, y + shelf) });
-  const sheet: FigureSheet = { assets: {}, frames: {} };
-  for (const c of placed) {
-    for (let yy = 0; yy < c.h; yy++) {
-      const from = ((c.y0 + yy) * c.img.width + c.x0) * 4;
-      png.data.set(c.img.rgba.subarray(from, from + c.w * 4), ((c.py + yy) * WIDTH + c.px) * 4);
-    }
     const [ox, oy] = offsets.get(c.name)!;
     // O deslocamento do Habbo vale para a imagem inteira; cortando, ele anda junto.
     sheet.assets[c.name] = { x: ox - c.x0, y: oy - c.y0 };
-    sheet.frames[c.name] = { x: c.px, y: c.py, w: c.w, h: c.h };
   }
   for (const m of swf.manifest.matchAll(
     /<alias name=["']([^"']+)["'] link=["']([^"']+)["'] fliph=["'](\d)["']/g,
@@ -189,6 +173,49 @@ export function buildFigureSheet(
     sheet.assets[name!] = { ...target, source: link };
   }
   return { sheet, png: PNG.sync.write(png) };
+}
+
+/** Recorte de uma imagem a colocar na folha. */
+export interface SheetCut {
+  name: string;
+  img: Bitmap;
+  x0: number;
+  y0: number;
+  w: number;
+  h: number;
+}
+
+/** Empacota os recortes em prateleiras de até 1024 px de largura (mais altos primeiro). */
+export function packBitmaps(cuts: SheetCut[]): {
+  png: PNG;
+  frames: Record<string, { x: number; y: number; w: number; h: number }>;
+} {
+  const sorted = [...cuts].sort((a, b) => b.h - a.h);
+  const WIDTH = 1024;
+  let x = 0;
+  let y = 0;
+  let shelf = 0;
+  const placed: (SheetCut & { px: number; py: number })[] = [];
+  for (const c of sorted) {
+    if (x + c.w > WIDTH) {
+      x = 0;
+      y += shelf + 1;
+      shelf = 0;
+    }
+    placed.push({ ...c, px: x, py: y });
+    x += c.w + 1;
+    shelf = Math.max(shelf, c.h);
+  }
+  const png = new PNG({ width: WIDTH, height: Math.max(1, y + shelf) });
+  const frames: Record<string, { x: number; y: number; w: number; h: number }> = {};
+  for (const c of placed) {
+    for (let yy = 0; yy < c.h; yy++) {
+      const from = ((c.y0 + yy) * c.img.width + c.x0) * 4;
+      png.data.set(c.img.rgba.subarray(from, from + c.w * 4), ((c.py + yy) * WIDTH + c.px) * 4);
+    }
+    frames[c.name] = { x: c.px, y: c.py, w: c.w, h: c.h };
+  }
+  return { png, frames };
 }
 
 /**

@@ -25,6 +25,10 @@ export interface CatalogItem {
   walk?: 1;
   /** Liga/desliga (vários estados). */
   multi?: 1;
+  /** Desenhado por camadas e animações do Habbo (Fase 37). */
+  a?: 1;
+  /** Comportamento especial (Fase 37): dado, teleporte ou jukebox. */
+  x?: 'dice' | 'teleport' | 'jukebox';
   /** Revisão do SWF no Habbo. */
   rev: number;
   /** Variações de cor (classnames `base*N`), quando houver. */
@@ -53,6 +57,8 @@ export const CATALOG_CATEGORIES: Record<string, string> = {
   vending_machine: 'Máquinas',
   food: 'Comida',
   trophy: 'Troféus',
+  teleport: 'Teleportes',
+  dice: 'Dados',
   tent: 'Barracas',
   misc: 'Diversos',
   other: 'Outros',

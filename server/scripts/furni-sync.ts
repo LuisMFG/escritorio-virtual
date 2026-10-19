@@ -31,11 +31,18 @@ interface ApiFurni {
   can_sit_on: boolean;
   can_stand_on: boolean;
   can_lay_on: boolean;
+  visualization: string | null;
   swf: { directions?: number[] } | null;
 }
 
 /** Só móveis comuns (os outros tipos são coisas do hotel: créditos, wired, presentes, roupas…). */
-const LOGICS = new Set(['furniture_basic', 'furniture_multistate']);
+const LOGICS = new Set([
+  'furniture_basic',
+  'furniture_multistate',
+  // Fase 37: dados que rolam e jukebox.
+  'furniture_dice',
+  'furniture_jukebox',
+]);
 
 // Lista bruta em cache por um dia (a paginação inteira leva um minuto e meio).
 const rawFile = join(config.assetCacheDir, 'furni-list.json');
@@ -64,10 +71,12 @@ console.log();
 const usable = all.filter(
   (f) =>
     LOGICS.has(f.logic) &&
-    CATALOG_CATEGORY_IDS.includes(f.category) &&
+    (CATALOG_CATEGORY_IDS.includes(f.category) || f.logic === 'furniture_dice') &&
+    // A garrafa giratória usa outra lógica de desenho.
+    f.visualization !== 'furniture_bottle' &&
     (f.name ?? '').trim() &&
     // NFT são cópias dos mesmos desenhos.
-    !/^\s*(ads_|test|nft_)/i.test(f.classname) &&
+    !/^\s*(ads_|test)|nft/i.test(f.classname) &&
     (f.swf?.directions?.length ?? 0) > 0,
 );
 
@@ -84,10 +93,18 @@ for (const [base, variants] of groups) {
   );
   const main = variants.find((v) => v.classname === base) ?? variants[0]!;
   const wall = main.type === 'wall';
+  const special =
+    main.logic === 'furniture_dice'
+      ? 'dice'
+      : main.logic === 'furniture_jukebox'
+        ? 'jukebox'
+        : main.category === 'teleport' && main.logic === 'furniture_multistate'
+          ? 'teleport'
+          : undefined;
   const item: CatalogItem = {
     id: main.classname,
     n: main.name.trim().replace(/\s+/g, ' '),
-    c: main.category,
+    c: special === 'dice' ? 'dice' : main.category,
     w: wall ? 1 : Math.max(1, main.dimensions.x ?? 1),
     d: wall ? 1 : Math.max(1, main.dimensions.y ?? 1),
     h: Math.round((main.dimensions.z ?? 1) * 100) / 100,
@@ -98,6 +115,8 @@ for (const [base, variants] of groups) {
   if (main.can_lay_on) item.lay = 1;
   if (main.can_stand_on && !main.can_sit_on && !main.can_lay_on) item.walk = 1;
   if (main.logic === 'furniture_multistate') item.multi = 1;
+  if (main.visualization === 'furniture_animated') item.a = 1;
+  if (special) item.x = special;
   if (variants.length > 1) item.colors = variants.map((v) => v.classname);
   items.push(item);
 }

@@ -1,4 +1,5 @@
 import {
+  baseClassname,
   CATALOG_CATEGORIES,
   furniManifestEntrySchema,
   type CatalogItem,
@@ -44,16 +45,31 @@ export class FurniDefService {
       const parsed = furniManifestEntrySchema.safeParse(JSON.parse(row.json));
       if (parsed.success && !this.defs.has(row.id)) this.defs.set(row.id, parsed.data);
     }
+    for (const [id, def] of this.defs) this.defs.set(id, withVisual(def, this.itemFor(def)));
   }
 
-  /** Definições medidas (para o cliente juntar às do manifesto). */
+  /**
+   * Definições que o cliente não tem no manifesto: as medidas e as curadas que passaram a ser
+   * desenhadas por camadas (o cliente troca as dele por estas).
+   */
   measured(): FurniManifestEntry[] {
-    return this.db
-      .select()
-      .from(furniDefs)
-      .all()
-      .map((r) => this.defs.get(r.id))
+    const ids = new Set(
+      this.db
+        .select({ id: furniDefs.id })
+        .from(furniDefs)
+        .all()
+        .map((r) => r.id),
+    );
+    for (const [id, d] of this.defs) if (this.curated.has(id) && d.animated) ids.add(id);
+    return [...ids]
+      .map((id) => this.defs.get(id))
       .filter((d): d is FurniManifestEntry => Boolean(d));
+  }
+
+  /** Item do catálogo do desenho da definição (pelo classname sem cor). */
+  private itemFor(def: FurniManifestEntry): CatalogItem | undefined {
+    const cls = def.sprite ?? def.id;
+    return this.item(cls) ?? this.item(baseClassname(cls));
   }
 
   /**
@@ -65,6 +81,20 @@ export class FurniDefService {
     const item = this.item(id);
     if (!item) return this.defs.has(id) ? null : 'Móvel desconhecido.';
     return hidden.includes(item.c) ? 'Essa categoria de móveis está desligada pelo admin.' : null;
+  }
+
+  /**
+   * Revisões conhecidas do SWF de um móvel (pelo classname sem cor): a do catálogo e as das
+   * definições (curadas ou medidas) que usam esse desenho. Vazio = desconhecido.
+   */
+  swfRevisions(classname: string): Set<number> {
+    const out = new Set<number>();
+    const item = this.catalog().get(classname);
+    if (item && baseClassname(item.id) === classname) out.add(item.rev);
+    for (const d of this.defs.values()) {
+      if (d.revision && baseClassname(d.sprite ?? d.id) === classname) out.add(d.revision);
+    }
+    return out;
   }
 
   /** Item do catálogo pelo classname (inclui as variações de cor). */
@@ -80,7 +110,8 @@ export class FurniDefService {
     if (!item) return null;
     let p = this.pending.get(id);
     if (!p) {
-      p = this.measure(item, id).then((entry) => {
+      p = this.measure(item, id).then((measured) => {
+        const entry = withVisual(measured, item);
         this.defs.set(id, entry);
         this.db
           .insert(furniDefs)
@@ -130,8 +161,24 @@ export function curationFor(item: CatalogItem, id: string): FurniCuration {
     wall: Boolean(item.wall),
     // Senta/deita na metade da altura (como as cadeiras curadas: altura 1, assento 0,5).
     sitHeight: item.sit || item.lay ? Math.min(1, Math.max(0.1, Math.round(item.h * 5) / 10)) : 0,
-    interaction: item.multi ? 'toggle' : undefined,
+    interaction: item.x ?? (item.multi ? 'toggle' : undefined),
   };
+}
+
+/** Interações que desenham por cima da imagem do imager (quadro, tabuleiro): ficam estáticas. */
+const OVERLAY_INTERACTIONS = new Set(['whiteboard', 'tictactoe', 'jira', 'kudos', 'board']);
+
+/** Marca como desenhado por camadas se o Habbo anima esse móvel (Fase 37). */
+export function withVisual(
+  def: FurniManifestEntry,
+  item: CatalogItem | undefined,
+): FurniManifestEntry {
+  const animated =
+    def.source === 'habboassets' &&
+    Boolean(item?.a) &&
+    !def.surface &&
+    !OVERLAY_INTERACTIONS.has(def.interaction ?? '');
+  return def.animated === animated ? def : { ...def, animated };
 }
 
 /** Mede pelo imager, com o tamanho e as capacidades do catálogo. */

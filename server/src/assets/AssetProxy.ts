@@ -9,7 +9,9 @@ import {
   SHEET_FORMAT,
   type FigureData,
   furniImageUrl,
+  furniSwfUrl,
 } from '@office/shared';
+import { buildFurniVisual } from './furniVisual.js';
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { UpstreamError, type HabboAssetsClient } from './HabboAssetsClient.js';
@@ -55,6 +57,8 @@ export function createAssetRouter(
   client: HabboAssetsClient,
   cacheDir: string,
   figureData: () => Pick<FigureData, 'libs' | 'swf' | 'effects'> | null = loadFigureData,
+  /** Revisões conhecidas do SWF de um móvel (vazio = móvel desconhecido, não baixa). */
+  furniRevisions: (classname: string) => ReadonlySet<number> = () => new Set(),
 ): Router {
   const router = Router();
   const inflight = new Map<string, Promise<Buffer>>();
@@ -216,6 +220,50 @@ export function createAssetRouter(
     }
   });
   router.get('/effect/:file', sheetRoute('effect'));
+
+  // Móveis por camadas (Fase 37): o SWF do móvel vira folha + dados de desenho e animação.
+  const furniSheets = new Map<string, Promise<{ png: Buffer; json: Buffer }>>();
+  router.get('/furni/:file', async (req: Request, res: Response) => {
+    const m = /^([A-Za-z0-9_.-]{1,80})\.(png|json)$/.exec(String(req.params.file ?? ''));
+    const revision = z.coerce.number().int().positive().safeParse(req.query.revision);
+    const name = m?.[1] ?? '';
+    if (!m || !revision.success || !furniRevisions(name).has(revision.data)) {
+      return void res.status(400).json({ error: 'Parâmetros inválidos' });
+    }
+    const key = `furni-v${SHEET_FORMAT}-${name}-${revision.data}`;
+    let pending = furniSheets.get(key);
+    if (!pending) {
+      const base = join(cacheDir, 'furni', key);
+      pending = (async () => {
+        const [png, json] = await Promise.all([
+          readCached(`${base}.png`, Infinity),
+          readCached(`${base}.json`, Infinity),
+        ]);
+        if (png && json) return { png, json };
+        const built = buildFurniVisual(
+          name,
+          readSwf(await client.fetchSwf(furniSwfUrl(name, revision.data))),
+        );
+        const out = { png: built.png, json: Buffer.from(JSON.stringify(built.visual)) };
+        await writeAtomic(`${base}.png`, out.png);
+        await writeAtomic(`${base}.json`, out.json);
+        return out;
+      })();
+      pending.catch(() => furniSheets.delete(key));
+      furniSheets.set(key, pending);
+    }
+    try {
+      const sheet = await pending;
+      res.setHeader('Content-Type', m[2] === 'png' ? 'image/png' : 'application/json');
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      res.end(m[2] === 'png' ? sheet.png : sheet.json);
+    } catch (err) {
+      const status = err instanceof UpstreamError ? err.status : 502;
+      res
+        .status(status >= 400 && status < 600 ? status : 502)
+        .json({ error: (err as Error).message });
+    }
+  });
 
   return router;
 }

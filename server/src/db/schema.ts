@@ -545,3 +545,9 @@ export type CargoRow = typeof cargos.$inferSelect;
 export type RoomRow = typeof rooms.$inferSelect;
 export type ChatMessageRow = typeof chatMessages.$inferSelect;
 export type RoomFurniRow = typeof roomFurni.$inferSelect;
+
+/** Teleportes ligados (Fase 37): cada lado aponta para o outro (pode ser em outra sala). */
+export const teleportLinks = sqliteTable('teleport_links', {
+  furniId: text('furni_id').primaryKey(),
+  targetId: text('target_id').notNull(),
+});

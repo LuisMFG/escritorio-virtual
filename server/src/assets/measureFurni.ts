@@ -49,9 +49,11 @@ export async function measureFurni(
   const states = (info.states ?? []).filter((s) => s <= 20).slice(0, 7);
   const analyses = new Map<number, RenderAnalysis>();
   const stateAnalyses = new Map<string, RenderAnalysis>();
+  // Os que mudam de estado: ligar/desligar, dado, teleporte (porta abrindo), jukebox.
+  const stateful = ['toggle', 'dice', 'teleport', 'jukebox'].includes(cur.interaction ?? '');
   for (const dir of info.directions) {
     analyses.set(dir, await render(dir));
-    if (cur.interaction === 'toggle') {
+    if (stateful) {
       for (const state of states.filter((s) => s > 0)) {
         // Alguns estados existem no SWF mas o imager não desenha (400): ficam de fora.
         const a = await render(dir, state).catch(() => null);
@@ -63,7 +65,7 @@ export async function measureFurni(
   const drawn = states.filter(
     (st) => st === 0 || [...stateAnalyses.keys()].some((k) => k.endsWith(`:${st}`)),
   );
-  const usable = cur.interaction === 'toggle' ? drawn : states.length ? [0] : [];
+  const usable = stateful ? drawn : states.length ? [0] : [];
   const curation =
     cur.interaction === 'toggle' && usable.length < 2 ? { ...cur, interaction: undefined } : cur;
   const entry = buildFurniEntry(

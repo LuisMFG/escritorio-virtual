@@ -114,6 +114,12 @@ type OfficeClient = Client<{ auth: UserRow }>;
 /**
  * Uma sala física do escritório (Recepção, Copa…). Autoridade sobre posições e movimento.
  */
+/** Estado do dado rolando (o cliente mostra a animação -1 do Habbo). */
+const DICE_ROLLING_STATE = 255;
+const DICE_ROLL_MS = 1200;
+/** Porta do teleporte abrindo antes de a pessoa sumir. */
+const TELEPORT_MS = 900;
+
 export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient }> {
   override maxClients = 30;
   /** Proteção geral contra flood; limites específicos por ação ficam nos handlers. */
@@ -735,7 +741,10 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     if (
       def.interaction === 'toggle' ||
       def.interaction === 'coffee' ||
-      def.interaction === 'fridge'
+      def.interaction === 'fridge' ||
+      def.interaction === 'dice' ||
+      def.interaction === 'teleport' ||
+      def.interaction === 'jukebox'
     ) {
       return this.handleUse(client, player, f, def);
     }
@@ -844,6 +853,14 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       const i = def.states.indexOf(f.state);
       f.state = def.states[(i + 1) % def.states.length]!;
       services().furni.setState(this.layout.roomId, f.id, f.state);
+    } else if (def.interaction === 'dice') {
+      this.rollDice(sessionId, f);
+    } else if (def.interaction === 'jukebox') {
+      // Liga/desliga a música da sala (cada navegador toca, para quem tem o som ligado).
+      f.state = f.state > 0 ? 0 : (def.states.find((s) => s > 0) ?? 1);
+      services().furni.setState(this.layout.roomId, f.id, f.state);
+    } else if (def.interaction === 'teleport') {
+      this.teleport(sessionId, f, def);
     } else if (def.interaction === 'fridge') {
       // Abre a porta por um instante e entrega uma bebida sorteada.
       if (def.states.includes(1)) {
@@ -866,6 +883,88 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
         }, 2500);
       }
     }
+  }
+
+  /** Dado do Habbo: rola (animação) por um instante e para num número sorteado pelo servidor. */
+  private rollDice(sessionId: string, f: Furni): void {
+    if (f.state === DICE_ROLLING_STATE) return;
+    const client = this.clients.getById(sessionId) as OfficeClient | undefined;
+    f.state = DICE_ROLLING_STATE;
+    this.clock.setTimeout(() => {
+      if (this.state.furni.get(f.id) !== f) return;
+      const roll = randomInt(1, 7);
+      f.state = roll;
+      services().furni.setState(this.layout.roomId, f.id, roll);
+      if (!client?.auth) return;
+      const message = services().chat.add(
+        this.layout.roomId,
+        client.auth,
+        quickCommandText('dice', roll),
+        sessionId,
+        undefined,
+        'dice',
+        null,
+      );
+      this.broadcast(ServerMessage.Chat, message);
+      if (roll === 6) services().achievements.unlock(client.auth.id, 'lucky');
+    }, DICE_ROLL_MS);
+  }
+
+  /**
+   * Teleporte: a porta abre, a pessoa some e aparece do lado do teleporte ligado (na mesma sala
+   * ou em outra, como passar por uma porta).
+   */
+  private teleport(sessionId: string, f: Furni, def: FurniManifestEntry): void {
+    const client = this.clients.getById(sessionId) as OfficeClient | undefined;
+    if (!client?.auth) return;
+    const targetId = services().furni.linkedTo(f.id);
+    const target = targetId ? services().furni.locate(targetId) : undefined;
+    if (!target) {
+      return this.sendError(
+        client,
+        ErrorCode.InvalidMove,
+        'Este teleporte não está ligado a nenhum outro. Ligue os dois no Decorar.',
+      );
+    }
+    const open = (furni: Furni | undefined, d: FurniManifestEntry | undefined) => {
+      if (!furni || !d?.states.includes(1)) return;
+      furni.state = 1;
+      this.clock.setTimeout(() => {
+        if (this.state.furni.get(furni.id) === furni) furni.state = 0;
+      }, TELEPORT_MS * 2);
+    };
+    open(f, def);
+    this.clock.setTimeout(() => {
+      const player = this.state.players.get(sessionId);
+      if (!player) return;
+      if (target.roomId === this.layout.roomId) {
+        const there = this.state.furni.get(target.id);
+        open(there, there && services().furniDefs.get(there.defId));
+        const spot = this.freeTileNear({ x: target.x, y: target.y });
+        this.movement.remove(sessionId);
+        this.pendingSit.delete(sessionId);
+        Object.assign(player, {
+          x: spot.x,
+          y: spot.y,
+          nextX: spot.x,
+          nextY: spot.y,
+          action: 'idle',
+          z: this.gridFor(sessionId).heightAt(spot.x, spot.y),
+        });
+        return;
+      }
+      const ticket = services().transfers.issue({
+        userId: client.auth!.id,
+        roomId: target.roomId,
+        x: target.x,
+        y: target.y,
+        dir: player.dir,
+      });
+      client.send(ServerMessage.RoomTransfer, {
+        targetRoomId: target.roomId,
+        ticket,
+      } satisfies RoomTransferMessage);
+    }, TELEPORT_MS);
   }
 
   private sitDown(sessionId: string, furniId: string): void {

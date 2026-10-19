@@ -23,6 +23,7 @@ import * as jiraRoutes from './jira.js';
 import * as effectRoutes from './effects.js';
 import * as lookRoutes from './looks.js';
 import * as furniRoutes from './furni.js';
+import * as teleportRoutes from './teleports.js';
 import { UPLOAD_MAX_BYTES } from '@office/shared';
 import {
   changePassword,
@@ -80,7 +81,8 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
     jiraRoutes.JiraDeps &
     effectRoutes.EffectDeps &
     lookRoutes.LookDeps &
-    furniRoutes.FurniDeps = {
+    furniRoutes.FurniDeps &
+    teleportRoutes.TeleportDeps = {
     inviteCode: () => svc.settings.inviteCode(),
     adminUsernames: cfg.adminUsernames,
     avatarManifest: svc.avatarManifest,
@@ -467,6 +469,17 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
       send(res, await furniRoutes.furniDef(defId, auth));
     }),
   );
+  // Teleportes (Fase 37): ligar dois teleportes, mesmo em salas diferentes.
+  app.get(
+    '/api/teleports',
+    withCaller((_c, _req, res) => send(res, teleportRoutes.listTeleports(auth))),
+  );
+  app.put(
+    '/api/teleports/:id/link',
+    withCaller((c, req, res) =>
+      send(res, teleportRoutes.linkTeleport(c, String(req.params.id), req.body, auth)),
+    ),
+  );
   app.put(
     '/api/admin/furni-categories',
     withCaller((c, req, res) => send(res, furniRoutes.setHiddenCategories(c, req.body, auth))),
@@ -561,7 +574,10 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
   });
 
   const habbo = new HabboAssetsClient({ apiKey: cfg.habboAssetsApiKey });
-  app.use('/hh', createAssetRouter(habbo, cfg.assetCacheDir));
+  app.use(
+    '/hh',
+    createAssetRouter(habbo, cfg.assetCacheDir, undefined, (c) => svc.furniCatalog.swfRevisions(c)),
+  );
 
   if (cfg.isProduction && existsSync(cfg.clientDistDir)) {
     app.use(express.static(cfg.clientDistDir, { index: false, maxAge: '1h' }));

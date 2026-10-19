@@ -26,8 +26,7 @@ export interface FurniCuration {
   source?: 'habboassets' | 'local';
   directions?: number[];
   anchors?: Record<string, [number, number]>;
-  interaction?:
-    'toggle' | 'coffee' | 'fridge' | 'board' | 'whiteboard' | 'tictactoe' | 'kudos' | 'jira';
+  interaction?: FurniManifestEntry['interaction'];
   /** Arte de outro móvel do Habbo (padrão = `id`). */
   sprite?: string;
   /** Cantos do papel na PNG (ver `surface` no manifesto). */
@@ -486,6 +485,7 @@ export function buildLocalEntry(cur: FurniCuration): FurniManifestEntry {
     stateAnchors: {},
     interaction: cur.interaction,
     light: cur.light ?? false,
+    animated: false,
   };
 }
 
@@ -524,6 +524,7 @@ export function buildFurniEntry(
       stateAnchors,
       interaction: cur.interaction,
       light: cur.light ?? false,
+      animated: false,
       surface: cur.surface,
       ...(cur.sprite ? { sprite: cur.sprite } : {}),
     },

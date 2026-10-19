@@ -38,10 +38,27 @@ export const furniManifestEntrySchema = z.object({
    * abre o quadro de demandas.
    */
   interaction: z
-    .enum(['toggle', 'coffee', 'fridge', 'board', 'whiteboard', 'tictactoe', 'kudos', 'jira'])
+    .enum([
+      'toggle',
+      'coffee',
+      'fridge',
+      'board',
+      'whiteboard',
+      'tictactoe',
+      'kudos',
+      'jira',
+      'dice',
+      'teleport',
+      'jukebox',
+    ])
     .optional(),
   /** Desenho do Habbo usado (quando o móvel reaproveita a arte de outro; padrão = `id`). */
   sprite: z.string().optional(),
+  /**
+   * Desenhado por camadas a partir do SWF do Habbo (Fase 37): animações, brilho somado das luzes
+   * e cores das variações. Sem isso, a imagem estática do imager.
+   */
+  animated: z.boolean().default(false),
   /** Emite luz quando ligado (estado > 0): brilha à noite. */
   light: z.boolean().default(false),
   /**
