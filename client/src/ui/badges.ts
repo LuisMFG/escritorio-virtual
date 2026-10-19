@@ -1,18 +1,35 @@
-import { findAchievement, parseShowcase, type AchievementDef } from '@office/shared';
+import { badgeImageUrl, findAchievement, parseShowcase, type AchievementDef } from '@office/shared';
+import { OFFLINE_ASSETS } from '../config.js';
 
 /**
- * Emblema de conquista: medalha redonda com o emoji sobre a cor da conquista (arte própria,
- * em CSS). Bloqueado = cinza.
+ * Emblema de conquista: o emblema do Habbo escolhido para ela (Fase 39). Sem internet, ou se a
+ * imagem não carregar, a medalha redonda com o emoji sobre a cor da conquista (arte própria, em
+ * CSS). Bloqueado = cinza.
  */
 export function badgeEl(def: AchievementDef, opts: { locked?: boolean; size?: number } = {}) {
   const el = Object.assign(document.createElement('span'), {
     className: `badge${opts.locked ? ' locked' : ''}`,
-    textContent: def.emoji,
     title: `${def.name}: ${def.description}`,
   });
   el.style.setProperty('--badge', def.color);
   if (opts.size) el.style.setProperty('--size', `${opts.size}px`);
   el.setAttribute('aria-label', def.name);
+  el.setAttribute('role', 'img');
+  if (OFFLINE_ASSETS) {
+    el.textContent = def.emoji;
+    return el;
+  }
+  el.classList.add('badge-habbo');
+  const img = Object.assign(document.createElement('img'), {
+    alt: '',
+    src: badgeImageUrl(def.badge),
+  });
+  img.dataset.badge = def.badge;
+  img.addEventListener('error', () => {
+    el.classList.remove('badge-habbo');
+    el.textContent = def.emoji;
+  });
+  el.append(img);
   return el;
 }
 

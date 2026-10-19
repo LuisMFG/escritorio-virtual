@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
+  ACHIEVEMENTS,
   avatarImageUrl,
   clothingSetImageUrl,
   figureSchema,
@@ -221,6 +222,32 @@ export function createAssetRouter(
     }
   });
   router.get('/effect/:file', sheetRoute('effect'));
+
+  // Emblemas do Habbo das conquistas (Fase 39): imagem estática da CDN, só os códigos conhecidos.
+  const badgeCodes = new Set(ACHIEVEMENTS.map((a) => a.badge));
+  router.get('/badge/:file', async (req: Request, res: Response) => {
+    const m = /^([A-Za-z0-9_]{1,40})\.gif$/.exec(String(req.params.file ?? ''));
+    if (!m || !badgeCodes.has(m[1]!)) {
+      return void res.status(400).json({ error: 'Parâmetros inválidos' });
+    }
+    const url = `${HABBOASSETS_CDN}/images.habbo.com/c_images/album1584/${m[1]}.gif`;
+    const file = cacheFileFor(cacheDir, url);
+    try {
+      let body = await readCached(file, Infinity);
+      if (!body) {
+        body = await client.fetchCdnImage(url);
+        await writeAtomic(file, body);
+      }
+      res.setHeader('Content-Type', 'image/gif');
+      res.setHeader('Cache-Control', 'public, max-age=604800');
+      res.end(body);
+    } catch (err) {
+      const status = err instanceof UpstreamError ? err.status : 502;
+      res
+        .status(status >= 400 && status < 600 ? status : 502)
+        .json({ error: (err as Error).message });
+    }
+  });
 
   // Pets do Habbo (Fase 38): SWF do pet → folha (já com a paleta escolhida) + dados de desenho.
   const petSheets = new Map<string, Promise<{ png: Buffer; json: Buffer }>>();

@@ -3526,6 +3526,25 @@ button.reply-quote:hover {
   opacity: 0.45;
 }
 
+.badge.badge-habbo {
+  background: none;
+  border: 0;
+  box-shadow: none;
+  border-radius: 0;
+}
+
+.badge.badge-habbo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+.badge.badge-habbo.locked {
+  background: none;
+  opacity: 0.4;
+}
+
 .badge-row {
   display: flex;
   gap: 6px;

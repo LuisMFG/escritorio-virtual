@@ -18,7 +18,9 @@ export interface AchievementDef {
   id: string;
   name: string;
   description: string;
-  /** Desenho do emblema (emoji sobre um círculo colorido; arte própria). */
+  /** Emblema do Habbo (Fase 39): código na CDN (`ACH_RoomEntry1`…). */
+  badge: string;
+  /** Reserva sem internet: emoji sobre um círculo colorido (arte própria). */
   emoji: string;
   color: string;
   /** Conquista por contador: desbloqueia quando `stat` chega em `goal`. */
@@ -33,6 +35,7 @@ export interface AchievementDef {
 export const ACHIEVEMENTS: readonly AchievementDef[] = [
   {
     id: 'first_message',
+    badge: 'ACH_GuideChatReviewer1',
     name: 'Primeira palavra',
     description: 'Mandou a primeira mensagem no chat.',
     emoji: '💬',
@@ -42,6 +45,7 @@ export const ACHIEVEMENTS: readonly AchievementDef[] = [
   },
   {
     id: 'chatter',
+    badge: 'ACH_GuideChatReviewer5',
     name: 'Tagarela',
     description: 'Mandou 100 mensagens no chat.',
     emoji: '📣',
@@ -51,6 +55,7 @@ export const ACHIEVEMENTS: readonly AchievementDef[] = [
   },
   {
     id: 'first_dm',
+    badge: 'ACH_EmailVerification1',
     name: 'Correio',
     description: 'Mandou a primeira mensagem privada.',
     emoji: '✉️',
@@ -58,6 +63,7 @@ export const ACHIEVEMENTS: readonly AchievementDef[] = [
   },
   {
     id: 'reactions',
+    badge: 'ACH_AvatarTags1',
     name: 'Expressivo',
     description: 'Reagiu a 10 mensagens.',
     emoji: '😄',
@@ -67,6 +73,7 @@ export const ACHIEVEMENTS: readonly AchievementDef[] = [
   },
   {
     id: 'first_furni',
+    badge: 'ACH_AllTimeHotelPresence1',
     name: 'Decorador',
     description: 'Colocou o primeiro móvel.',
     emoji: '🪑',
@@ -76,6 +83,7 @@ export const ACHIEVEMENTS: readonly AchievementDef[] = [
   },
   {
     id: 'architect',
+    badge: 'ACH_GiftGiver1',
     name: 'Arquiteto de interiores',
     description: 'Colocou 25 móveis.',
     emoji: '🛋️',
@@ -85,6 +93,7 @@ export const ACHIEVEMENTS: readonly AchievementDef[] = [
   },
   {
     id: 'explorer',
+    badge: 'ACH_RoomEntry1',
     name: 'Explorador',
     description: 'Visitou todas as salas do escritório.',
     emoji: '🧭',
@@ -92,6 +101,7 @@ export const ACHIEVEMENTS: readonly AchievementDef[] = [
   },
   {
     id: 'streak',
+    badge: 'ACH_Login5',
     name: 'Assíduo',
     description: 'Entrou 7 dias seguidos.',
     emoji: '📅',
@@ -101,6 +111,7 @@ export const ACHIEVEMENTS: readonly AchievementDef[] = [
   },
   {
     id: 'coffee',
+    badge: 'ACH_HappyHour1',
     name: 'Cafezinho',
     description: 'Tomou um café na máquina.',
     emoji: '☕',
@@ -108,6 +119,7 @@ export const ACHIEVEMENTS: readonly AchievementDef[] = [
   },
   {
     id: 'board_note',
+    badge: 'ACH_Motto1',
     name: 'Recado dado',
     description: 'Pregou um recado no mural.',
     emoji: '📌',
@@ -115,6 +127,7 @@ export const ACHIEVEMENTS: readonly AchievementDef[] = [
   },
   {
     id: 'artist',
+    badge: 'ACH_AvatarLooks1',
     name: 'Artista',
     description: 'Desenhou no quadro branco.',
     emoji: '🎨',
@@ -122,6 +135,7 @@ export const ACHIEVEMENTS: readonly AchievementDef[] = [
   },
   {
     id: 'organizer',
+    badge: 'ACH_Name1',
     name: 'Organizador',
     description: 'Marcou a primeira reunião.',
     emoji: '🗓️',
@@ -129,6 +143,7 @@ export const ACHIEVEMENTS: readonly AchievementDef[] = [
   },
   {
     id: 'meetings',
+    badge: 'ACH_TraderPass1',
     name: 'Sempre presente',
     description: 'Confirmou presença em 5 reuniões que aconteceram.',
     emoji: '🤝',
@@ -138,6 +153,7 @@ export const ACHIEVEMENTS: readonly AchievementDef[] = [
   },
   {
     id: 'ttt_win',
+    badge: 'ACH_BattleBallTilesLocked1',
     name: 'Primeira vitória',
     description: 'Ganhou uma partida de jogo da velha.',
     emoji: '🏆',
@@ -147,6 +163,7 @@ export const ACHIEVEMENTS: readonly AchievementDef[] = [
   },
   {
     id: 'ttt_master',
+    badge: 'ACH_GamePlayerExperience5',
     name: 'Mestre da velha',
     description: 'Ganhou 5 partidas de jogo da velha.',
     emoji: '👑',
@@ -156,6 +173,7 @@ export const ACHIEVEMENTS: readonly AchievementDef[] = [
   },
   {
     id: 'lucky',
+    badge: 'ACH_GamePlayed5',
     name: 'Sorte grande',
     description: 'Tirou 6 no /dado.',
     emoji: '🎲',
@@ -163,6 +181,7 @@ export const ACHIEVEMENTS: readonly AchievementDef[] = [
   },
   {
     id: 'pet_owner',
+    badge: 'ACH_PetLover1',
     name: 'Melhor amigo',
     description: 'Adotou um pet.',
     emoji: '🐾',
@@ -170,6 +189,7 @@ export const ACHIEVEMENTS: readonly AchievementDef[] = [
   },
   {
     id: 'recognizer',
+    badge: 'ACH_RespectGiven1',
     name: 'Reconhece os colegas',
     description: 'Elogiou 5 vezes alguém da equipe.',
     emoji: '👏',
@@ -179,6 +199,7 @@ export const ACHIEVEMENTS: readonly AchievementDef[] = [
   },
   {
     id: 'beloved',
+    badge: 'ACH_RespectEarned1',
     name: 'Querido pela equipe',
     description: 'Recebeu 5 elogios.',
     emoji: '💖',
@@ -224,4 +245,9 @@ export interface AchievementsResponse {
 export const AchievementMessage = { Unlocked: 'achievement.unlocked' } as const;
 export interface AchievementUnlocked {
   id: string;
+}
+
+/** Imagem do emblema do Habbo pelo proxy do servidor (só os das conquistas). */
+export function badgeImageUrl(code: string): string {
+  return `/hh/badge/${encodeURIComponent(code)}.gif`;
 }

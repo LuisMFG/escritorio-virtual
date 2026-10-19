@@ -10,11 +10,19 @@ import { tinySwf } from './testSwf.js';
 
 let base = '';
 let downloads = 0;
+let badgeDownloads = 0;
 let close: () => void;
 
 beforeAll(async () => {
   const client = {
     fetchCdnImage: async (url: string) => {
+      if (url.includes('/c_images/')) {
+        expect(url).toBe(
+          'https://cdn.habboassets.com/images.habbo.com/c_images/album1584/ACH_PetLover1.gif',
+        );
+        badgeDownloads++;
+        return Buffer.from('gif');
+      }
       expect(url).toBe('https://cdn.habboassets.com/derived/clothing/shirt_M_suit/9/set_6462.png');
       return Buffer.from('png');
     },
@@ -74,5 +82,23 @@ describe('proxy das bibliotecas de roupa', () => {
       '..%2Fx.png?revision=7',
     ])
       expect((await fetch(`${base}/figure/${path}`)).status, path).toBe(400);
+  });
+});
+
+describe('emblemas das conquistas (Fase 39)', () => {
+  it('só os códigos das conquistas, baixados uma vez', async () => {
+    for (let i = 0; i < 2; i++) {
+      const res = await fetch(`${base}/badge/ACH_PetLover1.gif`);
+      expect(res.status).toBe(200);
+      expect(res.headers.get('content-type')).toBe('image/gif');
+    }
+    expect(badgeDownloads).toBe(1);
+    for (const path of ['ACH_Inventado1.gif', 'ACH_PetLover1.png', '..%2Fx.gif'])
+      expect((await fetch(`${base}/badge/${path}`)).status, path).toBe(400);
+  });
+
+  it('móvel por camadas desconhecido não baixa nada', async () => {
+    expect((await fetch(`${base}/furni/qualquer.json?revision=1`)).status).toBe(400);
+    expect((await fetch(`${base}/pet/unicornio.json?revision=1`)).status).toBe(400);
   });
 });
