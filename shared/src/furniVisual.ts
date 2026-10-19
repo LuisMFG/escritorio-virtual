@@ -15,6 +15,8 @@ export interface FurniVisualLayer {
   ignoreMouse?: 1;
   /** Ordem de desenho dentro do móvel (maior = mais na frente). */
   z?: number;
+  /** Etiqueta do Habbo (pets: `body`, `head`, `tail`, `emoticon`). */
+  tag?: string;
 }
 
 /** Quadro de uma camada animada. */
@@ -22,6 +24,8 @@ export interface FurniVisualFrame {
   id: number;
   x?: number;
   y?: number;
+  /** Deslocamento por direção (pets: a cabeça anda junto com o corpo). */
+  off?: Record<string, [number, number]>;
 }
 
 export interface FurniVisualAnimLayer {
@@ -42,6 +46,8 @@ export interface FurniVisualAsset {
   /** Apelido: usa a imagem de outro asset (espelhada, se `flip`). */
   source?: string;
   flip?: 1;
+  /** Pinta com a paleta (pets): a cor vem da paleta escolhida. */
+  palette?: 1;
 }
 
 export interface FurniVisual {
@@ -58,6 +64,10 @@ export interface FurniVisual {
   assets: Record<string, FurniVisualAsset>;
   /** Retângulo de cada imagem na folha PNG. */
   frames: Record<string, { x: number; y: number; w: number; h: number }>;
+  /** Pets: postura (`std`, `sit`, `lay`, `mv`…) → animação. */
+  postures?: Record<string, number>;
+  /** Pets: gesto (`sml`, `joy`, `sad`…) → animação (vale para a cabeça). */
+  gestures?: Record<string, number>;
 }
 
 /** Um sprite a desenhar, já resolvido. */
@@ -74,6 +84,8 @@ export interface FurniSprite {
   ignoreMouse: boolean;
   /** Camada (-1 = sombra), para ordenar. */
   layer: number;
+  /** Usa a paleta (pets): recebe a cor do pet. */
+  palette: boolean;
 }
 
 /** Tiques de animação por segundo (o Habbo anima os móveis a 24 quadros por segundo). */
@@ -119,6 +131,8 @@ export function furniSprites(
   anim: number,
   tick: number,
   color?: number,
+  /** Pets: animação do gesto, que substitui a das camadas da cabeça. */
+  gesture?: number,
 ): FurniSprite[] {
   const out: (FurniSprite & { z: number })[] = [];
   const base = `${v.classname}_64`;
@@ -142,19 +156,27 @@ export function furniSprites(
       tint: layer >= 0 ? (tints?.[String(layer)] ?? null) : null,
       ignoreMouse: layer < 0 || Boolean(props.ignoreMouse),
       layer,
+      palette: Boolean(a.palette),
       z,
     });
     return true;
   };
   push(`${base}_sd_${dir}_0`, -1, 0, 0, -Infinity);
   const anims = v.animations[String(anim)] ?? {};
+  const gestureAnims = gesture !== undefined ? v.animations[String(gesture)] : undefined;
   for (let i = 0; i < v.layerCount; i++) {
-    const al = anims[String(i)];
+    const tag = v.layers[String(i)]?.tag;
+    const fromGesture =
+      (tag === 'head' || tag === 'emoticon') && gestureAnims?.[String(i)]
+        ? gestureAnims[String(i)]
+        : undefined;
+    const al = fromGesture ?? anims[String(i)];
     const frame = al ? animFrame(al, tick) : { id: 0 };
     const d = v.directions[String(dir)]?.[String(i)] ?? {};
     const z = (v.layers[String(i)]?.z ?? 0) + (d.z ?? 0);
-    const dx = (d.x ?? 0) + (frame.x ?? 0);
-    const dy = (d.y ?? 0) + (frame.y ?? 0);
+    const off = frame.off?.[String(dir)];
+    const dx = (d.x ?? 0) + (frame.x ?? 0) + (off?.[0] ?? 0);
+    const dy = (d.y ?? 0) + (frame.y ?? 0) + (off?.[1] ?? 0);
     const letter = layerLetter(i);
     if (!push(`${base}_${letter}_${dir}_${frame.id}`, i, dx, dy, z) && frame.id !== 0) {
       push(`${base}_${letter}_${dir}_0`, i, dx, dy, z);

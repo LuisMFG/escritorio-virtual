@@ -39,3 +39,4 @@ export * from './effects.js';
 export * from './clothingSearch.js';
 export * from './furniCatalog.js';
 export * from './furniVisual.js';
+export * from './habboPets.js';

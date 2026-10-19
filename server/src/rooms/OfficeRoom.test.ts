@@ -923,7 +923,7 @@ describe('OfficeRoom', () => {
       async () => {
         const roomId = svc.rooms.create('Pets', svc.furniDefs).id;
         const ana = newUser('Ana');
-        svc.pets.save(ana.user.id, { name: 'Rex', species: 'dog', color: 0 });
+        svc.pets.save(ana.user.id, { name: 'Rex', species: 'dog', color: 0, tint: 'ffffff' });
         const a = await join(ana.token, roomId);
         const b = await join(newUser('Beto').token, roomId);
         await wait(100);
@@ -958,7 +958,7 @@ describe('OfficeRoom', () => {
         await wait(100);
         expect(b.state.pets.has(ana.user.id)).toBe(false);
         // Adotar de novo: aparece ao lado.
-        svc.pets.save(ana.user.id, { name: 'Mimi', species: 'cat', color: 1 });
+        svc.pets.save(ana.user.id, { name: 'Mimi', species: 'cat', color: 1, tint: 'ffffff' });
         await wait(100);
         expect(b.state.pets.get(ana.user.id)?.name).toBe('Mimi');
         await a.leave();

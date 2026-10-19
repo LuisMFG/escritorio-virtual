@@ -8,6 +8,7 @@ import {
   HABBOASSETS_CDN,
   SHEET_FORMAT,
   type FigureData,
+  type HabboPetCatalog,
   furniImageUrl,
   furniSwfUrl,
 } from '@office/shared';
@@ -221,6 +222,54 @@ export function createAssetRouter(
   });
   router.get('/effect/:file', sheetRoute('effect'));
 
+  // Pets do Habbo (Fase 38): SWF do pet → folha (já com a paleta escolhida) + dados de desenho.
+  const petSheets = new Map<string, Promise<{ png: Buffer; json: Buffer }>>();
+  router.get('/pet/:file', async (req: Request, res: Response) => {
+    const m = /^([a-z0-9_]{1,40})\.(png|json)$/.exec(String(req.params.file ?? ''));
+    const revision = z.coerce.number().int().positive().safeParse(req.query.revision);
+    const palette = z.coerce.number().int().min(0).max(99).default(0).safeParse(req.query.palette);
+    const pet = m ? loadPetCatalog()?.pets.find((p) => p.type === m[1]) : undefined;
+    if (!m || !pet || !revision.success || pet.revision !== revision.data || !palette.success) {
+      return void res.status(400).json({ error: 'Parâmetros inválidos' });
+    }
+    const pal = palette.data < pet.palettes.length ? palette.data : -1;
+    const key = `pet-v${SHEET_FORMAT}-${pet.type}-${pet.revision}-${pal}`;
+    let pending = petSheets.get(key);
+    if (!pending) {
+      const base = join(cacheDir, 'pets', key);
+      pending = (async () => {
+        const [png, json] = await Promise.all([
+          readCached(`${base}.png`, Infinity),
+          readCached(`${base}.json`, Infinity),
+        ]);
+        if (png && json) return { png, json };
+        const swf = readSwf(await client.fetchSwf(pet.swf));
+        const built = buildFurniVisual(
+          pet.type,
+          swf,
+          pal >= 0 ? swf.raw.get(`${pet.type}_${pet.palettes[pal]}`) : undefined,
+        );
+        const out = { png: built.png, json: Buffer.from(JSON.stringify(built.visual)) };
+        await writeAtomic(`${base}.png`, out.png);
+        await writeAtomic(`${base}.json`, out.json);
+        return out;
+      })();
+      pending.catch(() => petSheets.delete(key));
+      petSheets.set(key, pending);
+    }
+    try {
+      const sheet = await pending;
+      res.setHeader('Content-Type', m[2] === 'png' ? 'image/png' : 'application/json');
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      res.end(m[2] === 'png' ? sheet.png : sheet.json);
+    } catch (err) {
+      const status = err instanceof UpstreamError ? err.status : 502;
+      res
+        .status(status >= 400 && status < 600 ? status : 502)
+        .json({ error: (err as Error).message });
+    }
+  });
+
   // Móveis por camadas (Fase 37): o SWF do móvel vira folha + dados de desenho e animação.
   const furniSheets = new Map<string, Promise<{ png: Buffer; json: Buffer }>>();
   router.get('/furni/:file', async (req: Request, res: Response) => {
@@ -315,4 +364,20 @@ export async function writeAtomic(file: string, body: Buffer): Promise<void> {
   const tmp = `${file}.${process.pid}.tmp`;
   await writeFile(tmp, body);
   await rename(tmp, file);
+}
+
+let petCache: { mtime: number; data: HabboPetCatalog } | null = null;
+
+/** Catálogo dos pets do Habbo (`assets:pets`), relido quando o arquivo muda. */
+export function loadPetCatalog(): HabboPetCatalog | null {
+  const file = join(ROOT_DIR, 'client', 'public', 'assets', 'pets', 'pets.json');
+  try {
+    const mtime = statSync(file).mtimeMs;
+    if (petCache?.mtime !== mtime) {
+      petCache = { mtime, data: JSON.parse(readFileSync(file, 'utf8')) as HabboPetCatalog };
+    }
+    return petCache.data;
+  } catch {
+    return null;
+  }
 }

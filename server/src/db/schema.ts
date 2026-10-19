@@ -324,9 +324,12 @@ export const pets = sqliteTable('pets', {
     .primaryKey()
     .references(() => users.id),
   name: text('name').notNull(),
-  /** 'dog' | 'cat' | 'bunny' | 'chick' */
+  /** 'dog' | 'cat' | 'bunny' | 'chick' ou `hh:{tipo}` (pet do Habbo, Fase 38). */
   species: text('species').notNull(),
+  /** Pelagem (arte própria) ou paleta (Habbo). */
   color: integer('color').notNull().default(0),
+  /** Pets do Habbo: cor que tinge a paleta. */
+  tint: text('tint').notNull().default('ffffff'),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 });
 

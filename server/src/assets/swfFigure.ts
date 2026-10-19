@@ -24,6 +24,8 @@ interface SwfContents {
   bitmaps: Map<string, Bitmap>;
   /** Nome da classe → texto dos dados binários (XMLs dos móveis: `_assets`, `_visualization`…). */
   binaries: Map<string, string>;
+  /** Os mesmos dados binários, crus (paletas dos pets). */
+  raw: Map<string, Buffer>;
 }
 
 /** Lê as tags do SWF que interessam: imagens sem perda, nomes das classes e o manifesto. */
@@ -35,6 +37,7 @@ export function readSwf(file: Buffer): SwfContents {
   let p = Math.ceil((5 + nbits * 4) / 8) + 4;
   const images = new Map<number, Bitmap>();
   const texts = new Map<number, string>();
+  const raws = new Map<number, Buffer>();
   const names = new Map<string, number>();
   let manifest = '';
   let animation = '';
@@ -67,19 +70,23 @@ export function readSwf(file: Buffer): SwfContents {
     } else if (type === 87) {
       const text = data.subarray(6).toString('utf8');
       texts.set(data.readUInt16LE(0), text);
+      raws.set(data.readUInt16LE(0), data.subarray(6));
       if (text.includes('<manifest')) manifest = text;
       else if (text.includes('<animation')) animation = text;
     }
   }
   const bitmaps = new Map<string, Bitmap>();
   const binaries = new Map<string, string>();
+  const raw = new Map<string, Buffer>();
   for (const [name, id] of names) {
     const img = images.get(id);
     if (img) bitmaps.set(name, img);
     const text = texts.get(id);
     if (text !== undefined) binaries.set(name, text);
+    const bytes = raws.get(id);
+    if (bytes) raw.set(name, bytes);
   }
-  return { manifest, animation, bitmaps, binaries };
+  return { manifest, animation, bitmaps, binaries, raw };
 }
 
 /** DefineBitsLossless(2): formato 3 (paleta) ou 5 (32 bits, ARGB pré-multiplicado no 2). */

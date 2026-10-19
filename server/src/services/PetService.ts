@@ -1,4 +1,4 @@
-import { PET_SPECIES, type PetInfo, type PetSpecies } from '@office/shared';
+import { isPetSpecies, type PetInfo } from '@office/shared';
 import { eq } from 'drizzle-orm';
 import { EventEmitter } from 'node:events';
 import type { Db } from '../db/client.js';
@@ -18,10 +18,8 @@ export class PetService {
   get(userId: string): PetInfo | null {
     const row = this.db.select().from(pets).where(eq(pets.userId, userId)).get();
     if (!row) return null;
-    const species = (PET_SPECIES as readonly string[]).includes(row.species)
-      ? (row.species as PetSpecies)
-      : 'dog';
-    return { name: row.name, species, color: row.color };
+    const species = isPetSpecies(row.species) ? row.species : 'dog';
+    return { name: row.name, species, color: row.color, tint: row.tint };
   }
 
   /** Adota ou edita (um pet por pessoa). */

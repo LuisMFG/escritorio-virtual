@@ -1,0 +1,1 @@
+ALTER TABLE `pets` ADD `tint` text DEFAULT 'ffffff' NOT NULL;

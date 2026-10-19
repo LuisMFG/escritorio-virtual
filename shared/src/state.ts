@@ -108,9 +108,11 @@ export const Pet = schema(
     ownerSession: t.string(),
     ownerName: t.string(),
     name: t.string(),
-    /** 'dog' | 'cat' | 'bunny' | 'chick' */
+    /** 'dog' | 'cat' | 'bunny' | 'chick' ou `hh:{tipo}` (pet do Habbo). */
     species: t.string(),
     color: t.uint8(),
+    /** Pets do Habbo: cor que tinge a paleta (hex). */
+    tint: t.string(),
     x: t.uint8(),
     y: t.uint8(),
     z: t.float32(),

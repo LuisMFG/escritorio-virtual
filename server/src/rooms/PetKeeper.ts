@@ -52,7 +52,12 @@ export class PetKeeper {
     const existing = this.host.pets.get(userId);
     if (!info) return this.remove(userId);
     if (existing) {
-      Object.assign(existing, { name: info.name, species: info.species, color: info.color });
+      Object.assign(existing, {
+        name: info.name,
+        species: info.species,
+        color: info.color,
+        tint: info.tint,
+      });
       return;
     }
     const owner = this.host.owner(ownerSession);
@@ -64,6 +69,7 @@ export class PetKeeper {
       name: info.name,
       species: info.species,
       color: info.color,
+      tint: info.tint,
       x: at.x,
       y: at.y,
       nextX: at.x,

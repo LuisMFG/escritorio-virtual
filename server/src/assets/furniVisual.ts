@@ -2,10 +2,11 @@ import type {
   FurniVisual,
   FurniVisualAnimLayer,
   FurniVisualAsset,
+  FurniVisualFrame,
   FurniVisualLayer,
 } from '@office/shared';
 import { PNG } from 'pngjs';
-import { packBitmaps, type SheetCut, type readSwf } from './swfFigure.js';
+import { packBitmaps, type Bitmap, type SheetCut, type readSwf } from './swfFigure.js';
 
 type SwfContents = ReturnType<typeof readSwf>;
 
@@ -48,6 +49,8 @@ export function parseFurniVisualization(
     if (attr(l.attrs, 'ignoreMouse') === '1') layer.ignoreMouse = 1;
     const z = num(l.attrs, 'z');
     if (z) layer.z = z;
+    const tag = attr(l.attrs, 'tag');
+    if (tag) layer.tag = tag;
     layers[id] = layer;
   }
 
@@ -103,11 +106,17 @@ export function parseFurniVisualization(
       for (const seq of blocks(al.body, 'frameSequence')) {
         if (attr(seq.attrs, 'random') === '1') layer.random = 1;
         for (const f of blocks(seq.body, 'frame')) {
-          const frame: { id: number; x?: number; y?: number } = { id: num(f.attrs, 'id') ?? 0 };
+          const frame: FurniVisualFrame = { id: num(f.attrs, 'id') ?? 0 };
           const x = num(f.attrs, 'x');
           const y = num(f.attrs, 'y');
           if (x) frame.x = x;
           if (y) frame.y = y;
+          for (const o of blocks(f.body, 'offset')) {
+            const dir = attr(o.attrs, 'direction');
+            const ox = num(o.attrs, 'x') ?? 0;
+            const oy = num(o.attrs, 'y') ?? 0;
+            if (dir !== undefined && (ox || oy)) (frame.off ??= {})[dir] = [ox, oy];
+          }
           layer.frames.push(frame);
         }
       }
@@ -115,7 +124,26 @@ export function parseFurniVisualization(
     }
     animations[id] = per;
   }
-  return { layerCount, layers, directions, animations, colors };
+  const named = (tag: string) => {
+    const out: Record<string, number> = {};
+    for (const b of blocks(vis.body, tag)) {
+      const id = attr(b.attrs, 'id');
+      const anim = num(b.attrs, 'animationId');
+      if (id && anim !== undefined) out[id] = anim;
+    }
+    return Object.keys(out).length ? out : undefined;
+  };
+  const postures = named('posture');
+  const gestures = named('gesture');
+  return {
+    layerCount,
+    layers,
+    directions,
+    animations,
+    colors,
+    ...(postures ? { postures } : {}),
+    ...(gestures ? { gestures } : {}),
+  };
 }
 
 /** Lê `{classname}_assets`: deslocamento, apelido e espelhamento de cada asset de 64 px. */
@@ -129,6 +157,7 @@ export function parseFurniAssets(xml: string): Record<string, FurniVisualAsset> 
     const source = attr(tag, 'source');
     if (source) a.source = source;
     if (attr(tag, 'flipH') === '1') a.flip = 1;
+    if (attr(tag, 'usesPalette') === '1') a.palette = 1;
     out[name] = a;
   }
   return out;
@@ -141,6 +170,8 @@ export function parseFurniAssets(xml: string): Record<string, FurniVisualAsset> 
 export function buildFurniVisual(
   classname: string,
   swf: SwfContents,
+  /** Pets: paleta (256 cores RGB) aplicada às imagens marcadas com `usesPalette`. */
+  palette?: Buffer,
 ): { visual: FurniVisual; png: Buffer } {
   const visXml = swf.binaries.get(`${classname}_${classname}_visualization`);
   const assetsXml = swf.binaries.get(`${classname}_${classname}_assets`);
@@ -152,7 +183,8 @@ export function buildFurniVisual(
     if (!cls.startsWith(prefix)) continue;
     const name = cls.slice(prefix.length);
     if (!/_64_/.test(name)) continue;
-    cuts.push({ name, img, x0: 0, y0: 0, w: img.width, h: img.height });
+    const colored = palette && assets[name]?.palette ? applyPalette(img, palette) : img;
+    cuts.push({ name, img: colored, x0: 0, y0: 0, w: img.width, h: img.height });
   }
   const { png, frames } = packBitmaps(cuts);
   // Apelido de um apelido: aponta direto para a imagem.
@@ -167,4 +199,19 @@ export function buildFurniVisual(
     frames,
   };
   return { visual, png: PNG.sync.write(png) };
+}
+
+/** Troca cada pixel pela cor da paleta no índice do canal verde (como o `paletteMap` do Habbo). */
+export function applyPalette(img: Bitmap, palette: Buffer): Bitmap {
+  const rgba = new Uint8Array(img.rgba);
+  for (let i = 0; i < rgba.length; i += 4) {
+    if (!rgba[i + 3]) continue;
+    const k = rgba[i + 1]! * 3;
+    // Só as 256 cores (algumas paletas têm 4 bytes a mais no fim).
+    if (k + 2 >= Math.min(768, palette.length)) continue;
+    rgba[i] = palette[k]!;
+    rgba[i + 1] = palette[k + 1]!;
+    rgba[i + 2] = palette[k + 2]!;
+  }
+  return { width: img.width, height: img.height, rgba };
 }

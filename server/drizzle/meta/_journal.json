@@ -190,6 +190,13 @@
       "when": 1792377093255,
       "tag": "0026_teleportes",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "6",
+      "when": 1792379559337,
+      "tag": "0027_pets_habbo",
+      "breakpoints": true
     }
   ]
 }

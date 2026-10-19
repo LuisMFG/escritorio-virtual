@@ -27,9 +27,21 @@ describe('pets', () => {
       body: { pet: { name: 'Mimi', species: 'cat', color: 2 } },
     });
     expect(saveMyPet(caller, { name: 'Zé', species: 'dragon', color: 0 }, deps).ok).toBe(false);
+    // Pets do Habbo (Fase 38): tipo conhecido, paleta e cor; pelagem antiga continua 0–2.
+    expect(
+      saveMyPet(caller, { name: 'Rex', species: 'hh:dog', color: 7, tint: 'C98A4B' }, deps),
+    ).toMatchObject({ ok: true, body: { species: 'hh:dog', color: 7, tint: 'c98a4b' } });
+    expect(getMyPet(caller, deps)).toMatchObject({ body: { pet: { tint: 'c98a4b' } } });
+    expect(saveMyPet(caller, { name: 'Rex', species: 'hh:unicornio', color: 0 }, deps).ok).toBe(
+      false,
+    );
+    expect(
+      saveMyPet(caller, { name: 'Rex', species: 'hh:dog', color: 0, tint: 'zz' }, deps).ok,
+    ).toBe(false);
+    expect(saveMyPet(caller, { name: 'Mimi', species: 'cat', color: 5 }, deps).ok).toBe(false);
     releaseMyPet(caller, deps);
     expect(getMyPet(caller, deps)).toMatchObject({ body: { pet: null } });
-    expect(seen).toHaveLength(3);
+    expect(seen).toHaveLength(4);
     expect(seen.at(-1)).toBeNull();
   });
 });
