@@ -10,7 +10,7 @@ import { MeetingScheduler } from './services/MeetingScheduler.js';
 import { BackupScheduler } from './services/BackupService.js';
 import { loadSecretKey } from './util/secretBox.js';
 import { HabboAssetsClient } from './assets/HabboAssetsClient.js';
-import { imagerMeasure } from './services/FurniDefService.js';
+import { imagerMeasure, offlineMeasure } from './services/FurniDefService.js';
 
 const services = createServices(
   openDatabase(config.databasePath),
@@ -20,7 +20,11 @@ const services = createServices(
   config.uploadDir,
   {
     secretKey: loadSecretKey(config.secretKey, config.secretKeyFile),
-    measureFurni: imagerMeasure(new HabboAssetsClient(), config.assetCacheDir),
+    // Testes de ponta a ponta: sem depender do imager pela internet.
+    measureFurni:
+      process.env.FURNI_MEASURE === 'offline'
+        ? offlineMeasure()
+        : imagerMeasure(new HabboAssetsClient(), config.assetCacheDir),
   },
 );
 if (config.spotify) console.log('[spotify] integração ligada');

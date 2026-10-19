@@ -48,7 +48,7 @@ export const CATALOG_CATEGORIES: Record<string, string> = {
   rug: 'Tapetes',
   divider: 'Divisórias',
   decoration: 'Decoração',
-  wall_decoration: 'Parede',
+  wall_decoration: 'Enfeites de parede',
   window: 'Janelas',
   vending_machine: 'Máquinas',
   food: 'Comida',

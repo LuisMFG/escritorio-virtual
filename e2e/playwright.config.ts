@@ -55,6 +55,8 @@ export default defineConfig({
         SPOTIFY_CLIENT_ID: '',
         ADMIN_USERNAMES: 'admin.e2e',
         JIRA_SITE: 'http://127.0.0.1:2601',
+        // Catálogo completo sem o imager (Fase 36).
+        FURNI_MEASURE: 'offline',
       },
     },
   ],

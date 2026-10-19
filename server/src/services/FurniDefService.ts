@@ -9,6 +9,7 @@ import { readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import type { HabboAssetsClient } from '../assets/HabboAssetsClient.js';
 import { measureFurni } from '../assets/measureFurni.js';
+import type { FurniCuration } from '../assets/furniCatalog.js';
 import { ROOT_DIR } from '../config.js';
 import type { Db } from '../db/client.js';
 import { furniDefs } from '../db/schema.js';
@@ -113,28 +114,44 @@ export class FurniDefService {
   }
 }
 
+/** Curadoria de um item do catálogo: tamanho e capacidades vêm do Habbo. */
+export function curationFor(item: CatalogItem, id: string): FurniCuration {
+  return {
+    id,
+    name: item.n,
+    category: (CATALOG_CATEGORIES[item.c] ?? 'Outros').toLowerCase(),
+    width: item.w,
+    depth: item.d,
+    // Altura de empilhar: a do Habbo (paredes não empilham nada).
+    height: item.wall ? 0 : Math.min(10, Math.max(0, item.h)),
+    canSit: Boolean(item.sit),
+    canLay: Boolean(item.lay),
+    canWalk: Boolean(item.walk),
+    wall: Boolean(item.wall),
+    // Senta/deita na metade da altura (como as cadeiras curadas: altura 1, assento 0,5).
+    sitHeight: item.sit || item.lay ? Math.min(1, Math.max(0.1, Math.round(item.h * 5) / 10)) : 0,
+    interaction: item.multi ? 'toggle' : undefined,
+  };
+}
+
 /** Mede pelo imager, com o tamanho e as capacidades do catálogo. */
 export function imagerMeasure(client: HabboAssetsClient, cacheDir: string) {
   return (item: CatalogItem, id: string): Promise<FurniManifestEntry> =>
-    measureFurni(
-      client,
-      {
-        id,
-        name: item.n,
-        category: (CATALOG_CATEGORIES[item.c] ?? 'Outros').toLowerCase(),
-        width: item.w,
-        depth: item.d,
-        // Altura de empilhar: a do Habbo (paredes não empilham nada).
-        height: item.wall ? 0 : Math.max(0, item.h),
-        canSit: Boolean(item.sit),
-        canLay: Boolean(item.lay),
-        canWalk: Boolean(item.walk),
-        wall: Boolean(item.wall),
-        // Senta/deita na metade da altura (como as cadeiras curadas: altura 1, assento 0,5).
-        sitHeight:
-          item.sit || item.lay ? Math.min(1, Math.max(0.1, Math.round(item.h * 5) / 10)) : 0,
-        interaction: item.multi ? 'toggle' : undefined,
-      },
-      cacheDir,
-    );
+    measureFurni(client, curationFor(item, id), cacheDir);
+}
+
+/**
+ * Sem imager (`FURNI_MEASURE=offline`, testes de ponta a ponta): todas as direções, âncora
+ * padrão (centro da base) e dois estados para os que ligam/desligam.
+ */
+export function offlineMeasure() {
+  return async (item: CatalogItem, id: string): Promise<FurniManifestEntry> => {
+    const cur = curationFor(item, id);
+    return furniManifestEntrySchema.parse({
+      ...cur,
+      directions: item.wall ? [2, 4] : [0, 2, 4, 6],
+      revision: item.rev || undefined,
+      states: item.multi ? [0, 1] : [],
+    });
+  };
 }
