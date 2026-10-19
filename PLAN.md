@@ -1045,10 +1045,17 @@ Pedido (18/10/2026): prioridade para as **animações dos personagens**, **senta
 - Testes: espécie e cor (tipo conhecido, cor padrão, pelagem antiga limitada), postura de cada ação com o que o tipo tiver, API de pets com pet do Habbo, leitura de deslocamento por quadro/posturas/gestos/paleta e ponta a ponta (`e2e/tests/pets.spec.ts`: adotar no Perfil com padrão e cor, o outro vê e ele senta). Achado no teste: o pet criado na sala vinha sem a cor; corrigido.
 - No navegador: a Bolota (gata desenhada da Ana) virou o Gato do Habbo, padrão 3, cor caramelo; anda atrás da Ana e senta com `/senta`. Para voltar à desenhada: Perfil → Meu pet → Editar → Desenhados → Gato.
 
-#### Fase 39 — Emblemas do Habbo e acabamento
+#### Fase 39 — Emblemas do Habbo e acabamento ✅ implementada
 - Conquistas com **emblemas reais do Habbo** (no lugar das medalhas em CSS), escolhidos um para cada conquista.
 - **Desempenho:** juntar sprites em atlas, pré-carregar a sala, limitar memória com muitas pessoas, e conferir celulares.
 - **Como testar:** abrir o Perfil e ver os emblemas; sala com 15 pessoas andando sem travar.
+
+**Notas da implementação:**
+- **Emblemas:** cada uma das 19 conquistas ganhou um emblema de conquista do Habbo (`ACH_…`, conferidos um a um na CDN): balões de chat para conversar, envelope para a primeira mensagem privada, chave para explorar as salas, árvore para entrar 7 dias seguidos, cachorrinho para adotar um pet, joinha para elogios, dados para a sorte… O servidor serve só esses códigos, com cache (`/hh/badge/{código}.gif`). Aparecem no Perfil, no cartão do avatar e no aviso de conquista; bloqueados ficam apagados. Sem internet (ou se a imagem falhar), volta a medalha antiga com emoji.
+- **Desempenho medido** com 15 robôs andando e falando na Recepção (16 pessoas): atualizar e desenhar um quadro custa ~0,3 ms (p95 2–3 ms), longe dos 16 ms de um quadro a 60 fps. Por isso o atlas de sprites e o pré-carregamento de sala ficaram de fora: não havia gargalo para resolver. No celular (375×812) a sala com as 16 pessoas abre e anima normalmente.
+- **Memória:** o cache de poses de cada avatar descartava poses sem liberar a textura da GPU (passou de 800 texturas em poucos minutos). Agora é LRU, com no máximo 160 poses por figura, e as descartadas (e as das figuras que saem do cache) são liberadas da GPU.
+- **Achados na carga:** a limpeza do histórico do chat falhava quando a mensagem apagada tinha uma resposta mais nova (no banco de desenvolvimento a coluna `reply_to_id` perdeu o `ON DELETE SET NULL` numa migração antiga) e a mensagem nova não era gravada; agora a citação é desfeita antes. O robô de teste (`npm run bot`) espera quando bate no limite de entradas por minuto e aceita até 20 robôs.
+- Testes: emblemas únicos com código do Habbo, rota dos emblemas (só os conhecidos, baixados uma vez), móvel/pet desconhecido não baixa nada e limpeza do histórico com resposta a mensagem antiga.
 
 ### Decisões para aprovar antes da Fase 31
 1. **Ordem:** a acima (avatar montado → animações → sentar/deitar → itens/efeitos → roupas → móveis → móveis animados → pets → emblemas).

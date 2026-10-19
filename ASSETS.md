@@ -44,7 +44,7 @@ Desde a Fase 2 as imagens passam pelo proxy do servidor (`/hh/avatar.png`, `/hh/
 - **Som de mensagem** (`client/src/ui/sound.ts`): sintetizado na hora com Web Audio, sem arquivo de áudio.
 - **Pets desenhados** (`client/src/assets/petArt.ts`): pixel art própria (cachorro, gato, coelho e pintinho, 3 pelagens, em pé/andando/sentado/deitado), desenhada por código a partir de grades 16×12 com contorno automático. Continuam como opção e como reserva sem internet.
 - **Pets do Habbo** (Fase 38): SWFs das bibliotecas de pet (`/api/v2/swfs/libraries?kind=pet`, CDN `gordon/…/pets/{tipo}.swf`), convertidos pelo servidor em `/hh/pet/{tipo}.png|json` com a paleta aplicada. Catálogo em `client/public/assets/pets/pets.json` (`npm run assets:pets`).
-- **Emblemas de conquistas** (`client/src/ui/badges.ts` + CSS): medalhas desenhadas em CSS com emoji. A HabboAssets não tem imagens de emblemas.
+- **Emblemas de conquistas** (Fase 39): emblemas de conquista do Habbo (`cdn.habboassets.com/images.habbo.com/c_images/album1584/{código}.gif`, códigos em `shared/src/achievements.ts`), pelo proxy `/hh/badge/{código}.gif`. Reserva sem internet: medalhas desenhadas em CSS com emoji (`client/src/ui/badges.ts`).
 - **Som ambiente** (`client/src/ui/ambient.ts`) e **tabuleiro do jogo da velha** (`FurniView.drawGameBoard`): gerados por código.
 
 ## Arte local e pacotes CC0

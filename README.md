@@ -15,7 +15,7 @@ Escritório virtual isométrico para amigos e colegas (até ~10 pessoas online):
 - **Agenda de reuniões**: botão 📅 Agenda para marcar reunião (sala, horário, duração e convidados), responder Vou/Não vou e cancelar. Lembrete 5 min antes (aviso, notificação e DM) com "Ir para a sala"; durante a reunião a porta da sala mostra "🔴 Em reunião".
 - **Mini-jogos**: jogo da velha na Mesa de Jogos da Copa (duas pessoas sentam e jogam, o resto da sala assiste, com placar) e `/dado` e `/moeda` no chat, sorteados pelo servidor.
 - **Pets**: adote um bichinho no Perfil: **33 pets do Habbo** (cachorro, gato, urso, leão, dragão, macaco, sapo…, com padrão de pelagem e cor) ou os 4 desenhados (cachorro, gato, coelho e pintinho). Ele segue você entre as salas, passeia quando você para e obedece `/senta`, `/deita` e `/vem` no chat.
-- **Conquistas**: 17 conquistas (conversar, decorar, explorar as salas, jogar, ir às reuniões…) com aviso ao desbloquear. No Perfil você escolhe até 3 emblemas para aparecer no seu cartão.
+- **Conquistas**: 17 conquistas (conversar, decorar, explorar as salas, jogar, ir às reuniões…) com aviso ao desbloquear. Cada conquista tem um **emblema do Habbo**; no Perfil você escolhe até 3 para aparecer no seu cartão.
 - **Status do editor de código**: com a extensão do VS Code ou do Visual Studio, seu cartão mostra “💻 Codando em C# no Visual Studio” enquanto você programa. No Perfil você escolhe o que aparece (nada, só “Codando”, a linguagem ou também o projeto). Veja [Extensões dos editores](#extensões-dos-editores).
 - **Spotify**: conecte sua conta no Perfil e a música que você está ouvindo aparece no seu cartão (“🎵 Música – Artista”, com link). Dá para esconder sem desconectar. Precisa de um app do Spotify configurado; veja [Spotify](#spotify).
 - **Avisos da diretoria**: botão 📢 Avisos. Admins publicam comunicados (normais ou urgentes); aparecem como faixa no topo para todo mundo, inclusive para quem entrar depois, até a pessoa clicar em **Li**. Histórico com “lido por N” para os admins.
@@ -98,7 +98,7 @@ Opções de URL do cliente: `?offline=1` usa só a arte provisória gerada por c
 | `npm run lint` / `npm run format` | ESLint / Prettier |
 | `npm run build` | Build de produção do cliente (`client/dist`) |
 | `npm start` | Servidor em modo produção (serve o `client/dist`) |
-| `npm run bot` | Robôs de teste |
+| `npm run bot` | Robôs de teste (`npm run bot -- Bia 15`: até 20 robôs andando e falando na Recepção; serve para testar o desempenho) |
 | `npm run assets:sync` | Regera o manifesto dos móveis curados do escritório a partir da HabboAssets |
 | `npm run assets:furni` | Regera o catálogo completo de móveis (`client/public/assets/furni/catalog.json`) pela API da HabboAssets; precisa de `HABBOASSETS_API_KEY`. Cada móvel é medido no imager só quando alguém usa pela primeira vez |
 | `npm run assets:pets` | Regera o catálogo dos pets do Habbo (`client/public/assets/pets/pets.json`): tipos, paletas e posturas, lendo os SWFs da HabboAssets |
