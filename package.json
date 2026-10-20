@@ -25,7 +25,7 @@
     "db:generate": "npm exec -w server -- drizzle-kit generate",
     "bot": "npm run bot -w server --",
     "assets:sync": "npm run assets:sync -w server --",
-    "start": "NODE_ENV=production npm run start -w server",
+    "start": "npm run start -w server",
     "vscode:package": "npm run package -w vscode-extension",
     "e2e": "npm run build && playwright test -c e2e/playwright.config.ts",
     "assets:figure": "npm run assets:figure -w server --",
