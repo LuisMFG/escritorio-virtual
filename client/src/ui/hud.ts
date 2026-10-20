@@ -24,7 +24,7 @@ export interface Hud {
   setDecorLocked(locked: boolean): void;
 }
 
-/** Nome da sala, status dos assets e controles de zoom (que agem sobre a cena atual). */
+/** Nome da sala, barra de baixo em grupos e a coluna de câmera e som (agem sobre a cena atual). */
 export function mountHud(opts: {
   getCamera: () => Camera | undefined;
   loader: AssetLoader;
@@ -36,37 +36,40 @@ export function mountHud(opts: {
   onOpenAnnouncements: () => void;
   onOpenMap: () => void;
   onEditRoom: () => void;
+  /** Câmera no próprio avatar. */
+  onCenterSelf: () => void;
   ambient: AmbientSound;
   onToggleDecor: () => void;
   /** Liga/desliga o som de mensagem; devolve o novo estado. */
   onToggleSound: () => boolean;
   soundOn: boolean;
 }): Hud {
+  // Fase 41: só o nome da sala no canto (as dicas vão para a ajuda).
   const card = document.createElement('header');
   card.className = 'hud-card';
   const title = document.createElement('h1');
-  const hint = document.createElement('p');
-  hint.textContent =
-    'Clique no piso para andar · Enter para conversar · arraste para mover a câmera.';
-  const editRoomBtn = document.createElement('button');
-  editRoomBtn.type = 'button';
-  editRoomBtn.className = 'btn-link hud-edit-room';
-  editRoomBtn.append(icon('pencil', 14), ' Editar sala');
-  editRoomBtn.hidden = true;
-  editRoomBtn.addEventListener('click', opts.onEditRoom);
-  card.append(title, hint, editRoomBtn);
+  card.append(title);
 
+  // Selo da origem da arte: só para admins (diagnóstico).
   const status = document.createElement('div');
   status.className = 'hud-status';
   status.setAttribute('role', 'status');
+  status.hidden = true;
   opts.loader.onChange((stats) => renderStatus(status, stats));
 
+  // Coluna da direita compacta: som e tema em cima, câmera embaixo.
   const zoom = document.createElement('div');
   zoom.className = 'hud-zoom';
+  zoom.setAttribute('role', 'toolbar');
+  zoom.setAttribute('aria-label', 'Câmera e som');
+  const sep = Object.assign(document.createElement('span'), { className: 'hud-sep' });
+  sep.setAttribute('aria-hidden', 'true');
   zoom.append(
+    sep,
     button('plus', 'Aproximar', () => opts.getCamera()?.zoomIn()),
     button('minus', 'Afastar', () => opts.getCamera()?.zoomOut()),
-    button('locate', 'Centralizar a sala', () => opts.getCamera()?.center()),
+    button('scan', 'Enquadrar a sala', () => opts.getCamera()?.fit()),
+    button('locate-fixed', 'Centralizar em mim', opts.onCenterSelf),
   );
   const soundBtn = button('bell', '', () => renderSound(opts.onToggleSound()));
   const renderSound = (on: boolean) => {
@@ -154,21 +157,66 @@ export function mountHud(opts: {
   annBadge.className = 'dm-badge';
   annBadge.hidden = true;
   annBtn.append(annBadge);
-  const adminBtn = actionButton('hud-admin', 'shield', 'Admin', opts.onOpenAdmin);
+  // "Mais": o que é de poucos (editar sala, admin); some quando não há nada.
+  const moreBtn = actionButton('hud-more-btn', 'ellipsis', 'Mais', () => {
+    moreMenu.hidden = !moreMenu.hidden;
+    moreBtn.setAttribute('aria-expanded', String(!moreMenu.hidden));
+  });
+  moreBtn.setAttribute('aria-haspopup', 'menu');
+  moreBtn.setAttribute('aria-expanded', 'false');
+  const moreMenu = document.createElement('div');
+  moreMenu.className = 'hud-more-menu';
+  moreMenu.setAttribute('role', 'menu');
+  moreMenu.hidden = true;
+  const menuItem = (name: IconName, label: string, onClick: () => void) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.setAttribute('role', 'menuitem');
+    b.append(icon(name), label);
+    b.addEventListener('click', () => {
+      moreMenu.hidden = true;
+      moreBtn.setAttribute('aria-expanded', 'false');
+      onClick();
+    });
+    return b;
+  };
+  const editRoomBtn = menuItem('pencil', 'Editar sala', opts.onEditRoom);
+  editRoomBtn.classList.add('hud-edit-room');
+  editRoomBtn.hidden = true;
+  const adminBtn = menuItem('shield', 'Admin', opts.onOpenAdmin);
+  adminBtn.classList.add('hud-admin');
   adminBtn.hidden = true;
+  moreMenu.append(editRoomBtn, adminBtn);
+  const moreWrap = Object.assign(document.createElement('div'), { className: 'hud-more' });
+  moreWrap.append(moreBtn, moreMenu);
+  const renderMore = () => {
+    moreWrap.hidden = editRoomBtn.hidden && adminBtn.hidden;
+  };
+  renderMore();
+  document.addEventListener('pointerdown', (e) => {
+    if (!moreMenu.hidden && !moreWrap.contains(e.target as Node)) {
+      moreMenu.hidden = true;
+      moreBtn.setAttribute('aria-expanded', 'false');
+    }
+  });
 
-  const actions = document.createElement('div');
+  // Barra de baixo em grupos: Eu · Pessoas · Conversas · Escritório · Mais.
+  const group = (label: string, ...buttons: HTMLElement[]) => {
+    const g = Object.assign(document.createElement('div'), { className: 'hud-group' });
+    g.setAttribute('role', 'group');
+    g.setAttribute('aria-label', label);
+    g.append(...buttons);
+    return g;
+  };
+  const actions = document.createElement('nav');
   actions.className = 'hud-actions';
+  actions.setAttribute('aria-label', 'Menu do escritório');
   actions.append(
-    profileBtn,
-    teamBtn,
-    dmBtn,
-    mapBtn,
-    agendaBtn,
-    annBtn,
-    focusBtn,
-    decorBtn,
-    adminBtn,
+    group('Eu', profileBtn, focusBtn),
+    group('Pessoas', teamBtn, mapBtn),
+    group('Conversas', dmBtn, annBtn),
+    group('Escritório', agendaBtn, decorBtn),
+    moreWrap,
   );
   document.body.append(card, status, zoom, actions, panel);
   return {
@@ -185,9 +233,12 @@ export function mountHud(opts: {
     },
     setCanEditRooms(on) {
       editRoomBtn.hidden = !on;
+      renderMore();
     },
     setAdmin(on) {
       adminBtn.hidden = !on;
+      status.hidden = !on;
+      renderMore();
     },
     setDecorLocked(locked) {
       decorBtn.disabled = locked;

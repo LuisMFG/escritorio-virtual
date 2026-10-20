@@ -20,6 +20,7 @@ import type { PollCreate, PollView } from '@office/shared';
 import { openPollForm, pollCard } from './poll.js';
 import { confirmDialog } from './confirm.js';
 import { appendLinkified, AttachmentDraft, attachmentView, linkPreview } from './attachments.js';
+import { icon } from './icons.js';
 import {
   flashMessage,
   openReactionPicker,
@@ -34,6 +35,8 @@ const STICKY_SCROLL_PX = 40;
 /** Reenvia "digitando" enquanto a pessoa continua digitando (o servidor não expira sozinho). */
 const TYPING_REFRESH_MS = 3000;
 const MAX_SUGGESTIONS = 5;
+/** Painel da conversa aberto/recolhido (lembrado no navegador). */
+const OPEN_KEY = 'ev-chat-open';
 
 export interface ChatHandlers {
   send(text: string, replyToId?: number, attachmentId?: string): void;
@@ -77,6 +80,7 @@ export class ChatPanel {
   private localName = '';
   private names: string[] = [];
   private unread = 0;
+  private readonly toggleListeners: ((open: boolean) => void)[] = [];
   private typingOn = false;
   private typingSentAt = 0;
   private typingTimer = 0;
@@ -94,7 +98,7 @@ export class ChatPanel {
 
     this.emoteBtn.type = 'button';
     this.emoteBtn.className = 'chat-emote-btn';
-    this.emoteBtn.textContent = '😊';
+    this.emoteBtn.append(icon('smile'));
     this.emoteBtn.title = 'Emotes';
     this.emoteBtn.setAttribute('aria-label', 'Emotes');
     this.emoteBtn.setAttribute('aria-expanded', 'false');
@@ -183,7 +187,7 @@ export class ChatPanel {
 
     this.input.className = 'chat-input';
     this.input.maxLength = CHAT_MAX_LENGTH;
-    this.input.placeholder = 'Diga algo… (Enter envia, @ menciona, / emotes, /dado)';
+    this.input.placeholder = 'Diga algo… (@ menciona, / comandos)';
     this.input.autocomplete = 'off';
     this.input.setAttribute('aria-label', 'Mensagem para a sala');
     this.input.setAttribute('aria-autocomplete', 'list');
@@ -193,14 +197,16 @@ export class ChatPanel {
 
     const send = document.createElement('button');
     send.type = 'submit';
-    send.className = 'btn-primary';
-    send.textContent = 'Enviar';
+    send.className = 'btn-primary chat-send';
+    send.append(icon('send'));
+    send.title = 'Enviar (Enter)';
+    send.setAttribute('aria-label', 'Enviar');
     const searchBtn = Object.assign(document.createElement('button'), {
       type: 'button',
       className: 'chat-attach-btn',
-      textContent: '🔎',
       title: 'Buscar nas conversas',
     });
+    searchBtn.append(icon('search'));
     searchBtn.setAttribute('aria-label', 'Buscar nas conversas');
     searchBtn.addEventListener('click', () => on.search());
     this.form.append(
@@ -217,7 +223,7 @@ export class ChatPanel {
     );
 
     this.history.className = 'chat-history';
-    this.history.open = window.innerWidth > 900;
+    this.history.open = loadOpen();
     this.log.className = 'chat-log';
     this.log.setAttribute('aria-live', 'polite');
     this.empty.className = 'muted chat-empty';
@@ -380,11 +386,13 @@ export class ChatPanel {
     });
 
     this.history.addEventListener('toggle', () => {
+      saveOpen(this.history.open);
       if (this.history.open) {
         this.unread = 0;
-        this.renderSummary();
         this.scrollToEnd();
       }
+      this.renderSummary();
+      for (const fn of this.toggleListeners) fn(this.history.open);
     });
     // Enter em qualquer lugar (fora de campos e diálogos) começa a digitar.
     document.addEventListener('keydown', (e) => {
@@ -587,12 +595,56 @@ export class ChatPanel {
     return true;
   }
 
+  /** Avisa quando o painel abre ou recolhe (a câmera reenquadra a sala). */
+  onToggle(fn: (open: boolean) => void): void {
+    this.toggleListeners.push(fn);
+  }
+
+  get isOpen(): boolean {
+    return this.history.open;
+  }
+
   private renderSummary(): void {
-    this.summary.textContent =
-      this.unread > 0 ? `Conversa (${this.unread} nova${this.unread > 1 ? 's' : ''})` : 'Conversa';
+    const label = Object.assign(document.createElement('span'), {
+      className: 'chat-summary-label',
+      textContent: 'Conversa',
+    });
+    const parts: Node[] = [icon('message-square', 16), label];
+    if (this.unread > 0) {
+      const n = this.unread > 99 ? '99+' : String(this.unread);
+      const badge = Object.assign(document.createElement('span'), {
+        className: 'chat-unread',
+        textContent: n,
+      });
+      badge.setAttribute('aria-label', `${n} nova${this.unread > 1 ? 's' : ''}`);
+      parts.push(badge);
+    }
+    const chevron = icon('chevron-down', 16);
+    chevron.classList.add('chat-chevron');
+    parts.push(chevron);
+    this.summary.replaceChildren(...parts);
+    this.summary.title = this.history.open ? 'Recolher a conversa' : 'Abrir a conversa';
   }
 
   private scrollToEnd(): void {
     this.log.scrollTop = this.log.scrollHeight;
+  }
+}
+
+function loadOpen(): boolean {
+  try {
+    const saved = localStorage.getItem(OPEN_KEY);
+    if (saved) return saved === '1';
+  } catch {
+    // sem armazenamento: usa o padrão
+  }
+  return window.innerWidth > 900;
+}
+
+function saveOpen(open: boolean): void {
+  try {
+    localStorage.setItem(OPEN_KEY, open ? '1' : '0');
+  } catch {
+    // sem armazenamento: vale só para esta visita
   }
 }

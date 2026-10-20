@@ -5192,3 +5192,385 @@ button svg.icon {
 .dm-panel {
   box-shadow: var(--shadow-1);
 }
+
+/* ---------- Fase 41: tela principal limpa ---------- */
+
+:root {
+  /* Largura da coluna da conversa (esquerda). */
+  --chat-col: 340px;
+}
+
+/* Nome da sala: só um selo no canto. */
+.hud-card {
+  top: 16px;
+  left: 16px;
+  padding: 8px 14px;
+  border-radius: var(--radius-pill);
+  max-width: var(--chat-col);
+}
+
+.hud-card h1 {
+  margin: 0;
+  font-size: 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Selo dos assets (só admins): no alto, centralizado. */
+.hud-status {
+  top: 16px;
+  right: auto;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.hud-status[hidden] {
+  display: none;
+}
+
+.people {
+  top: 16px;
+}
+
+/* Conversa: painel lateral à esquerda, recolhível. */
+.chat-history {
+  left: 16px;
+  top: 64px;
+  bottom: 76px;
+  width: var(--chat-col);
+  max-height: none;
+  height: auto;
+  box-shadow: var(--shadow-1);
+}
+
+.chat-history[open] {
+  height: auto;
+}
+
+.chat-history:not([open]) {
+  top: auto;
+  width: auto;
+}
+
+.chat-history summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  list-style: none;
+  border-bottom: 1px solid transparent;
+}
+
+.chat-history summary::-webkit-details-marker {
+  display: none;
+}
+
+.chat-history[open] summary {
+  border-bottom-color: var(--line);
+  margin-bottom: 8px;
+}
+
+.chat-summary-label {
+  flex: 1;
+}
+
+.chat-unread {
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-strong);
+  color: var(--on-accent);
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.chat-chevron {
+  color: var(--muted);
+  transform: rotate(180deg);
+  transition: transform var(--dur) var(--ease);
+}
+
+.chat-history[open] .chat-chevron {
+  transform: none;
+}
+
+/* Falas em balões: as suas à direita. */
+.chat-log {
+  gap: 6px;
+}
+
+.chat-log li {
+  align-self: flex-start;
+  max-width: 92%;
+  padding: 6px 10px;
+  border-radius: var(--radius-lg) var(--radius-lg) var(--radius-lg) var(--radius-xs);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}
+
+.chat-log li.mine {
+  align-self: flex-end;
+  background: var(--accent-tint);
+  border-radius: var(--radius-lg) var(--radius-lg) var(--radius-xs) var(--radius-lg);
+}
+
+.chat-log li.mine strong {
+  color: var(--accent-text);
+}
+
+.chat-log li.mentioned {
+  margin: 0;
+  padding: 6px 10px;
+  background: var(--warn-tint);
+  box-shadow: inset 3px 0 0 var(--warn);
+}
+
+.chat-log li time {
+  float: right;
+  margin-left: 8px;
+}
+
+/* Campo de mensagem: embaixo da conversa, na mesma coluna. */
+.chat-bar {
+  left: 16px;
+  right: auto;
+  bottom: 16px;
+  width: var(--chat-col);
+  transform: none;
+  box-shadow: var(--shadow-1);
+}
+
+.chat-emote-btn,
+.chat-attach-btn,
+.chat-send {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  padding: 0;
+  color: var(--text);
+}
+
+.chat-send {
+  width: 40px;
+  color: var(--on-accent);
+}
+
+/* Barra de baixo em grupos, centralizada no espaço que sobra. */
+.hud-actions {
+  left: calc(32px + var(--chat-col));
+  right: 72px;
+  bottom: 16px;
+  justify-content: center;
+  flex-wrap: nowrap;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.hud-actions > * {
+  pointer-events: auto;
+}
+
+.hud-group {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-1);
+}
+
+.hud-group .hud-action,
+.hud-more .hud-action {
+  padding: 7px 10px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.hud-group .hud-action:hover,
+.hud-more .hud-action:hover,
+.hud-more .hud-action[aria-expanded='true'] {
+  background: var(--surface-3);
+}
+
+.hud-group .hud-action[aria-pressed='true'] {
+  background: var(--accent-tint);
+  color: var(--accent-text);
+}
+
+.hud-more {
+  position: relative;
+  display: flex;
+  padding: 3px;
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-1);
+}
+
+.hud-more[hidden] {
+  display: none;
+}
+
+.hud-more-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  min-width: 180px;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  background: var(--surface-1);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-2);
+}
+
+.hud-more-menu[hidden] {
+  display: none;
+}
+
+.hud-more-menu button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.hud-more-menu button:hover {
+  background: var(--surface-3);
+}
+
+.hud-more-menu button[hidden] {
+  display: none;
+}
+
+/* Rótulos só onde cabem; nas telas menores fica o ícone (com dica). */
+@media (max-width: 1360px) {
+  .hud-action .lbl {
+    display: none;
+  }
+
+  .hud-focus.focusing .lbl,
+  .hud-focus.on-break .lbl {
+    display: inline;
+  }
+
+  .hud-group .hud-action,
+  .hud-more .hud-action {
+    padding: 8px;
+  }
+}
+
+/* Coluna da direita: uma barrinha só, com som/tema em cima e a câmera embaixo. */
+.hud-zoom {
+  right: 16px;
+  bottom: 16px;
+  gap: 2px;
+  padding: 3px;
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-1);
+}
+
+.hud-zoom button {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  box-shadow: none;
+}
+
+.hud-sep {
+  height: 1px;
+  margin: 3px 6px;
+  background: var(--line-strong);
+}
+
+.ambient-panel {
+  right: 72px;
+}
+
+@media (max-width: 900px) {
+  :root {
+    --chat-col: 300px;
+  }
+}
+
+@media (max-width: 700px) {
+  .hud-card {
+    max-width: calc(100vw - 32px);
+  }
+
+  .people {
+    top: 64px;
+    left: auto;
+    right: 64px;
+    bottom: auto;
+    width: min(240px, calc(100vw - 96px));
+    max-height: 40vh;
+  }
+
+  .chat-history {
+    left: 16px;
+    right: 16px;
+    top: 64px;
+    bottom: 128px;
+    width: auto;
+  }
+
+  .chat-history:not([open]) {
+    right: auto;
+    top: auto;
+  }
+
+  .chat-bar {
+    left: 16px;
+    right: 16px;
+    bottom: 68px;
+    width: auto;
+  }
+
+  .hud-actions {
+    left: 8px;
+    right: 8px;
+    bottom: 12px;
+    gap: 6px;
+    justify-content: flex-start;
+    overflow-x: auto;
+  }
+
+  .hud-zoom {
+    right: 8px;
+    top: 64px;
+    bottom: auto;
+    left: auto;
+    flex-direction: column;
+  }
+
+  .hud-zoom button {
+    width: 36px;
+    height: 36px;
+  }
+
+  .hud-status {
+    display: none;
+  }
+
+  .ambient-panel {
+    right: 60px;
+    top: 64px;
+    bottom: auto;
+  }
+}

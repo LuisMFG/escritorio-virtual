@@ -10,7 +10,7 @@ import { uploadApi } from '../net/api.js';
 import { iconHtml } from './icons.js';
 
 /**
- * Anexos (Fase 29): botão 📎 / colar / arrastar, miniaturas das imagens (baixadas com o token e
+ * Anexos (Fase 29): botão de clipe / colar / arrastar, miniaturas das imagens (baixadas com o token e
  * mostradas da memória), links clicáveis com prévia e a busca nas conversas.
  */
 
@@ -54,7 +54,7 @@ export class AttachmentDraft {
   readonly button = el('button', {
     type: 'button',
     className: 'chat-attach-btn',
-    textContent: '📎',
+    innerHTML: iconHtml('paperclip'),
     title: 'Anexar arquivo (ou cole/arraste uma imagem)',
   });
   readonly chip = el('div', { className: 'attach-draft', hidden: true });
