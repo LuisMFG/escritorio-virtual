@@ -35,6 +35,7 @@ Escritório virtual isométrico para amigos e colegas (até ~10 pessoas online):
 - **Presença**: selo sobre a cabeça para ocupado, ausente e em reunião; segure **Alt** para ver o nome de todos sem encavalar; clique em alguém na lista de pessoas para a câmera ir até a pessoa.
 - **Primeiro acesso e ajuda**: quem cria a conta ganha um tour guiado (andar, escolher a mesa, conversar, emotes e Decorar); aperte **?** (ou Mais → Ajuda) para ver comandos, atalhos e o que cada botão faz, e refazer o tour.
 - **Desfazer**: remover um móvel, apagar uma mensagem ou soltar o pet mostra um aviso com **Desfazer** por alguns segundos. Se a conexão cair, uma faixa no alto avisa e o escritório volta sozinho.
+- **Celular**: barra com 5 botões e **Mais**, janelas que abrem como gaveta de baixo (arraste para baixo para fechar), campo do chat que sobe com o teclado, pinça para zoom e segurar sobre alguém para abrir o cartão.
 - **Configurações** (engrenagem na coluna da direita): tema escuro, claro ou do sistema, tamanho do texto, reduzir movimento, som de mensagem, som ambiente e notificações; tudo fica salvo no navegador. O **Perfil** é dividido em abas (Perfil, Pet, Conquistas, Efeitos, Integrações e Conta).
 - Andar clicando no piso, com desvio de móveis e outras pessoas, sincronizado em tempo real.
 - Conversar: **Enter** abre o campo de mensagem; a fala aparece em balão sobre o avatar e fica no histórico **Conversa**. Há um som de mensagem opcional (sino na coluna da direita).

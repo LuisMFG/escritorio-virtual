@@ -1128,10 +1128,12 @@ Pedido em 20/10/2026, com o escritório já em uso pelo pessoal do trabalho (ser
 - **Feito:** **tela de carregamento** com barra (preparando → conectando → entrando na sala → arte da sala, que acompanha os downloads de texturas e camadas de móveis pelo contador `assets/progress.ts`; sai com 90% ou em 8 s); **esqueletos** cintilando no lugar de "Carregando…" em Equipe, Agenda, Mapa, Mensagens, Admin, Perfil e editor de salas; "Preparando móvel" do catálogo com girador. **Avisos empilhados** (até 4, com ícone de sucesso/erro, fechar e ação), erros do servidor como aviso de erro. **Desfazer** em remover móvel (volta no mesmo lugar), apagar mensagem e soltar pet (os dois últimos só vão ao servidor quando o aviso some). **Faixa de conexão** no alto com girador enquanto reconecta e aviso "Conectado de novo" ao voltar (a queda curta continua voltando no mesmo lugar; reinício do servidor volta para a entrada da sala). Testes `decorar.spec.ts` (remover e desfazer) e `retorno.spec.ts` (apagar mensagem com desfazer).
 
 
-#### Fase 46 — Celular de verdade
+#### Fase 46 — Celular de verdade ✅ implementada
 - Barra inferior com 5 ícones + "mais", **painéis como gaveta de baixo** (bottom sheet), sala enquadrada na tela.
 - **Toque:** tocar para andar, pinça para zoom, segurar sobre alguém para abrir o cartão; teclado que não cobre o campo do chat.
 - **Como testar:** num celular, andar, sentar, conversar e abrir o Perfil sem nada cortado.
+- **Feito:** até 700px de largura a barra de baixo vira uma faixa só com **5 botões** (Perfil, Foco, Equipe, Mapa, Mensagens) e **Mais** (Minha mesa, Avisos com contador, Agenda, Decorar, Ajuda e os de admin), alvos de 44px e respeitando a área segura do aparelho. Toda janela vira **gaveta de baixo** (largura da tela, puxador, sobe animada; arrastar o cabeçalho para baixo fecha). **Teclado:** `interactive-widget=resizes-content` e, no iOS, `visualViewport` sobe o campo do chat e esconde a barra enquanto o teclado está aberto; campos com 16px para o iOS não dar zoom. **Segurar sobre alguém** abre o cartão (sem andar); pinça já funcionava. Zoom mínimo 0,4× para a sala caber melhor no celular. Deitado (pouca altura): lista de pessoas começa recolhida e as gavetas usam a altura toda. Teste `e2e/tests/celular.spec.ts`.
+
 
 #### Fase 47 — Decorar sem esforço
 - Painel redesenhado: grade que não espreme, filtros como chips, **favoritos e recentes**, prévia maior do móvel e das cores.
