@@ -1097,11 +1097,13 @@ Pedido em 20/10/2026, com o escritório já em uso pelo pessoal do trabalho (ser
 - **Feito:** barra de baixo em grupos (Eu: Perfil e Foco · Pessoas: Equipe e Mapa · Conversas: Mensagens e Avisos · Escritório: Agenda e Decorar) com **Mais** (Editar sala e Admin, só para quem pode), rótulos só em telas largas; coluna da direita virou uma barrinha (som ambiente, tema, som de mensagem | aproximar, afastar, **enquadrar a sala**, **centralizar em mim**). A **conversa** é um painel à esquerda, com as falas em balões (as suas à direita), recolhível num botão com contador de novas e lembrado no navegador; o campo de mensagem fica embaixo dele, com ícones. O cartão de dicas saiu (vira a ajuda da Fase 44) e o selo de assets só aparece para admins. **Câmera:** enquadra só o piso e as paredes na área livre (sem a conversa, a barra de baixo e a coluna da direita), com zoom contínuo abaixo de 1× e níveis 1×, 1,5×, 2× e 3× acima; reenquadra ao recolher a conversa e ao redimensionar; roda do mouse e **pinça** no celular. Testes `Camera.test.ts` e `e2e/tests/tela.spec.ts`.
 
 
-#### Fase 42 — Minha mesa e presença
+#### Fase 42 — Minha mesa e presença ✅ implementada
 - **Minha mesa:** cada pessoa escolhe a sua estação na Recepção (com o nome numa plaquinha na mesa); ao entrar, um botão "Ir para minha mesa" leva e senta.
 - **Status sobre o avatar** mais legível (ocupado, ausente, em reunião, foco) e **nomes que não se sobrepõem** com muita gente.
 - **Achar alguém:** clicar numa pessoa na lista leva a câmera até ela e a destaca por um instante.
 - **Como testar:** escolher a mesa, sair e entrar de novo e ir direto para ela; clicar no nome de um colega e a câmera ir até ele.
+- **Feito:** sentado numa estação da Recepção (cadeira `…-cadeira` com a mesa `…-mesa`), uma faixa acima da barra diz se ela está livre (**Ficar com esta mesa** / **Mudar minha mesa para cá**), se é sua (**Deixar mesa**) ou de quem é. A escolha fica na conta (`users.desk`, única; migration `0028_minha_mesa`), vira uma **plaquinha** com o nome na frente da mesa para todos (`desks` no estado da sala) e o botão **Minha mesa** no grupo "Eu": de qualquer sala, volta para a Recepção, anda até a estação e senta. Ao entrar, a faixa convida "Sua mesa está esperando" por 15 s. **Selo sobre a cabeça** maior e desenhado: ocupado (vermelho com traço), ausente (âmbar com relógio) e **em reunião** (roxo, quando a sala tem reunião agora). **Alt** segurado mostra o nome de todos, afastados para não encavalar. Clicar numa pessoa da lista leva a câmera até ela com um círculo pulsando; quem está em outra sala leva até a sala dela. Testes `shared/src/desks.test.ts`, `OfficeRoom.test.ts` (minha mesa) e `e2e/tests/mesa.spec.ts`.
+
 
 #### Fase 43 — Perfil e configurações
 - **Perfil em abas** (Visual · Pet · Conquistas · Efeitos · Integrações) no lugar da rolagem gigante; editor de visual com prévia maior e animada.
