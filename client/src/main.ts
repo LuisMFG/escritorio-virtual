@@ -26,6 +26,7 @@ import {
   officeHour,
   STATUSES,
   DESK_ROOM_ID,
+  type FurniPlaceMessage,
   deskSeatIds,
 } from '@office/shared';
 import { Application, TextureSource } from 'pixi.js';
@@ -96,6 +97,7 @@ import { openSettings } from './ui/settings.js';
 import { applyPrefs } from './ui/prefs.js';
 import { openHelp, tipOnce } from './ui/help.js';
 import { takeTourPending, Tour } from './ui/tour.js';
+import { BootScreen } from './ui/boot.js';
 
 const E2E_MODE = new URLSearchParams(location.search).has('e2e');
 const TOUR_IN_E2E = new URLSearchParams(location.search).has('tour');
@@ -166,6 +168,7 @@ function snapshot(p: Player): AvatarSnapshot {
 }
 
 async function start(): Promise<void> {
+  const boot = new BootScreen();
   TextureSource.defaultOptions.scaleMode = 'nearest';
 
   applyTheme(loadTheme());
@@ -371,7 +374,10 @@ async function start(): Promise<void> {
     openKudosForm({
       token: session.token,
       to: { userId, name },
-      sent: (k) => overlay.notify(`${KUDOS_INFO[k.type].emoji} Elogio enviado para ${k.toName}!`),
+      sent: (k) =>
+        overlay.notify(`${KUDOS_INFO[k.type].emoji} Elogio enviado para ${k.toName}!`, {
+          kind: 'success',
+        }),
     });
   }
   /** Minimapa aberto (atualiza com a presença) e quem estamos indo encontrar. */
@@ -531,7 +537,7 @@ async function start(): Promise<void> {
         // A definição da cor nova precisa existir antes do estado chegar com ela.
         void furniStore.ensure(defId).then((d) => {
           if (d) scene?.decor.setColor(defId);
-          else overlay.notify('Não consegui trocar a cor agora.');
+          else overlay.notify('Não consegui trocar a cor agora. Tente de novo.', { kind: 'error' });
         });
       },
       close: () => setDecorating(false),
@@ -811,7 +817,29 @@ async function start(): Promise<void> {
         },
         placeFurni: (msg) => connection.placeFurni(msg),
         moveFurni: (msg) => connection.moveFurni(msg),
-        removeFurni: (furniId) => connection.removeFurni(furniId),
+        removeFurni: (furniId) => {
+          // Desfazer (Fase 45): guarda onde estava e põe de volta igual.
+          const f = room.state.furni.get(furniId);
+          connection.removeFurni(furniId);
+          if (!f) return;
+          const wall = deps.furniDefs.get(f.defId)?.wall ?? false;
+          const back: FurniPlaceMessage = {
+            defId: f.defId,
+            x: f.x,
+            y: f.y,
+            rot: f.rot as FurniPlaceMessage['rot'],
+            ...(wall ? { z: f.z } : {}),
+          };
+          const name = deps.furniDefs.get(f.defId)?.name ?? 'Móvel';
+          overlay.notify(`${name} removido.`, {
+            action: {
+              label: 'Desfazer',
+              run: () => {
+                if (connection?.currentRoomId === layout.roomId) connection.placeFurni(back);
+              },
+            },
+          });
+        },
         colorFurni: (msg) => connection.colorFurni(msg),
         avatarClick: (sessionId, at) => {
           const info = s.avatarInfo(sessionId);
@@ -865,6 +893,7 @@ async function start(): Promise<void> {
     s.camera.setInsets(uiInsets());
     await s.load();
     if (scene !== s) return;
+    boot.step('art');
     s.setDayLight(currentLight());
     s.setBusyRooms(busyRooms());
     ambient.setAmbient(layout.ambient);
@@ -1082,7 +1111,7 @@ async function start(): Promise<void> {
       },
       receipt: (r) => messages.receipt(r),
       reactions: (u) => messages.updateReactions(u.id, u.reactions),
-      error: (e) => overlay.notify(e.message),
+      error: (e) => overlay.notify(e.message, { kind: 'error' }),
       people: (list) => {
         online = list;
         minimap?.refresh();
@@ -1172,9 +1201,10 @@ async function start(): Promise<void> {
   }
 
   async function enter(current: SessionResponse): Promise<void> {
+    boot.step('room');
     const conn: OfficeConnection = new OfficeConnection({
       status: (status, detail) => overlay.setStatus(status, detail),
-      serverError: (err) => overlay.notify(err.message),
+      serverError: (err) => overlay.notify(err.message, { kind: 'error', durationMs: 5000 }),
       chat: (msg) => {
         chat.add(msg);
         const fromOther = msg.userId !== session?.userId;
@@ -1271,9 +1301,11 @@ async function start(): Promise<void> {
   }
 
   let notice = takeNotice();
+  boot.step('connect');
   let result = notice ? undefined : await resumeSession((d) => overlay.setStatus('connecting', d));
   let attempts = 0;
   for (;;) {
+    if (!result) boot.hide();
     result ??= await showLogin({ manifest: avatarManifest, fallbackPreview, notice });
     // Conta antiga (só o token deste navegador): escolhe usuário e senha antes de entrar.
     if (!result.username) result = await showClaim(result);

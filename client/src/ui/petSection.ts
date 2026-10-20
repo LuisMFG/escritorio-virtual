@@ -16,7 +16,8 @@ import { petPreview, PET_SWATCH } from '../assets/petArt.js';
 import { FurniVisualLibrary, type LoadedFurniVisual } from '../assets/FurniVisualLibrary.js';
 import { OFFLINE_ASSETS } from '../config.js';
 import { petApi } from '../net/api.js';
-import { confirmDialog } from './confirm.js';
+import { undoable } from './toasts.js';
+import { skeleton } from './skeleton.js';
 
 /** Pets do Habbo (Fase 38): catálogo e desenhos, compartilhados entre aberturas do Perfil. */
 const visuals = new FurniVisualLibrary(!OFFLINE_ASSETS);
@@ -144,15 +145,18 @@ export function mountPetSection(box: HTMLElement, token: string): void {
       render();
     });
     const release = el('button', { type: 'button', className: 'btn-link', textContent: 'Soltar' });
-    release.addEventListener('click', async () => {
-      const yes = await confirmDialog(`Soltar ${p.name}? Ele some da sala.`, {
-        confirmLabel: 'Soltar',
-        danger: true,
-      });
-      if (!yes) return;
-      await petApi.release(token);
+    // Soltar com "Desfazer" (Fase 45): o pet só sai da sala quando o aviso some.
+    release.addEventListener('click', () => {
       pet = null;
       render();
+      undoable(
+        `${p.name} foi solto.`,
+        () => void petApi.release(token),
+        () => {
+          pet = p;
+          render();
+        },
+      );
     });
     actions.append(edit, release);
     box.append(row, actions);
@@ -322,10 +326,7 @@ export function mountPetSection(box: HTMLElement, token: string): void {
     box.append(form);
   };
 
-  box.replaceChildren(
-    el('h3', { textContent: '🐾 Meu pet' }),
-    el('p', { className: 'muted', textContent: 'Carregando…' }),
-  );
+  box.replaceChildren(el('h3', { textContent: '🐾 Meu pet' }), skeleton());
   Promise.all([petApi.get(token), visuals.petCatalog()])
     .then(([r, c]) => {
       pet = r.pet;

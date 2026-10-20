@@ -18,7 +18,7 @@ import {
 } from '@office/shared';
 import type { PollCreate, PollView } from '@office/shared';
 import { openPollForm, pollCard } from './poll.js';
-import { confirmDialog } from './confirm.js';
+import { undoable } from './toasts.js';
 import { appendLinkified, AttachmentDraft, attachmentView, linkPreview } from './attachments.js';
 import { icon } from './icons.js';
 import {
@@ -552,13 +552,19 @@ export class ChatPanel {
       button('😊', 'Reagir', (b) => openReactionPicker(b, (emoji) => this.on.react(m.id, emoji))),
     );
     if (this.isAdmin || m.userId === this.localUserId) {
-      const del = button('🗑', 'Apagar', async () => {
-        const who = m.userId === this.localUserId ? 'sua mensagem' : `a mensagem de ${m.name}`;
-        const yes = await confirmDialog(`Apagar ${who} para todos?`, {
-          confirmLabel: 'Apagar',
-          danger: true,
-        });
-        if (yes) this.on.remove(m.id);
+      // Apagar com "Desfazer" (Fase 45): some daqui na hora e só apaga de verdade depois.
+      const del = button('🗑', 'Apagar', () => {
+        const li = this.log.querySelector<HTMLElement>(`li[data-id="${m.id}"]`);
+        if (li) li.hidden = true;
+        const who =
+          m.userId === this.localUserId ? 'Mensagem apagada.' : `Mensagem de ${m.name} apagada.`;
+        undoable(
+          who,
+          () => this.on.remove(m.id),
+          () => {
+            if (li) li.hidden = false;
+          },
+        );
       });
       del.classList.add('danger');
       box.append(del);

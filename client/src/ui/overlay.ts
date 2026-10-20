@@ -1,6 +1,7 @@
 import { STATUS_LABELS, STATUSES, type Status } from '@office/shared';
 import type { ConnectionStatus } from '../net/OfficeConnection.js';
 import { cargoPill } from './profile.js';
+import { mountToasts, toast, type ToastOptions } from './toasts.js';
 
 export interface PersonEntry {
   id: string;
@@ -52,12 +53,11 @@ export class Overlay {
   private readonly peopleBody = document.createElement('div');
   private readonly statusSelect = document.createElement('select');
   private readonly banner = document.createElement('div');
-  private readonly toast = document.createElement('div');
   private readonly fade = document.createElement('div');
-  private toastTimer = 0;
   private here: PersonEntry[] = [];
   private others: OtherRoom[] = [];
   private roomName = '';
+  private lastStatus: ConnectionStatus = 'connecting';
   private pick: ((target: PersonPick) => void) | null = null;
 
   constructor(onStatusChange: (status: Status) => void) {
@@ -81,13 +81,10 @@ export class Overlay {
     this.banner.setAttribute('role', 'status');
     this.banner.hidden = true;
 
-    this.toast.className = 'toast';
-    this.toast.setAttribute('role', 'status');
-    this.toast.hidden = true;
-
     this.fade.className = 'room-fade';
 
-    document.body.append(this.people, this.banner, this.toast, this.fade);
+    document.body.append(this.people, this.banner, this.fade);
+    mountToasts();
     this.render();
   }
 
@@ -190,17 +187,28 @@ export class Overlay {
     });
   }
 
+  /**
+   * Faixa de conexão (Fase 45): no alto, com um girador, enquanto conecta ou reconecta; ao
+   * voltar depois de cair, um aviso de sucesso.
+   */
   setStatus(status: ConnectionStatus, detail?: string): void {
     const show = status === 'reconnecting' || status === 'connecting';
+    if (status === 'online' && this.lastStatus === 'reconnecting') {
+      toast('Conectado de novo.', { kind: 'success' });
+    }
+    this.lastStatus = status;
     this.banner.hidden = !show;
     this.banner.dataset.status = status;
-    this.banner.textContent = detail ?? (status === 'connecting' ? 'Conectando…' : 'Reconectando…');
+    const spinner = Object.assign(document.createElement('span'), { className: 'spinner' });
+    spinner.setAttribute('aria-hidden', 'true');
+    this.banner.replaceChildren(
+      spinner,
+      detail ?? (status === 'connecting' ? 'Conectando…' : 'Reconectando…'),
+    );
   }
 
-  notify(message: string, durationMs = 3000): void {
-    this.toast.textContent = message;
-    this.toast.hidden = false;
-    clearTimeout(this.toastTimer);
-    this.toastTimer = window.setTimeout(() => (this.toast.hidden = true), durationMs);
+  /** Aviso rápido (empilha com os outros). Número = quanto tempo fica (ms). */
+  notify(message: string, opts: number | ToastOptions = {}): () => void {
+    return toast(message, typeof opts === 'number' ? { durationMs: opts } : opts);
   }
 }
