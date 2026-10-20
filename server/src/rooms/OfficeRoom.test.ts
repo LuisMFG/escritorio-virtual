@@ -1110,6 +1110,53 @@ describe('OfficeRoom', () => {
     });
   });
 
+  describe('minha mesa (Fase 42)', () => {
+    it(
+      'senta na estação, fica com ela (plaquinha), outro não pega, e "ir para minha mesa" senta',
+      { timeout: 90_000 },
+      async () => {
+        const ana = newUser('Ana');
+        const a = await join(ana.token);
+        const b = await join(newUser('Beto').token);
+        const seat = 'r-fila-2-cadeira';
+        // Sem estar sentado nela, não dá.
+        a.send(ClientMessage.ClaimDesk, { furniId: seat });
+        const err = (await a.waitForMessage(ServerMessage.Error)) as ErrorMessage;
+        expect(err.message).toMatch(/Sente na cadeira/);
+
+        a.send(ClientMessage.Interact, { furniId: seat });
+        await wait(STEP_MS * 20);
+        expect(a.state.players.get(a.sessionId)!.action).toBe('sit');
+        a.send(ClientMessage.ClaimDesk, { furniId: seat });
+        await wait(200);
+        expect(b.state.desks.get(seat)).toBe('Ana');
+        expect(a.state.players.get(a.sessionId)!.desk).toBe(seat);
+        expect(svc.users.findById(ana.user.id)?.desk).toBe(seat);
+
+        // Beto senta na mesma cadeira depois que a Ana sai e tenta ficar com ela.
+        a.send(ClientMessage.Move, { x: 14, y: 18 });
+        await wait(STEP_MS * 30);
+        b.send(ClientMessage.Interact, { furniId: seat });
+        await wait(STEP_MS * 26);
+        b.send(ClientMessage.ClaimDesk, { furniId: seat });
+        const err2 = (await b.waitForMessage(ServerMessage.Error)) as ErrorMessage;
+        expect(err2.message).toBe('Esta mesa já é de outra pessoa.');
+        b.send(ClientMessage.Move, { x: 16, y: 18 });
+        await wait(STEP_MS * 30);
+
+        // "Ir para minha mesa": anda até lá e senta.
+        a.send(ClientMessage.GoToDesk, {});
+        await wait(STEP_MS * 30);
+        expect(a.state.players.get(a.sessionId)!).toMatchObject({ action: 'sit', x: 6, y: 3 });
+
+        // Largar: a plaquinha some.
+        a.send(ClientMessage.ReleaseDesk, {});
+        await wait(200);
+        expect(b.state.desks.has(seat)).toBe(false);
+      },
+    );
+  });
+
   describe('sentar e deitar (Fase 33)', () => {
     it(
       'sofá de dois lugares: o segundo senta no outro lugar; o terceiro não cabe',

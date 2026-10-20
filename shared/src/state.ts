@@ -50,6 +50,8 @@ export const Player = schema(
     effect: t.string(),
     /** Item na mão (id do Habbo, ex.: 6 = café); 0 = nada. */
     handItem: t.uint16(),
+    /** Minha mesa (Fase 42): id da cadeira da estação escolhida na Recepção; vazio = nenhuma. */
+    desk: t.string(),
   },
   'Player',
 );
@@ -139,6 +141,8 @@ export const OfficeState = schema(
     pets: t.map(Pet),
     /** Só admins decoram esta sala. */
     decorLocked: t.boolean(),
+    /** Mesas com dono (Fase 42, só na Recepção): id da cadeira → nome de quem escolheu. */
+    desks: t.map('string'),
   },
   'OfficeState',
 );

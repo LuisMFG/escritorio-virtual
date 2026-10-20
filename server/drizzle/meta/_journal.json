@@ -197,6 +197,13 @@
       "when": 1792379559337,
       "tag": "0027_pets_habbo",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "6",
+      "when": 1792525244321,
+      "tag": "0028_minha_mesa",
+      "breakpoints": true
     }
   ]
 }

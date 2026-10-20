@@ -43,6 +43,8 @@ export const users = sqliteTable('users', {
   effect: text('effect').notNull().default(''),
   /** O que aparece quando a pessoa programa: 'hidden' | 'coding' | 'language' | 'project'. */
   codeShare: text('code_share').notNull().default('language'),
+  /** Minha mesa (Fase 42): id da cadeira da estação na Recepção (única por conta). */
+  desk: text('desk').unique(),
   figure: text('figure').notNull(),
   gender: text('gender', { enum: ['M', 'F'] })
     .notNull()

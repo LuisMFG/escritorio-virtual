@@ -40,3 +40,4 @@ export * from './clothingSearch.js';
 export * from './furniCatalog.js';
 export * from './furniVisual.js';
 export * from './habboPets.js';
+export * from './desks.js';

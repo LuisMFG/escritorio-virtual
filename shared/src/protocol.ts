@@ -32,6 +32,10 @@ export const ClientMessage = {
   FurniColor: 'furni.color',
   /** Clique num móvel fora do modo decorar (sentar): `{ furniId }`. */
   Interact: 'interact',
+  /** Minha mesa (Fase 42): ficar com a estação onde está sentado, largar e ir até ela. */
+  ClaimDesk: 'claimDesk',
+  ReleaseDesk: 'releaseDesk',
+  GoToDesk: 'goToDesk',
   /** `{ status }`: Disponível / Ocupado / Ausente. */
   SetStatus: 'status.set',
   /** `{ on }`: começou/parou de digitar. */

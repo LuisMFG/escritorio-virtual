@@ -39,6 +39,8 @@ import {
   type ReactionsUpdate,
   type ReactRequest,
   RECEPTION,
+  DESK_ROOM_ID,
+  deskSeatIds,
   type ChatDeletedMessage,
   type KickedMessage,
   emoteSchema,
@@ -365,6 +367,18 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     [ClientMessage.Interact]: validate(furniRefSchema, (client, msg) =>
       this.handleInteract(client as OfficeClient, msg.furniId),
     ),
+    [ClientMessage.ClaimDesk]: validate(furniRefSchema, (client, msg) =>
+      this.handleClaimDesk(client as OfficeClient, msg.furniId),
+    ),
+    [ClientMessage.ReleaseDesk]: (client: Client) => {
+      const c = client as OfficeClient;
+      if (c.auth) services().users.setDesk(c.auth.id, null);
+    },
+    [ClientMessage.GoToDesk]: (client: Client) => {
+      const c = client as OfficeClient;
+      const desk = this.state.players.get(c.sessionId)?.desk;
+      if (desk && this.state.furni.has(desk)) this.handleInteract(c, desk);
+    },
   };
 
   /** Perfil mudou (nome, cargo, papel…): atualiza os avatares dessa pessoa nesta sala. */
@@ -376,6 +390,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     for (const c of this.clients) if (c.auth?.id === user.id) c.auth = user;
     services().presence.rename(user.id, user.name);
     this.pets.ownerRenamed(user.id, user.name);
+    this.refreshDesks();
   };
 
   /** Admin tirou alguém: da sala (vai para a Recepção) ou do escritório (desconecta). */
@@ -478,6 +493,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       this.state.furni.delete(id);
       this.state.games.delete(id);
     }
+    this.refreshDesks();
     // Quem ficou fora do piso (ou numa porta) volta para perto da entrada.
     for (const [sessionId, p] of this.state.players.entries()) {
       const onDoor = layout.doors.some((d) => d.x === p.x && d.y === p.y);
@@ -541,6 +557,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     services().moderation.on('room', this.onRoomSettings);
     services().moderation.on('layout', this.onLayout);
     services().pets.events.on('changed', this.onPetChanged);
+    this.refreshDesks();
     services().activity.events.on('changed', this.onActivity);
     services().focus.events.on('changed', this.onFocus);
     services().achievements.events.on('unlocked', this.onAchievement);
@@ -1286,6 +1303,49 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     services().furni.remove(this.layout.roomId, furniId);
     this.state.furni.delete(furniId);
     this.state.games.delete(furniId);
+    this.refreshDesks();
+  }
+
+  // ---------- Minha mesa (Fase 42) ----------
+
+  /** Plaquinhas: as mesas com dono que existem nesta sala (só a Recepção tem estações). */
+  private refreshDesks(): void {
+    const desks = this.state.desks;
+    const seats = this.layout.roomId === DESK_ROOM_ID ? deskSeatIds(this.state.furni.keys()) : [];
+    const owners = services().users.deskOwners();
+    const want = new Map(
+      [...seats].flatMap((id) => (owners.has(id) ? [[id, owners.get(id)!]] : [])),
+    );
+    for (const id of [...desks.keys()]) if (!want.has(id)) desks.delete(id);
+    for (const [id, name] of want) if (desks.get(id) !== name) desks.set(id, name);
+  }
+
+  /** Fica com a estação onde está sentado (precisa ser uma estação da Recepção e estar livre). */
+  private handleClaimDesk(client: OfficeClient, furniId: string): void {
+    const player = this.state.players.get(client.sessionId);
+    const f = this.state.furni.get(furniId);
+    const def = f && services().furniDefs.get(f.defId);
+    if (!player || !client.auth || !f || !def) return;
+    if (this.layout.roomId !== DESK_ROOM_ID || !deskSeatIds(this.state.furni.keys()).has(furniId)) {
+      return this.sendError(
+        client,
+        ErrorCode.Forbidden,
+        'Só dá para escolher uma estação da Recepção.',
+      );
+    }
+    const seated =
+      player.action === 'sit' &&
+      seatTiles(def, f).some((t) => t.x === player.x && t.y === player.y);
+    if (!seated) {
+      return this.sendError(
+        client,
+        ErrorCode.Forbidden,
+        'Sente na cadeira da mesa para ficar com ela.',
+      );
+    }
+    if (!services().users.setDesk(client.auth.id, furniId)) {
+      return this.sendError(client, ErrorCode.Forbidden, 'Esta mesa já é de outra pessoa.');
+    }
   }
 
   /** Qualquer pessoa na sala decora, a não ser que um admin trave a sala (Fase 10). */

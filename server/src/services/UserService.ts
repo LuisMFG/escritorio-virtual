@@ -29,6 +29,8 @@ export interface PublicProfile {
   badges: string;
   /** Efeito em uso (Fase 34); vazio = nenhum. */
   effect: string;
+  /** Minha mesa (Fase 42): id da cadeira; vazio = nenhuma. */
+  desk: string;
 }
 
 export interface NewUser {
@@ -57,6 +59,7 @@ type UserChanges = Partial<
     | 'birthday'
     | 'disabled'
     | 'canEditRooms'
+    | 'desk'
   >
 >;
 
@@ -160,6 +163,31 @@ export class UserService {
       .get();
     this.events.emit('updated', user);
     return user;
+  }
+
+  // ---------- Minha mesa (Fase 42) ----------
+
+  /** Mesas com dono: id da cadeira → nome. */
+  deskOwners(): Map<string, string> {
+    const rows = this.db
+      .select({ desk: users.desk, name: users.name })
+      .from(users)
+      .where(and(isNotNull(users.desk), eq(users.disabled, false)))
+      .all();
+    return new Map(rows.map((r) => [r.desk!, r.name]));
+  }
+
+  /**
+   * Fica com a mesa (troca a anterior, se tinha). `false` se outra pessoa já é dona dela.
+   * `null` larga a mesa.
+   */
+  setDesk(userId: string, desk: string | null): boolean {
+    if (desk) {
+      const owner = this.db.select({ id: users.id }).from(users).where(eq(users.desk, desk)).get();
+      if (owner && owner.id !== userId) return false;
+    }
+    this.update(userId, { desk });
+    return true;
   }
 
   touch(id: string): void {
@@ -268,6 +296,7 @@ export class UserService {
       canEditRooms: user.role === 'admin' || user.canEditRooms,
       badges: parseShowcase(user.badges).join(','),
       effect: (EFFECT_IDS as readonly string[]).includes(user.effect) ? user.effect : '',
+      desk: user.desk ?? '',
     };
   }
 
