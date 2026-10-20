@@ -1105,10 +1105,12 @@ Pedido em 20/10/2026, com o escritório já em uso pelo pessoal do trabalho (ser
 - **Feito:** sentado numa estação da Recepção (cadeira `…-cadeira` com a mesa `…-mesa`), uma faixa acima da barra diz se ela está livre (**Ficar com esta mesa** / **Mudar minha mesa para cá**), se é sua (**Deixar mesa**) ou de quem é. A escolha fica na conta (`users.desk`, única; migration `0028_minha_mesa`), vira uma **plaquinha** com o nome na frente da mesa para todos (`desks` no estado da sala) e o botão **Minha mesa** no grupo "Eu": de qualquer sala, volta para a Recepção, anda até a estação e senta. Ao entrar, a faixa convida "Sua mesa está esperando" por 15 s. **Selo sobre a cabeça** maior e desenhado: ocupado (vermelho com traço), ausente (âmbar com relógio) e **em reunião** (roxo, quando a sala tem reunião agora). **Alt** segurado mostra o nome de todos, afastados para não encavalar. Clicar numa pessoa da lista leva a câmera até ela com um círculo pulsando; quem está em outra sala leva até a sala dela. Testes `shared/src/desks.test.ts`, `OfficeRoom.test.ts` (minha mesa) e `e2e/tests/mesa.spec.ts`.
 
 
-#### Fase 43 — Perfil e configurações
+#### Fase 43 — Perfil e configurações ✅ implementada
 - **Perfil em abas** (Visual · Pet · Conquistas · Efeitos · Integrações) no lugar da rolagem gigante; editor de visual com prévia maior e animada.
 - **Configurações num só lugar:** som, notificações, ambiente, tema, tamanho da letra e "reduzir movimento".
 - **Como testar:** trocar de aba no Perfil sem rolar; mudar tema e som em Configurações.
+- **Feito:** Perfil em **abas** (Perfil · Pet · Conquistas · Efeitos · Integrações · Conta; setas trocam de aba e a última usada volta aberta), com o cabeçalho do visual em cima; janela mais larga. **Configurações** pela engrenagem da coluna da direita: tema (escuro, claro ou do sistema), **tamanho do texto** (Normal, Grande, Maior: todo `font-size` do CSS multiplica por `--font-scale`), **movimento** (do sistema, reduzir ou normal: desliga transições e animações), som de mensagem, som ambiente com volume, notificações do navegador e, para admins, o diagnóstico da arte (o selo saiu da tela). Tudo salvo no navegador e aplicado antes de pintar a página. O botão de tema e o de som ambiente saíram da coluna (o sino ficou, para silenciar rápido). Editor de visual com prévia maior que **gira sozinha** (pausa ao girar à mão ou com "reduzir movimento"). Teste `e2e/tests/tema.spec.ts` (configurações e abas).
+
 
 #### Fase 44 — Primeira experiência e ajuda
 - **Tela de entrada** repaginada (avatar animado, explicação curta do escritório, erros claros nos campos).
