@@ -402,6 +402,37 @@ async function start(): Promise<void> {
     e.preventDefault();
     showHelp();
   });
+  // Gaveta (celular): arrastar o cabeçalho para baixo fecha a janela (as janelas fecham com Esc).
+  let sheetDrag: { y: number; sheet: HTMLElement } | null = null;
+  document.addEventListener('pointerdown', (e) => {
+    const head = (e.target as HTMLElement).closest('.modal-backdrop > .sheet > .sheet-head');
+    if (!head || e.pointerType !== 'touch' || (e.target as HTMLElement).closest('button')) return;
+    sheetDrag = { y: e.clientY, sheet: head.parentElement as HTMLElement };
+  });
+  document.addEventListener('pointermove', (e) => {
+    if (!sheetDrag) return;
+    const dy = Math.max(0, e.clientY - sheetDrag.y);
+    sheetDrag.sheet.style.transform = `translateY(${dy}px)`;
+  });
+  document.addEventListener('pointerup', (e) => {
+    if (!sheetDrag) return;
+    const { sheet, y } = sheetDrag;
+    sheetDrag = null;
+    sheet.style.transform = '';
+    if (e.clientY - y > 90) document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+  });
+  // Teclado do celular (Fase 46): mede quanto ele cobre e sobe o campo do chat (iOS não
+  // encolhe a página sozinho); com o teclado aberto a barra de baixo sai da frente.
+  const vv = window.visualViewport;
+  if (vv) {
+    const onViewport = () => {
+      const kb = Math.max(0, Math.round(innerHeight - vv.height - vv.offsetTop));
+      document.documentElement.style.setProperty('--kb', `${kb}px`);
+      document.body.classList.toggle('kb-open', kb > 80);
+    };
+    vv.addEventListener('resize', onViewport);
+    vv.addEventListener('scroll', onViewport);
+  }
   // Alt segurado: nomes de todos sobre os avatares (afastados para não encavalar).
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Alt') scene?.setAllNames(true);

@@ -189,6 +189,12 @@ export class RoomScene implements DecorHost {
     this.camera = new Camera(app, this.world, () => this.roomArt.getLocalBounds());
     this.camera.setPointerGuard((g) => this.decor.pointerDown(g));
     this.camera.onTap((p) => this.handleTap(p));
+    // Segurar sobre alguém (celular): abre o cartão sem andar.
+    this.camera.onLongPress((p) => {
+      if (this.decor.active) return;
+      const avatar = this.pickAvatar(p);
+      if (avatar) this.actions.avatarClick(avatar.avatarId, { x: p.x, y: p.y });
+    });
     app.stage.on('globalpointermove', this.onPointerMove, this);
     app.stage.on('pointerup', this.onPointerUp, this);
     app.stage.on('pointerupoutside', this.onPointerUp, this);

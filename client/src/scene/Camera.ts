@@ -1,7 +1,7 @@
 import type { Application, Container, FederatedPointerEvent, Point } from 'pixi.js';
 
 /** Níveis de zoom (Fase 41: com intermediários, para a sala caber inteira em notebooks). */
-export const ZOOM_LEVELS = [0.5, 0.75, 1, 1.5, 2, 3];
+export const ZOOM_LEVELS = [0.4, 0.5, 0.75, 1, 1.5, 2, 3];
 const DEFAULT_ZOOM = 1;
 /** Maior zoom que o enquadramento automático escolhe (salas pequenas não viram um borrão). */
 const MAX_FIT_ZOOM = 2;
@@ -9,6 +9,8 @@ const MAX_FIT_ZOOM = 2;
 const FIT_PADDING = 16;
 /** Quanto a distância entre os dedos precisa mudar para a pinça trocar de nível. */
 const PINCH_STEP = 1.2;
+/** Segurar parado por isto (ms) vira "segurar" em vez de toque (Fase 46). */
+const LONG_PRESS_MS = 500;
 
 /** Faixas da tela cobertas pela interface (px); a câmera enquadra no que sobra. */
 export interface CameraInsets {
@@ -21,7 +23,7 @@ export interface CameraInsets {
 /**
  * Zoom em que uma sala `w`×`h` (em 1×) cabe inteira na área livre `areaW`×`areaH`.
  * Abaixo de 1× é contínuo (de 0,05 em 0,05) para aproveitar a tela; de 1× para cima fica num
- * dos níveis (1×, 1,5×, 2×) para a pixel art seguir nítida. Entre 0,5× e `MAX_FIT_ZOOM`.
+ * dos níveis (1×, 1,5×, 2×) para a pixel art seguir nítida. Entre 0,4× (celular) e `MAX_FIT_ZOOM`.
  */
 export function fitZoom(w: number, h: number, areaW: number, areaH: number): number {
   const raw = Math.min((areaW - FIT_PADDING * 2) / w, (areaH - FIT_PADDING * 2) / h);
@@ -47,6 +49,10 @@ export class Camera {
   /** Acumula a roda do mouse para trackpads não pularem vários níveis de uma vez. */
   private wheelAccum = 0;
   private readonly tapListeners: ((global: Point) => void)[] = [];
+  private readonly longPressListeners: ((global: Point) => void)[] = [];
+  private longPressTimer = 0;
+  /** O gesto atual já virou "segurar": soltar não conta como toque. */
+  private longPressed = false;
   private insets: CameraInsets = { top: 0, right: 0, bottom: 0, left: 0 };
   /** Dedos na tela (pinça): id → posição. */
   private readonly touches = new Map<number, { x: number; y: number }>();
@@ -114,6 +120,11 @@ export class Camera {
 
   onTap(listener: (global: Point) => void): void {
     this.tapListeners.push(listener);
+  }
+
+  /** Segurar o dedo (ou o botão) parado num ponto. */
+  onLongPress(listener: (global: Point) => void): void {
+    this.longPressListeners.push(listener);
   }
 
   /** Faixas cobertas pela interface; se a pessoa não mexeu na câmera, reenquadra. */
@@ -216,6 +227,16 @@ export class Camera {
     }
     this.pointerDown = { x: e.global.x, y: e.global.y, worldX: this.world.x, worldY: this.world.y };
     this.dragging = false;
+    this.longPressed = false;
+    clearTimeout(this.longPressTimer);
+    if (this.longPressListeners.length) {
+      const at = e.global.clone();
+      this.longPressTimer = window.setTimeout(() => {
+        if (!this.pointerDown || this.dragging || this.pinching) return;
+        this.longPressed = true;
+        for (const l of this.longPressListeners) l(at);
+      }, LONG_PRESS_MS);
+    }
   }
 
   private onMove(e: FederatedPointerEvent): void {
@@ -223,7 +244,10 @@ export class Camera {
     if (!d || this.pinching) return;
     const dx = e.global.x - d.x;
     const dy = e.global.y - d.y;
-    if (!this.dragging && Math.hypot(dx, dy) > DRAG_THRESHOLD) this.dragging = true;
+    if (!this.dragging && Math.hypot(dx, dy) > DRAG_THRESHOLD) {
+      this.dragging = true;
+      clearTimeout(this.longPressTimer);
+    }
     if (this.dragging) {
       this.world.position.set(Math.round(d.worldX + dx), Math.round(d.worldY + dy));
       this.userMoved = true;
@@ -231,12 +255,13 @@ export class Camera {
   }
 
   private onUp(e: FederatedPointerEvent): void {
-    const wasTap = this.pointerDown && !this.dragging && !this.pinching;
+    const wasTap = this.pointerDown && !this.dragging && !this.pinching && !this.longPressed;
     this.reset();
     if (wasTap) for (const l of this.tapListeners) l(e.global);
   }
 
   private reset(): void {
+    clearTimeout(this.longPressTimer);
     this.pointerDown = null;
     this.dragging = false;
   }

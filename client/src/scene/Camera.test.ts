@@ -15,6 +15,6 @@ describe('fitZoom', () => {
   });
 
   it('se nada couber, fica no menor zoom', () => {
-    expect(zoomFor(2000, 1200, 375, 600)).toBe(0.5);
+    expect(zoomFor(2000, 1200, 375, 600)).toBe(0.4);
   });
 });
