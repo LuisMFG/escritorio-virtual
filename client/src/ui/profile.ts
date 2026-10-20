@@ -7,14 +7,20 @@ import { mountSpotifySection } from './spotifySection.js';
 import { mountJiraSection } from './jiraSection.js';
 import { mountEffectsSection } from './effectsSection.js';
 import { mountAchievements } from './achievementsSection.js';
+import { iconHtml } from './icons.js';
+import { createTabs } from './tabs.js';
+
+/** Abas do Perfil (Fase 43). */
+export type ProfileTab = 'perfil' | 'pet' | 'conquistas' | 'efeitos' | 'integracoes' | 'conta';
+const TAB_KEY = 'ev-profile-tab';
 
 export interface ProfileHandlers {
   /** O servidor aceitou as mudanças (nome, bio, aniversário). */
   saved(session: SessionResponse): void;
   editAvatar(): void;
   logout(all: boolean): void;
-  /** Abre já rolado até as conquistas (vindo do aviso de conquista nova). */
-  focusAchievements?: boolean;
+  /** Abre já numa aba (ex.: conquistas, vindo do aviso de conquista nova). */
+  tab?: ProfileTab;
 }
 
 const MONTHS = [
@@ -37,12 +43,12 @@ export function openProfile(session: SessionResponse, on: ProfileHandlers): void
   const backdrop = document.createElement('div');
   backdrop.className = 'modal-backdrop';
   backdrop.innerHTML = `
-    <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="profile-title">
+    <section class="sheet profile-sheet" role="dialog" aria-modal="true" aria-labelledby="profile-title">
       <header class="sheet-head">
         <h2 id="profile-title">Meu perfil</h2>
-        <button type="button" class="sheet-close" aria-label="Fechar">✕</button>
+        <button type="button" class="sheet-close" aria-label="Fechar">${iconHtml('x')}</button>
       </header>
-      <div class="sheet-body">
+      <div class="sheet-body profile-body">
         <div class="profile-top">
           <img class="profile-avatar" alt="" width="64" height="110" />
           <div>
@@ -52,6 +58,8 @@ export function openProfile(session: SessionResponse, on: ProfileHandlers): void
             <button type="button" class="btn-secondary profile-visual">Meu visual</button>
           </div>
         </div>
+        <div class="profile-tabs"></div>
+        <div class="profile-panel" data-tab="perfil">
         <form class="profile-form" novalidate>
           <label class="field"><span>Nome exibido</span>
             <input name="name" maxlength="${NAME_MAX}" /></label>
@@ -65,14 +73,24 @@ export function openProfile(session: SessionResponse, on: ProfileHandlers): void
           <p class="login-error" role="alert" hidden></p>
           <button type="submit" class="btn-primary">Salvar perfil</button>
         </form>
-        <section class="profile-achievements" aria-label="Conquistas"></section>
-        <section class="profile-pet" aria-label="Meu pet"></section>
-        <section class="profile-code" aria-label="Editores de código"></section>
-        <section class="profile-spotify" aria-label="Spotify"></section>
-        <section class="profile-jira" aria-label="Jira"></section>
-        <section class="profile-effects" aria-label="Efeitos"></section>
-        <details class="profile-password">
-          <summary>Trocar senha</summary>
+        </div>
+        <div class="profile-panel" data-tab="pet">
+          <section class="profile-pet" aria-label="Meu pet"></section>
+        </div>
+        <div class="profile-panel" data-tab="conquistas">
+          <section class="profile-achievements" aria-label="Conquistas"></section>
+        </div>
+        <div class="profile-panel" data-tab="efeitos">
+          <section class="profile-effects" aria-label="Efeitos"></section>
+        </div>
+        <div class="profile-panel" data-tab="integracoes">
+          <section class="profile-code" aria-label="Editores de código"></section>
+          <section class="profile-spotify" aria-label="Spotify"></section>
+          <section class="profile-jira" aria-label="Jira"></section>
+        </div>
+        <div class="profile-panel" data-tab="conta">
+        <section class="profile-password" aria-label="Trocar senha">
+          <h3>Trocar senha</h3>
           <form novalidate>
             <label class="field"><span>Senha atual</span>
               <input name="current" type="password" autocomplete="current-password" /></label>
@@ -82,10 +100,11 @@ export function openProfile(session: SessionResponse, on: ProfileHandlers): void
             <p class="login-error" role="alert" hidden></p>
             <button type="submit" class="btn-secondary">Trocar senha</button>
           </form>
-        </details>
+        </section>
         <div class="profile-exit">
           <button type="button" class="btn-secondary" data-logout="one">Sair</button>
           <button type="button" class="btn-link" data-logout="all">Sair de todos os aparelhos</button>
+        </div>
         </div>
       </div>
     </section>`;
@@ -104,6 +123,35 @@ export function openProfile(session: SessionResponse, on: ProfileHandlers): void
     if (e.target === backdrop) close();
   });
   $('.sheet-close').addEventListener('click', close);
+
+  // Abas: a última usada volta aberta (a não ser que peçam uma).
+  const panel = (id: ProfileTab) => $<HTMLElement>(`.profile-panel[data-tab="${id}"]`);
+  let saved: string | null = null;
+  try {
+    saved = sessionStorage.getItem(TAB_KEY);
+  } catch {
+    // sem armazenamento
+  }
+  const tabs = createTabs(
+    'Seções do perfil',
+    [
+      { id: 'perfil', label: 'Perfil', panel: panel('perfil') },
+      { id: 'pet', label: 'Pet', panel: panel('pet') },
+      { id: 'conquistas', label: 'Conquistas', panel: panel('conquistas') },
+      { id: 'efeitos', label: 'Efeitos', panel: panel('efeitos') },
+      { id: 'integracoes', label: 'Integrações', panel: panel('integracoes') },
+      { id: 'conta', label: 'Conta', panel: panel('conta') },
+    ],
+    on.tab ?? saved ?? 'perfil',
+    (id) => {
+      try {
+        sessionStorage.setItem(TAB_KEY, id);
+      } catch {
+        // sem armazenamento
+      }
+    },
+  );
+  $('.profile-tabs').append(tabs.el);
 
   // Cabeçalho: visual, nome, usuário e cargo (só leitura).
   const renderTop = (s: SessionResponse) => {
@@ -136,7 +184,7 @@ export function openProfile(session: SessionResponse, on: ProfileHandlers): void
   const updateCount = () => (count.textContent = `${bioInput.value.length}/${BIO_MAX}`);
   bioInput.addEventListener('input', updateCount);
   updateCount();
-  if (!on.focusAchievements) nameInput.focus();
+  if (tabs.current === 'perfil') nameInput.focus();
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -174,10 +222,7 @@ export function openProfile(session: SessionResponse, on: ProfileHandlers): void
   mountSpotifySection($<HTMLElement>('.profile-spotify'), session.token);
   mountJiraSection($<HTMLElement>('.profile-jira'), session.token);
   mountEffectsSection($<HTMLElement>('.profile-effects'), session.token);
-  const achievementsBox = $<HTMLElement>('.profile-achievements');
-  void mountAchievements(achievementsBox, session.token).then(() => {
-    if (on.focusAchievements) achievementsBox.scrollIntoView({ block: 'start' });
-  });
+  void mountAchievements($<HTMLElement>('.profile-achievements'), session.token);
 
   // Troca de senha.
   const pwForm = $<HTMLFormElement>('.profile-password form');

@@ -16,6 +16,7 @@ test('efeito no Perfil e café na mão, vistos pelo outro', async ({ browser }) 
 
   // Brilho é liberado para todos: escolhe no Perfil.
   await ana.page.getByRole('button', { name: 'Perfil' }).click();
+  await ana.page.getByRole('tab', { name: 'Efeitos' }).click();
   const fx = ana.page.locator('.profile-effects');
   await expect(fx.getByRole('button', { name: 'Corações (Receba 3 elogios)' })).toBeDisabled();
   await fx.getByRole('button', { name: 'Brilho', exact: true }).click();

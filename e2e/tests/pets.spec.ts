@@ -8,6 +8,7 @@ test('pet do Habbo: adotar no Perfil com padrão e cor, o outro vê e ele obedec
   const page = ana.page;
 
   await page.getByRole('button', { name: 'Perfil' }).click();
+  await page.getByRole('tab', { name: 'Pet' }).click();
   const section = page.getByRole('region', { name: 'Meu pet' });
   await section.getByLabel('Nome do pet').fill('Rex');
   await section.getByLabel('Espécie').selectOption('hh:dog');

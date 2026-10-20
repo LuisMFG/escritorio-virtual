@@ -11,6 +11,7 @@ test('cria conta, volta sozinho ao recarregar, sai e entra de novo', async ({ br
 
   // Sair pelo Perfil e entrar com usuário e senha.
   await page.getByRole('button', { name: 'Perfil' }).click();
+  await page.getByRole('tab', { name: 'Conta' }).click();
   await page.locator('[data-logout="one"]').click();
   await expect(page.locator('form.login-card')).toBeVisible();
   await page.goto(APP);

@@ -6,6 +6,7 @@ test('jira: conectar no Perfil, demanda no cartão e Quadro de Demandas', async 
 
   // Ana conecta: token errado é recusado; o certo conecta.
   await ana.page.getByRole('button', { name: 'Perfil' }).click();
+  await ana.page.getByRole('tab', { name: 'Integrações' }).click();
   const jira = ana.page.locator('.profile-jira');
   await jira.getByLabel('E-mail do Jira').fill('ana@empresa.com');
   await jira.getByLabel('Token de API do Jira').fill('token-errado-0000');
@@ -32,6 +33,7 @@ test('jira: conectar no Perfil, demanda no cartão e Quadro de Demandas', async 
 
   // Privacidade: só o código.
   await ana.page.getByRole('button', { name: 'Perfil' }).click();
+  await ana.page.getByRole('tab', { name: 'Integrações' }).click();
   await ana.page.locator('.profile-jira select').selectOption('key');
   // A lista de pessoas atualiza ao vivo; o cartão é reaberto.
   await expect(beto.page.locator('.people-body')).not.toContainText('Ajustar relatório');

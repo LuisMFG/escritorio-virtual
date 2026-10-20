@@ -21,6 +21,10 @@ import {
 } from '@office/shared';
 import { loadWithFallback, ThumbQueue } from './thumbQueue.js';
 import { iconHtml } from './icons.js';
+import { motionReduced } from './prefs.js';
+
+/** Prévia girando sozinha (Fase 43): um passo de direção a cada tanto (ms). */
+const SPIN_MS = 1100;
 
 export interface AvatarChoice {
   figure: string;
@@ -96,17 +100,34 @@ export function openAvatarEditor(opts: AvatarEditorOptions): Promise<AvatarChoic
   const rotateLeft = el('button', {
     type: 'button',
     className: 'icon-btn',
-    textContent: '⟲',
+    innerHTML: iconHtml('rotate-ccw'),
     title: 'Girar',
   });
   const rotateRight = el('button', {
     type: 'button',
     className: 'icon-btn',
-    textContent: '⟳',
+    innerHTML: iconHtml('rotate-cw'),
     title: 'Girar',
   });
   rotateLeft.setAttribute('aria-label', 'Girar para a esquerda');
   rotateRight.setAttribute('aria-label', 'Girar para a direita');
+  // Prévia animada: gira sozinha (desligada com "reduzir movimento"); girar à mão para.
+  const spinBtn = el('button', { type: 'button', className: 'icon-btn editor-spin' });
+  spinBtn.setAttribute('aria-label', 'Girar sozinho');
+  spinBtn.title = 'Girar sozinho';
+  let spinTimer = 0;
+  const setSpin = (on: boolean) => {
+    clearInterval(spinTimer);
+    spinTimer = on
+      ? window.setInterval(() => {
+          dir = (dir + 7) % 8;
+          schedulePreview();
+        }, SPIN_MS)
+      : 0;
+    spinBtn.setAttribute('aria-pressed', String(on));
+    spinBtn.innerHTML = iconHtml(on ? 'pause' : 'play');
+  };
+  spinBtn.addEventListener('click', () => setSpin(!spinTimer));
 
   const genderButtons = (['M', 'F'] as const).map((g) => {
     const b = el('button', { type: 'button', textContent: g === 'M' ? 'Masculino' : 'Feminino' });
@@ -177,7 +198,7 @@ export function openAvatarEditor(opts: AvatarEditorOptions): Promise<AvatarChoic
     el('div', { className: 'editor-body' }, [
       el('section', { className: 'editor-preview' }, [
         previewStage,
-        el('div', { className: 'editor-rotate' }, [rotateLeft, rotateRight]),
+        el('div', { className: 'editor-rotate' }, [rotateLeft, spinBtn, rotateRight]),
         genderGroup,
         randomBtn,
         looksBox,
@@ -421,11 +442,14 @@ export function openAvatarEditor(opts: AvatarEditorOptions): Promise<AvatarChoic
   }
 
   // ---------- Eventos ----------
+  setSpin(!motionReduced());
   rotateLeft.addEventListener('click', () => {
+    setSpin(false);
     dir = (dir + 1) % 8;
     schedulePreview();
   });
   rotateRight.addEventListener('click', () => {
+    setSpin(false);
     dir = (dir + 7) % 8;
     schedulePreview();
   });
@@ -488,6 +512,7 @@ export function openAvatarEditor(opts: AvatarEditorOptions): Promise<AvatarChoic
   return new Promise((resolve) => {
     const close = (result: AvatarChoice | null) => {
       clearTimeout(previewTimer);
+      clearInterval(spinTimer);
       document.removeEventListener('keydown', onKey);
       backdrop.remove();
       opener?.focus();
