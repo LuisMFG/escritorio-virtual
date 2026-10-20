@@ -86,6 +86,11 @@ export interface FurniSprite {
   layer: number;
   /** Usa a paleta (pets): recebe a cor do pet. */
   palette: boolean;
+  /**
+   * Profundidade extra da camada (`z` da visualização; 1000 = um tile para a frente). As
+   * positivas ficam na frente de quem senta no móvel (encosto de costas, braços do sofá).
+   */
+  z: number;
 }
 
 /** Tiques de animação por segundo (o Habbo anima os móveis a 24 quadros por segundo). */
@@ -134,7 +139,7 @@ export function furniSprites(
   /** Pets: animação do gesto, que substitui a das camadas da cabeça. */
   gesture?: number,
 ): FurniSprite[] {
-  const out: (FurniSprite & { z: number })[] = [];
+  const out: FurniSprite[] = [];
   const base = `${v.classname}_64`;
   const tints = color !== undefined ? v.colors[String(color)] : undefined;
   const push = (name: string, layer: number, dx: number, dy: number, z: number) => {
@@ -182,7 +187,7 @@ export function furniSprites(
       push(`${base}_${letter}_${dir}_0`, i, dx, dy, z);
     }
   }
-  return out.sort((a, b) => a.z - b.z || a.layer - b.layer).map(({ z: _z, ...s }) => s);
+  return out.sort((a, b) => a.z - b.z || a.layer - b.layer);
 }
 
 /** Um teleporte colocado (para escolher o outro lado no Decorar). */

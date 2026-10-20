@@ -102,6 +102,19 @@ export function renderDirection(item: Pick<FurniManifestEntry, 'directions'>, ro
   return item.directions[0]!;
 }
 
+/** Rotações em que o móvel tem desenho próprio (0, 2, 4, 6, na ordem do giro). */
+export function rotations(item: Pick<FurniManifestEntry, 'directions'>): number[] {
+  const dirs = [0, 2, 4, 6].filter((d) => item.directions.includes(d));
+  return dirs.length ? dirs : [0];
+}
+
+/** Próxima rotação ao girar (R): pula as que repetiriam o mesmo desenho. */
+export function nextRotation(item: Pick<FurniManifestEntry, 'directions'>, rot: number): number {
+  const dirs = rotations(item);
+  const i = dirs.indexOf(rot);
+  return dirs[(i + 1) % dirs.length]!;
+}
+
 const figurePartType = z.string().regex(/^[a-z]{2}$/);
 const gender = z.enum(['M', 'F']);
 

@@ -1,4 +1,6 @@
 import {
+  nextRotation,
+  rotations,
   canPlace,
   footprint,
   tileCorners,
@@ -119,7 +121,7 @@ export class DecorMode {
     this.picking = {
       view: this.host.createGhost(defId, -99, -99, def.directions[0] ?? 0),
       defId,
-      rot: def.wall ? 2 : 0,
+      rot: def.wall ? 2 : rotations(def)[0]!,
       tile: null,
       ok: false,
     };
@@ -133,13 +135,14 @@ export class DecorMode {
     const sel = this.selectedId ? this.host.furniView(this.selectedId) : undefined;
     if (wallPick || (!this.picking && sel?.def.wall)) return;
     if (this.picking) {
-      this.picking.rot = (this.picking.rot + 2) % 8;
+      this.picking.rot = nextRotation(this.host.defs.get(this.picking.defId)!, this.picking.rot);
       this.updateGhost(this.picking, this.retarget(this.picking), undefined);
       return;
     }
     const f = this.selectedId ? this.host.furniView(this.selectedId) : undefined;
     if (!f) return;
-    const rot = (f.placed.rot + 2) % 8;
+    const rot = nextRotation(f.def, f.placed.rot);
+    if (rot === f.placed.rot) return;
     const res = canPlace(this.host.placementContext(), { ...f.placed, rot, ignoreId: f.placed.id });
     if (!res.ok) return this.listener.onError(res.reason);
     this.actions.moveFurni({

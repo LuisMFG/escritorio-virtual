@@ -1,7 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { parseFigure, serializeFigure } from './figure.js';
-import { parseAvatarManifest, parseFurniManifest, renderDirection } from './manifests.js';
+import {
+  nextRotation,
+  parseAvatarManifest,
+  parseFurniManifest,
+  renderDirection,
+  rotations,
+} from './manifests.js';
 
 const readJson = (path: string): unknown =>
   JSON.parse(readFileSync(new URL(path, import.meta.url), 'utf8'));
@@ -95,5 +101,17 @@ describe('figure string', () => {
     expect(parseFigure('hd-180-1..xx.ch-abc-1.<b>-1-1')).toEqual([
       { type: 'hd', setId: 180, colors: [1] },
     ]);
+  });
+});
+
+describe('giro (R) só pelas direções que o móvel tem', () => {
+  it('arquivo com 2 e 4 alterna entre os dois; cadeira passa pelas 4; mesa redonda não gira', () => {
+    expect(rotations({ directions: [4, 2] })).toEqual([2, 4]);
+    expect(nextRotation({ directions: [4, 2] }, 2)).toBe(4);
+    expect(nextRotation({ directions: [4, 2] }, 4)).toBe(2);
+    // Rotação antiga que não existe (ex.: 0 num arquivo): vai para a primeira válida.
+    expect(nextRotation({ directions: [4, 2] }, 0)).toBe(2);
+    expect(nextRotation({ directions: [0, 6, 4, 2] }, 6)).toBe(0);
+    expect(nextRotation({ directions: [0] }, 0)).toBe(0);
   });
 });

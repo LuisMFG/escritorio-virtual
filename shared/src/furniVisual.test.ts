@@ -79,4 +79,12 @@ describe('móveis por camadas (Fase 37)', () => {
     const s = furniSprites(v, 0, 0, 0);
     expect(s[0]).toMatchObject({ image: 'fan_64_a_2_0', flip: true, x: 20 - 32 });
   });
+
+  it('cada sprite leva o z da camada (positivo = na frente de quem senta)', () => {
+    const s = furniSprites(v, 2, 0, 0);
+    expect(s.find((x) => x.layer === 2)?.z).toBe(5);
+    expect(s.find((x) => x.layer === 0)?.z).toBe(0);
+    // Sombra sempre atrás de tudo.
+    expect(s[0]).toMatchObject({ layer: -1, z: -Infinity });
+  });
 });
