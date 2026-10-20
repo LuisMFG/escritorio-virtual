@@ -62,18 +62,23 @@ export const AVATAR_CURATION: CategoryCuration[] = [
 ];
 
 /**
- * Catálogo completo (Fase 35): as mesmas categorias e mais acessório de cabeça, máscara e
- * cinto, com peças de **todas** as bibliotecas de roupa (`*`), menos as NFT.
+ * Catálogo completo (Fase 35; tudo desde 20/10/2026): as mesmas categorias e mais acessório de
+ * cabeça, máscara, estampa, cinto, itens diversos e pet de ombro, com peças de **todas** as
+ * bibliotecas de roupa (`*`), inclusive NFT e peles/rostos unissex.
  */
 export const FULL_CATALOG: CategoryCuration[] = [
-  { ...AVATAR_CURATION[0]!, libraries: ['*'] },
+  { ...AVATAR_CURATION[0]!, libraries: ['*'], genders: undefined },
   ...AVATAR_CURATION.slice(1, 3).map((c) => ({ ...c, libraries: ['*'] })),
   { type: 'he', label: 'Acessório de cabeça', required: false, layer: 9, libraries: ['*'] },
   ...AVATAR_CURATION.slice(3, 4).map((c) => ({ ...c, libraries: ['*'] })),
   { type: 'fa', label: 'Máscara', required: false, layer: 7, libraries: ['*'] },
-  ...AVATAR_CURATION.slice(4, 7).map((c) => ({ ...c, libraries: ['*'] })),
+  ...AVATAR_CURATION.slice(4, 5).map((c) => ({ ...c, libraries: ['*'] })),
+  { type: 'cp', label: 'Estampa', required: false, layer: 3, libraries: ['*'] },
+  ...AVATAR_CURATION.slice(5, 7).map((c) => ({ ...c, libraries: ['*'] })),
   { type: 'wa', label: 'Cinto', required: false, layer: 4, libraries: ['*'] },
   ...AVATAR_CURATION.slice(7).map((c) => ({ ...c, libraries: ['*'] })),
+  { type: 'mc', label: 'Diversos', required: false, layer: 4, libraries: ['*'] },
+  { type: 'pt', label: 'Pet de ombro', required: false, layer: 9, libraries: ['*'] },
 ];
 
 export const AVATAR_DEFAULTS = {

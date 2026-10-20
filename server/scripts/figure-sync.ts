@@ -4,7 +4,7 @@
  *   - `client/public/assets/figure/figuredata.json`: partes de cada roupa, onde está cada parte,
  *     paletas, o SWF de cada biblioteca, itens na mão e efeitos;
  *   - `client/public/assets/avatar/manifest.json`: o catálogo do editor (todas as roupas usáveis
- *     do Habbo Brasil, menos as NFT).
+ *     do Habbo Brasil, inclusive NFT).
  *
  * Lê a lista de bibliotecas de roupa da HabboAssets e o `/imaging/info/clothing/{lib}` de cada
  * uma (com cache em disco por revisão: rodar de novo só baixa o que mudou).
@@ -44,10 +44,8 @@ for (let page = 1; ; page++) {
   if (page >= res.meta.last_page) break;
 }
 console.log();
-// Sem NFT (decisão do roadmap v5) e sem as bibliotecas que não são roupa.
-const libs = all.filter(
-  (l) => !/nft/i.test(l.name) && l.name !== 'hh_human_fx' && l.name !== HAND_ITEM_LIB,
-);
+// Tudo o que é roupa (NFT incluídas desde 20/10/2026), menos as bibliotecas que não são roupa.
+const libs = all.filter((l) => l.name !== 'hh_human_fx' && l.name !== HAND_ITEM_LIB);
 // As básicas primeiro: numa parte declarada em duas bibliotecas, vale a básica.
 libs.sort(
   (a, b) => Number(b.name.startsWith('hh_human_')) - Number(a.name.startsWith('hh_human_')),
@@ -117,7 +115,7 @@ for (const cat of manifest.categories) {
 }
 parseAvatarManifest(manifest);
 const comment =
-  'Gerado por `npm run assets:figure` (catálogo completo de roupas do Habbo Brasil, sem NFT). Não editar à mão.';
+  'Gerado por `npm run assets:figure` (catálogo completo de roupas do Habbo Brasil, inclusive NFT). Não editar à mão.';
 await writeFile(
   resolve(ROOT_DIR, 'client', 'public', 'assets', 'avatar', 'manifest.json'),
   `${JSON.stringify({ $comment: comment, ...manifest }, null, 1)}\n`,
