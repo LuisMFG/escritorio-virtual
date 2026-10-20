@@ -107,7 +107,8 @@ describe('OfficeRoom', () => {
 
       const b = await join(beto.token);
       expect(b.roomId).toBe(a.roomId);
-      await a.waitForNextPatch();
+      // O patch com o Beto pode não ser o próximo (a sala manda outros antes): espera ele chegar.
+      for (let i = 0; i < 40 && a.state.players.size < 2; i++) await a.waitForNextPatch();
       const names = [...a.state.players.values()].map((p) => p.name).sort();
       expect(names).toEqual(['Ana', 'Beto']);
       expect(svc.presence.list()).toHaveLength(2);
