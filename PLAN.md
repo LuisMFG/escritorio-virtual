@@ -1150,6 +1150,7 @@ Pedido em 20/10/2026, com o escritório já em uso pelo pessoal do trabalho (ser
 
 **Roadmap v6 de UI/UX concluído (Fases 40–48).**
 
+- **Meu visual (20/10):** catálogo **completo** de roupas: 3.296 peças em 15 categorias (antes 2.416 em 12), com as NFT, peles e rostos unissex e três categorias novas: **Estampa** (`cp`), **Diversos** (`mc`, itens na mão) e **Pet de ombro** (`pt`); o montador da sala ganhou a ordem de desenho desses tipos e um quadro largo para o pet/item não sair cortado. Editor: miniaturas na proporção original (antes eram forçadas a 34×84 e esticavam), com reserva "vestido em você" quando a prévia da CDN não existe; **provador** (passar o mouse mostra a peça na prévia grande); **Desfazer** (botão e Ctrl+Z); looks redesenhados (espaço vazio com "Guardar" em vez do disquete escondido, trocar/apagar ao passar o mouse, mensagem de confirmação); abrir "Meu visual" de novo não empilha outro editor.
 - **Ajuste (20/10):** a luz do dia e noite amarelava a sala no fim da tarde. Agora os tons de entardecer e noite são bem leves e o efeito fica **desligado por padrão**, com interruptor em Configurações (salvo por pessoa; `?hora=` continua forçando para testar).
 
 
