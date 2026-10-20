@@ -1082,11 +1082,12 @@ Pedido em 20/10/2026, com o escritório já em uso pelo pessoal do trabalho (ser
 
 ### Fases (ordem sugerida)
 
-#### Fase 40 — Base visual (design system)
+#### Fase 40 — Base visual (design system) ✅ implementada
 - Cores, espaçamentos, tipografia e raios num só lugar; **componentes únicos** (botão, painel, modal, abas, lista, campo, toast) usados por todas as telas.
 - **Ícones** desenhados e consistentes no lugar dos emojis soltos, sempre com nome (dica ao passar o mouse e para leitores de tela).
 - Tema escuro refinado e **tema claro** opcional; foco, hover e transições suaves iguais em tudo.
 - **Como testar:** abrir Perfil, Equipe, Admin e Decorar e ver o mesmo visual, botões e ícones.
+- **Feito:** tokens no topo do `client/src/style.css` (superfícies, bordas, texto, realce, ok/aviso/perigo, sombras, raios, espaços, fontes, transição) e as cores fixas do CSS trocadas por eles; **tema claro** com os mesmos nomes em `:root[data-theme='light']`, escolhido pelo botão sol/lua na coluna da direita (provisório até as configurações da Fase 43), salvo no navegador e aplicado antes de pintar a página; o fundo da cena acompanha. **Ícones SVG** de traço (desenhos do Lucide, ISC) em `client/src/ui/icons.ts` nos botões do canto, de câmera/som, do modo foco, do "Editar sala" e nos X de fechar, todos com nome para leitor de tela. Botões com a mesma transição, anel de foco e "apertar"; `prefers-reduced-motion` desliga as transições. Teste `e2e/tests/tema.spec.ts`.
 
 #### Fase 41 — Tela principal limpa
 - **HUD reorganizado:** barra inferior em grupos (Eu · Pessoas · Conversas · Escritório) com "mais" para o resto; a coluna da direita vira um controle compacto de câmera e som.

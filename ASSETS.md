@@ -45,6 +45,7 @@ Desde a Fase 2 as imagens passam pelo proxy do servidor (`/hh/avatar.png`, `/hh/
 - **Pets desenhados** (`client/src/assets/petArt.ts`): pixel art própria (cachorro, gato, coelho e pintinho, 3 pelagens, em pé/andando/sentado/deitado), desenhada por código a partir de grades 16×12 com contorno automático. Continuam como opção e como reserva sem internet.
 - **Pets do Habbo** (Fase 38): SWFs das bibliotecas de pet (`/api/v2/swfs/libraries?kind=pet`, CDN `gordon/…/pets/{tipo}.swf`), convertidos pelo servidor em `/hh/pet/{tipo}.png|json` com a paleta aplicada. Catálogo em `client/public/assets/pets/pets.json` (`npm run assets:pets`).
 - **Emblemas de conquistas** (Fase 39): emblemas de conquista do Habbo (`cdn.habboassets.com/images.habbo.com/c_images/album1584/{código}.gif`, códigos em `shared/src/achievements.ts`), pelo proxy `/hh/badge/{código}.gif`. Reserva sem internet: medalhas desenhadas em CSS com emoji (`client/src/ui/badges.ts`).
+- **Ícones da interface** (Fase 40, `client/src/ui/icons.ts`): desenhos do [Lucide](https://lucide.dev) (licença ISC), copiados como SVG inline.
 - **Som ambiente** (`client/src/ui/ambient.ts`) e **tabuleiro do jogo da velha** (`FurniView.drawGameBoard`): gerados por código.
 
 ## Arte local e pacotes CC0
