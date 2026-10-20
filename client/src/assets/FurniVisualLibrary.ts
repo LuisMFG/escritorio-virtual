@@ -5,6 +5,7 @@ import {
   type HabboPetCatalog,
 } from '@office/shared';
 import { Assets, Rectangle, Texture } from 'pixi.js';
+import { track } from './progress.js';
 
 /** Um móvel por camadas pronto: os dados de desenho e uma textura por imagem da folha. */
 export interface LoadedFurniVisual {
@@ -56,10 +57,12 @@ export class FurniVisualLibrary {
   ): Promise<LoadedFurniVisual | null> {
     let hit = this.loaded.get(key);
     if (!hit) {
-      hit = this.fetch(url).catch((err: Error) => {
-        console.warn(`[camadas] ${label}: ${err.message}`);
-        return null;
-      });
+      hit = track(
+        this.fetch(url).catch((err: Error) => {
+          console.warn(`[camadas] ${label}: ${err.message}`);
+          return null;
+        }),
+      );
       this.loaded.set(key, hit);
     }
     return hit;

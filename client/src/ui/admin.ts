@@ -12,6 +12,7 @@ import { adminApi, furniApi } from '../net/api.js';
 import { confirmDialog } from './confirm.js';
 import { setAvatarPreview } from './login.js';
 import { cargoPill } from './profile.js';
+import { skeletonHtml, skeleton } from './skeleton.js';
 
 export interface AdminOptions {
   token: string;
@@ -50,7 +51,7 @@ export function openAdmin(opts: AdminOptions): void {
         <button type="button" class="sheet-close" aria-label="Fechar">✕</button>
       </header>
       <p class="admin-flash" role="status" hidden></p>
-      <div class="sheet-body admin-body"><p class="muted">Carregando…</p></div>
+      <div class="sheet-body admin-body">${skeletonHtml()}</div>
     </section>`;
   document.body.append(backdrop);
   const body = backdrop.querySelector<HTMLElement>('.admin-body')!;
@@ -543,7 +544,7 @@ export function openAdmin(opts: AdminOptions): void {
   // ---------- Backups ----------
 
   function renderBackups(): HTMLElement[] {
-    if (!backups) return [el('p', 'muted', 'Carregando…')];
+    if (!backups) return [skeleton(2)];
     const intro = el(
       'p',
       'muted backup-intro',

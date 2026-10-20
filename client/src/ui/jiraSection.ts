@@ -7,6 +7,7 @@ import {
 } from '@office/shared';
 import { jiraApi } from '../net/api.js';
 import { confirmDialog } from './confirm.js';
+import { skeleton } from './skeleton.js';
 
 /**
  * Seção "Jira" do perfil: conectar com e-mail + token de API, escolher o que aparece no cartão
@@ -131,7 +132,7 @@ export function mountJiraSection(box: HTMLElement, token: string): void {
     box.replaceChildren(...nodes);
   };
 
-  box.replaceChildren(title, el('p', { className: 'muted', textContent: 'Carregando…' }));
+  box.replaceChildren(title, skeleton());
   jiraApi
     .status(token)
     .then(render)

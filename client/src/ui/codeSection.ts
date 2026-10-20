@@ -7,6 +7,7 @@ import {
 } from '@office/shared';
 import { activityApi } from '../net/api.js';
 import { confirmDialog } from './confirm.js';
+import { skeleton } from './skeleton.js';
 
 /**
  * Seção "Editores de código" do perfil: o que aparece quando a pessoa programa e os tokens
@@ -153,7 +154,7 @@ export function mountCodeSection(box: HTMLElement, token: string): void {
     render();
   };
 
-  box.replaceChildren(title, el('p', { className: 'muted', textContent: 'Carregando…' }));
+  box.replaceChildren(title, skeleton());
   load().catch(() =>
     box.replaceChildren(
       title,

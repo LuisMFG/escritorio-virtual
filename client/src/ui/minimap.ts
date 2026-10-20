@@ -1,6 +1,7 @@
 import { layoutMap, type MapRoom } from '@office/shared';
 import type { OnlineInfo } from '../net/LobbyConnection.js';
 import { mapApi } from '../net/api.js';
+import { skeletonHtml } from './skeleton.js';
 
 const el = <K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -36,7 +37,7 @@ export function openMinimap(opts: MinimapOptions): { refresh(): void; close(): v
         <h2 id="map-title">🗺️ Mapa do escritório</h2>
         <button type="button" class="sheet-close" aria-label="Fechar">✕</button>
       </header>
-      <div class="sheet-body"><div class="minimap-fit"><div class="minimap-board"><p class="muted">Carregando…</p></div></div></div>
+      <div class="sheet-body"><div class="minimap-fit"><div class="minimap-board">${skeletonHtml()}</div></div></div>
     </section>`;
   document.body.append(backdrop);
   const board = backdrop.querySelector<HTMLElement>('.minimap-board')!;

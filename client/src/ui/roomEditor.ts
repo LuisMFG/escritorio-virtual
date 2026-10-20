@@ -13,6 +13,7 @@ import {
 } from '@office/shared';
 import { roomApi } from '../net/api.js';
 import { confirmDialog } from './confirm.js';
+import { skeletonHtml } from './skeleton.js';
 
 export interface RoomEditorOptions {
   token: string;
@@ -48,7 +49,7 @@ export function openRoomEditor(opts: RoomEditorOptions): void {
         <button type="button" class="btn-secondary btn-small re-new">+ Nova sala</button>
         <button type="button" class="sheet-close" aria-label="Fechar">✕</button>
       </header>
-      <div class="sheet-body re-body"><p class="muted">Carregando…</p></div>
+      <div class="sheet-body re-body">${skeletonHtml()}</div>
     </section>`;
   document.body.append(backdrop);
   const $ = <T extends Element>(sel: string) => backdrop.querySelector<T>(sel)!;

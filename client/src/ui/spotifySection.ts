@@ -1,6 +1,7 @@
 import type { SpotifyStatus } from '@office/shared';
 import { spotifyApi } from '../net/api.js';
 import { confirmDialog } from './confirm.js';
+import { skeleton } from './skeleton.js';
 
 /**
  * Seção "Spotify" do perfil: conectar a conta (vai para a página do Spotify e volta),
@@ -97,7 +98,7 @@ export function mountSpotifySection(box: HTMLElement, token: string): void {
     box.replaceChildren(title, who, actions, error);
   };
 
-  box.replaceChildren(title, el('p', { className: 'muted', textContent: 'Carregando…' }));
+  box.replaceChildren(title, skeleton());
   spotifyApi
     .status(token)
     .then(render)

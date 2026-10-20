@@ -1,6 +1,7 @@
 import { ACHIEVEMENTS, SHOWCASE_MAX, type AchievementsResponse } from '@office/shared';
 import { achievementApi } from '../net/api.js';
 import { badgeEl } from './badges.js';
+import { skeleton } from './skeleton.js';
 
 const dateFormat = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short' });
 
@@ -10,13 +11,7 @@ const dateFormat = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'sh
  */
 export async function mountAchievements(box: HTMLElement, token: string): Promise<void> {
   const title = Object.assign(document.createElement('h3'), { textContent: '🏅 Conquistas' });
-  box.replaceChildren(
-    title,
-    Object.assign(document.createElement('p'), {
-      className: 'muted',
-      textContent: 'Carregando…',
-    }),
-  );
+  box.replaceChildren(title, skeleton(4));
   let data: AchievementsResponse;
   try {
     data = await achievementApi.me(token);

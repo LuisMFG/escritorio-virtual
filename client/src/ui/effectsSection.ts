@@ -1,5 +1,6 @@
 import { EFFECTS, unlockHint, type EffectId, type EffectsResponse } from '@office/shared';
 import { effectsApi } from '../net/api.js';
+import { skeleton } from './skeleton.js';
 
 /**
  * Seção "Efeitos" do perfil: os efeitos do Habbo liberados por conquistas e elogios. O escolhido
@@ -54,7 +55,7 @@ export function mountEffectsSection(box: HTMLElement, token: string): void {
     box.replaceChildren(title, intro, list, error);
   };
 
-  box.replaceChildren(title, el('p', { className: 'muted', textContent: 'Carregando…' }));
+  box.replaceChildren(title, skeleton());
   effectsApi
     .list(token)
     .then(render)

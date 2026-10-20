@@ -1,6 +1,7 @@
 import { formatLastSeen, JIRA_COLUMNS, type JiraBoard, type JiraBoardIssue } from '@office/shared';
 import { jiraApi } from '../net/api.js';
 import { sheet } from './kudos.js';
+import { skeleton } from './skeleton.js';
 
 const el = <K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -18,7 +19,7 @@ export function openJiraBoard(opts: { token: string; myUserId: string; openProfi
   const info = el('small', { className: 'muted jira-info' });
   top.append(who, info);
   const columns = el('div', { className: 'jira-columns' });
-  body.append(el('p', { className: 'muted', textContent: 'Carregando…' }));
+  body.append(skeleton());
   let board: JiraBoard | null = null;
 
   const draw = () => {

@@ -8,6 +8,7 @@ import {
 } from '@office/shared';
 import { meetingApi } from '../net/api.js';
 import { confirmDialog } from './confirm.js';
+import { skeletonHtml } from './skeleton.js';
 
 export interface AgendaOptions {
   token: string;
@@ -65,7 +66,7 @@ export function openAgenda(opts: AgendaOptions): AgendaHandle {
         <button type="button" class="sheet-close" aria-label="Fechar">✕</button>
       </header>
       <p class="admin-flash" role="status" hidden></p>
-      <div class="sheet-body agenda-body"><p class="muted">Carregando…</p></div>
+      <div class="sheet-body agenda-body">${skeletonHtml()}</div>
     </section>`;
   document.body.append(backdrop);
   const $ = <T extends Element>(sel: string) => backdrop.querySelector<T>(sel)!;

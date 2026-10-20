@@ -1,4 +1,5 @@
 import { Texture } from 'pixi.js';
+import { track } from './progress.js';
 
 export type AssetSource = 'habboassets' | 'placeholder';
 
@@ -77,7 +78,7 @@ export class AssetLoader {
   ): Promise<LoadedTexture> {
     let entry = this.cache.get(key);
     if (!entry) {
-      entry = this.resolve(urls, placeholder);
+      entry = track(this.resolve(urls, placeholder));
       this.cache.set(key, entry);
     }
     return entry;

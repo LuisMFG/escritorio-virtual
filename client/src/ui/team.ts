@@ -10,6 +10,7 @@ import {
 import { api } from '../net/api.js';
 import { setAvatarPreview } from './login.js';
 import { cargoPill } from './profile.js';
+import { skeletonHtml } from './skeleton.js';
 
 export interface TeamOptions {
   token: string;
@@ -36,7 +37,7 @@ export function openTeam(opts: TeamOptions): void {
         <input class="team-search" type="search" placeholder="Buscar por nome, usuário ou cargo" aria-label="Buscar na equipe" />
         <button type="button" class="sheet-close" aria-label="Fechar">✕</button>
       </header>
-      <div class="sheet-body team-body"><p class="muted">Carregando…</p></div>
+      <div class="sheet-body team-body">${skeletonHtml()}</div>
     </section>`;
   document.body.append(backdrop);
   const body = backdrop.querySelector<HTMLElement>('.team-body')!;

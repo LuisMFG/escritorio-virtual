@@ -423,10 +423,16 @@ export class DecorPanel {
   private async pickItem(id: string): Promise<void> {
     if (this.items.some((i) => i.id === id)) return this.on.pick(id);
     this.preparing = id;
+    const spinner = Object.assign(document.createElement('span'), { className: 'spinner' });
+    spinner.setAttribute('aria-hidden', 'true');
     this.status.replaceChildren(
+      Object.assign(document.createElement('span'), { className: 'decor-preparing' }),
+    );
+    this.status.firstElementChild!.append(
+      spinner,
       Object.assign(document.createElement('span'), {
         className: 'muted',
-        textContent: `Preparando ${this.nameOf(id)}…`,
+        textContent: `Preparando ${this.nameOf(id)}… (baixando e medindo no servidor)`,
       }),
     );
     const ok = await this.on.prepare(id);

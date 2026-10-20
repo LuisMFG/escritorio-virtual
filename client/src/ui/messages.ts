@@ -23,6 +23,7 @@ import {
   replyQuote,
 } from './reactions.js';
 import { iconHtml } from './icons.js';
+import { skeleton } from './skeleton.js';
 
 export interface MessagesDeps {
   userId: string;
@@ -275,7 +276,7 @@ export class MessagesPanel {
     search.setAttribute('aria-label', 'Buscar pessoa');
     const ul = document.createElement('ul');
     ul.className = 'dm-list';
-    this.body.replaceChildren(search, p('muted', 'Carregando…'));
+    this.body.replaceChildren(search, skeleton());
     let team: TeamMember[] = [];
     try {
       team = (await this.deps.loadTeam()).filter((m) => m.userId !== this.deps.userId);
