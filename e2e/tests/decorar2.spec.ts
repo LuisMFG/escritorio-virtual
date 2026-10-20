@@ -22,7 +22,6 @@ test('decorar sem esforço: recentes, favoritos, desfazer e refazer', async ({ b
   await expect.poll(count).toBe(before + 1);
   // Recentes: a cadeira colocada aparece lá.
   await expect(panel.getByRole('button', { name: /Recentes \(1\)/ })).toBeVisible();
-  await page.screenshot({ path: 'e2e-results/decorar-painel.png' });
 
   // Desfazer (botão) tira; refazer (Ctrl+Shift+Z) põe de volta.
   const undo = panel.getByRole('button', { name: 'Desfazer' });
