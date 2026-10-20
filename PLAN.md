@@ -1142,10 +1142,14 @@ Pedido em 20/10/2026, com o escritório já em uso pelo pessoal do trabalho (ser
 - **Feito:** painel mais largo com categorias em **chips** (rolam de lado), grade de cartões que não espreme, **Recentes** (os 16 últimos colocados) e **Favoritos** (estrela em cada cartão), guardados no navegador; **prévia grande** do móvel escolhido/selecionado e cores maiores. **Ferramentas grandes** sempre à vista: Girar, Remover, **Desfazer** e **Refazer** (também Ctrl+Z e Ctrl+Shift+Z/Ctrl+Y), com histórico de colocar, mover/girar, remover e trocar cor (`scene/DecorHistory.ts`, que segue o id novo de um móvel tirado e posto de volta); o "Desfazer" do aviso de remoção usa o mesmo histórico. **Grade de tiles** aparece enquanto coloca ou arrasta; atalhos em `kbd` no rodapé. No celular o painel é uma gaveta de baixo. Testes `DecorHistory.test.ts` e `e2e/tests/decorar2.spec.ts`.
 
 
-#### Fase 48 — Acessibilidade e polimento final
+#### Fase 48 — Acessibilidade e polimento final ✅ implementada
 - Navegação completa por teclado nos painéis, nomes certos para leitores de tela, contraste adequado, foco visível.
 - Teste automático de acessibilidade (axe) nos testes de ponta a ponta e revisão final de textos e tamanhos.
 - **Como testar:** usar Perfil, Equipe e Mensagens só com o teclado; ver o relatório de acessibilidade sem erros graves.
+- **Feito:** teste automático com **axe** (`@axe-core/playwright`, só nos testes) em `e2e/tests/acessibilidade.spec.ts`: entrada, sala, Perfil (todas as abas), Equipe, Mensagens, Configurações, Agenda, Mapa, Decorar, Ajuda e o tema claro, sem nenhum problema grave ou crítico. Corrigido o que ele achou: **contraste** do botão azul com texto branco (o azul forte do tema escuro ficou mais escuro, ≥ 4,5:1) e a **lista de pessoas** (o item volta a ser item de lista, com um botão por cima para achar a pessoa). **Teclado:** toda janela recebe o foco ao abrir, Tab/Shift+Tab ficam presos nela e, ao fechar, o foco volta ao botão que a abriu (`ui/a11y.ts`); o painel de Mensagens também leva o foco para dentro e Esc fecha. Achado no caminho: a CSP do servidor bloqueava o script que aplica tema e tamanho do texto antes de pintar; virou o arquivo `public/boot-prefs.js`.
+
+**Roadmap v6 de UI/UX concluído (Fases 40–48).**
+
 
 ### Decisões para aprovar antes da Fase 40
 1. **Ordem:** a acima (base visual → tela principal → minha mesa → perfil/configurações → primeira experiência → retorno → celular → decorar → acessibilidade)? Alternativa: trazer o celular (46) para logo depois da tela principal, se muita gente for usar pelo celular.
