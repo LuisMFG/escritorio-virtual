@@ -24,16 +24,16 @@ test('móveis interativos: dado rola para todos e teleporte leva para o outro la
     for (const [x, y] of tiles) await clickTile(page, x, y);
     await page.keyboard.press('Escape');
   };
-  await place('holo-dado', /Holo-Dado/, [[6, 9]]);
+  await place('holo-dado', /Holo-Dado/, [[13, 11]]);
   await place('porta teleporte', /Porta Teleporte/, [
-    [8, 9],
-    [12, 4],
+    [14, 13],
+    [15, 6],
   ]);
   await expect.poll(async () => (await furniOf('teleport_door')).length).toBe(2);
 
   // Liga os dois: seleciona um e escolhe o outro na lista.
   const [t1, t2] = await furniOf('teleport_door');
-  const near = t1!.x === 8 ? t1! : t2!;
+  const near = t1!.x === 14 ? t1! : t2!;
   const far = near === t1 ? t2! : t1!;
   await clickFurni(page, near.id);
   await expect(page.locator('.decor-teleport')).toContainText('Teleporte solto');

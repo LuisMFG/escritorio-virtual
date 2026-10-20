@@ -23,7 +23,7 @@ export default defineConfig({
   use: {
     ...devices['Desktop Chrome'],
     baseURL: `http://localhost:${PORT}`,
-    viewport: { width: 1280, height: 800 },
+    viewport: { width: 1440, height: 900 },
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },

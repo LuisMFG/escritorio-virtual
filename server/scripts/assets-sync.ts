@@ -135,8 +135,11 @@ for (const cur of FURNI_CURATION) {
   };
   for (const dir of info.directions) {
     analyses.set(dir, await render(dir));
-    // Estados com interação (luz acesa, TV ligada…): a imagem muda e a âncora pode mudar.
-    if (cur.interaction === 'toggle') {
+    // Estados com interação (luz acesa, TV ligada, porta da geladeira…): a imagem muda e a
+    // âncora pode mudar.
+    if (
+      ['toggle', 'fridge', 'coffee', 'dice', 'teleport', 'jukebox'].includes(cur.interaction ?? '')
+    ) {
       for (const state of (info.states ?? []).filter((s) => s > 0)) {
         stateAnalyses.set(`${dir}:${state}`, await render(dir, state));
       }

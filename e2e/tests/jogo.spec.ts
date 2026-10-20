@@ -3,8 +3,8 @@ import { clickFurni, expect, goThroughDoor, newPerson, test } from '../helpers.j
 test('jogo da velha na Copa: dois jogam até alguém vencer', async ({ browser }) => {
   const ana = await newPerson(browser, 'Ana');
   const beto = await newPerson(browser, 'Beto');
-  await goThroughDoor(ana.page, [9, 0], 'pantry');
-  await goThroughDoor(beto.page, [9, 0], 'pantry');
+  await goThroughDoor(ana.page, [21, 0], 'pantry');
+  await goThroughDoor(beto.page, [21, 0], 'pantry');
 
   // Ana senta primeiro (X), Beto depois (O).
   for (const p of [ana, beto]) {

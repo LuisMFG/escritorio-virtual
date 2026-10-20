@@ -39,8 +39,8 @@ test('catálogo completo: busca, quadro na parede, cores e categorias escondidas
   await search.fill('circular pura escuro');
   await page.getByRole('button', { name: /Circular Pura Escuro/ }).click();
   await expect(page.locator('.decor-status')).toContainText('Colocando');
-  await clickTile(page, 10, 8);
-  await expect.poll(() => betoSees('purablk_c16_round')).toMatchObject({ x: 10, y: 8 });
+  await clickTile(page, 14, 12);
+  await expect.poll(() => betoSees('purablk_c16_round')).toMatchObject({ x: 14, y: 12 });
   await page.keyboard.press('Escape');
   const chair = (await betoSees('purablk_c16_round'))!;
   await clickFurni(page, chair.id);

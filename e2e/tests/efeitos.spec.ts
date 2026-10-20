@@ -27,8 +27,8 @@ test('efeito no Perfil e café na mão, vistos pelo outro', async ({ browser }) 
   await ana.page.keyboard.press('Escape');
 
   // Os dois vão à Copa; a Ana pega um café e depois larga.
-  await goThroughDoor(ana.page, [9, 0], 'pantry');
-  await goThroughDoor(beto.page, [9, 0], 'pantry');
+  await goThroughDoor(ana.page, [21, 0], 'pantry');
+  await goThroughDoor(beto.page, [21, 0], 'pantry');
   await waitRoom(beto.page, 'pantry');
   await clickFurni(ana.page, 'p-coffee');
   await expect.poll(async () => (await seenByBeto())?.handItem, { timeout: 15_000 }).toBe(6);

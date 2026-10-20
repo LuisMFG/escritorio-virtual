@@ -10,9 +10,9 @@ test('sentar e deitar: dois no mesmo sofá e comandos no chão', async ({ browse
     });
 
   // Os dois clicam no sofá de dois lugares: cada um senta num lugar.
-  await clickFurni(ana.page, 'r-couch');
+  await clickFurni(ana.page, 'r-sofa');
   await expect.poll(async () => (await me(ana.page)).action, { timeout: 15_000 }).toBe('sit');
-  await clickFurni(beto.page, 'r-couch');
+  await clickFurni(beto.page, 'r-sofa');
   await expect.poll(async () => (await me(beto.page)).action, { timeout: 15_000 }).toBe('sit');
   const [a, b] = [await me(ana.page), await me(beto.page)];
   expect(Math.abs(a.x - b.x) + Math.abs(a.y - b.y)).toBe(1);
@@ -20,7 +20,7 @@ test('sentar e deitar: dois no mesmo sofá e comandos no chão', async ({ browse
   // Ana levanta, anda e senta no chão; depois deita.
   await sendChat(ana.page, '/levantar');
   await expect.poll(async () => (await me(ana.page)).action).toBe('idle');
-  await clickTile(ana.page, 4, 6);
+  await clickTile(ana.page, 15, 10);
   await expect
     .poll(
       async () => {
@@ -29,7 +29,7 @@ test('sentar e deitar: dois no mesmo sofá e comandos no chão', async ({ browse
       },
       { timeout: 15_000 },
     )
-    .toBe('4,6,idle');
+    .toBe('15,10,idle');
   await sendChat(ana.page, '/sentar');
   await expect.poll(async () => (await me(ana.page)).action).toBe('sit');
   await sendChat(ana.page, '/deitar');

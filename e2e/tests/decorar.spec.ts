@@ -8,10 +8,10 @@ test('decorar: colocar uma cadeira aparece para os outros', async ({ browser }) 
 
   await ana.page.getByRole('button', { name: 'Decorar' }).click();
   await ana.page.getByRole('button', { name: /Cadeira Norja/ }).click();
-  await clickTile(ana.page, 4, 9);
+  await clickTile(ana.page, 14, 11);
   await expect.poll(count).toBe(before + 1);
   const placed = await beto.page.evaluate(() =>
-    window.__e2e!.furniList().find((f) => f.x === 4 && f.y === 9),
+    window.__e2e!.furniList().find((f) => f.x === 14 && f.y === 11),
   );
   expect(placed?.defId).toBe('chair_norja');
   await ana.page.getByRole('button', { name: 'Concluir', exact: true }).click();

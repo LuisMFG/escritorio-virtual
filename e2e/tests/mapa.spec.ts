@@ -3,7 +3,7 @@ import { expect, goThroughDoor, newPerson, positionOf, test, waitRoom } from '..
 test('mapa: ver quem está em cada sala e ir até alguém de outra sala', async ({ browser }) => {
   const ana = await newPerson(browser, 'Ana');
   const beto = await newPerson(browser, 'Beto');
-  await goThroughDoor(beto.page, [9, 0], 'pantry');
+  await goThroughDoor(beto.page, [21, 0], 'pantry');
 
   await ana.page.getByRole('button', { name: 'Mapa' }).click();
   const map = ana.page.locator('.minimap');

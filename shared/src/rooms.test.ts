@@ -33,7 +33,8 @@ describe.each(ROOMS.map((r) => [r.name, r] as const))('sala %s', (_name, room) =
             room.doors.some((d) => d.x === x && d.y === y),
             `${f.id} na porta`,
           ).toBe(false);
-          if (!def!.canWalk) {
+          // Itens em cima de outro móvel (o computador na mesa, z > 0) não ocupam o piso.
+          if (!def!.canWalk && f.z === 0) {
             expect(used.has(`${x},${y}`), `${f.id} sobreposto em ${x},${y}`).toBe(false);
             used.add(`${x},${y}`);
           }

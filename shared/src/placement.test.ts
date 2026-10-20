@@ -150,11 +150,13 @@ describe('salas iniciais', () => {
   it.each(ROOMS.map((r) => [r.name, r] as const))(
     'cada móvel de %s é uma colocação válida',
     (_n, room) => {
-      for (const item of room.furni) {
+      // Itens em cima de outro móvel (computador na mesa, z > 0) são colocados pela semente.
+      const onFloor = room.furni.filter((f) => f.z === 0);
+      for (const item of onFloor) {
         const res = canPlace(
           {
             map: parseHeightmap(room.heightmap),
-            furni: room.furni,
+            furni: onFloor,
             defs: real,
             doors: room.doors,
             spawn: room.spawn,

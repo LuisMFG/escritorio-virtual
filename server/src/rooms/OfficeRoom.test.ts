@@ -273,17 +273,17 @@ describe('OfficeRoom', () => {
     it('colocar, girar, mover e remover sincroniza com todos e persiste no banco', async () => {
       const a = await join(newUser('Ana').token);
       const b = await join(newUser('Beto').token);
-      a.send(ClientMessage.FurniPlace, { defId: 'plant_yukka', x: 11, y: 9, rot: 0 });
+      a.send(ClientMessage.FurniPlace, { defId: 'plant_yukka', x: 15, y: 18, rot: 0 });
       await wait(200);
-      const placed = furniAt(b, 11, 9);
+      const placed = furniAt(b, 15, 18);
       expect(placed?.defId).toBe('plant_yukka');
       expect(svc.furni.list(RECEPTION.id).some((f) => f.id === placed!.id)).toBe(true);
 
-      a.send(ClientMessage.FurniMove, { furniId: placed!.id, x: 10, y: 9, rot: 2 });
+      a.send(ClientMessage.FurniMove, { furniId: placed!.id, x: 16, y: 18, rot: 2 });
       await wait(200);
-      expect(b.state.furni.get(placed!.id)).toMatchObject({ x: 10, y: 9, rot: 2 });
+      expect(b.state.furni.get(placed!.id)).toMatchObject({ x: 16, y: 18, rot: 2 });
       expect(svc.furni.list(RECEPTION.id).find((f) => f.id === placed!.id)).toMatchObject({
-        x: 10,
+        x: 16,
         rot: 2,
       });
 
@@ -303,8 +303,8 @@ describe('OfficeRoom', () => {
         message: 'Deixe a porta e a entrada livres.',
       });
       const before = a.state.furni.size;
-      a.send(ClientMessage.FurniPlace, { defId: 'nao-existe', x: 11, y: 9, rot: 0 });
-      a.send(ClientMessage.FurniPlace, { defId: 'plant_yukka', x: 11, y: 9, rot: 3 });
+      a.send(ClientMessage.FurniPlace, { defId: 'nao-existe', x: 15, y: 18, rot: 0 });
+      a.send(ClientMessage.FurniPlace, { defId: 'plant_yukka', x: 15, y: 18, rot: 3 });
       await wait(200);
       expect(a.state.furni.size).toBe(before);
     });
@@ -347,11 +347,11 @@ describe('OfficeRoom', () => {
 
       // Categoria escondida pelo admin: não coloca (os curados continuam liberados).
       svc.settings.setHiddenCategories(['plant']);
-      a.send(ClientMessage.FurniPlace, { defId: 'plant_yukka', x: 11, y: 9, rot: 0 });
-      await waitFor(() => Boolean(furniAt(a, 11, 9)));
+      a.send(ClientMessage.FurniPlace, { defId: 'plant_yukka', x: 15, y: 18, rot: 0 });
+      await waitFor(() => Boolean(furniAt(a, 15, 18)));
       svc.settings.setHiddenCategories(['games']);
       a.send(ClientMessage.FurniRemove, { furniId: pic.id });
-      a.send(ClientMessage.FurniRemove, { furniId: furniAt(a, 11, 9)!.id });
+      a.send(ClientMessage.FurniRemove, { furniId: furniAt(a, 15, 18)!.id });
       await wait(200);
     });
 
@@ -382,7 +382,7 @@ describe('OfficeRoom', () => {
 
         // Teleporte solto avisa; ligado na mesma sala, a pessoa aparece do lado do outro.
         a.send(ClientMessage.FurniPlace, { defId: 'tele_t', x: p0.x, y: p0.y + 1, rot: 0 });
-        a.send(ClientMessage.FurniPlace, { defId: 'tele_t', x: 11, y: 8, rot: 0 });
+        a.send(ClientMessage.FurniPlace, { defId: 'tele_t', x: 14, y: 18, rot: 0 });
         await waitFor(
           () => [...a.state.furni.values()].filter((f) => f.defId === 'tele_t').length === 2,
         );
@@ -424,12 +424,12 @@ describe('OfficeRoom', () => {
     it('a sala recriada carrega os móveis do banco', async () => {
       const ana = newUser('Ana');
       const a = await join(ana.token);
-      a.send(ClientMessage.FurniPlace, { defId: 'plant_bonsai', x: 11, y: 8, rot: 0 });
+      a.send(ClientMessage.FurniPlace, { defId: 'plant_bonsai', x: 16, y: 19, rot: 0 });
       await wait(200);
       await a.leave();
       await colyseus.cleanup();
       const again = await join(ana.token);
-      expect(furniAt(again, 11, 8)?.defId).toBe('plant_bonsai');
+      expect(furniAt(again, 16, 19)?.defId).toBe('plant_bonsai');
     });
 
     it(
@@ -437,7 +437,7 @@ describe('OfficeRoom', () => {
       { timeout: 20_000 },
       async () => {
         const a = await join(newUser('Ana').token);
-        const chair = [...a.state.furni.values()].find((f) => f.id === 'r-chair-1')!;
+        const chair = [...a.state.furni.values()].find((f) => f.id === 'r-fila-1-cadeira')!;
         a.send(ClientMessage.Interact, { furniId: chair.id });
         await wait(STEP_MS * 14);
         const me = a.state.players.get(a.sessionId)!;
@@ -449,7 +449,7 @@ describe('OfficeRoom', () => {
         expect(err.message).toBe('Tem alguém sentado aí.');
 
         // Andar de novo levanta.
-        a.send(ClientMessage.Move, { x: 4, y: 6 });
+        a.send(ClientMessage.Move, { x: 4, y: 4 });
         await wait(STEP_MS * 2);
         expect(a.state.players.get(a.sessionId)!.action).not.toBe('sit');
       },
@@ -1113,16 +1113,16 @@ describe('OfficeRoom', () => {
   describe('sentar e deitar (Fase 33)', () => {
     it(
       'sofá de dois lugares: o segundo senta no outro lugar; o terceiro não cabe',
-      { timeout: 25_000 },
+      { timeout: 45_000 },
       async () => {
         const a = await join(newUser('Ana').token);
         const b = await join(newUser('Beto').token);
         const c = await join(newUser('Caio').token);
-        const sofa = [...a.state.furni.values()].find((f) => f.defId === 'couch_norja')!;
+        const sofa = [...a.state.furni.values()].find((f) => f.id === 'r-sofa')!;
         a.send(ClientMessage.Interact, { furniId: sofa.id });
-        await wait(STEP_MS * 8);
+        await wait(STEP_MS * 26);
         b.send(ClientMessage.Interact, { furniId: sofa.id });
-        await wait(STEP_MS * 10);
+        await wait(STEP_MS * 28);
         const pa = a.state.players.get(a.sessionId)!;
         const pb = a.state.players.get(b.sessionId)!;
         expect([pa.action, pb.action]).toEqual(['sit', 'sit']);
@@ -1136,18 +1136,18 @@ describe('OfficeRoom', () => {
       },
     );
 
-    it('cama: deita na cabeceira, no sentido da cama', { timeout: 25_000 }, async () => {
+    it('cama: deita na cabeceira, no sentido da cama', { timeout: 45_000 }, async () => {
       const a = await join(newUser('Ana').token);
-      a.send(ClientMessage.FurniPlace, { defId: 'bed_polyfon', x: 9, y: 6, rot: 0 });
+      a.send(ClientMessage.FurniPlace, { defId: 'bed_polyfon', x: 19, y: 17, rot: 0 });
       await wait(300);
       const bed = [...a.state.furni.values()].find((f) => f.defId === 'bed_polyfon')!;
       expect(bed).toBeDefined();
       a.send(ClientMessage.Interact, { furniId: bed.id });
-      await wait(STEP_MS * 16);
+      await wait(STEP_MS * 34);
       const me = a.state.players.get(a.sessionId)!;
-      // Cama no eixo y (rot 0): cabeceira em y = 6, deitado virado para a esquerda (4).
-      expect(me).toMatchObject({ y: 6, action: 'lay', dir: 4 });
-      expect([9, 10]).toContain(me.x);
+      // Cama no eixo y (rot 0): cabeceira em y = 17, deitado virado para a esquerda (4).
+      expect(me).toMatchObject({ y: 17, action: 'lay', dir: 4 });
+      expect([19, 20]).toContain(me.x);
       expect(me.z).toBeGreaterThan(0);
     });
 
@@ -1156,7 +1156,7 @@ describe('OfficeRoom', () => {
       { timeout: 20_000 },
       async () => {
         const a = await join(newUser('Ana').token);
-        a.send(ClientMessage.Move, { x: 6, y: 6 });
+        a.send(ClientMessage.Move, { x: 5, y: 4 });
         await wait(STEP_MS * 12);
         const me = () => a.state.players.get(a.sessionId)!;
         a.send(ClientMessage.Posture, { posture: 'sit' });
@@ -1168,9 +1168,9 @@ describe('OfficeRoom', () => {
         await wait(150);
         expect(me().dir).toBe(2);
         // Clicar num tile do lado só vira (não levanta).
-        a.send(ClientMessage.Move, { x: 6, y: 5 });
+        a.send(ClientMessage.Move, { x: 5, y: 3 });
         await wait(STEP_MS);
-        expect(me()).toMatchObject({ x: 6, y: 6, action: 'sit', dir: 0 });
+        expect(me()).toMatchObject({ x: 5, y: 4, action: 'sit', dir: 0 });
         a.send(ClientMessage.Posture, { posture: 'stand' });
         await wait(150);
         expect(me().action).toBe('idle');
@@ -1184,7 +1184,7 @@ describe('OfficeRoom', () => {
         a.send(ClientMessage.Turn, { dir: 1 });
         await wait(150);
         expect(me().dir).toBe(4);
-        a.send(ClientMessage.Move, { x: 4, y: 6 });
+        a.send(ClientMessage.Move, { x: 3, y: 4 });
         await wait(STEP_MS * 2);
         expect(me().action).not.toBe('lay');
       },
