@@ -22,12 +22,12 @@ test('modo foco: os outros veem 🍅, menções ficam seguradas e chegam no resu
   await sendChat(beto.page, `@${ana.name} pode revisar meu PR?`);
   await expect(ana.page.locator('.chat-log')).toContainText('pode revisar meu PR?');
   await ana.page.waitForTimeout(500);
-  await expect(ana.page.locator('.toast')).not.toContainText('mencionou você');
+  await expect(ana.page.locator('.toasts')).not.toContainText('mencionou você');
 
   // Parar: resumo com o que ficou segurado.
   await ana.page.getByRole('button', { name: /Em foco/ }).click();
   await ana.page.locator('.focus-popover').getByRole('button', { name: 'Parar' }).click();
-  await expect(ana.page.locator('.toast')).toContainText(
+  await expect(ana.page.locator('.toasts')).toContainText(
     'Foco encerrado. Enquanto isso: 1 menção.',
   );
   await expect(beto.page.locator('.people-list li', { hasText: ana.name })).not.toContainText('🍅');

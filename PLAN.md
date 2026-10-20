@@ -1120,11 +1120,13 @@ Pedido em 20/10/2026, com o escritório já em uso pelo pessoal do trabalho (ser
 - **Feito:** tela de entrada com uma frase sobre o escritório, avatar girando (também no Entrar, se o navegador lembra de quem é) e **erros embaixo de cada campo** (`aria-invalid`), inclusive os do servidor: convite errado, usuário em uso, nome em uso (com sugestão), senha incorreta e dados inválidos (o servidor agora diz o `field`). **Tour guiado** só para conta nova (marcado ao criar a conta): boas-vindas, andar, escolher a mesa, conversar, emotes, Decorar e a ajuda; cada etapa com ação conclui sozinha quando a pessoa faz, com "Pular etapa" e "Pular tour"; contorno no botão de que fala e cartão perto dele. **Ajuda** com `?` ou em Mais → Ajuda (agora para todos): comandos do chat, emotes, atalhos e o que cada botão faz, e "Refazer o tour guiado". **Dica no momento certo** na primeira vez que alguém abre o Decorar. Testes `e2e/tests/tour.spec.ts`, `conta.spec.ts` (erro no campo) e `auth.test.ts` (campo do erro); nos testes e2e o tour só aparece com `&tour=1`.
 
 
-#### Fase 45 — Retorno, carregamento e erros
+#### Fase 45 — Retorno, carregamento e erros ✅ implementada
 - **Carregamento** com barra de progresso na entrada e esqueletos nos painéis; "Preparando móvel" com progresso.
 - **Avisos** empilhados e coerentes (sucesso, erro, info), erros com o que fazer e **desfazer** para remover móvel, apagar mensagem e soltar pet.
 - **Conexão:** faixa "Reconectando…" visível e volta automática sem perder o lugar.
 - **Como testar:** remover um móvel e desfazer; derrubar a internet por alguns segundos e ver a faixa e a volta.
+- **Feito:** **tela de carregamento** com barra (preparando → conectando → entrando na sala → arte da sala, que acompanha os downloads de texturas e camadas de móveis pelo contador `assets/progress.ts`; sai com 90% ou em 8 s); **esqueletos** cintilando no lugar de "Carregando…" em Equipe, Agenda, Mapa, Mensagens, Admin, Perfil e editor de salas; "Preparando móvel" do catálogo com girador. **Avisos empilhados** (até 4, com ícone de sucesso/erro, fechar e ação), erros do servidor como aviso de erro. **Desfazer** em remover móvel (volta no mesmo lugar), apagar mensagem e soltar pet (os dois últimos só vão ao servidor quando o aviso some). **Faixa de conexão** no alto com girador enquanto reconecta e aviso "Conectado de novo" ao voltar (a queda curta continua voltando no mesmo lugar; reinício do servidor volta para a entrada da sala). Testes `decorar.spec.ts` (remover e desfazer) e `retorno.spec.ts` (apagar mensagem com desfazer).
+
 
 #### Fase 46 — Celular de verdade
 - Barra inferior com 5 ícones + "mais", **painéis como gaveta de baixo** (bottom sheet), sala enquadrada na tela.
