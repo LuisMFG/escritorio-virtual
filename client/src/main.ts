@@ -94,6 +94,11 @@ import {
 import { DeskChip } from './ui/desk.js';
 import { openSettings } from './ui/settings.js';
 import { applyPrefs } from './ui/prefs.js';
+import { openHelp, tipOnce } from './ui/help.js';
+import { takeTourPending, Tour } from './ui/tour.js';
+
+const E2E_MODE = new URLSearchParams(location.search).has('e2e');
+const TOUR_IN_E2E = new URLSearchParams(location.search).has('tour');
 
 /** Sala pedida na URL (`#/meeting`), para recarregar no mesmo lugar. */
 function roomFromHash(): string {
@@ -257,7 +262,10 @@ async function start(): Promise<void> {
 
   const sound = new ChatSound();
   const chat = new ChatPanel({
-    send: (text, replyToId, attachmentId) => connection?.say(text, replyToId, attachmentId),
+    send: (text, replyToId, attachmentId) => {
+      connection?.say(text, replyToId, attachmentId);
+      tour?.notify('chat');
+    },
     notify: (message) => overlay.notify(message),
     search: () =>
       openSearch({
@@ -273,7 +281,10 @@ async function start(): Promise<void> {
         openDmHit: (hit) => void messages.showMessage(hit.where, hit.whereName, hit.id),
       }),
     react: (id, emoji) => connection?.react(id, emoji),
-    emote: (id) => connection?.emote(id),
+    emote: (id) => {
+      connection?.emote(id);
+      tour?.notify('emote');
+    },
     posture: (p) => connection?.posture(p),
     dropItem: () => connection?.dropItem(),
     typing: (on) => connection?.typing(on),
@@ -366,6 +377,25 @@ async function start(): Promise<void> {
   /** Minimapa aberto (atualiza com a presença) e quem estamos indo encontrar. */
   let minimap: ReturnType<typeof openMinimap> | null = null;
   let approach: string | null = null;
+  /** Tour guiado (Fase 44): começa sozinho para conta nova; refaz pela ajuda. */
+  let tour: Tour | null = null;
+  function startTour(): void {
+    tour?.stop();
+    tour = new Tour(session?.name ?? '');
+    tour.start();
+  }
+  function showHelp(): void {
+    openHelp({ restartTour: startTour });
+  }
+  // "?" abre a ajuda (fora de campos de texto e janelas).
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== '?' || e.isComposing) return;
+    const target = e.target as HTMLElement;
+    if (target.closest('input, textarea, select, [contenteditable=true], [role=dialog]')) return;
+    if (document.querySelector('.modal-backdrop, .login-backdrop')) return;
+    e.preventDefault();
+    showHelp();
+  });
   // Alt segurado: nomes de todos sobre os avatares (afastados para não encavalar).
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Alt') scene?.setAllNames(true);
@@ -479,6 +509,14 @@ async function start(): Promise<void> {
   let decorating = false;
   const setDecorating = (on: boolean) => {
     decorating = on;
+    if (on) {
+      tipOnce('decorar', () =>
+        overlay.notify(
+          'Dica: escolha um móvel no catálogo e clique no piso. Clique num móvel para mover; R gira, Delete tira.',
+          9000,
+        ),
+      );
+    }
     scene?.decor.setActive(on);
     decorPanel.show(on);
     hud.setDecorating(on);
@@ -542,6 +580,7 @@ async function start(): Promise<void> {
         currentRoomId: conn.currentRoomId,
       });
     },
+    onOpenHelp: () => showHelp(),
     onOpenSettings: () =>
       openSettings({
         sound,
@@ -837,12 +876,16 @@ async function start(): Promise<void> {
     if (effectiveStatus() !== 'available') connection.setStatus(effectiveStatus());
     overlay.setOwnStatus(effectiveStatus());
 
+    let lastPos: { x: number; y: number } | null = null;
     /** Faixa da mesa, botão "Minha mesa" e plaquinhas, a partir do estado da sala. */
     const refreshDesk = () => {
       const me = room.state.players.get(room.sessionId);
       if (!me) return;
       const myDesk = me.desk;
       hud.setDesk(myDesk !== '');
+      if (myDesk) tour?.notify('desk');
+      if (lastPos && (lastPos.x !== me.x || lastPos.y !== me.y)) tour?.notify('move');
+      lastPos = { x: me.x, y: me.y };
       let seat: string | null = null;
       if (layout.roomId === DESK_ROOM_ID && me.action === 'sit') {
         const seats = deskSeatIds(room.state.furni.keys());
@@ -988,6 +1031,9 @@ async function start(): Promise<void> {
       }),
     );
 
+    // Conta recém-criada: tour guiado na primeira entrada.
+    // (Nos testes de ponta a ponta só com `&tour=1`, para não cobrir o que eles clicam.)
+    if (!tour && takeTourPending() && (!E2E_MODE || TOUR_IN_E2E)) setTimeout(startTour, 800);
     // Veio pelo "Minha mesa" de outra sala: vai até a mesa e senta.
     if (pendingDesk && layout.roomId === DESK_ROOM_ID) {
       pendingDesk = false;

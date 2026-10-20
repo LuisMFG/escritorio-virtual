@@ -197,10 +197,10 @@ export class Overlay {
     this.banner.textContent = detail ?? (status === 'connecting' ? 'Conectando…' : 'Reconectando…');
   }
 
-  notify(message: string): void {
+  notify(message: string, durationMs = 3000): void {
     this.toast.textContent = message;
     this.toast.hidden = false;
     clearTimeout(this.toastTimer);
-    this.toastTimer = window.setTimeout(() => (this.toast.hidden = true), 3000);
+    this.toastTimer = window.setTimeout(() => (this.toast.hidden = true), durationMs);
   }
 }

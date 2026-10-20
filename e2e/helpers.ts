@@ -94,7 +94,7 @@ export interface Person {
 export async function newPerson(
   browser: Browser,
   base: string,
-  opts: { username?: string } = {},
+  opts: { username?: string; tour?: boolean } = {},
 ): Promise<Person> {
   const id = uniq();
   const name = `${base} ${id}`;
@@ -102,7 +102,7 @@ export async function newPerson(
   const context = await browser.newContext();
   openContexts.push(context);
   const page = await context.newPage();
-  await page.goto(APP);
+  await page.goto(opts.tour ? `${APP}&tour=1` : APP);
   await page.getByRole('tab', { name: 'Criar conta' }).click();
   await page.locator('input[name=invite]').fill(INVITE);
   await page.locator('input[name=name]').fill(name);

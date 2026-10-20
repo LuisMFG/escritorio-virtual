@@ -42,6 +42,7 @@ export function mountHud(opts: {
   /** Vai até a própria mesa e senta. */
   onGoToDesk: () => void;
   onOpenSettings: () => void;
+  onOpenHelp: () => void;
   onToggleDecor: () => void;
   /** Liga/desliga o som de mensagem; devolve o novo estado. */
   onToggleSound: () => boolean;
@@ -108,7 +109,7 @@ export function mountHud(opts: {
   annBadge.className = 'dm-badge';
   annBadge.hidden = true;
   annBtn.append(annBadge);
-  // "Mais": o que é de poucos (editar sala, admin); some quando não há nada.
+  // "Mais": ajuda para todos; editar sala e admin para quem pode.
   const moreBtn = actionButton('hud-more-btn', 'ellipsis', 'Mais', () => {
     moreMenu.hidden = !moreMenu.hidden;
     moreBtn.setAttribute('aria-expanded', String(!moreMenu.hidden));
@@ -137,12 +138,12 @@ export function mountHud(opts: {
   const adminBtn = menuItem('shield', 'Admin', opts.onOpenAdmin);
   adminBtn.classList.add('hud-admin');
   adminBtn.hidden = true;
-  moreMenu.append(editRoomBtn, adminBtn);
+  const helpBtn = menuItem('help', 'Ajuda (?)', opts.onOpenHelp);
+  helpBtn.classList.add('hud-help');
+  moreMenu.append(helpBtn, editRoomBtn, adminBtn);
   const moreWrap = Object.assign(document.createElement('div'), { className: 'hud-more' });
   moreWrap.append(moreBtn, moreMenu);
-  const renderMore = () => {
-    moreWrap.hidden = editRoomBtn.hidden && adminBtn.hidden;
-  };
+  const renderMore = () => undefined;
   renderMore();
   document.addEventListener('pointerdown', (e) => {
     if (!moreMenu.hidden && !moreWrap.contains(e.target as Node)) {

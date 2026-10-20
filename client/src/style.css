@@ -5854,3 +5854,182 @@ button svg.icon {
 .sheet.settings {
   width: min(560px, 100%);
 }
+
+/* ---------- Fase 44: primeira experiência e ajuda ---------- */
+
+/* Entrar: o avatar só aparece se o navegador lembra de quem é. */
+.login-card[data-mode='login'] .login-avatar[data-known='false'] {
+  display: none;
+}
+
+.login-card .login-avatar {
+  background:
+    radial-gradient(ellipse at 50% 86%, rgba(0, 0, 0, 0.22) 0 20%, transparent 21%),
+    var(--surface-3);
+}
+
+.field-error {
+  color: var(--danger-text);
+  font-size: calc(12px * var(--font-scale, 1));
+}
+
+.field input[aria-invalid='true'] {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 1px var(--danger);
+}
+
+/* Tour guiado */
+.tour-ring {
+  position: fixed;
+  z-index: 40;
+  border: 2px solid var(--accent);
+  border-radius: var(--radius-lg);
+  box-shadow:
+    0 0 0 4px var(--accent-tint),
+    0 0 0 9999px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+  transition: all var(--dur) var(--ease);
+}
+
+.tour-ring[hidden] {
+  display: none;
+}
+
+.tour-card {
+  position: fixed;
+  z-index: 41;
+  width: min(320px, calc(100vw - 32px));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  background: var(--surface-1);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-2);
+}
+
+.tour-card.centered {
+  left: 50%;
+  top: 40%;
+  transform: translate(-50%, -50%);
+}
+
+.tour-card.top {
+  left: 50%;
+  top: 72px;
+  transform: translateX(-50%);
+}
+
+.tour-card h3 {
+  margin: 0;
+  font-size: calc(16px * var(--font-scale, 1));
+}
+
+.tour-card p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.tour-card.done h3::after {
+  content: ' ✓';
+  color: var(--ok);
+}
+
+.tour-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.tour-step {
+  color: var(--accent-text);
+  font-size: calc(12px * var(--font-scale, 1));
+  font-weight: 700;
+}
+
+.tour-close {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.tour-close:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.tour-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* Ajuda */
+.sheet.help {
+  width: min(600px, 100%);
+}
+
+.help-panel[hidden] {
+  display: none;
+}
+
+.help-panel {
+  padding-top: 8px;
+}
+
+.help-list {
+  display: grid;
+  grid-template-columns: minmax(150px, max-content) 1fr;
+  gap: 8px 16px;
+  margin: 0;
+}
+
+.help-list dt {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: start;
+}
+
+.help-list dd {
+  margin: 0;
+  color: var(--muted);
+}
+
+kbd {
+  display: inline-block;
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: calc(12px * var(--font-scale, 1));
+  white-space: nowrap;
+}
+
+.help-emotes {
+  margin: 12px 0 0;
+}
+
+.help-tour {
+  align-self: flex-start;
+  margin-top: 8px;
+}
+
+@media (max-width: 600px) {
+  .help-list {
+    grid-template-columns: 1fr;
+  }
+}
