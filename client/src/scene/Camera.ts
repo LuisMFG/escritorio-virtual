@@ -1,17 +1,44 @@
 import type { Application, Container, FederatedPointerEvent, Point } from 'pixi.js';
 
-/** 0,5× só para caber em telas pequenas; o resto é inteiro para a pixel art ficar nítida. */
-const ZOOM_LEVELS = [0.5, 1, 2, 3];
-const DEFAULT_LEVEL = 1;
+/** Níveis de zoom (Fase 41: com intermediários, para a sala caber inteira em notebooks). */
+export const ZOOM_LEVELS = [0.5, 0.75, 1, 1.5, 2, 3];
+const DEFAULT_ZOOM = 1;
+/** Maior zoom que o enquadramento automático escolhe (salas pequenas não viram um borrão). */
+const MAX_FIT_ZOOM = 2;
+/** Folga (px) entre a sala e as bordas da área livre. */
+const FIT_PADDING = 16;
+/** Quanto a distância entre os dedos precisa mudar para a pinça trocar de nível. */
+const PINCH_STEP = 1.2;
+
+/** Faixas da tela cobertas pela interface (px); a câmera enquadra no que sobra. */
+export interface CameraInsets {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}
+
+/**
+ * Zoom em que uma sala `w`×`h` (em 1×) cabe inteira na área livre `areaW`×`areaH`.
+ * Abaixo de 1× é contínuo (de 0,05 em 0,05) para aproveitar a tela; de 1× para cima fica num
+ * dos níveis (1×, 1,5×, 2×) para a pixel art seguir nítida. Entre 0,5× e `MAX_FIT_ZOOM`.
+ */
+export function fitZoom(w: number, h: number, areaW: number, areaH: number): number {
+  const raw = Math.min((areaW - FIT_PADDING * 2) / w, (areaH - FIT_PADDING * 2) / h);
+  const min = ZOOM_LEVELS[0]!;
+  if (!(raw > min)) return min;
+  if (raw < 1) return Math.floor(raw * 20) / 20;
+  return [...ZOOM_LEVELS].reverse().find((z) => z <= Math.min(raw, MAX_FIT_ZOOM)) ?? 1;
+}
 /** Distância (px) a partir da qual um clique vira arrasto. */
 const DRAG_THRESHOLD = 5;
 
 /**
- * Câmera 2D: arrastar para mover, roda do mouse/botões para zoom (0,5× só em telas pequenas; 1×, 2×, 3×),
- * mantendo a pixel art nítida. Cliques sem arrasto são repassados via `onTap`.
+ * Câmera 2D: arrastar para mover; roda do mouse, pinça ou botões para zoom. Ao abrir, a sala é
+ * enquadrada na área livre da tela (descontando a interface). Cliques sem arrasto vão para `onTap`.
  */
 export class Camera {
-  private levelIndex = DEFAULT_LEVEL;
+  private zoomValue = DEFAULT_ZOOM;
   /** A pessoa escolheu o zoom (botões/roda): o enquadramento automático não mexe mais. */
   private userZoomed = false;
   private pointerDown: { x: number; y: number; worldX: number; worldY: number } | null = null;
@@ -20,12 +47,25 @@ export class Camera {
   /** Acumula a roda do mouse para trackpads não pularem vários níveis de uma vez. */
   private wheelAccum = 0;
   private readonly tapListeners: ((global: Point) => void)[] = [];
+  private insets: CameraInsets = { top: 0, right: 0, bottom: 0, left: 0 };
+  /** Dedos na tela (pinça): id → posição. */
+  private readonly touches = new Map<number, { x: number; y: number }>();
+  private pinchBase = 0;
+  /** Durante e logo após a pinça nada vira toque nem arrasto até todos os dedos saírem. */
+  private pinching = false;
   /** Se devolver true no pointerdown, a câmera ignora o gesto (ex.: arrastar um móvel). */
   private pointerGuard: ((global: Point) => boolean) | null = null;
 
   constructor(
     private readonly app: Application,
     private readonly world: Container,
+    /** Retângulo da sala (em coordenadas do mundo) para enquadrar; padrão: tudo do mundo. */
+    private readonly contentBounds: () => {
+      minX: number;
+      minY: number;
+      maxX: number;
+      maxY: number;
+    } = () => world.getLocalBounds(),
   ) {
     const stage = app.stage;
     stage.eventMode = 'static';
@@ -35,6 +75,10 @@ export class Camera {
     stage.on('pointerup', this.onUp, this);
     stage.on('pointerupoutside', this.reset, this);
     app.canvas.addEventListener('wheel', this.handleWheel, { passive: false });
+    app.canvas.addEventListener('pointerdown', this.handleTouchDown);
+    window.addEventListener('pointermove', this.handleTouchMove);
+    window.addEventListener('pointerup', this.handleTouchUp);
+    window.addEventListener('pointercancel', this.handleTouchUp);
     app.renderer.on('resize', this.onResize, this);
   }
 
@@ -46,6 +90,10 @@ export class Camera {
     stage.off('pointerup', this.onUp, this);
     stage.off('pointerupoutside', this.reset, this);
     this.app.canvas.removeEventListener('wheel', this.handleWheel);
+    this.app.canvas.removeEventListener('pointerdown', this.handleTouchDown);
+    window.removeEventListener('pointermove', this.handleTouchMove);
+    window.removeEventListener('pointerup', this.handleTouchUp);
+    window.removeEventListener('pointercancel', this.handleTouchUp);
     this.app.renderer.off('resize', this.onResize, this);
     this.tapListeners.length = 0;
   }
@@ -57,7 +105,7 @@ export class Camera {
   }
 
   get zoom(): number {
-    return ZOOM_LEVELS[this.levelIndex]!;
+    return this.zoomValue;
   }
 
   setPointerGuard(guard: ((global: Point) => boolean) | null): void {
@@ -68,50 +116,100 @@ export class Camera {
     this.tapListeners.push(listener);
   }
 
-  /** Centraliza o conteúdo do mundo na tela. */
+  /** Faixas cobertas pela interface; se a pessoa não mexeu na câmera, reenquadra. */
+  setInsets(insets: CameraInsets): void {
+    const i = this.insets;
+    if (
+      i.top === insets.top &&
+      i.right === insets.right &&
+      i.bottom === insets.bottom &&
+      i.left === insets.left
+    ) {
+      return;
+    }
+    this.insets = { ...insets };
+    if (!this.userMoved && !this.userZoomed) this.center();
+  }
+
+  /** Área livre da tela (sem a interface por cima). */
+  private area() {
+    const { width, height } = this.app.screen;
+    const i = this.insets;
+    // Em telas estreitas a interface cobriria quase tudo: aí usa a tela inteira.
+    const useInsets = width - i.left - i.right >= width * 0.5;
+    const left = useInsets ? i.left : 0;
+    const right = useInsets ? i.right : 0;
+    const top = height - i.top - i.bottom >= height * 0.5 ? i.top : 0;
+    const bottom = top ? i.bottom : 0;
+    return { x: left, y: top, w: width - left - right, h: height - top - bottom };
+  }
+
+  /** Enquadra a sala inteira na área livre (com o maior zoom que couber) e volta ao automático. */
+  fit(): void {
+    this.userZoomed = false;
+    this.center();
+  }
+
+  /** Centraliza o conteúdo do mundo na área livre. */
   center(): void {
-    const b = this.world.getLocalBounds();
-    if (!this.userZoomed) {
-      // 1× sempre que der (cortar um pouco é ok: dá para arrastar); 0,5× só em telas bem
-      // estreitas (celular), onde a sala em 1× ficaria muito maior que a tela.
-      const roomWidth = b.maxX - b.minX;
-      this.levelIndex = this.app.screen.width < roomWidth * 0.75 ? 0 : DEFAULT_LEVEL;
+    const b = this.contentBounds();
+    const a = this.area();
+    if (!this.userZoomed && b.maxX > b.minX) {
+      this.zoomValue = fitZoom(b.maxX - b.minX, b.maxY - b.minY, a.w, a.h);
     }
     this.world.scale.set(this.zoom);
-    const cx = (b.minX + b.maxX) / 2;
-    const cy = (b.minY + b.maxY) / 2;
-    this.world.position.set(
-      Math.round(this.app.screen.width / 2 - cx * this.zoom),
-      Math.round(this.app.screen.height / 2 - cy * this.zoom),
-    );
+    this.lookAt((b.minX + b.maxX) / 2, (b.minY + b.maxY) / 2);
     this.userMoved = false;
+  }
+
+  /** Põe o ponto do mundo (`x`, `y`, em coordenadas da cena) no meio da área livre. */
+  lookAt(x: number, y: number): void {
+    const a = this.area();
+    this.world.position.set(
+      Math.round(a.x + a.w / 2 - x * this.zoom),
+      Math.round(a.y + a.h / 2 - y * this.zoom),
+    );
+  }
+
+  /** Centraliza num ponto do mundo (ex.: o próprio avatar); se estiver longe, aproxima até 1×. */
+  focusOn(x: number, y: number): void {
+    if (this.zoom < 1) {
+      this.userZoomed = true;
+      this.zoomValue = DEFAULT_ZOOM;
+      this.world.scale.set(this.zoom);
+    }
+    this.lookAt(x, y);
+    this.userMoved = true;
   }
 
   zoomIn(): void {
     this.userZoomed = true;
-    this.setLevel(this.levelIndex + 1);
+    this.step(1);
   }
 
   zoomOut(): void {
     this.userZoomed = true;
-    this.setLevel(this.levelIndex - 1);
+    this.step(-1);
   }
 
-  /** Troca o zoom mantendo fixo o ponto de tela `focus` (padrão: centro da tela). */
-  private setLevel(index: number, focus?: { x: number; y: number }): void {
-    const next = Math.max(0, Math.min(ZOOM_LEVELS.length - 1, index));
-    if (next === this.levelIndex) return;
+  /** Vai para o nível vizinho (`dir` = +1 aproxima, −1 afasta) mantendo fixo o ponto `focus`. */
+  private step(dir: 1 | -1, focus?: { x: number; y: number }): void {
+    const z = this.zoomValue;
+    const next =
+      dir > 0
+        ? ZOOM_LEVELS.find((l) => l > z + 0.001)
+        : [...ZOOM_LEVELS].reverse().find((l) => l < z - 0.001);
+    if (next === undefined) return;
     const f = focus ?? { x: this.app.screen.width / 2, y: this.app.screen.height / 2 };
-    const before = this.zoom;
-    this.levelIndex = next;
-    const after = this.zoom;
-    const wx = (f.x - this.world.x) / before;
-    const wy = (f.y - this.world.y) / before;
-    this.world.scale.set(after);
-    this.world.position.set(Math.round(f.x - wx * after), Math.round(f.y - wy * after));
+    const wx = (f.x - this.world.x) / z;
+    const wy = (f.y - this.world.y) / z;
+    this.zoomValue = next;
+    this.world.scale.set(next);
+    this.world.position.set(Math.round(f.x - wx * next), Math.round(f.y - wy * next));
   }
 
   private onDown(e: FederatedPointerEvent): void {
+    if (this.pinching) return;
     if (this.pointerGuard?.(e.global)) {
       this.reset();
       return;
@@ -122,7 +220,7 @@ export class Camera {
 
   private onMove(e: FederatedPointerEvent): void {
     const d = this.pointerDown;
-    if (!d) return;
+    if (!d || this.pinching) return;
     const dx = e.global.x - d.x;
     const dy = e.global.y - d.y;
     if (!this.dragging && Math.hypot(dx, dy) > DRAG_THRESHOLD) this.dragging = true;
@@ -133,7 +231,7 @@ export class Camera {
   }
 
   private onUp(e: FederatedPointerEvent): void {
-    const wasTap = this.pointerDown && !this.dragging;
+    const wasTap = this.pointerDown && !this.dragging && !this.pinching;
     this.reset();
     if (wasTap) for (const l of this.tapListeners) l(e.global);
   }
@@ -150,8 +248,46 @@ export class Camera {
     const rect = this.app.canvas.getBoundingClientRect();
     const focus = { x: e.clientX - rect.left, y: e.clientY - rect.top };
     this.userZoomed = true;
-    this.setLevel(this.levelIndex + (this.wheelAccum < 0 ? 1 : -1), focus);
+    this.step(this.wheelAccum < 0 ? 1 : -1, focus);
     this.wheelAccum = 0;
     this.userMoved = true;
+  }
+
+  // ---------- Pinça (dois dedos) ----------
+
+  private readonly handleTouchDown = (e: PointerEvent) => {
+    if (e.pointerType !== 'touch') return;
+    this.touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (this.touches.size === 2) {
+      this.pinching = true;
+      this.pinchBase = this.touchDistance();
+      this.reset();
+    }
+  };
+
+  private readonly handleTouchMove = (e: PointerEvent) => {
+    if (!this.touches.has(e.pointerId)) return;
+    this.touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (this.touches.size !== 2 || !this.pinchBase) return;
+    const ratio = this.touchDistance() / this.pinchBase;
+    if (ratio < PINCH_STEP && ratio > 1 / PINCH_STEP) return;
+    const [p, q] = [...this.touches.values()];
+    const rect = this.app.canvas.getBoundingClientRect();
+    const focus = { x: (p!.x + q!.x) / 2 - rect.left, y: (p!.y + q!.y) / 2 - rect.top };
+    this.userZoomed = true;
+    this.userMoved = true;
+    this.step(ratio > 1 ? 1 : -1, focus);
+    this.pinchBase = this.touchDistance();
+  };
+
+  private readonly handleTouchUp = (e: PointerEvent) => {
+    if (!this.touches.delete(e.pointerId)) return;
+    this.pinchBase = 0;
+    if (this.touches.size === 0) this.pinching = false;
+  };
+
+  private touchDistance(): number {
+    const [p, q] = [...this.touches.values()];
+    return p && q ? Math.hypot(p.x - q.x, p.y - q.y) : 0;
   }
 }

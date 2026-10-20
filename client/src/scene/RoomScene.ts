@@ -93,6 +93,8 @@ export class RoomScene implements DecorHost {
   readonly decor: DecorMode;
   readonly overlay = new Graphics({ label: 'decor-overlay' });
   private grid: RoomGrid;
+  /** Piso e paredes: o que a câmera enquadra. */
+  private readonly roomArt: Container;
   private readonly objects = new Container({ label: 'objects', sortableChildren: true });
   /** Itens de parede (quadros, janelas): atrás de tudo que está no piso. */
   private readonly wallItems = new Container({ label: 'wall-items' });
@@ -142,8 +144,10 @@ export class RoomScene implements DecorHost {
     this.grid = this.buildGrid();
 
     const room: RoomDefinition = { ...layout, id: layout.roomId, furni: [] };
+    const roomArt = drawRoom(this.map, room);
+    this.roomArt = roomArt;
     this.world.addChild(
-      drawRoom(this.map, room),
+      roomArt,
       this.wallItems,
       this.hover,
       this.target,
@@ -165,7 +169,7 @@ export class RoomScene implements DecorHost {
     app.stage.addChild(this.world);
 
     this.decor = new DecorMode(this, actions, decorListener);
-    this.camera = new Camera(app, this.world);
+    this.camera = new Camera(app, this.world, () => this.roomArt.getLocalBounds());
     this.camera.setPointerGuard((g) => this.decor.pointerDown(g));
     this.camera.onTap((p) => this.handleTap(p));
     app.stage.on('globalpointermove', this.onPointerMove, this);
@@ -359,6 +363,15 @@ export class RoomScene implements DecorHost {
   }
 
   // ---------- Avatares ----------
+
+  /** Câmera no próprio avatar (botão "centralizar em mim"). */
+  centerOnSelf(): void {
+    const view = this.localId ? this.avatars.get(this.localId) : undefined;
+    if (!view) return this.camera.center();
+    const p = this.world.toLocal(view.getGlobalPosition());
+    // O ponto do avatar é o pé: sobe meio corpo para o rosto ficar no meio.
+    this.camera.focusOn(p.x, p.y - 40);
+  }
 
   addAvatar(id: string, snapshot: AvatarSnapshot, isLocal: boolean): void {
     if (this.avatars.has(id)) return this.updateAvatar(id, snapshot);

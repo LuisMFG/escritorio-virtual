@@ -112,6 +112,25 @@ function currentLight() {
   return dayLight(HOUR_OVERRIDE ?? officeHour(new Date(), localZone));
 }
 
+/**
+ * Faixas da tela cobertas pela interface (Fase 41): conversa aberta à esquerda, barra de baixo,
+ * coluna de câmera à direita e o nome da sala em cima. A câmera enquadra a sala no que sobra.
+ */
+function uiInsets() {
+  const rect = (sel: string) => document.querySelector(sel)?.getBoundingClientRect();
+  const history = document.querySelector<HTMLDetailsElement>('.chat-history');
+  const dock = rect('.hud-actions');
+  const tools = rect('.hud-zoom');
+  const chatBar = rect('.chat-bar');
+  const bottomEdge = Math.min(dock?.top ?? innerHeight, chatBar?.top ?? innerHeight);
+  return {
+    top: Math.round(rect('.hud-card')?.bottom ?? 0),
+    right: tools ? Math.round(innerWidth - tools.left) : 0,
+    bottom: Math.round(innerHeight - bottomEdge),
+    left: history?.open ? Math.round(history.getBoundingClientRect().right) : 0,
+  };
+}
+
 function snapshot(p: Player): AvatarSnapshot {
   return {
     name: p.name,
@@ -257,6 +276,9 @@ async function start(): Promise<void> {
     votePoll: (id, option) => connection?.votePoll(id, option),
     closePoll: (id) => connection?.closePoll(id),
   });
+  const refit = () => scene?.camera.setInsets(uiInsets());
+  chat.onToggle(() => requestAnimationFrame(refit));
+  window.addEventListener('resize', () => requestAnimationFrame(refit));
 
   // Setas ← →: vira o avatar sem sair do lugar (parado ou sentado no chão).
   document.addEventListener('keydown', (e) => {
@@ -453,6 +475,7 @@ async function start(): Promise<void> {
   );
   const hud = mountHud({
     getCamera: () => scene?.camera,
+    onCenterSelf: () => scene?.centerOnSelf(),
     loader,
     onToggleDecor: () => setDecorating(!decorating),
     onToggleSound: () => sound.toggle(),
@@ -754,6 +777,7 @@ async function start(): Promise<void> {
     hud.setRoomName(layout.name);
     history.replaceState(null, '', `#/${layout.roomId}`);
     overlay.setPeople([], layout.name);
+    s.camera.setInsets(uiInsets());
     await s.load();
     if (scene !== s) return;
     s.setDayLight(currentLight());
