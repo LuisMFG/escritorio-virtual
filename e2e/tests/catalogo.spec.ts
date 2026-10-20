@@ -21,7 +21,9 @@ test('catálogo completo: busca, quadro na parede, cores e categorias escondidas
 
   // Quadro na parede: escolhe, aponta a parede do fundo e clica.
   await search.fill('familia da recepcao');
-  await page.getByRole('button', { name: /A Família da Recepção/ }).click();
+  await page
+    .locator('.decor-cell > button:first-child', { hasText: 'A Família da Recepção' })
+    .click();
   await expect(page.locator('.decor-status')).toContainText('Colocando: A Família da Recepção');
   const wall = await page.evaluate(() => window.__e2e!.wall(5, 1, 2, 1.5));
   await page.mouse.move(wall.x, wall.y);
@@ -37,7 +39,10 @@ test('catálogo completo: busca, quadro na parede, cores e categorias escondidas
 
   // Móvel com cores: coloca, seleciona e troca a cor no lugar.
   await search.fill('circular pura escuro');
-  await page.getByRole('button', { name: /Circular Pura Escuro/ }).click();
+  await page
+    .locator('.decor-cell > button:first-child', { hasText: 'Circular Pura Escuro' })
+    .first()
+    .click();
   await expect(page.locator('.decor-status')).toContainText('Colocando');
   await clickTile(page, 14, 12);
   await expect.poll(() => betoSees('purablk_c16_round')).toMatchObject({ x: 14, y: 12 });

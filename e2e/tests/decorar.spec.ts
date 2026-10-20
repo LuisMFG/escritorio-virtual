@@ -9,7 +9,7 @@ test('decorar: colocar uma cadeira aparece para os outros; remover e desfazer', 
   const before = await count();
 
   await ana.page.getByRole('button', { name: 'Decorar' }).click();
-  await ana.page.getByRole('button', { name: /Cadeira Norja/ }).click();
+  await ana.page.getByRole('button', { name: 'Cadeira Norja', exact: true }).click();
   await clickTile(ana.page, 14, 11);
   await expect.poll(count).toBe(before + 1);
   const placed = await beto.page.evaluate(() =>

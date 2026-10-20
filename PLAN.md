@@ -1135,10 +1135,12 @@ Pedido em 20/10/2026, com o escritório já em uso pelo pessoal do trabalho (ser
 - **Feito:** até 700px de largura a barra de baixo vira uma faixa só com **5 botões** (Perfil, Foco, Equipe, Mapa, Mensagens) e **Mais** (Minha mesa, Avisos com contador, Agenda, Decorar, Ajuda e os de admin), alvos de 44px e respeitando a área segura do aparelho. Toda janela vira **gaveta de baixo** (largura da tela, puxador, sobe animada; arrastar o cabeçalho para baixo fecha). **Teclado:** `interactive-widget=resizes-content` e, no iOS, `visualViewport` sobe o campo do chat e esconde a barra enquanto o teclado está aberto; campos com 16px para o iOS não dar zoom. **Segurar sobre alguém** abre o cartão (sem andar); pinça já funcionava. Zoom mínimo 0,4× para a sala caber melhor no celular. Deitado (pouca altura): lista de pessoas começa recolhida e as gavetas usam a altura toda. Teste `e2e/tests/celular.spec.ts`.
 
 
-#### Fase 47 — Decorar sem esforço
+#### Fase 47 — Decorar sem esforço ✅ implementada
 - Painel redesenhado: grade que não espreme, filtros como chips, **favoritos e recentes**, prévia maior do móvel e das cores.
 - Ferramentas grandes para girar, mover e remover, **desfazer/refazer**, grade de tiles visível ao arrastar e atalhos sempre à vista.
 - **Como testar:** montar um canto da sala usando recentes, girar, desfazer e refazer.
+- **Feito:** painel mais largo com categorias em **chips** (rolam de lado), grade de cartões que não espreme, **Recentes** (os 16 últimos colocados) e **Favoritos** (estrela em cada cartão), guardados no navegador; **prévia grande** do móvel escolhido/selecionado e cores maiores. **Ferramentas grandes** sempre à vista: Girar, Remover, **Desfazer** e **Refazer** (também Ctrl+Z e Ctrl+Shift+Z/Ctrl+Y), com histórico de colocar, mover/girar, remover e trocar cor (`scene/DecorHistory.ts`, que segue o id novo de um móvel tirado e posto de volta); o "Desfazer" do aviso de remoção usa o mesmo histórico. **Grade de tiles** aparece enquanto coloca ou arrasta; atalhos em `kbd` no rodapé. No celular o painel é uma gaveta de baixo. Testes `DecorHistory.test.ts` e `e2e/tests/decorar2.spec.ts`.
+
 
 #### Fase 48 — Acessibilidade e polimento final
 - Navegação completa por teclado nos painéis, nomes certos para leitores de tela, contraste adequado, foco visível.
