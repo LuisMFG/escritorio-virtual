@@ -11,6 +11,7 @@ import {
   type TeleportInfo,
 } from '@office/shared';
 import type { DecorSelection } from '../scene/DecorMode.js';
+import { icon, type IconName } from './icons.js';
 import { ThumbQueue } from './thumbQueue.js';
 
 export interface DecorPanelHandlers {
@@ -20,6 +21,9 @@ export interface DecorPanelHandlers {
   /** Outra cor do móvel selecionado. */
   color(defId: string): void;
   close(): void;
+  /** Desfazer/refazer do Decorar (Fase 47). */
+  undo(): void;
+  redo(): void;
   /** Prepara um móvel do catálogo completo (o servidor mede na primeira vez). */
   prepare(defId: string): Promise<boolean>;
   /** O catálogo completo e as categorias escondidas pelo admin. */
@@ -33,6 +37,30 @@ export interface DecorPanelHandlers {
 const OFFICE = '__escritorio__';
 /** Aba "Parede": quadros, janelas, prateleiras… de qualquer categoria. */
 const WALL = '__parede__';
+/** Abas da Fase 47: os últimos colocados e os marcados com estrela (guardados no navegador). */
+const RECENT = '__recentes__';
+const FAVORITES = '__favoritos__';
+const RECENT_KEY = 'ev-decor-recentes';
+const FAV_KEY = 'ev-decor-favoritos';
+const RECENT_MAX = 16;
+
+function loadIds(key: string): string[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(key) ?? '[]') as unknown;
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveIds(key: string, ids: string[]): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(ids));
+  } catch {
+    // sem armazenamento: vale só para esta visita
+  }
+}
+
 /** Itens por página da grade ("Mostrar mais" carrega a próxima). */
 export const DECOR_PAGE = 60;
 
@@ -54,7 +82,12 @@ interface GridItem {
 export class DecorPanel {
   private readonly root = document.createElement('aside');
   private readonly search = document.createElement('input');
-  private readonly select = document.createElement('select');
+  private readonly chips = document.createElement('div');
+  private readonly preview = document.createElement('div');
+  private readonly tools = document.createElement('div');
+  private readonly toolButtons = new Map<string, HTMLButtonElement>();
+  private recent = loadIds(RECENT_KEY);
+  private favorites = new Set(loadIds(FAV_KEY));
   private readonly grid = document.createElement('div');
   private readonly more = document.createElement('button');
   private readonly status = document.createElement('div');
@@ -102,13 +135,31 @@ export class DecorPanel {
       if (this.query.trim()) void this.ensureCatalog();
       this.render();
     });
-    this.select.className = 'decor-category';
-    this.select.setAttribute('aria-label', 'Categoria');
-    this.select.addEventListener('change', () => {
-      this.category = this.select.value;
-      this.shown = DECOR_PAGE;
-      this.render();
-    });
+    this.chips.className = 'decor-chips';
+    this.chips.setAttribute('role', 'group');
+    this.chips.setAttribute('aria-label', 'Categorias');
+    if (this.recent.length) this.category = RECENT;
+    this.preview.className = 'decor-preview';
+    // Ferramentas grandes (sempre à vista): girar, remover, desfazer e refazer.
+    this.tools.className = 'decor-tools';
+    const tool = (id: string, name: IconName, label: string, onClick: () => void) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'decor-tool';
+      b.append(
+        icon(name, 20),
+        Object.assign(document.createElement('span'), { textContent: label }),
+      );
+      b.setAttribute('aria-label', label);
+      b.addEventListener('click', onClick);
+      this.toolButtons.set(id, b);
+      this.tools.append(b);
+    };
+    tool('rotate', 'rotate-cw', 'Girar', () => this.on.rotate());
+    tool('remove', 'trash', 'Remover', () => this.on.remove());
+    tool('undo', 'undo', 'Desfazer', () => this.on.undo());
+    tool('redo', 'redo', 'Refazer', () => this.on.redo());
+    this.setHistory(false, false);
     this.grid.className = 'decor-grid';
     Object.assign(this.more, {
       type: 'button',
@@ -121,12 +172,29 @@ export class DecorPanel {
       this.render();
     });
     this.status.className = 'decor-status';
-    const help = Object.assign(document.createElement('p'), {
-      className: 'muted decor-help',
-      textContent:
-        'Escolha um item e clique no piso (ou na parede) para colocar. Clique num móvel para selecionar, arraste para mover. R gira · Delete remove · Esc cancela.',
-    });
-    this.root.append(head, this.search, this.select, this.grid, this.more, this.status, help);
+    // Atalhos sempre à vista.
+    const help = document.createElement('p');
+    help.className = 'muted decor-help';
+    for (const [k, v] of [
+      ['R', 'gira'],
+      ['Delete', 'remove'],
+      ['Ctrl+Z', 'desfaz'],
+      ['Ctrl+Shift+Z', 'refaz'],
+      ['Esc', 'cancela'],
+    ] as const) {
+      help.append(Object.assign(document.createElement('kbd'), { textContent: k }), ` ${v} `);
+    }
+    this.root.append(
+      head,
+      this.search,
+      this.chips,
+      this.grid,
+      this.more,
+      this.preview,
+      this.status,
+      this.tools,
+      help,
+    );
     document.body.append(this.root);
     this.fillCategories();
     this.render();
@@ -143,22 +211,59 @@ export class DecorPanel {
     this.picked = defId;
     this.markPressed();
     if (defId) {
+      this.showPreview(defId);
       this.status.replaceChildren(
         Object.assign(document.createElement('span'), {
           textContent: `Colocando: ${this.nameOf(defId)}`,
         }),
         this.swatches(defId, (id) => void this.pickItem(id)),
-        this.button('Girar (R)', () => this.on.rotate()),
         this.button('Cancelar', () => this.on.pick(null)),
       );
     } else {
       this.renderSelected();
     }
+    this.renderTools();
+  }
+
+  /** Estado do desfazer/refazer. */
+  setHistory(canUndo: boolean, canRedo: boolean): void {
+    this.toolButtons.get('undo')!.disabled = !canUndo;
+    this.toolButtons.get('redo')!.disabled = !canRedo;
+  }
+
+  /** Colocou um móvel: vai para o começo dos recentes. */
+  markRecent(defId: string): void {
+    const base = this.byId.get(defId)?.id ?? defId;
+    this.recent = [base, ...this.recent.filter((id) => id !== base)].slice(0, RECENT_MAX);
+    saveIds(RECENT_KEY, this.recent);
+    this.fillCategories();
+    if (this.category === RECENT) this.render();
+  }
+
+  private renderTools(): void {
+    this.toolButtons.get('rotate')!.disabled = !this.picked && !this.selected;
+    this.toolButtons.get('remove')!.disabled = !this.selected || Boolean(this.picked);
+  }
+
+  /** Prévia grande do móvel escolhido/selecionado. */
+  private showPreview(defId: string | null): void {
+    if (!defId) {
+      this.preview.hidden = true;
+      this.preview.replaceChildren();
+      return;
+    }
+    const item = this.gridItem(defId);
+    this.preview.hidden = false;
+    this.preview.replaceChildren(
+      item ? this.thumb(item) : document.createElement('span'),
+      Object.assign(document.createElement('strong'), { textContent: this.nameOf(defId) }),
+    );
   }
 
   setSelected(selected: DecorSelection | null): void {
     this.selected = selected;
     if (!this.picked) this.renderSelected();
+    this.renderTools();
   }
 
   /** O admin mudou as categorias escondidas. */
@@ -173,11 +278,13 @@ export class DecorPanel {
 
   private renderSelected(): void {
     const sel = this.selected;
+    this.showPreview(sel?.defId ?? null);
     if (!sel) {
       this.status.replaceChildren(
         Object.assign(document.createElement('span'), {
           className: 'muted',
-          textContent: 'Nenhum móvel selecionado.',
+          textContent:
+            'Escolha um item e clique no piso (ou na parede). Clique num móvel para selecionar e arraste para mover.',
         }),
       );
       return;
@@ -187,8 +294,6 @@ export class DecorPanel {
         textContent: `Selecionado: ${this.nameOf(sel.defId, sel.name)}`,
       }),
       this.swatches(sel.defId, (id) => this.on.color(id)),
-      this.button('Girar (R)', () => this.on.rotate()),
-      this.button('Remover', () => this.on.remove()),
     );
     if (sel.interaction === 'teleport') this.status.append(this.teleportBox(sel.id));
   }
@@ -290,18 +395,75 @@ export class DecorPanel {
       if (item.wall) walls++;
       else counts.set(item.c, (counts.get(item.c) ?? 0) + 1);
     }
-    const option = (value: string, label: string) =>
-      Object.assign(document.createElement('option'), { value, textContent: label });
-    const options = [option(OFFICE, `Escritório (${this.items.length})`)];
-    if (walls) options.push(option(WALL, `Parede (${walls})`));
+    const chip = (value: string, label: string) => {
+      const b = Object.assign(document.createElement('button'), {
+        type: 'button',
+        className: 'decor-chip',
+        textContent: label,
+      });
+      b.dataset.value = value;
+      b.setAttribute('aria-pressed', String(value === this.category));
+      b.addEventListener('click', () => {
+        this.category = value;
+        this.shown = DECOR_PAGE;
+        if (this.query) {
+          this.query = this.search.value = '';
+        }
+        this.fillCategories();
+        this.render();
+      });
+      return b;
+    };
+    const chips: HTMLButtonElement[] = [];
+    if (this.recent.length) chips.push(chip(RECENT, `Recentes (${this.recent.length})`));
+    if (this.favorites.size) chips.push(chip(FAVORITES, `★ Favoritos (${this.favorites.size})`));
+    chips.push(chip(OFFICE, `Escritório (${this.items.length})`));
+    if (walls) chips.push(chip(WALL, `Parede (${walls})`));
     for (const [c, label] of Object.entries(CATALOG_CATEGORIES)) {
       const n = counts.get(c);
-      if (n) options.push(option(c, `${label} (${n})`));
+      if (n) chips.push(chip(c, `${label} (${n})`));
     }
-    if (!this.catalog.length) options.push(option('', 'Carregando o catálogo completo…'));
-    this.select.replaceChildren(...options);
-    this.select.value = this.category;
-    this.select.lastElementChild?.toggleAttribute('disabled', !this.catalog.length);
+    if (
+      (this.category === RECENT && !this.recent.length) ||
+      (this.category === FAVORITES && !this.favorites.size)
+    ) {
+      this.category = OFFICE;
+      chips.find((c) => c.dataset.value === OFFICE)?.setAttribute('aria-pressed', 'true');
+    }
+    if (!this.catalog.length) {
+      chips.push(
+        Object.assign(document.createElement('span'), {
+          className: 'muted decor-chip-loading',
+          textContent: 'Carregando o catálogo completo…',
+        }) as unknown as HTMLButtonElement,
+      );
+    }
+    this.chips.replaceChildren(...chips);
+  }
+
+  /** Um item da grade a partir do id (curado ou do catálogo). */
+  private gridItem(id: string): GridItem | null {
+    const curated = this.items.find((i) => i.id === id);
+    if (curated) return this.curatedItem(curated);
+    const c = this.byId.get(id);
+    return c
+      ? { id: c.id, name: c.n, thumb: { classname: c.id, revision: c.rev }, colors: c.colors }
+      : null;
+  }
+
+  private curatedItem(i: FurniManifestEntry): GridItem {
+    return {
+      id: i.id,
+      name: i.name,
+      thumb:
+        i.source === 'habboassets'
+          ? { classname: i.sprite ?? i.id, direction: renderDirection(i, 2), revision: i.revision }
+          : null,
+      local:
+        i.source === 'local'
+          ? `/assets/local/furni/${i.id}_${renderDirection(i, 2)}.png`
+          : undefined,
+    };
   }
 
   /** Itens da aba atual (ou da busca, que procura em tudo). */
@@ -310,22 +472,7 @@ export class DecorPanel {
     const curated = (): GridItem[] =>
       this.items
         .filter((i) => !terms.length || catalogMatches({ id: i.id, n: i.name }, terms))
-        .map((i) => ({
-          id: i.id,
-          name: i.name,
-          thumb:
-            i.source === 'habboassets'
-              ? {
-                  classname: i.sprite ?? i.id,
-                  direction: renderDirection(i, 2),
-                  revision: i.revision,
-                }
-              : null,
-          local:
-            i.source === 'local'
-              ? `/assets/local/furni/${i.id}_${renderDirection(i, 2)}.png`
-              : undefined,
-        }));
+        .map((i) => this.curatedItem(i));
     const fromCatalog = (filter: (i: CatalogItem) => boolean): GridItem[] =>
       this.catalog
         .filter((i) => !this.hidden.has(i.c) && filter(i))
@@ -342,17 +489,21 @@ export class DecorPanel {
         ...fromCatalog((i) => !curatedIds.has(i.id) && catalogMatches(i, terms)),
       ];
     }
+    const byIds = (ids: Iterable<string>) =>
+      [...ids].map((id) => this.gridItem(id)).filter((x): x is GridItem => x !== null);
+    if (this.category === RECENT) return byIds(this.recent);
+    if (this.category === FAVORITES) return byIds(this.favorites);
     if (this.category === OFFICE) return curated();
     if (this.category === WALL) return fromCatalog((i) => Boolean(i.wall));
     return fromCatalog((i) => i.c === this.category && !i.wall);
   }
 
   private render(): void {
-    this.select.disabled = Boolean(this.query.trim());
+    this.chips.classList.toggle('searching', Boolean(this.query.trim()));
     const all = this.visibleItems();
     const page = all.slice(0, this.shown);
     this.thumbs.clear();
-    this.grid.replaceChildren(...page.map((item) => this.itemButton(item)));
+    this.grid.replaceChildren(...page.map((item) => this.itemCell(item)));
     if (!all.length) {
       this.grid.append(
         Object.assign(document.createElement('p'), {
@@ -392,6 +543,36 @@ export class DecorPanel {
     return b;
   }
 
+  /** Card da grade: o item e a estrela de favorito. */
+  private itemCell(item: GridItem): HTMLElement {
+    const cell = document.createElement('div');
+    cell.className = 'decor-cell';
+    const star = document.createElement('button');
+    star.type = 'button';
+    star.className = 'decor-star';
+    const render = () => {
+      const on = this.favorites.has(item.id);
+      star.textContent = on ? '★' : '☆';
+      star.setAttribute('aria-pressed', String(on));
+      star.setAttribute(
+        'aria-label',
+        on ? `Tirar ${item.name} dos favoritos` : `Favoritar ${item.name}`,
+      );
+      star.title = on ? 'Tirar dos favoritos' : 'Favoritar';
+    };
+    render();
+    star.addEventListener('click', () => {
+      if (this.favorites.has(item.id)) this.favorites.delete(item.id);
+      else this.favorites.add(item.id);
+      saveIds(FAV_KEY, [...this.favorites]);
+      render();
+      this.fillCategories();
+      if (this.category === FAVORITES) this.render();
+    });
+    cell.append(this.itemButton(item), star);
+    return cell;
+  }
+
   private thumb(item: GridItem): HTMLElement {
     const img = Object.assign(document.createElement('img'), { alt: '' });
     const sources: string[] = [];
@@ -409,6 +590,7 @@ export class DecorPanel {
         Object.assign(document.createElement('span'), {
           className: 'decor-nothumb',
           textContent: '🪑',
+          ariaHidden: 'true',
         }),
       );
     if (!sources.length) {
