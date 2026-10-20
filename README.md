@@ -205,7 +205,7 @@ A imagem roda como usuário `node`, tem healthcheck em `GET /healthz` e encerra 
 
 ### VPS (Oracle Cloud grátis, DigitalOcean, Hetzner…)
 
-O `docker-compose.yml` sobe o app e o **Caddy**, que pega o certificado HTTPS sozinho para o `DOMAIN` do `.env` (sem domínio próprio, use `escritorio.<ip-com-hifens>.sslip.io`). Só as portas 80 e 443 ficam abertas.
+O `docker-compose.yml` sobe o app e, conforme `COMPOSE_PROFILES` no `.env`, o jeito de chegar pela internet: `caddy` (VPS com IP público: HTTPS automático para o `DOMAIN`; sem domínio próprio, use `escritorio.<ip-com-hifens>.sslip.io`), `tunel-rapido` (Cloudflare Tunnel grátis e sem conta, para um PC de casa; `./scripts/tunel-url.sh` mostra o endereço) ou `tunel` (Cloudflare Tunnel fixo, com `TUNNEL_TOKEN`). Servidor num PC Windows com WSL2 e Docker: veja [docs/SERVIDOR-WINDOWS.md](docs/SERVIDOR-WINDOWS.md).
 
 Passo a passo completo para a **Oracle Cloud Always Free** (criar a VM, liberar portas, `.env`, primeiro deploy, backup e problemas comuns): **[docs/DEPLOY-ORACLE.md](docs/DEPLOY-ORACLE.md)**. Em resumo, com o `.env` criado na VM:
 

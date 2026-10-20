@@ -1,6 +1,13 @@
-# Produção num VPS (Oracle Cloud, DigitalOcean, Hetzner…): `docker compose up -d --build`.
-# O Caddy pega o certificado HTTPS sozinho para o DOMAIN do .env e repassa tudo
-# (inclusive o WebSocket) para o app. A porta 2567 não fica exposta na internet.
+# Produção com Docker: `docker compose up -d --build`.
+#
+# O app sempre sobe; a porta 2567 fica no próprio computador (127.0.0.1) — mude APP_BIND para
+# 0.0.0.0 no .env para abrir na rede local. Para a internet, escolha UM perfil em
+# COMPOSE_PROFILES no .env:
+#   caddy         VPS com IP público (Oracle, Hetzner…): HTTPS automático para o DOMAIN.
+#   tunel-rapido  PC de casa sem abrir portas: Cloudflare Tunnel grátis, sem conta; o endereço
+#                 https://….trycloudflare.com muda a cada vez que o túnel reinicia.
+#   tunel         Cloudflare Tunnel fixo (precisa de conta e domínio na Cloudflare e do
+#                 TUNNEL_TOKEN no .env).
 services:
   escritorio:
     build: .
@@ -12,11 +19,12 @@ services:
       NODE_ENV: production
     volumes:
       - ./data:/app/data
-    expose:
-      - '2567'
+    ports:
+      - '${APP_BIND:-127.0.0.1}:${APP_PORT:-2567}:2567'
 
   caddy:
     image: caddy:2-alpine
+    profiles: [caddy]
     restart: unless-stopped
     depends_on:
       - escritorio
@@ -25,11 +33,29 @@ services:
       - '443:443'
       - '443:443/udp'
     environment:
-      DOMAIN: '${DOMAIN:?Defina DOMAIN no .env, por exemplo escritorio.203-0-113-10.sslip.io}'
+      DOMAIN: '${DOMAIN:-localhost}'
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
+
+  tunel-rapido:
+    image: cloudflare/cloudflared:2024.12.2
+    profiles: [tunel-rapido]
+    restart: unless-stopped
+    depends_on:
+      - escritorio
+    command: tunnel --no-autoupdate --url http://escritorio:2567
+
+  tunel:
+    image: cloudflare/cloudflared:2024.12.2
+    profiles: [tunel]
+    restart: unless-stopped
+    depends_on:
+      - escritorio
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: '${TUNNEL_TOKEN:-}'
 
 volumes:
   caddy_data:

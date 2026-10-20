@@ -38,7 +38,7 @@ rsync -az --delete \
 echo "==> Subindo os containers"
 "${SSH[@]}" "$TARGET" "cd $REMOTE_DIR && \
   if [ ! -f .env ]; then echo 'Falta ~/$REMOTE_DIR/.env no servidor (INVITE_CODE e DOMAIN). Veja docs/DEPLOY-ORACLE.md.'; exit 1; fi && \
-  docker compose up -d --build --remove-orphans && docker compose ps && docker image prune -f >/dev/null"
+  COMPOSE_PROFILES=\${COMPOSE_PROFILES:-caddy} docker compose up -d --build --remove-orphans && docker compose ps && docker image prune -f >/dev/null"
 
 DOMAIN="$("${SSH[@]}" "$TARGET" "grep -E '^DOMAIN=' $REMOTE_DIR/.env | cut -d= -f2-")"
 echo "==> No ar: https://$DOMAIN (o primeiro certificado pode levar ~1 minuto)"
