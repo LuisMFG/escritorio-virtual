@@ -82,6 +82,13 @@ import { LobbyConnection, type OnlineInfo } from './net/LobbyConnection.js';
 import { confirmDialog } from './ui/confirm.js';
 import { ChatSound } from './ui/sound.js';
 import { Overlay } from './ui/overlay.js';
+import {
+  applyTheme,
+  currentTheme,
+  loadTheme,
+  onThemeChange,
+  THEME_BACKGROUND,
+} from './ui/theme.js';
 
 /** Sala pedida na URL (`#/meeting`), para recarregar no mesmo lugar. */
 function roomFromHash(): string {
@@ -132,16 +139,18 @@ function snapshot(p: Player): AvatarSnapshot {
 async function start(): Promise<void> {
   TextureSource.defaultOptions.scaleMode = 'nearest';
 
+  applyTheme(loadTheme());
   const app = new Application();
   await app.init({
     resizeTo: window,
-    background: 0x1b1d24,
+    background: THEME_BACKGROUND[currentTheme()],
     antialias: false,
     roundPixels: true,
     autoDensity: true,
     resolution: Math.min(window.devicePixelRatio || 1, 2),
   });
   document.getElementById('app')!.appendChild(app.canvas);
+  onThemeChange((t) => (app.renderer.background.color = THEME_BACKGROUND[t]));
 
   const [furniManifest, avatarManifest] = await Promise.all([
     fetchJson('/assets/furni/manifest.json').then(parseFurniManifest),

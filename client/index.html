@@ -10,6 +10,13 @@
     />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>Escritório Virtual</title>
+    <script>
+      // Tema salvo antes de pintar a página (evita piscar escuro→claro).
+      try {
+        if (localStorage.getItem('ev-theme') === 'light')
+          document.documentElement.dataset.theme = 'light';
+      } catch {}
+    </script>
   </head>
   <body>
     <div id="app"></div>
