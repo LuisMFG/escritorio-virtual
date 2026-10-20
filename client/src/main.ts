@@ -94,7 +94,7 @@ import {
 } from './ui/theme.js';
 import { DeskChip } from './ui/desk.js';
 import { openSettings } from './ui/settings.js';
-import { applyPrefs } from './ui/prefs.js';
+import { applyPrefs, loadDayLight } from './ui/prefs.js';
 import { openHelp, tipOnce } from './ui/help.js';
 import { takeTourPending, Tour } from './ui/tour.js';
 import { BootScreen } from './ui/boot.js';
@@ -120,8 +120,12 @@ function placed(f: Furni): PlacedFurni {
   return { id: f.id, defId: f.defId, x: f.x, y: f.y, z: f.z, rot: f.rot, state: f.state };
 }
 
-/** Luz do dia agora, no fuso de quem está olhando (ou na hora forçada por `?hora=`). */
+/**
+ * Luz do dia agora, no fuso de quem está olhando (ou na hora forçada por `?hora=`). Desligada
+ * em Configurações (o padrão), a sala fica sempre com a cor do dia.
+ */
 function currentLight() {
+  if (HOUR_OVERRIDE === null && !loadDayLight()) return dayLight(12);
   const localZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   return dayLight(HOUR_OVERRIDE ?? officeHour(new Date(), localZone));
 }
@@ -675,6 +679,7 @@ async function start(): Promise<void> {
         ambient,
         notifier,
         assetStatus: () => (session?.role === 'admin' ? hud.assetStatus : null),
+        onDayLightChange: () => scene?.setDayLight(currentLight()),
       }),
     onEditRoom: () => {
       if (!session || !connection) return;

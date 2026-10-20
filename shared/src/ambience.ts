@@ -44,8 +44,9 @@ function mixColor(a: number, b: number, t: number): number {
 }
 
 const DAY = 0xffffff;
-const DUSK = 0xffc9a0;
-const NIGHT = 0x6f7fb8;
+// Bem leves (20/10/2026): o entardecer amarelava demais a sala.
+const DUSK = 0xffeedd;
+const NIGHT = 0xb4bddf;
 
 /**
  * Luz do ambiente pela hora: dia claro das 8h às 17h, entardecer até as 19h, noite até as 5h

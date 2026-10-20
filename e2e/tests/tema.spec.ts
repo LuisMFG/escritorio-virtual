@@ -21,6 +21,13 @@ test('configurações: tema claro e texto maior ficam salvos; perfil em abas', a
   await settings.getByRole('radio', { name: 'Maior' }).check({ force: true });
   await settings.getByRole('radio', { name: 'Reduzir' }).check({ force: true });
   await expect(html).toHaveAttribute('data-motion', 'reduce');
+  // Luz do dia e noite: desligada por padrão; liga e desliga.
+  const daylight = settings.getByRole('switch', { name: /Luz do dia e noite/ });
+  await expect(daylight).not.toBeChecked();
+  await daylight.click();
+  expect(await page.evaluate(() => localStorage.getItem('ev-dia-noite'))).toBe('1');
+  await daylight.click();
+  expect(await page.evaluate(() => localStorage.getItem('ev-dia-noite'))).toBe('0');
   // Som de mensagem: o sino da coluna acompanha.
   await settings.getByRole('switch', { name: 'Som de mensagem e menções' }).click();
   await page.keyboard.press('Escape');

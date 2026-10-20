@@ -5,7 +5,9 @@ import { NOTIFY_LABELS, type SystemNotifier } from './notifications.js';
 import {
   FONT_SCALES,
   loadFontScale,
+  loadDayLight,
   loadMotion,
+  setDayLightPref,
   setFontScale,
   setMotion,
   type MotionPref,
@@ -19,6 +21,8 @@ export interface SettingsDeps {
   onSoundChange: (on: boolean) => void;
   ambient: AmbientSound;
   notifier: SystemNotifier;
+  /** Ligou/desligou a luz do dia e noite: a sala reaplica a cor. */
+  onDayLightChange: () => void;
   /** Só admins: de onde vem a arte (diagnóstico); `null` para os outros. */
   assetStatus: () => string | null;
 }
@@ -105,6 +109,15 @@ export function openSettings(deps: SettingsDeps): () => void {
     ),
     choice('Movimento e animações', 'motion', MOTIONS, loadMotion(), (v) => setMotion(v)),
   );
+  const daylight = toggle(
+    'Luz do dia e noite na sala (horário de Brasília)',
+    loadDayLight(),
+    (on) => {
+      setDayLightPref(on);
+      deps.onDayLightChange();
+    },
+  );
+  appearance.append(daylight.wrap);
 
   // Som
   const msgSound = toggle('Som de mensagem e menções', deps.sound.enabled, () => {

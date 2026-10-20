@@ -61,3 +61,14 @@ export function setMotion(pref: MotionPref): void {
   write(MOTION_KEY, pref);
   applyPrefs();
 }
+
+const DAYLIGHT_KEY = 'ev-dia-noite';
+
+/** Luz do dia e noite na sala (pelo horário de Brasília); desligada por padrão. */
+export function loadDayLight(): boolean {
+  return read(DAYLIGHT_KEY) === '1';
+}
+
+export function setDayLightPref(on: boolean): void {
+  write(DAYLIGHT_KEY, on ? '1' : '0');
+}

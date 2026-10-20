@@ -1150,6 +1150,8 @@ Pedido em 20/10/2026, com o escritório já em uso pelo pessoal do trabalho (ser
 
 **Roadmap v6 de UI/UX concluído (Fases 40–48).**
 
+- **Ajuste (20/10):** a luz do dia e noite amarelava a sala no fim da tarde. Agora os tons de entardecer e noite são bem leves e o efeito fica **desligado por padrão**, com interruptor em Configurações (salvo por pessoa; `?hora=` continua forçando para testar).
+
 
 ### Decisões para aprovar antes da Fase 40
 1. **Ordem:** a acima (base visual → tela principal → minha mesa → perfil/configurações → primeira experiência → retorno → celular → decorar → acessibilidade)? Alternativa: trazer o celular (46) para logo depois da tela principal, se muita gente for usar pelo celular.
