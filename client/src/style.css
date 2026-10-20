@@ -5502,6 +5502,19 @@ button svg.icon {
   right: 72px;
 }
 
+/* Telas grandes (Full HD para cima): conversa um pouco mais larga. */
+@media (min-width: 1800px) {
+  :root {
+    --chat-col: 380px;
+  }
+}
+
+@media (min-width: 2400px) {
+  :root {
+    --chat-col: 440px;
+  }
+}
+
 @media (max-width: 900px) {
   :root {
     --chat-col: 300px;
