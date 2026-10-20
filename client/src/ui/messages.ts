@@ -99,6 +99,8 @@ export class MessagesPanel {
     this.renderNotify();
   }
 
+  private opener: HTMLElement | null = null;
+
   get isOpen(): boolean {
     return !this.root.hidden;
   }
@@ -120,15 +122,25 @@ export class MessagesPanel {
 
   /** Abre o painel (na lista ou direto numa conversa). */
   open(withUser?: { userId: string; name: string }): void {
+    // Acessibilidade (Fase 48): o foco entra no painel (Esc fecha) e volta para quem abriu.
+    if (this.root.hidden) this.opener = document.activeElement as HTMLElement | null;
     this.root.hidden = false;
     document.body.classList.add('dm-open');
-    void this.show(withUser ? { kind: 'chat', ...withUser } : { kind: 'list' });
+    void this.show(withUser ? { kind: 'chat', ...withUser } : { kind: 'list' }).then(() => {
+      if (!this.root.contains(document.activeElement)) {
+        this.root
+          .querySelector<HTMLElement>('input, textarea, button:not([hidden]):not(:disabled)')
+          ?.focus();
+      }
+    });
   }
 
   close(): void {
+    const wasOpen = !this.root.hidden;
     this.root.hidden = true;
     document.body.classList.remove('dm-open');
     this.chatList = null;
+    if (wasOpen && this.root.contains(document.activeElement)) this.opener?.focus();
   }
 
   /** (Re)conectou: recarrega as conversas e o contador. */

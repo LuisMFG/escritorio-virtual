@@ -16,7 +16,7 @@
   --text: #eef0f4;
   --muted: #a3a9b8;
   --accent: #7aa7ff;
-  --accent-strong: #4c7dff;
+  --accent-strong: #3563e9;
   --accent-text: #9dbaff;
   --accent-contrast: #15171d;
   --on-accent: #ffffff;
@@ -56,7 +56,7 @@
   --dur: 140ms;
   --login-backdrop: rgba(15, 16, 21, 0.92);
   --modal-backdrop: rgba(10, 11, 14, 0.7);
-  --accent-hover: #5d8bff;
+  --accent-hover: #2b55d4;
   --danger-strong: #d9534f;
   --danger-hover: #e4645f;
   color-scheme: dark;
@@ -6666,4 +6666,27 @@ kbd {
     gap: 8px;
     padding: 10px;
   }
+}
+
+/* ---------- Fase 48: acessibilidade ---------- */
+
+/* Lista de pessoas: o item continua item de lista; um botão por cima dele acha a pessoa. */
+.people-list li.pickable {
+  position: relative;
+}
+
+.person-pick {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  cursor: pointer;
+}
+
+.person-pick:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 0;
 }

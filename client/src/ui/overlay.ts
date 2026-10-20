@@ -173,24 +173,16 @@ export class Overlay {
 
   private makePickable(li: HTMLLIElement, label: string, target: PersonPick): void {
     li.classList.add('pickable');
-    li.tabIndex = 0;
-    li.setAttribute('role', 'button');
-    li.title = li.title ? `${li.title} · ${label}` : label;
-    li.setAttribute('aria-label', label);
-    const go = () => this.pick?.(target);
-    li.addEventListener('click', go);
-    li.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        go();
-      }
+    const b = Object.assign(document.createElement('button'), {
+      type: 'button',
+      className: 'person-pick',
+      title: li.title ? `${li.title} · ${label}` : label,
     });
+    b.setAttribute('aria-label', label);
+    b.addEventListener('click', () => this.pick?.(target));
+    li.append(b);
   }
 
-  /**
-   * Faixa de conexão (Fase 45): no alto, com um girador, enquanto conecta ou reconecta; ao
-   * voltar depois de cair, um aviso de sucesso.
-   */
   setStatus(status: ConnectionStatus, detail?: string): void {
     const show = status === 'reconnecting' || status === 'connecting';
     if (status === 'online' && this.lastStatus === 'reconnecting') {

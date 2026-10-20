@@ -99,6 +99,7 @@ import { openHelp, tipOnce } from './ui/help.js';
 import { takeTourPending, Tour } from './ui/tour.js';
 import { BootScreen } from './ui/boot.js';
 import { DecorHistory } from './scene/DecorHistory.js';
+import { installModalFocus } from './ui/a11y.js';
 
 const E2E_MODE = new URLSearchParams(location.search).has('e2e');
 const TOUR_IN_E2E = new URLSearchParams(location.search).has('tour');
@@ -170,6 +171,7 @@ function snapshot(p: Player): AvatarSnapshot {
 
 async function start(): Promise<void> {
   const boot = new BootScreen();
+  installModalFocus();
   TextureSource.defaultOptions.scaleMode = 'nearest';
 
   applyTheme(loadTheme());
