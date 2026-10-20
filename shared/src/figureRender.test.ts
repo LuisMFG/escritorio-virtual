@@ -1,12 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import {
+  partsWithoutArt,
+  canvasFor,
   composeFigure,
   FIGURE_WIDTH,
-  partsWithoutArt,
-  poseKey,
-  resolveFigure,
   type FigureData,
   type FigureLib,
+  LAY_CANVAS,
+  needsWideCanvas,
+  poseKey,
+  resolveFigure,
+  STAND_CANVAS,
+  WIDE_CANVAS,
 } from './figureRender.js';
 
 /** Biblioteca de mentira: cada parte é um quadrado 2×2 branco ou de uma cor. */
@@ -257,5 +262,18 @@ describe('montagem do avatar', () => {
     ]);
     const missing = partsWithoutArt(resolveFigure('hd-6022-1', DATA).parts, libs);
     expect(missing.map((p) => `${p.type}:${p.id}`)).toEqual(['fc:77']);
+  });
+});
+
+describe('quadro largo (pet de ombro e itens diversos)', () => {
+  it('usa o quadro largo só quando a figura tem pt/mc, e o deitado continua o seu', () => {
+    expect(needsWideCanvas([{ type: 'ch' }, { type: 'ptl' }])).toBe(true);
+    expect(needsWideCanvas([{ type: 'mcr' }])).toBe(true);
+    expect(needsWideCanvas([{ type: 'ch' }, { type: 'hr' }])).toBe(false);
+    expect(canvasFor({ posture: 'std' }, true)).toEqual(WIDE_CANVAS);
+    expect(canvasFor({ posture: 'std' })).toEqual(STAND_CANVAS);
+    expect(canvasFor({ posture: 'lay' }, true)).toEqual(LAY_CANVAS);
+    // Mesmo eixo: os pés não mudam de lugar ao trocar de quadro.
+    expect(WIDE_CANVAS.regY).toBe(STAND_CANVAS.regY);
   });
 });

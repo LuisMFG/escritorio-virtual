@@ -19,9 +19,21 @@ export const STAND_CANVAS: FigureCanvas = { width: 64, height: 110, regX: 0, reg
 /** Deitado o corpo fica na horizontal: quadro mais largo, com o mesmo eixo do em pé no meio. */
 export const LAY_CANVAS: FigureCanvas = { width: 128, height: 120, regX: 32, regY: 100 };
 
-/** Quadro de cada postura. */
-export function canvasFor(pose: Pick<FigurePose, 'posture'>): FigureCanvas {
-  return pose.posture === 'lay' ? LAY_CANVAS : STAND_CANVAS;
+/**
+ * Com pet de ombro ou item diverso (20/10/2026): o desenho sai para os lados do avatar; quadro
+ * largo como o de deitado, com o mesmo eixo, para não cortar.
+ */
+export const WIDE_CANVAS: FigureCanvas = { width: 128, height: 110, regX: 32, regY: 100 };
+
+/** Partes que desenham fora do corpo (pet de ombro, itens diversos). */
+export function needsWideCanvas(parts: readonly { type: string }[]): boolean {
+  return parts.some((p) => /^(pt|mc)/.test(p.type));
+}
+
+/** Quadro de cada postura (`wide`: figura com pet de ombro ou item diverso). */
+export function canvasFor(pose: Pick<FigurePose, 'posture'>, wide = false): FigureCanvas {
+  if (pose.posture === 'lay') return LAY_CANVAS;
+  return wide ? WIDE_CANVAS : STAND_CANVAS;
 }
 
 /** Dados de montagem gerados pelo `assets:figure` (`client/public/assets/figure/figuredata.json`). */
@@ -60,11 +72,16 @@ export interface FigureLib extends FigureSheet {
 }
 
 // Ordem de desenho, de trás para a frente, por direção (4–6 são o espelho de 2–0).
-const FRONT = 'sd lh ls lc bd sh lg ch cc ca wa rh rs rc hd fa ey fc hr hrb ha he ea ri li';
+// Tipos novos do catálogo completo (20/10/2026): estampa (cp) por cima da blusa; itens diversos
+// (mc, mcl/mcr nas mãos, mco por cima) e pet de ombro (pt, ptl atrás, ptr na frente).
+const FRONT =
+  'sd ptl mcl lh ls lc bd sh lg ch cp cc ca wa mc pt rh rs rc mcr hd fa ey fc hr hrb ha he ea ptr mco ri li';
 /** De lado (3): os dois braços por cima da roupa. */
-const SIDE = 'sd bd sh lg ch cc ca wa lh ls lc rh rs rc hd fa ey fc hr hrb ha he ea ri li';
+const SIDE =
+  'sd ptl bd sh lg ch cp cc ca wa mc pt mcl lh ls lc rh rs rc mcr hd fa ey fc hr hrb ha he ea ptr mco ri li';
 /** De costas para a esquerda (7): o braço direito fica atrás do corpo. */
-const BACK = 'sd rh rs rc lh ls lc bd sh lg ch cc ca wa hd fa ey fc hr hrb ha he ea ri li';
+const BACK =
+  'sd ptr mcr rh rs rc mcl lh ls lc bd sh lg ch cp cc ca wa mc pt hd fa ey fc hr hrb ha he ea ptl mco ri li';
 const ORDER: Record<number, string[]> = {
   0: FRONT.split(' '),
   1: FRONT.split(' '),

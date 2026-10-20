@@ -5,6 +5,7 @@ import {
   HAND_ITEM_LIB,
   poseKey,
   STAND_CANVAS,
+  needsWideCanvas,
   type FigureCanvas,
   type FigureLayer,
   type FigurePose,
@@ -157,7 +158,7 @@ class FigurePoser implements AvatarPoser {
       this.cache.set(key, hit);
       return hit;
     }
-    const canvas = canvasFor(pose);
+    const canvas = canvasFor(pose, needsWideCanvas(this.parts));
     const texture = toTexture(composeFigure(this.parts, this.libs, pose, canvas), canvas);
     // Os pés ficam no mesmo ponto em qualquer quadro (o deitado é só mais largo).
     const anchor = {
