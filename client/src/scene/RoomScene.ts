@@ -1,4 +1,6 @@
 import {
+  deskOfSeat,
+  tileToScreen,
   depthOrder,
   footprint,
   hasWall,
@@ -36,6 +38,9 @@ import { PetView, type PetSnapshot } from '../entities/PetView.js';
 import { Camera } from './Camera.js';
 import { DecorMode, type DecorActions, type DecorHost, type DecorListener } from './DecorMode.js';
 import { drawRoom } from './RoomRenderer.js';
+
+/** Destaque ao achar a pessoa pela lista (ms). */
+const SPOTLIGHT_MS = 1800;
 
 /** Ponta do balão: um pouco acima do nome do avatar. */
 const HEAD_OFFSET_Y = -100;
@@ -104,6 +109,16 @@ export class RoomScene implements DecorHost {
   private readonly target = new Graphics({ label: 'target' });
   private readonly debugLayer = new Graphics({ label: 'debug' });
   private readonly bubbles = new Container({ label: 'bubbles' });
+  /** Plaquinhas com o nome do dono de cada mesa (Fase 42). */
+  private readonly plaques = new Container({ label: 'plaques' });
+  private deskOwners: ReadonlyMap<string, string> = new Map();
+  /** Alt segurado: todos os nomes aparecem, afastados para não encavalar. */
+  private allNames = false;
+  private spreadTimer = 0;
+  private plaquesDirty = false;
+  /** Destaque de quem foi achado pela lista: círculo pulsando por cima de tudo. */
+  private readonly spotlight = new Graphics({ label: 'spotlight' });
+  private spotlightOn: { view: AvatarView; left: number } | null = null;
   /** Luz do dia/noite: multiplica a cena por uma cor (branco = dia). */
   private readonly nightShade = new Graphics({ label: 'night' });
   /** Brilho das luzes acesas (soma por cima da sombra da noite). */
@@ -156,6 +171,8 @@ export class RoomScene implements DecorHost {
       this.nightShade,
       this.glows,
       this.debugLayer,
+      this.plaques,
+      this.spotlight,
       this.bubbles,
       this.doorLabel,
     );
@@ -191,6 +208,7 @@ export class RoomScene implements DecorHost {
 
   /** Cria ou atualiza um móvel a partir do estado do servidor. */
   setFurni(id: string, placed: PlacedFurni): void {
+    if (this.deskOwners.size) this.plaquesDirty = true;
     let existing = this.furni.get(id);
     // Trocou de cor (outra definição): recria o desenho (e continua selecionado).
     const reselect = Boolean(
@@ -240,6 +258,119 @@ export class RoomScene implements DecorHost {
   /** Reuniões em andamento por sala (a placa aparece ao passar o mouse na porta). */
   setBusyRooms(busy: Map<string, string>): void {
     this.busyRooms = busy;
+    const meeting = busy.has(this.layout.roomId);
+    for (const a of this.avatars.values()) a.setMeeting(meeting);
+  }
+
+  // ---------- Minha mesa e presença (Fase 42) ----------
+
+  /** Donos das mesas (id da cadeira → nome): uma plaquinha na frente de cada mesa. */
+  setDeskOwners(owners: ReadonlyMap<string, string>): void {
+    this.deskOwners = owners;
+    this.plaquesDirty = true;
+  }
+
+  private drawPlaques(): void {
+    for (const c of this.plaques.removeChildren()) c.destroy({ children: true });
+    for (const [seat, name] of this.deskOwners) {
+      const deskId = deskOfSeat(seat);
+      const desk = deskId ? this.furni.get(deskId)?.placed : undefined;
+      const def = desk && this.deps.furniDefs.get(desk.defId);
+      if (!desk || !def) continue;
+      const fp = footprint(def, desk.x, desk.y, desk.rot);
+      const p = tileToScreen((fp.minX + fp.maxX + 1) / 2, fp.maxY + 1, desk.z + def.height * 0.55);
+      const label = new Text({
+        text: name.length > 14 ? `${name.slice(0, 13)}…` : name,
+        resolution: 2,
+        style: {
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: 9,
+          fontWeight: '700',
+          fill: 0x1c2330,
+        },
+      });
+      label.anchor.set(0.5);
+      const plate = new Graphics()
+        .roundRect(-label.width / 2 - 5, -7, label.width + 10, 14, 4)
+        .fill({ color: 0xf6f1e3 })
+        .stroke({ width: 1, color: 0x7a5c2e });
+      const tag = new Container({ label: `plaque:${seat}` });
+      tag.addChild(plate, label);
+      tag.position.set(Math.round(p.sx), Math.round(p.sy));
+      tag.eventMode = 'none';
+      this.plaques.addChild(tag);
+    }
+  }
+
+  /** Câmera até a pessoa e um círculo pulsando nos pés (achar alguém pela lista). */
+  focusAvatar(id: string): boolean {
+    const view = this.avatars.get(id);
+    if (!view) return false;
+    const p = this.world.toLocal(view.getGlobalPosition());
+    this.camera.focusOn(p.x, p.y - 40);
+    this.spotlightOn = { view, left: SPOTLIGHT_MS };
+    return true;
+  }
+
+  private updateSpotlight(dtMs: number): void {
+    const s = this.spotlightOn;
+    const g = this.spotlight.clear();
+    if (!s) return;
+    s.left -= dtMs;
+    if (s.left <= 0 || s.view.destroyed) {
+      this.spotlightOn = null;
+      return;
+    }
+    const p = this.world.toLocal(s.view.getGlobalPosition());
+    const pulse = ((1 - s.left / SPOTLIGHT_MS) * 3) % 1;
+    g.ellipse(p.x, p.y - 36, 22 + pulse * 16, 40 + pulse * 16).stroke({
+      width: 3,
+      color: 0x7aa7ff,
+      alpha: 1 - pulse,
+    });
+  }
+
+  /** Mostra (ou esconde) os nomes de todos, afastando os que se encostam. */
+  setAllNames(on: boolean): void {
+    if (this.allNames === on) return;
+    this.allNames = on;
+    for (const a of this.avatars.values()) {
+      a.setNameVisible(on || a === this.hoveredAvatar);
+      if (!on) a.setNameShift(0);
+    }
+    if (on) this.spreadNames();
+  }
+
+  /**
+   * Nomes sem encavalar: de quem está mais na frente para trás, cada nome sobe até não
+   * encostar nos já colocados.
+   */
+  private spreadNames(): void {
+    const zoom = this.camera.zoom || 1;
+    const items = [...this.avatars.values()].map((a) => {
+      a.setNameShift(0);
+      return { a, b: a.nameBounds() };
+    });
+    items.sort((p, q) => q.b.y - p.b.y);
+    const placed: { x: number; y: number; width: number; height: number }[] = [];
+    const hit = (r: (typeof placed)[0]) =>
+      placed.some(
+        (o) =>
+          r.x < o.x + o.width &&
+          o.x < r.x + r.width &&
+          r.y < o.y + o.height &&
+          o.y < r.y + r.height,
+      );
+    for (const { a, b } of items) {
+      const r = { ...b };
+      let shift = 0;
+      for (let i = 0; i < 12 && hit(r); i++) {
+        shift -= b.height + 1;
+        r.y = b.y + shift;
+      }
+      a.setNameShift(shift / zoom);
+      placed.push(r);
+    }
   }
 
   /** Tabuleiro de uma mesa de jogos (`null` = mesa sem partida). */
@@ -280,6 +411,7 @@ export class RoomScene implements DecorHost {
   }
 
   removeFurni(id: string): void {
+    if (this.deskOwners.size) this.plaquesDirty = true;
     this.waitingDef.delete(id);
     const view = this.furni.get(id);
     if (!view) return;
@@ -379,6 +511,8 @@ export class RoomScene implements DecorHost {
     this.avatars.set(id, view);
     if (this.deps.effects) view.useEffects(this.deps.effects, snapshot.effect);
     if (isLocal) this.localId = id;
+    view.setMeeting(this.busyRooms.has(this.layout.roomId));
+    if (this.allNames) view.setNameVisible(true);
     this.objects.addChild(view);
     this.loadFrames(view, snapshot.figure);
   }
@@ -489,6 +623,18 @@ export class RoomScene implements DecorHost {
 
   update(dtMs: number): void {
     for (const f of this.furni.values()) f.animate();
+    this.updateSpotlight(dtMs);
+    if (this.plaquesDirty) {
+      this.plaquesDirty = false;
+      this.drawPlaques();
+    }
+    if (this.allNames) {
+      this.spreadTimer -= dtMs;
+      if (this.spreadTimer <= 0) {
+        this.spreadTimer = 250;
+        this.spreadNames();
+      }
+    }
     for (const a of this.avatars.values()) a.update(dtMs);
     for (const p of this.pets.values()) p.update(dtMs);
     for (const b of [...this.bubbles.children] as ChatBubble[]) {
@@ -656,7 +802,7 @@ export class RoomScene implements DecorHost {
     // Nome só de quem está sob o ponteiro.
     const avatar = this.decor.active ? null : this.pickAvatar(e.global);
     if (avatar !== this.hoveredAvatar) {
-      this.hoveredAvatar?.setNameVisible(false);
+      if (!this.allNames) this.hoveredAvatar?.setNameVisible(false);
       avatar?.setNameVisible(true);
       this.hoveredAvatar = avatar;
     }

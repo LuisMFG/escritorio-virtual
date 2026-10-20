@@ -53,7 +53,14 @@ const SIT_CUT_Y = -2;
 /** Altura do "…" de digitando e do emoji dos emotes. */
 const TYPING_Y = -96;
 const EMOJI_Y = -100;
-const STATUS_COLORS: Record<string, number> = { busy: 0xe05555, away: 0xf2c94c };
+/** Selo sobre a cabeça (Fase 42): cor e desenho por estado; "reunião" vem da sala. */
+const STATUS_COLORS: Record<string, number> = {
+  busy: 0xe05555,
+  away: 0xe0a82e,
+  meeting: 0x8b5cf6,
+};
+const BADGE_R = 7;
+
 /** Direções percorridas na dança. */
 const DANCE_DIRS = [2, 3, 4, 5, 6, 5, 4, 3];
 
@@ -129,6 +136,10 @@ export class AvatarView extends Container {
   private focusKind = '';
   private readonly legMask = new Graphics();
   private readonly statusBadge = new Graphics();
+  /** Em reunião (a sala tem reunião agora): selo roxo se a pessoa estiver disponível. */
+  private inMeeting = false;
+  /** Deslocamento do nome para cima (px do mundo) para não encavalar com outros nomes. */
+  private nameShift = 0;
   private readonly typingBubble = new Container();
   private readonly typingDots: Graphics[] = [];
   private sitting = false;
@@ -416,21 +427,64 @@ export class AvatarView extends Container {
 
   private setStatus(status: string): void {
     this.status = status;
-    const color = STATUS_COLORS[status];
-    this.statusBadge.clear();
-    this.statusBadge.visible = color !== undefined;
-    if (color !== undefined) {
-      this.statusBadge.circle(0, 0, 4).fill(color).stroke({ width: 1.5, color: 0x101114 });
+    this.drawBadge();
+  }
+
+  /** A sala está em reunião: mostra o selo de reunião em quem está disponível. */
+  setMeeting(on: boolean): void {
+    if (this.inMeeting === on) return;
+    this.inMeeting = on;
+    this.drawBadge();
+  }
+
+  /** Selo sobre a cabeça: ocupado (traço), ausente (relógio) ou em reunião (duas pessoas). */
+  private drawBadge(): void {
+    const kind =
+      this.status === 'busy' || this.status === 'away'
+        ? this.status
+        : this.inMeeting
+          ? 'meeting'
+          : '';
+    const g = this.statusBadge.clear();
+    g.visible = kind !== '';
+    if (kind) {
+      g.circle(0, 0, BADGE_R).fill(STATUS_COLORS[kind]!).stroke({ width: 1.5, color: 0x101114 });
+      if (kind === 'busy') g.roundRect(-4, -1.25, 8, 2.5, 1).fill(0xffffff);
+      else if (kind === 'away') {
+        g.circle(0, 0, 4.2).stroke({ width: 1.3, color: 0xffffff });
+        g.moveTo(0, 0)
+          .lineTo(0, -2.8)
+          .moveTo(0, 0)
+          .lineTo(2, 1)
+          .stroke({ width: 1.3, color: 0xffffff });
+      } else {
+        g.circle(-2.4, -1.4, 1.6).circle(2.4, -1.4, 1.6).fill(0xffffff);
+        g.roundRect(-5, 1, 4.6, 3, 1.5).roundRect(0.4, 1, 4.6, 3, 1.5).fill(0xffffff);
+      }
     }
     this.layoutOverlays();
   }
 
+  /** Nome deslocado para cima (`px` do mundo, negativo = sobe) para não encavalar. */
+  setNameShift(px: number): void {
+    if (this.nameShift === px) return;
+    this.nameShift = px;
+    this.layoutOverlays();
+  }
+
+  /** Retângulo do nome na tela (para afastar nomes que se encostam). */
+  nameBounds(): { x: number; y: number; width: number; height: number } {
+    const b = this.nameTag.getBounds();
+    return { x: b.x, y: b.y, width: b.width, height: b.height };
+  }
+
   /** Selo de status ao lado do nome (ou da cabeça, com o nome escondido). */
   private layoutOverlays(): void {
-    const nameY = this.cargoTag.text ? NAME_Y - CARGO_LINE : NAME_Y;
+    const nameY = (this.cargoTag.text ? NAME_Y - CARGO_LINE : NAME_Y) + this.nameShift;
     this.nameTag.position.y = nameY;
-    const bounds = this.nameVisible ? this.nameTag.width / 2 + 7 : 12;
-    this.statusBadge.position.set(bounds, this.nameVisible ? nameY - 6 : -80);
+    this.cargoTag.position.y = NAME_Y + this.nameShift;
+    const bounds = this.nameVisible ? this.nameTag.width / 2 + BADGE_R + 3 : 13;
+    this.statusBadge.position.set(bounds, this.nameVisible ? nameY - 7 : -82);
     this.typingBubble.position.set(0, this.nameVisible ? nameY - 20 : TYPING_Y);
   }
 

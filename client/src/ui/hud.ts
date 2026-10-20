@@ -20,6 +20,8 @@ export interface Hud {
   setCanEditRooms(on: boolean): void;
   /** Mostra o botão Admin (só para admins). */
   setAdmin(on: boolean): void;
+  /** Tem mesa escolhida: mostra o "Minha mesa". */
+  setDesk(on: boolean): void;
   /** Sala com decoração travada para você: o botão fica desabilitado. */
   setDecorLocked(locked: boolean): void;
 }
@@ -38,6 +40,8 @@ export function mountHud(opts: {
   onEditRoom: () => void;
   /** Câmera no próprio avatar. */
   onCenterSelf: () => void;
+  /** Vai até a própria mesa e senta. */
+  onGoToDesk: () => void;
   ambient: AmbientSound;
   onToggleDecor: () => void;
   /** Liga/desliga o som de mensagem; devolve o novo estado. */
@@ -151,6 +155,8 @@ export function mountHud(opts: {
   dmBadge.hidden = true;
   dmBtn.append(dmBadge);
   const focusBtn = actionButton('hud-focus', 'timer', 'Foco', () => undefined);
+  const deskBtn = actionButton('hud-desk', 'monitor', 'Minha mesa', opts.onGoToDesk);
+  deskBtn.hidden = true;
   const mapBtn = actionButton('hud-map', 'map', 'Mapa', opts.onOpenMap);
   const annBtn = actionButton('hud-ann', 'megaphone', 'Avisos', opts.onOpenAnnouncements);
   const annBadge = document.createElement('span');
@@ -212,7 +218,7 @@ export function mountHud(opts: {
   actions.className = 'hud-actions';
   actions.setAttribute('aria-label', 'Menu do escritório');
   actions.append(
-    group('Eu', profileBtn, focusBtn),
+    group('Eu', profileBtn, deskBtn, focusBtn),
     group('Pessoas', teamBtn, mapBtn),
     group('Conversas', dmBtn, annBtn),
     group('Escritório', agendaBtn, decorBtn),
@@ -234,6 +240,9 @@ export function mountHud(opts: {
     setCanEditRooms(on) {
       editRoomBtn.hidden = !on;
       renderMore();
+    },
+    setDesk(on) {
+      deskBtn.hidden = !on;
     },
     setAdmin(on) {
       adminBtn.hidden = !on;

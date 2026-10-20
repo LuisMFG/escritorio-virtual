@@ -276,6 +276,19 @@ export class OfficeConnection {
     this.room?.send(ClientMessage.UpdateAvatar, msg);
   }
 
+  /** Minha mesa (Fase 42): ficar com a estação onde está sentado, largar e ir até ela. */
+  claimDesk(furniId: string): void {
+    this.room?.send(ClientMessage.ClaimDesk, { furniId });
+  }
+
+  releaseDesk(): void {
+    this.room?.send(ClientMessage.ReleaseDesk, {});
+  }
+
+  goToDesk(): void {
+    this.room?.send(ClientMessage.GoToDesk, {});
+  }
+
   /** Vai direto para outra sala (sem porta), nascendo na entrada dela. */
   goTo(roomId: string): void {
     if (roomId === this.roomId) return;

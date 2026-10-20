@@ -5587,3 +5587,71 @@ button svg.icon {
     bottom: auto;
   }
 }
+
+/* ---------- Fase 42: minha mesa e presença ---------- */
+
+.desk-chip {
+  position: fixed;
+  left: calc(32px + var(--chat-col) + (100vw - 104px - var(--chat-col)) / 2);
+  bottom: 72px;
+  transform: translateX(-50%);
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100vw - 32px);
+  padding: 6px 6px 6px 12px;
+  background: var(--card-strong);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow-2);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.desk-chip[hidden] {
+  display: none;
+}
+
+.desk-chip > svg {
+  color: var(--accent);
+}
+
+.desk-chip .btn-small {
+  border-radius: var(--radius-pill);
+}
+
+.desk-chip-close {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.desk-chip-close:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+/* Lista de pessoas: clicar acha a pessoa na sala. */
+.people-list li.pickable {
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+
+.people-list li.pickable:hover {
+  background: var(--hover-tint);
+}
+
+@media (max-width: 700px) {
+  .desk-chip {
+    left: 50%;
+    bottom: 124px;
+  }
+}

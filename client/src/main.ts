@@ -25,6 +25,8 @@ import {
   dayLight,
   officeHour,
   STATUSES,
+  DESK_ROOM_ID,
+  deskSeatIds,
 } from '@office/shared';
 import { Application, TextureSource } from 'pixi.js';
 import { AssetLoader } from './assets/AssetLoader.js';
@@ -89,6 +91,7 @@ import {
   onThemeChange,
   THEME_BACKGROUND,
 } from './ui/theme.js';
+import { DeskChip } from './ui/desk.js';
 
 /** Sala pedida na URL (`#/meeting`), para recarregar no mesmo lugar. */
 function roomFromHash(): string {
@@ -360,6 +363,38 @@ async function start(): Promise<void> {
   /** Minimapa aberto (atualiza com a presença) e quem estamos indo encontrar. */
   let minimap: ReturnType<typeof openMinimap> | null = null;
   let approach: string | null = null;
+  // Alt segurado: nomes de todos sobre os avatares (afastados para não encavalar).
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Alt') scene?.setAllNames(true);
+  });
+  window.addEventListener('keyup', (e) => {
+    if (e.key === 'Alt') scene?.setAllNames(false);
+  });
+  window.addEventListener('blur', () => scene?.setAllNames(false));
+  // Clique na lista de pessoas: câmera até a pessoa (ou vai até a sala dela).
+  overlay.onPick((t) => {
+    if (t.sessionId) {
+      scene?.focusAvatar(t.sessionId);
+      return;
+    }
+    if (!t.userId || !t.roomId || !connection) return;
+    approach = t.userId;
+    connection.goTo(t.roomId);
+  });
+  /** Minha mesa (Fase 42): ir até ela depois de chegar na Recepção; convite só ao entrar. */
+  let pendingDesk = false;
+  let deskOffered = false;
+  const deskChip = new DeskChip({
+    claim: (seat) => connection?.claimDesk(seat),
+    release: () => connection?.releaseDesk(),
+    goToDesk: () => goToMyDesk(),
+  });
+  function goToMyDesk(): void {
+    if (!connection) return;
+    if (connection.currentRoomId === DESK_ROOM_ID) return connection.goToDesk();
+    pendingDesk = true;
+    connection.goTo(DESK_ROOM_ID);
+  }
   function showMap(): void {
     if (!session || !connection) return;
     const conn = connection;
@@ -476,6 +511,7 @@ async function start(): Promise<void> {
   const hud = mountHud({
     getCamera: () => scene?.camera,
     onCenterSelf: () => scene?.centerOnSelf(),
+    onGoToDesk: () => goToMyDesk(),
     loader,
     onToggleDecor: () => setDecorating(!decorating),
     onToggleSound: () => sound.toggle(),
@@ -792,6 +828,26 @@ async function start(): Promise<void> {
     if (effectiveStatus() !== 'available') connection.setStatus(effectiveStatus());
     overlay.setOwnStatus(effectiveStatus());
 
+    /** Faixa da mesa, botão "Minha mesa" e plaquinhas, a partir do estado da sala. */
+    const refreshDesk = () => {
+      const me = room.state.players.get(room.sessionId);
+      if (!me) return;
+      const myDesk = me.desk;
+      hud.setDesk(myDesk !== '');
+      let seat: string | null = null;
+      if (layout.roomId === DESK_ROOM_ID && me.action === 'sit') {
+        const seats = deskSeatIds(room.state.furni.keys());
+        for (const id of seats) {
+          const f = room.state.furni.get(id);
+          if (f && f.x === me.x && f.y === me.y) seat = id;
+        }
+      }
+      deskChip.update({ seat, owner: seat ? room.state.desks.get(seat) : undefined, myDesk });
+      if (!deskOffered) {
+        deskOffered = true;
+        if (myDesk && seat !== myDesk) deskChip.offerGo();
+      }
+    };
     const refreshPeople = () => {
       const players = [...room.state.players.entries()];
       overlay.setPeople(
@@ -829,6 +885,7 @@ async function start(): Promise<void> {
         keep(
           cb.onChange(player, () => {
             s.updateAvatar(id, snapshot(player));
+            if (id === room.sessionId) refreshDesk();
             const isMe = id === room.sessionId && session;
             if (
               isMe &&
@@ -840,6 +897,7 @@ async function start(): Promise<void> {
           }),
         );
         refreshPeople();
+        if (id === room.sessionId) refreshDesk();
       }),
     );
     keep(
@@ -906,6 +964,14 @@ async function start(): Promise<void> {
       }),
     );
     keep(cb.onRemove('pets', (_p, id) => s.removePet(id)));
+    // Plaquinhas das mesas (só a Recepção tem).
+    const syncDesks = () => {
+      s.setDeskOwners(new Map(room.state.desks.entries()));
+      refreshDesk();
+    };
+    keep(cb.onAdd('desks', syncDesks));
+    keep(cb.onChange('desks', syncDesks));
+    keep(cb.onRemove('desks', syncDesks));
     keep(
       cb.listen('decorLocked', (locked) => {
         decorLocked = locked;
@@ -913,6 +979,11 @@ async function start(): Promise<void> {
       }),
     );
 
+    // Veio pelo "Minha mesa" de outra sala: vai até a mesa e senta.
+    if (pendingDesk && layout.roomId === DESK_ROOM_ID) {
+      pendingDesk = false;
+      setTimeout(() => connection?.goToDesk(), 300);
+    }
     // Veio pelo mapa para encontrar alguém: anda até perto da pessoa.
     if (approach) {
       const who = approach;
@@ -932,7 +1003,7 @@ async function start(): Promise<void> {
         name: r.meeting ? `${r.name} · 🔴 em reunião` : r.name,
         people: online
           .filter((p) => p.roomId === r.id)
-          .map((p) => ({ name: p.name, activity: p.activity })),
+          .map((p) => ({ name: p.name, userId: p.userId, activity: p.activity })),
       })),
       connection.currentRoomId,
     );

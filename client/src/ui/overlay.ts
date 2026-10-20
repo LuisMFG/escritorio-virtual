@@ -16,10 +16,17 @@ export interface PersonEntry {
   focusKind: string;
 }
 
+/** Quem foi clicado na lista: alguém desta sala (sessão) ou de outra (conta + sala). */
+export interface PersonPick {
+  sessionId?: string;
+  userId?: string;
+  roomId?: string;
+}
+
 export interface OtherRoom {
   roomId: string;
   name: string;
-  people: { name: string; activity?: string }[];
+  people: { name: string; userId?: string; activity?: string }[];
 }
 
 /** Linha pequena com a atividade fora do escritório ("💻 Codando em C#…"). */
@@ -51,6 +58,7 @@ export class Overlay {
   private here: PersonEntry[] = [];
   private others: OtherRoom[] = [];
   private roomName = '';
+  private pick: ((target: PersonPick) => void) | null = null;
 
   constructor(onStatusChange: (status: Status) => void) {
     this.people.className = 'people';
@@ -81,6 +89,11 @@ export class Overlay {
 
     document.body.append(this.people, this.banner, this.toast, this.fade);
     this.render();
+  }
+
+  /** Clique numa pessoa da lista (Fase 42): achar na sala ou ir até a sala dela. */
+  onPick(fn: (target: PersonPick) => void): void {
+    this.pick = fn;
   }
 
   setPeople(entries: PersonEntry[], roomName = this.roomName): void {
@@ -135,6 +148,9 @@ export class Overlay {
         li.append(tag('reconectando'));
       }
       if (p.activity) li.append(activityLine(p.activity));
+      this.makePickable(li, p.isLocal ? 'Achar você na sala' : `Achar ${p.name} na sala`, {
+        sessionId: p.id,
+      });
       return li;
     });
     const nodes: HTMLElement[] = [...section(`${this.roomName || 'Nesta sala'} · aqui`, hereItems)];
@@ -145,11 +161,33 @@ export class Overlay {
         li.classList.add('elsewhere');
         li.textContent = p.name;
         if (p.activity) li.append(activityLine(p.activity));
+        if (p.userId) {
+          this.makePickable(li, `Ir até ${p.name} (${room.name})`, {
+            userId: p.userId,
+            roomId: room.roomId,
+          });
+        }
         return li;
       });
       nodes.push(...section(room.name, items));
     }
     this.peopleBody.replaceChildren(...nodes);
+  }
+
+  private makePickable(li: HTMLLIElement, label: string, target: PersonPick): void {
+    li.classList.add('pickable');
+    li.tabIndex = 0;
+    li.setAttribute('role', 'button');
+    li.title = li.title ? `${li.title} · ${label}` : label;
+    li.setAttribute('aria-label', label);
+    const go = () => this.pick?.(target);
+    li.addEventListener('click', go);
+    li.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        go();
+      }
+    });
   }
 
   setStatus(status: ConnectionStatus, detail?: string): void {
