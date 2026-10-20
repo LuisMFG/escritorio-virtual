@@ -1,4 +1,5 @@
 import { FOCUS_PRESETS, type FocusKind, type FocusPhase } from '@office/shared';
+import { setIcon } from './icons.js';
 
 const el = <K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -11,7 +12,7 @@ const mmss = (ms: number) => {
 };
 
 /**
- * Modo foco do lado da pessoa: botão 🍅 com a contagem, janelinha para começar/parar e a
+ * Modo foco do lado da pessoa: botão de foco com a contagem, janelinha para começar/parar e a
  * "porta fechada" para avisos (menções e mensagens não tocam som nem notificação durante o
  * foco; chegam num resumo no fim).
  */
@@ -90,7 +91,7 @@ export class FocusController {
     const ico = this.button.querySelector('.ico');
     const lbl = this.button.querySelector('.lbl');
     if (!this.kind) {
-      if (ico) ico.textContent = '🍅';
+      if (ico) setIcon(ico, 'timer');
       if (lbl) lbl.textContent = 'Foco';
       this.button.classList.remove('focusing', 'on-break');
       this.button.setAttribute('aria-label', 'Modo foco');
@@ -98,7 +99,7 @@ export class FocusController {
       return;
     }
     const left = mmss(this.until - Date.now());
-    if (ico) ico.textContent = this.kind === 'focus' ? '🍅' : '☕';
+    if (ico) setIcon(ico, this.kind === 'focus' ? 'timer' : 'coffee');
     if (lbl) lbl.textContent = left;
     this.button.classList.toggle('focusing', this.kind === 'focus');
     this.button.classList.toggle('on-break', this.kind === 'break');

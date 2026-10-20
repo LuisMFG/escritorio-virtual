@@ -7,6 +7,7 @@ import {
   type SearchHit,
 } from '@office/shared';
 import { uploadApi } from '../net/api.js';
+import { iconHtml } from './icons.js';
 
 /**
  * Anexos (Fase 29): botão 📎 / colar / arrastar, miniaturas das imagens (baixadas com o token e
@@ -137,7 +138,11 @@ export class AttachmentDraft {
       return;
     }
     const a = this.current;
-    const remove = el('button', { type: 'button', className: 'reply-cancel', textContent: '✕' });
+    const remove = el('button', {
+      type: 'button',
+      className: 'reply-cancel',
+      innerHTML: iconHtml('x', 16),
+    });
     remove.setAttribute('aria-label', 'Tirar anexo');
     remove.addEventListener('click', () => this.clear());
     this.chip.replaceChildren(
@@ -192,7 +197,11 @@ function openLightbox(src: string, name: string): void {
   back.setAttribute('role', 'dialog');
   back.setAttribute('aria-label', name);
   const img = el('img', { src, alt: name });
-  const close = el('button', { type: 'button', className: 'lightbox-close', textContent: '✕' });
+  const close = el('button', {
+    type: 'button',
+    className: 'lightbox-close',
+    innerHTML: iconHtml('x', 16),
+  });
   close.setAttribute('aria-label', 'Fechar imagem');
   const done = () => {
     back.remove();
@@ -286,7 +295,11 @@ export function openSearch(h: SearchHandlers): void {
   const panel = el('aside', { className: 'search-panel' });
   panel.setAttribute('aria-label', 'Buscar nas conversas');
   openSearchPanel = panel;
-  const close = el('button', { type: 'button', className: 'dm-icon', textContent: '✕' });
+  const close = el('button', {
+    type: 'button',
+    className: 'dm-icon',
+    innerHTML: iconHtml('x', 16),
+  });
   close.setAttribute('aria-label', 'Fechar busca');
   const head = el('header', { className: 'dm-head' });
   head.append(el('h2', { textContent: '🔎 Buscar nas conversas' }), close);

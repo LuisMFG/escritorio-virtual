@@ -1,4 +1,5 @@
 import { REACTIONS, type Reaction, type ReactionSummary, type ReplyPreview } from '@office/shared';
+import { iconHtml } from './icons.js';
 
 /** Fichas de reação ("👍 2"); clicar põe/tira a sua. Os nomes aparecem no title. */
 export function reactionChips(
@@ -106,7 +107,7 @@ export class ReplyBar {
     const cancel = Object.assign(document.createElement('button'), {
       type: 'button',
       className: 'reply-cancel',
-      textContent: '✕',
+      innerHTML: iconHtml('x', 16),
     });
     cancel.setAttribute('aria-label', 'Cancelar resposta');
     cancel.addEventListener('click', () => {

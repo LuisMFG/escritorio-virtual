@@ -20,6 +20,7 @@ import {
   type Gender,
 } from '@office/shared';
 import { loadWithFallback, ThumbQueue } from './thumbQueue.js';
+import { iconHtml } from './icons.js';
 
 export interface AvatarChoice {
   figure: string;
@@ -163,7 +164,11 @@ export function openAvatarEditor(opts: AvatarEditorOptions): Promise<AvatarChoic
     className: 'btn-primary',
     textContent: opts.saveLabel ?? 'Salvar visual',
   });
-  const closeBtn = el('button', { type: 'button', className: 'icon-btn', textContent: '×' });
+  const closeBtn = el('button', {
+    type: 'button',
+    className: 'icon-btn',
+    innerHTML: iconHtml('x', 16),
+  });
   closeBtn.setAttribute('aria-label', 'Fechar editor');
 
   const title = el('h2', { id: 'editor-title', textContent: 'Seu visual' });
@@ -379,7 +384,11 @@ export function openAvatarEditor(opts: AvatarEditorOptions): Promise<AvatarChoic
       });
       box.append(apply, save);
       if (look) {
-        const del = el('button', { type: 'button', className: 'look-del', textContent: '×' });
+        const del = el('button', {
+          type: 'button',
+          className: 'look-del',
+          innerHTML: iconHtml('x', 16),
+        });
         del.setAttribute('aria-label', `Apagar look ${slot + 1}`);
         del.addEventListener('click', async () => {
           looksVersion++;

@@ -7,6 +7,7 @@ import {
   type NoteColor,
 } from '@office/shared';
 import { confirmDialog } from './confirm.js';
+import { iconHtml } from './icons.js';
 
 export interface BoardOptions {
   furniId: string;
@@ -107,7 +108,7 @@ export function openBoard(opts: BoardOptions): { furniId: string; refresh(): voi
             const del = Object.assign(document.createElement('button'), {
               type: 'button',
               className: 'board-del',
-              textContent: '✕',
+              innerHTML: iconHtml('x', 16),
               title: 'Tirar recado',
             });
             del.setAttribute('aria-label', `Tirar o recado de ${n.name}`);

@@ -1,4 +1,5 @@
 import type { Meeting } from '@office/shared';
+import { iconHtml } from './icons.js';
 
 const timeFormat = new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
@@ -23,7 +24,7 @@ export function showReminder(meeting: Meeting, goTo: (roomId: string) => void): 
   const dismiss = Object.assign(document.createElement('button'), {
     type: 'button',
     className: 'reminder-close',
-    textContent: '✕',
+    innerHTML: iconHtml('x', 16),
   });
   dismiss.setAttribute('aria-label', 'Fechar lembrete');
   go.addEventListener('click', () => {

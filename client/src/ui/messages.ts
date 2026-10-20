@@ -22,6 +22,7 @@ import {
   ReplyBar,
   replyQuote,
 } from './reactions.js';
+import { iconHtml } from './icons.js';
 
 export interface MessagesDeps {
   userId: string;
@@ -83,7 +84,7 @@ export class MessagesPanel {
     const close = Object.assign(document.createElement('button'), {
       type: 'button',
       className: 'dm-icon',
-      textContent: '✕',
+      innerHTML: iconHtml('x', 16),
     });
     close.setAttribute('aria-label', 'Fechar mensagens');
     close.addEventListener('click', () => this.close());

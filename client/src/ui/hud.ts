@@ -2,19 +2,21 @@ import type { AssetLoader, AssetStats } from '../assets/AssetLoader.js';
 import { AMBIENT_LABELS } from '@office/shared';
 import type { Camera } from '../scene/Camera.js';
 import type { AmbientSound } from './ambient.js';
+import { icon, setIcon, type IconName } from './icons.js';
+import { currentTheme, onThemeChange, setTheme } from './theme.js';
 
 export interface Hud {
   setRoomName(name: string): void;
   setDecorating(on: boolean): void;
-  /** O ambiente da sala mudou: atualiza o painel do 🎵. */
+  /** O ambiente da sala mudou: atualiza o painel do som ambiente. */
   refreshAmbient(): void;
   /** Contador de mensagens privadas não lidas no botão. */
   setUnreadDms(n: number): void;
   /** Contador de avisos da diretoria não lidos. */
   setUnreadAnnouncements(n: number): void;
-  /** Botão 🍅 do modo foco (o controle do foco cuida dele). */
+  /** Botão do modo foco (o controle do foco cuida dele). */
   readonly focusButton: HTMLButtonElement;
-  /** Mostra o "✎ Editar sala" (admins e quem pode editar salas). */
+  /** Mostra o "Editar sala" (admins e quem pode editar salas). */
   setCanEditRooms(on: boolean): void;
   /** Mostra o botão Admin (só para admins). */
   setAdmin(on: boolean): void;
@@ -49,7 +51,7 @@ export function mountHud(opts: {
   const editRoomBtn = document.createElement('button');
   editRoomBtn.type = 'button';
   editRoomBtn.className = 'btn-link hud-edit-room';
-  editRoomBtn.textContent = '✎ Editar sala';
+  editRoomBtn.append(icon('pencil', 14), ' Editar sala');
   editRoomBtn.hidden = true;
   editRoomBtn.addEventListener('click', opts.onEditRoom);
   card.append(title, hint, editRoomBtn);
@@ -62,13 +64,13 @@ export function mountHud(opts: {
   const zoom = document.createElement('div');
   zoom.className = 'hud-zoom';
   zoom.append(
-    button('+', 'Aproximar', () => opts.getCamera()?.zoomIn()),
-    button('−', 'Afastar', () => opts.getCamera()?.zoomOut()),
-    button('⌖', 'Centralizar a sala', () => opts.getCamera()?.center()),
+    button('plus', 'Aproximar', () => opts.getCamera()?.zoomIn()),
+    button('minus', 'Afastar', () => opts.getCamera()?.zoomOut()),
+    button('locate', 'Centralizar a sala', () => opts.getCamera()?.center()),
   );
-  const soundBtn = button(opts.soundOn ? '🔔' : '🔕', '', () => renderSound(opts.onToggleSound()));
+  const soundBtn = button('bell', '', () => renderSound(opts.onToggleSound()));
   const renderSound = (on: boolean) => {
-    soundBtn.textContent = on ? '🔔' : '🔕';
+    setIcon(soundBtn, on ? 'bell' : 'bell-off');
     const label = on
       ? 'Som de mensagem ligado (clique para desligar)'
       : 'Som de mensagem desligado (clique para ligar)';
@@ -79,8 +81,22 @@ export function mountHud(opts: {
   renderSound(opts.soundOn);
   zoom.prepend(soundBtn);
 
+  // Tema claro/escuro (provisório aqui; vai para as configurações na Fase 43).
+  const themeBtn = button('sun', '', () => setTheme(currentTheme() === 'dark' ? 'light' : 'dark'));
+  themeBtn.classList.add('hud-theme');
+  const renderTheme = () => {
+    const dark = currentTheme() === 'dark';
+    setIcon(themeBtn, dark ? 'sun' : 'moon');
+    const label = dark ? 'Usar tema claro' : 'Usar tema escuro';
+    themeBtn.title = label;
+    themeBtn.setAttribute('aria-label', label);
+  };
+  renderTheme();
+  onThemeChange(renderTheme);
+  zoom.prepend(themeBtn);
+
   // Som ambiente: botão 🎵 com um painelzinho (ligar e volume).
-  const ambientBtn = button('🎵', 'Som ambiente', () => {
+  const ambientBtn = button('music', 'Som ambiente', () => {
     panel.hidden = !panel.hidden;
     renderAmbient();
   });
@@ -121,24 +137,24 @@ export function mountHud(opts: {
   });
   zoom.prepend(ambientBtn);
 
-  const profileBtn = actionButton('hud-avatar', '👤', 'Perfil', opts.onOpenProfile);
-  const teamBtn = actionButton('hud-team', '👥', 'Equipe', opts.onOpenTeam);
-  const agendaBtn = actionButton('hud-agenda', '📅', 'Agenda', opts.onOpenAgenda);
-  const decorBtn = actionButton('hud-decor', '🪑', 'Decorar', opts.onToggleDecor);
+  const profileBtn = actionButton('hud-avatar', 'user', 'Perfil', opts.onOpenProfile);
+  const teamBtn = actionButton('hud-team', 'users', 'Equipe', opts.onOpenTeam);
+  const agendaBtn = actionButton('hud-agenda', 'calendar', 'Agenda', opts.onOpenAgenda);
+  const decorBtn = actionButton('hud-decor', 'armchair', 'Decorar', opts.onToggleDecor);
   decorBtn.setAttribute('aria-pressed', 'false');
-  const dmBtn = actionButton('hud-dm', '✉️', 'Mensagens', opts.onOpenMessages);
+  const dmBtn = actionButton('hud-dm', 'mail', 'Mensagens', opts.onOpenMessages);
   const dmBadge = document.createElement('span');
   dmBadge.className = 'dm-badge';
   dmBadge.hidden = true;
   dmBtn.append(dmBadge);
-  const focusBtn = actionButton('hud-focus', '🍅', 'Foco', () => undefined);
-  const mapBtn = actionButton('hud-map', '🗺️', 'Mapa', opts.onOpenMap);
-  const annBtn = actionButton('hud-ann', '📢', 'Avisos', opts.onOpenAnnouncements);
+  const focusBtn = actionButton('hud-focus', 'timer', 'Foco', () => undefined);
+  const mapBtn = actionButton('hud-map', 'map', 'Mapa', opts.onOpenMap);
+  const annBtn = actionButton('hud-ann', 'megaphone', 'Avisos', opts.onOpenAnnouncements);
   const annBadge = document.createElement('span');
   annBadge.className = 'dm-badge';
   annBadge.hidden = true;
   annBtn.append(annBadge);
-  const adminBtn = actionButton('hud-admin', '🛡️', 'Admin', opts.onOpenAdmin);
+  const adminBtn = actionButton('hud-admin', 'shield', 'Admin', opts.onOpenAdmin);
   adminBtn.hidden = true;
 
   const actions = document.createElement('div');
@@ -179,6 +195,7 @@ export function mountHud(opts: {
     },
     setDecorating(on) {
       setLabel(decorBtn, on ? 'Concluir decoração' : 'Decorar');
+      setIcon(decorBtn.querySelector('.ico')!, on ? 'check' : 'armchair');
       decorBtn.setAttribute('aria-pressed', String(on));
     },
     refreshAmbient() {
@@ -204,10 +221,10 @@ function renderStatus(el: HTMLElement, stats: AssetStats): void {
   }
 }
 
-function button(label: string, title: string, onClick: () => void): HTMLButtonElement {
+function button(name: IconName, title: string, onClick: () => void): HTMLButtonElement {
   const b = document.createElement('button');
   b.type = 'button';
-  b.textContent = label;
+  b.append(icon(name, 20));
   b.title = title;
   b.setAttribute('aria-label', title);
   b.addEventListener('click', onClick);
@@ -217,7 +234,7 @@ function button(label: string, title: string, onClick: () => void): HTMLButtonEl
 /** Botão do canto: ícone + texto (em telas pequenas só o ícone aparece). */
 function actionButton(
   className: string,
-  icon: string,
+  iconName: IconName,
   label: string,
   onClick: () => void,
 ): HTMLButtonElement {
@@ -225,9 +242,10 @@ function actionButton(
   b.type = 'button';
   b.className = `${className} btn-secondary hud-action`;
   b.append(
-    Object.assign(document.createElement('span'), { className: 'ico', textContent: icon }),
+    Object.assign(document.createElement('span'), { className: 'ico' }),
     Object.assign(document.createElement('span'), { className: 'lbl', textContent: label }),
   );
+  b.querySelector('.ico')!.append(icon(iconName));
   b.querySelector('.ico')!.setAttribute('aria-hidden', 'true');
   b.title = label;
   b.setAttribute('aria-label', label);
