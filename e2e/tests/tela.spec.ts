@@ -21,9 +21,13 @@ test('tela principal: a sala inteira cabe ao lado da conversa, que recolhe e é 
   const ana = await newPerson(browser, 'Ana');
   const page = ana.page;
   await expect(page.locator('.hud-card')).toHaveText('Recepção');
-  // Sem dicas nem selo de assets para quem não é admin; "Mais" só aparece com itens.
+  // Sem dicas nem selo de assets; no "Mais" quem não é admin só vê a Ajuda.
   await expect(page.locator('.hud-status')).toBeHidden();
-  await expect(page.locator('.hud-more')).toBeHidden();
+  await page.getByRole('button', { name: 'Mais' }).click();
+  await expect(page.getByRole('menuitem', { name: 'Ajuda (?)' })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: 'Admin' })).toBeHidden();
+  await page.getByRole('button', { name: 'Mais' }).click();
+  await expect(page.getByRole('menuitem', { name: 'Ajuda (?)' })).toBeHidden();
   await expect(page.getByRole('group', { name: 'Conversas' })).toBeVisible();
 
   const history = page.locator('details.chat-history');

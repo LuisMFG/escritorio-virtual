@@ -1112,11 +1112,13 @@ Pedido em 20/10/2026, com o escritório já em uso pelo pessoal do trabalho (ser
 - **Feito:** Perfil em **abas** (Perfil · Pet · Conquistas · Efeitos · Integrações · Conta; setas trocam de aba e a última usada volta aberta), com o cabeçalho do visual em cima; janela mais larga. **Configurações** pela engrenagem da coluna da direita: tema (escuro, claro ou do sistema), **tamanho do texto** (Normal, Grande, Maior: todo `font-size` do CSS multiplica por `--font-scale`), **movimento** (do sistema, reduzir ou normal: desliga transições e animações), som de mensagem, som ambiente com volume, notificações do navegador e, para admins, o diagnóstico da arte (o selo saiu da tela). Tudo salvo no navegador e aplicado antes de pintar a página. O botão de tema e o de som ambiente saíram da coluna (o sino ficou, para silenciar rápido). Editor de visual com prévia maior que **gira sozinha** (pausa ao girar à mão ou com "reduzir movimento"). Teste `e2e/tests/tema.spec.ts` (configurações e abas).
 
 
-#### Fase 44 — Primeira experiência e ajuda
+#### Fase 44 — Primeira experiência e ajuda ✅ implementada
 - **Tela de entrada** repaginada (avatar animado, explicação curta do escritório, erros claros nos campos).
 - **Tour guiado** no primeiro acesso: andar, sentar na sua mesa, falar, emotes, Decorar (pula quando quiser, refaz pela ajuda).
 - **Central de ajuda** (tecla `?`): comandos do chat, atalhos e o que cada botão faz; dicas no momento certo (ex.: a primeira vez que alguém abre o Decorar).
 - **Como testar:** criar uma conta nova e seguir o tour até sentar na mesa; abrir a ajuda com `?`.
+- **Feito:** tela de entrada com uma frase sobre o escritório, avatar girando (também no Entrar, se o navegador lembra de quem é) e **erros embaixo de cada campo** (`aria-invalid`), inclusive os do servidor: convite errado, usuário em uso, nome em uso (com sugestão), senha incorreta e dados inválidos (o servidor agora diz o `field`). **Tour guiado** só para conta nova (marcado ao criar a conta): boas-vindas, andar, escolher a mesa, conversar, emotes, Decorar e a ajuda; cada etapa com ação conclui sozinha quando a pessoa faz, com "Pular etapa" e "Pular tour"; contorno no botão de que fala e cartão perto dele. **Ajuda** com `?` ou em Mais → Ajuda (agora para todos): comandos do chat, emotes, atalhos e o que cada botão faz, e "Refazer o tour guiado". **Dica no momento certo** na primeira vez que alguém abre o Decorar. Testes `e2e/tests/tour.spec.ts`, `conta.spec.ts` (erro no campo) e `auth.test.ts` (campo do erro); nos testes e2e o tour só aparece com `&tour=1`.
+
 
 #### Fase 45 — Retorno, carregamento e erros
 - **Carregamento** com barra de progresso na entrada e esqueletos nos painéis; "Preparando móvel" com progresso.
