@@ -62,7 +62,7 @@ export class Overlay {
 
   constructor(onStatusChange: (status: Status) => void) {
     this.people.className = 'people';
-    this.people.open = window.innerWidth > 600;
+    this.people.open = window.innerWidth > 600 && window.innerHeight > 500;
     this.peopleBody.className = 'people-body';
 
     // Seletor do próprio status (fica fora da lista para não perder o foco ao re-renderizar).

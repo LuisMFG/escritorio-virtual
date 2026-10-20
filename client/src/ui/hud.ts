@@ -140,7 +140,18 @@ export function mountHud(opts: {
   adminBtn.hidden = true;
   const helpBtn = menuItem('help', 'Ajuda (?)', opts.onOpenHelp);
   helpBtn.classList.add('hud-help');
-  moreMenu.append(helpBtn, editRoomBtn, adminBtn);
+  // No celular (Fase 46) a barra mostra só 5 botões: os outros entram aqui (CSS mostra/esconde).
+  const mobileItem = (name: IconName, label: string, target: HTMLButtonElement) => {
+    const b = menuItem(name, label, () => target.click());
+    b.classList.add('mobile-only');
+    return b;
+  };
+  const deskItem = mobileItem('monitor', 'Minha mesa', deskBtn);
+  deskItem.hidden = true;
+  const annItem = mobileItem('megaphone', 'Avisos', annBtn);
+  const agendaItem = mobileItem('calendar', 'Agenda', agendaBtn);
+  const decorItem = mobileItem('armchair', 'Decorar', decorBtn);
+  moreMenu.append(deskItem, annItem, agendaItem, decorItem, helpBtn, editRoomBtn, adminBtn);
   const moreWrap = Object.assign(document.createElement('div'), { className: 'hud-more' });
   moreWrap.append(moreBtn, moreMenu);
   const renderMore = () => undefined;
@@ -179,6 +190,8 @@ export function mountHud(opts: {
       dmBtn.setAttribute('aria-label', n ? `Mensagens (${n} não lidas)` : 'Mensagens');
     },
     setUnreadAnnouncements(n) {
+      moreBtn.classList.toggle('has-unread', n > 0);
+      annItem.lastChild!.textContent = n ? `Avisos (${n > 99 ? '99+' : n})` : 'Avisos';
       annBadge.hidden = n === 0;
       annBadge.textContent = n > 99 ? '99+' : String(n);
       annBtn.setAttribute('aria-label', n ? `Avisos (${n} não lidos)` : 'Avisos');
@@ -189,6 +202,7 @@ export function mountHud(opts: {
     },
     setDesk(on) {
       deskBtn.hidden = !on;
+      deskItem.hidden = !on;
     },
     setAdmin(on) {
       adminBtn.hidden = !on;
@@ -196,10 +210,12 @@ export function mountHud(opts: {
     },
     setDecorLocked(locked) {
       decorBtn.disabled = locked;
+      decorItem.disabled = locked;
       decorBtn.title = locked ? 'Um admin travou a decoração desta sala.' : '';
     },
     setDecorating(on) {
       setLabel(decorBtn, on ? 'Concluir decoração' : 'Decorar');
+      decorItem.lastChild!.textContent = on ? 'Concluir decoração' : 'Decorar';
       setIcon(decorBtn.querySelector('.ico')!, on ? 'check' : 'armchair');
       decorBtn.setAttribute('aria-pressed', String(on));
     },
