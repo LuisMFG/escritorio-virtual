@@ -1,15 +1,14 @@
 import type { AssetLoader, AssetStats } from '../assets/AssetLoader.js';
-import { AMBIENT_LABELS } from '@office/shared';
 import type { Camera } from '../scene/Camera.js';
-import type { AmbientSound } from './ambient.js';
 import { icon, setIcon, type IconName } from './icons.js';
-import { currentTheme, onThemeChange, setTheme } from './theme.js';
 
 export interface Hud {
   setRoomName(name: string): void;
   setDecorating(on: boolean): void;
-  /** O ambiente da sala mudou: atualiza o painel do som ambiente. */
-  refreshAmbient(): void;
+  /** De onde vem a arte agora (diagnóstico para admins). */
+  readonly assetStatus: string;
+  /** O som de mensagem mudou em Configurações: o sino acompanha. */
+  setSoundOn(on: boolean): void;
   /** Contador de mensagens privadas não lidas no botão. */
   setUnreadDms(n: number): void;
   /** Contador de avisos da diretoria não lidos. */
@@ -42,7 +41,7 @@ export function mountHud(opts: {
   onCenterSelf: () => void;
   /** Vai até a própria mesa e senta. */
   onGoToDesk: () => void;
-  ambient: AmbientSound;
+  onOpenSettings: () => void;
   onToggleDecor: () => void;
   /** Liga/desliga o som de mensagem; devolve o novo estado. */
   onToggleSound: () => boolean;
@@ -54,14 +53,11 @@ export function mountHud(opts: {
   const title = document.createElement('h1');
   card.append(title);
 
-  // Selo da origem da arte: só para admins (diagnóstico).
-  const status = document.createElement('div');
-  status.className = 'hud-status';
-  status.setAttribute('role', 'status');
-  status.hidden = true;
-  opts.loader.onChange((stats) => renderStatus(status, stats));
+  // Origem da arte: só para admins, em Configurações → Diagnóstico.
+  let assetStatus = '';
+  opts.loader.onChange((stats) => (assetStatus = statusText(stats)));
 
-  // Coluna da direita compacta: som e tema em cima, câmera embaixo.
+  // Coluna da direita compacta: configurações e som em cima, câmera embaixo.
   const zoom = document.createElement('div');
   zoom.className = 'hud-zoom';
   zoom.setAttribute('role', 'toolbar');
@@ -88,61 +84,10 @@ export function mountHud(opts: {
   renderSound(opts.soundOn);
   zoom.prepend(soundBtn);
 
-  // Tema claro/escuro (provisório aqui; vai para as configurações na Fase 43).
-  const themeBtn = button('sun', '', () => setTheme(currentTheme() === 'dark' ? 'light' : 'dark'));
-  themeBtn.classList.add('hud-theme');
-  const renderTheme = () => {
-    const dark = currentTheme() === 'dark';
-    setIcon(themeBtn, dark ? 'sun' : 'moon');
-    const label = dark ? 'Usar tema claro' : 'Usar tema escuro';
-    themeBtn.title = label;
-    themeBtn.setAttribute('aria-label', label);
-  };
-  renderTheme();
-  onThemeChange(renderTheme);
-  zoom.prepend(themeBtn);
-
-  // Som ambiente: botão 🎵 com um painelzinho (ligar e volume).
-  const ambientBtn = button('music', 'Som ambiente', () => {
-    panel.hidden = !panel.hidden;
-    renderAmbient();
-  });
-  const panel = document.createElement('div');
-  panel.className = 'ambient-panel';
-  panel.hidden = true;
-  const toggleLabel = document.createElement('label');
-  const toggle = Object.assign(document.createElement('input'), { type: 'checkbox' });
-  toggleLabel.append(toggle, ' Som ambiente');
-  const volume = Object.assign(document.createElement('input'), {
-    type: 'range',
-    min: '0',
-    max: '1',
-    step: '0.05',
-  });
-  volume.setAttribute('aria-label', 'Volume do som ambiente');
-  const nowPlaying = Object.assign(document.createElement('small'), { className: 'muted' });
-  panel.append(toggleLabel, volume, nowPlaying);
-  const renderAmbient = () => {
-    const a = opts.ambient;
-    toggle.checked = a.enabled;
-    volume.value = String(a.volume);
-    volume.disabled = !a.enabled;
-    nowPlaying.textContent =
-      a.current === 'none' ? 'Esta sala é silenciosa.' : `Nesta sala: ${AMBIENT_LABELS[a.current]}`;
-    ambientBtn.setAttribute('aria-pressed', String(a.enabled));
-    ambientBtn.classList.toggle('on', a.enabled);
-  };
-  toggle.addEventListener('change', () => {
-    opts.ambient.setEnabled(toggle.checked);
-    renderAmbient();
-  });
-  volume.addEventListener('input', () => opts.ambient.setVolume(Number(volume.value)));
-  document.addEventListener('pointerdown', (e) => {
-    if (!panel.hidden && !panel.contains(e.target as Node) && e.target !== ambientBtn) {
-      panel.hidden = true;
-    }
-  });
-  zoom.prepend(ambientBtn);
+  // Configurações (Fase 43): tema, texto, movimento, som ambiente e notificações.
+  const settingsBtn = button('settings', 'Configurações', opts.onOpenSettings);
+  settingsBtn.classList.add('hud-settings');
+  zoom.prepend(settingsBtn);
 
   const profileBtn = actionButton('hud-avatar', 'user', 'Perfil', opts.onOpenProfile);
   const teamBtn = actionButton('hud-team', 'users', 'Equipe', opts.onOpenTeam);
@@ -224,7 +169,7 @@ export function mountHud(opts: {
     group('Escritório', agendaBtn, decorBtn),
     moreWrap,
   );
-  document.body.append(card, status, zoom, actions, panel);
+  document.body.append(card, zoom, actions);
   return {
     focusButton: focusBtn,
     setUnreadDms(n) {
@@ -246,7 +191,6 @@ export function mountHud(opts: {
     },
     setAdmin(on) {
       adminBtn.hidden = !on;
-      status.hidden = !on;
       renderMore();
     },
     setDecorLocked(locked) {
@@ -258,8 +202,11 @@ export function mountHud(opts: {
       setIcon(decorBtn.querySelector('.ico')!, on ? 'check' : 'armchair');
       decorBtn.setAttribute('aria-pressed', String(on));
     },
-    refreshAmbient() {
-      renderAmbient();
+    get assetStatus() {
+      return assetStatus;
+    },
+    setSoundOn(on) {
+      renderSound(on);
     },
     setRoomName(name) {
       title.textContent = name;
@@ -268,17 +215,12 @@ export function mountHud(opts: {
   };
 }
 
-function renderStatus(el: HTMLElement, stats: AssetStats): void {
-  if (stats.offline) {
-    el.dataset.state = 'fallback';
-    el.textContent = 'Arte provisória (modo offline)';
-  } else if (stats.failed > 0) {
-    el.dataset.state = 'fallback';
-    el.textContent = `HabboAssets indisponível em ${stats.failed} item(ns) — usando arte provisória`;
-  } else {
-    el.dataset.state = 'ok';
-    el.textContent = 'Assets: HabboAssets (Habbo BR)';
+function statusText(stats: AssetStats): string {
+  if (stats.offline) return 'Arte provisória (modo offline).';
+  if (stats.failed > 0) {
+    return `HabboAssets indisponível em ${stats.failed} item(ns): usando arte provisória.`;
   }
+  return 'Arte: HabboAssets (Habbo BR), tudo carregado.';
 }
 
 function button(name: IconName, title: string, onClick: () => void): HTMLButtonElement {

@@ -92,6 +92,8 @@ import {
   THEME_BACKGROUND,
 } from './ui/theme.js';
 import { DeskChip } from './ui/desk.js';
+import { openSettings } from './ui/settings.js';
+import { applyPrefs } from './ui/prefs.js';
 
 /** Sala pedida na URL (`#/meeting`), para recarregar no mesmo lugar. */
 function roomFromHash(): string {
@@ -162,6 +164,7 @@ async function start(): Promise<void> {
   TextureSource.defaultOptions.scaleMode = 'nearest';
 
   applyTheme(loadTheme());
+  applyPrefs();
   const app = new Application();
   await app.init({
     resizeTo: window,
@@ -539,7 +542,14 @@ async function start(): Promise<void> {
         currentRoomId: conn.currentRoomId,
       });
     },
-    ambient,
+    onOpenSettings: () =>
+      openSettings({
+        sound,
+        onSoundChange: (on) => hud.setSoundOn(on),
+        ambient,
+        notifier,
+        assetStatus: () => (session?.role === 'admin' ? hud.assetStatus : null),
+      }),
     onEditRoom: () => {
       if (!session || !connection) return;
       const conn = connection;
@@ -605,7 +615,7 @@ async function start(): Promise<void> {
   function showProfile(focusAchievements = false): void {
     if (!session) return;
     openProfile(session, {
-      focusAchievements,
+      tab: focusAchievements ? 'conquistas' : undefined,
       saved: (updated) => {
         session = updated;
         rememberSession(updated);
@@ -819,7 +829,6 @@ async function start(): Promise<void> {
     s.setDayLight(currentLight());
     s.setBusyRooms(busyRooms());
     ambient.setAmbient(layout.ambient);
-    hud.refreshAmbient();
     overlay.setFading(false);
     avatarCard.hide();
     refreshOtherRooms();

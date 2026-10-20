@@ -157,13 +157,13 @@ body {
 
 .hud-card h1 {
   margin: 0 0 4px;
-  font-size: 16px;
+  font-size: calc(16px * var(--font-scale, 1));
 }
 
 .hud-card p {
   margin: 0;
   color: var(--muted);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale, 1));
 }
 
 .hud-status {
@@ -174,7 +174,7 @@ body {
   background: var(--card);
   border: 1px solid var(--card-border);
   border-radius: var(--radius-pill);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale, 1));
   color: var(--muted);
   display: flex;
   align-items: center;
@@ -209,7 +209,7 @@ body {
   border: 1px solid var(--card-border);
   background: var(--card);
   color: var(--text);
-  font-size: 18px;
+  font-size: calc(18px * var(--font-scale, 1));
   cursor: pointer;
 }
 
@@ -267,14 +267,14 @@ body {
 
 .login-card h1 {
   margin: 0;
-  font-size: 20px;
+  font-size: calc(20px * var(--font-scale, 1));
 }
 
 .login-sub,
 .login-foot {
   margin: 0;
   color: var(--muted);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale, 1));
 }
 
 .login-avatar {
@@ -295,7 +295,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale, 1));
 }
 
 .field input {
@@ -305,7 +305,7 @@ body {
   background: var(--surface-sunken);
   color: var(--text);
   font: inherit;
-  font-size: 15px;
+  font-size: calc(15px * var(--font-scale, 1));
 }
 
 .field input:focus-visible {
@@ -323,7 +323,7 @@ body {
   border-radius: var(--radius-md);
   background: var(--danger-tint);
   color: var(--danger-text);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale, 1));
 }
 
 .btn-primary {
@@ -368,7 +368,7 @@ body {
   background: var(--card);
   border: 1px solid var(--card-border);
   border-radius: var(--radius-lg);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale, 1));
 }
 
 .people summary {
@@ -400,7 +400,7 @@ body {
   padding-left: 14px;
   margin-top: -4px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale, 1));
 }
 
 .people-list li::before {
@@ -425,7 +425,7 @@ body {
   border-radius: var(--radius-pill);
   background: var(--surface-3);
   color: var(--muted);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale, 1));
 }
 
 .conn-banner {
@@ -439,7 +439,7 @@ body {
   background: var(--warn-soft);
   border: 1px solid var(--warn);
   color: var(--warn-text);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale, 1));
   z-index: 5;
 }
 
@@ -454,7 +454,7 @@ body {
   border-radius: var(--radius-md);
   background: var(--surface-3);
   border: 1px solid var(--card-border);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale, 1));
 }
 
 @media (max-width: 600px) {
@@ -495,7 +495,7 @@ body {
   border: 1px solid var(--border);
   background: var(--surface-2);
   color: var(--text);
-  font-size: 18px;
+  font-size: calc(18px * var(--font-scale, 1));
   cursor: pointer;
 }
 
@@ -559,7 +559,7 @@ body {
 
 .editor-head h2 {
   margin: 0;
-  font-size: 17px;
+  font-size: calc(17px * var(--font-scale, 1));
 }
 
 .editor-foot {
@@ -584,8 +584,8 @@ body {
 }
 
 .preview-stage {
-  width: 176px;
-  height: 240px;
+  width: 200px;
+  height: 268px;
   display: grid;
   place-items: center;
   border-radius: var(--radius-lg);
@@ -621,7 +621,7 @@ body {
   background: var(--surface-2);
   color: var(--muted);
   font: inherit;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale, 1));
   cursor: pointer;
 }
 
@@ -651,7 +651,7 @@ body {
   background: var(--surface-2);
   color: var(--muted);
   font: inherit;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale, 1));
   cursor: pointer;
 }
 
@@ -680,7 +680,7 @@ body {
   background: var(--surface-3);
   color: var(--muted);
   font: inherit;
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale, 1));
   cursor: pointer;
 }
 
@@ -705,7 +705,7 @@ body {
 
 .swatch-label {
   margin: 0 0 4px;
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale, 1));
   color: var(--muted);
 }
 
@@ -731,7 +731,7 @@ body {
 .muted {
   margin: 0;
   color: var(--muted);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale, 1));
 }
 
 .editor-error {
@@ -740,7 +740,7 @@ body {
   border-radius: var(--radius-md);
   background: var(--danger-tint);
   color: var(--danger-text);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale, 1));
 }
 
 @media (max-width: 640px) {
@@ -811,7 +811,7 @@ body {
   background: var(--card);
   border: 1px solid var(--card-border);
   border-radius: var(--radius-lg);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale, 1));
 }
 
 .chat-history summary {
@@ -845,7 +845,7 @@ body {
 
 .chat-log time {
   color: var(--muted);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale, 1));
   font-variant-numeric: tabular-nums;
 }
 
@@ -906,7 +906,7 @@ body {
 
 .people-body h3 {
   margin: 6px 0 6px;
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale, 1));
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -965,7 +965,7 @@ body {
 
 .decor-panel h2 {
   margin: 0;
-  font-size: 15px;
+  font-size: calc(15px * var(--font-scale, 1));
 }
 
 .decor-grid {
@@ -991,7 +991,7 @@ body {
   background: var(--surface-3);
   color: var(--muted);
   font: inherit;
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale, 1));
   line-height: 1.2;
   cursor: pointer;
 }
@@ -1017,16 +1017,16 @@ body {
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale, 1));
 }
 
 .decor-status .btn-secondary {
   padding: 5px 10px;
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale, 1));
 }
 
 .decor-help {
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale, 1));
 }
 
 .decor-search,
@@ -1038,11 +1038,11 @@ body {
   background: var(--surface-2);
   color: var(--text);
   font: inherit;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale, 1));
 }
 
 .decor-grid button span {
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale, 1));
   line-height: 1.2;
   text-align: center;
   overflow: hidden;
@@ -1053,14 +1053,14 @@ body {
 }
 
 .decor-colors {
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale, 1));
   color: var(--muted);
 }
 
 .decor-more {
   align-self: center;
   padding: 5px 12px;
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale, 1));
 }
 
 .decor-more[hidden] {
@@ -1168,7 +1168,7 @@ body.decorating .hud-decor {
   .hud-zoom button {
     width: 36px;
     height: 36px;
-    font-size: 16px;
+    font-size: calc(16px * var(--font-scale, 1));
   }
 
   .people {
@@ -1192,7 +1192,7 @@ body.decorating .hud-decor {
   border-radius: var(--radius-md);
   border: 1px solid var(--border);
   background: var(--surface-2);
-  font-size: 18px;
+  font-size: calc(18px * var(--font-scale, 1));
   cursor: pointer;
 }
 
@@ -1236,7 +1236,7 @@ body.decorating .hud-decor {
   background: transparent;
   color: var(--muted);
   font: inherit;
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale, 1));
   cursor: pointer;
 }
 
@@ -1247,7 +1247,7 @@ body.decorating .hud-decor {
 }
 
 .emote-menu .emoji {
-  font-size: 22px;
+  font-size: calc(22px * var(--font-scale, 1));
 }
 
 .mention-suggestions {
@@ -1262,7 +1262,7 @@ body.decorating .hud-decor {
   padding: 6px 10px;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale, 1));
 }
 
 .mention-suggestions li[aria-selected='true'],
@@ -1291,7 +1291,7 @@ mark.mention {
   justify-content: space-between;
   gap: 8px;
   padding: 0 12px 8px;
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale, 1));
   color: var(--muted);
 }
 
@@ -1302,7 +1302,7 @@ mark.mention {
   background: var(--surface-sunken);
   color: var(--text);
   font: inherit;
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale, 1));
 }
 
 .status-row select[data-status='busy'] {
@@ -1340,12 +1340,12 @@ mark.mention {
 
 .avatar-card h3 {
   margin: 0 0 2px;
-  font-size: 15px;
+  font-size: calc(15px * var(--font-scale, 1));
 }
 
 .avatar-card p {
   margin: 0;
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale, 1));
 }
 
 .card-status::before {
@@ -1374,7 +1374,7 @@ mark.mention {
 
 .card-actions .btn-secondary {
   padding: 6px 10px;
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale, 1));
 }
 
 /* ---------- Fase 9: contas, cargos, perfil e equipe ---------- */
@@ -1449,7 +1449,7 @@ mark.mention {
   border: 1px solid color-mix(in srgb, var(--cargo) 60%, transparent);
   background: color-mix(in srgb, var(--cargo) 18%, transparent);
   color: color-mix(in srgb, var(--cargo) 70%, white);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale, 1));
   font-weight: 600;
   line-height: 1.6;
   white-space: nowrap;
@@ -1465,7 +1465,7 @@ mark.mention {
 
 .people-list .cargo-pill {
   margin-left: 6px;
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale, 1));
 }
 
 /* Janelas (perfil e equipe) */
@@ -1479,7 +1479,7 @@ mark.mention {
   border-radius: var(--radius-xl);
   box-shadow: 0 20px 60px var(--backdrop);
   overflow: hidden;
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale, 1));
 }
 
 .sheet-wide {
@@ -1496,7 +1496,7 @@ mark.mention {
 
 .sheet-head h2 {
   margin: 0;
-  font-size: 17px;
+  font-size: calc(17px * var(--font-scale, 1));
 }
 
 .sheet-close {
@@ -1507,7 +1507,7 @@ mark.mention {
   border-radius: var(--radius-md);
   background: none;
   color: var(--muted);
-  font-size: 16px;
+  font-size: calc(16px * var(--font-scale, 1));
   cursor: pointer;
 }
 
@@ -1542,7 +1542,7 @@ mark.mention {
 }
 
 .profile-name {
-  font-size: 17px;
+  font-size: calc(17px * var(--font-scale, 1));
   font-weight: 700;
 }
 
@@ -1583,12 +1583,12 @@ mark.mention {
 
 .team-group {
   margin: 4px 0 0;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale, 1));
   color: var(--muted);
 }
 
 .team-group .cargo-pill {
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale, 1));
 }
 
 .team-list {
@@ -1647,7 +1647,7 @@ mark.mention {
 }
 
 .team-meta {
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale, 1));
 }
 
 .team-member[data-online='true'] .team-meta {
@@ -1656,12 +1656,12 @@ mark.mention {
 
 .team-bio {
   margin-top: 2px !important;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale, 1));
   overflow-wrap: anywhere;
 }
 
 .team-birthday {
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale, 1));
 }
 
 .team-birthday.today {
@@ -1672,7 +1672,7 @@ mark.mention {
 .team-cargo {
   flex: none;
   max-width: 180px;
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale, 1));
 }
 
 /* Cartão do avatar */
@@ -1682,7 +1682,7 @@ mark.mention {
 
 .avatar-card .card-bio {
   max-width: 200px;
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale, 1));
   overflow-wrap: anywhere;
 }
 
@@ -1725,7 +1725,7 @@ mark.mention {
 
 .btn-small {
   padding: 5px 9px;
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale, 1));
 }
 
 .btn-danger {
@@ -1797,7 +1797,7 @@ mark.mention {
   background: none;
   color: var(--muted);
   font: inherit;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale, 1));
   font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
@@ -1813,7 +1813,7 @@ mark.mention {
   padding: 8px 16px;
   background: var(--ok-tint);
   color: var(--ok-text);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale, 1));
 }
 
 .admin-flash.error {
@@ -1852,7 +1852,7 @@ mark.mention {
   background: var(--surface-sunken);
   color: var(--text);
   font: inherit;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale, 1));
 }
 
 .admin-buttons {
@@ -1877,7 +1877,7 @@ mark.mention {
 }
 
 .temp-password code {
-  font-size: 20px;
+  font-size: calc(20px * var(--font-scale, 1));
   font-weight: 700;
   letter-spacing: 1px;
   user-select: all;
@@ -1932,7 +1932,7 @@ mark.mention {
 
 .admin-section {
   margin: 4px 0 0;
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale, 1));
 }
 
 .invite-form {
@@ -1961,7 +1961,7 @@ mark.mention {
   padding: 6px 8px;
   border-radius: var(--radius-md);
   background: var(--surface-2);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale, 1));
   overflow-wrap: anywhere;
 }
 
@@ -1976,7 +1976,7 @@ mark.mention {
 }
 
 .avatar-card .card-mod button {
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale, 1));
   padding: 5px 8px;
 }
 
@@ -2016,7 +2016,7 @@ mark.mention {
   border-radius: var(--radius-pill);
   background: var(--danger);
   color: var(--on-accent);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale, 1));
   font-weight: 700;
   line-height: 18px;
   text-align: center;
@@ -2063,7 +2063,7 @@ body.dm-open .hud-status {
 .dm-head h2 {
   flex: 1;
   margin: 0;
-  font-size: 16px;
+  font-size: calc(16px * var(--font-scale, 1));
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2077,7 +2077,7 @@ body.dm-open .hud-status {
   border-radius: var(--radius-md);
   background: none;
   color: var(--muted);
-  font-size: 15px;
+  font-size: calc(15px * var(--font-scale, 1));
   cursor: pointer;
 }
 
@@ -2182,12 +2182,12 @@ body.dm-open .hud-status {
 }
 
 .dm-conv-time {
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale, 1));
 }
 
 .dm-conv-last {
   color: var(--muted);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale, 1));
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2205,7 +2205,7 @@ body.dm-open .hud-status {
 .dm-sub {
   flex: none;
   margin: 0;
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale, 1));
 }
 
 .dm-messages {
@@ -2243,7 +2243,7 @@ body.dm-open .hud-status {
 .dm-time {
   display: block;
   margin-top: 2px;
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale, 1));
   opacity: 0.65;
   text-align: right;
 }
@@ -2252,7 +2252,7 @@ body.dm-open .hud-status {
   align-self: flex-end;
   margin: -2px 2px 0;
   color: var(--muted);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale, 1));
 }
 
 .dm-form {
@@ -2333,7 +2333,7 @@ body.dm-open .hud-status {
   border-radius: var(--radius-xs);
   background: var(--line);
   color: inherit;
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale, 1));
   line-height: 18px;
   cursor: pointer;
 }
@@ -2365,7 +2365,7 @@ body.dm-open .hud-status {
   background: #22252f;
   color: var(--text);
   font: inherit;
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale, 1));
   line-height: 20px;
   cursor: pointer;
 }
@@ -2397,7 +2397,7 @@ body.dm-open .hud-status {
   border: 0;
   border-radius: 50%;
   background: none;
-  font-size: 18px;
+  font-size: calc(18px * var(--font-scale, 1));
   cursor: pointer;
 }
 
@@ -2419,7 +2419,7 @@ body.dm-open .hud-status {
   background: rgba(122, 167, 255, 0.1);
   color: var(--muted);
   font: inherit;
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale, 1));
   text-align: left;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2457,7 +2457,7 @@ button.reply-quote:hover {
   border-left: 3px solid var(--accent);
   border-radius: var(--radius-md);
   background: var(--surface-2);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale, 1));
   color: var(--muted);
 }
 
@@ -2561,7 +2561,7 @@ button.reply-quote:hover {
 
 .hud-edit-room {
   margin-top: 4px;
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale, 1));
   /* O cartão não recebe cliques (para não atrapalhar a cena); o botão sim. */
   pointer-events: auto;
 }
@@ -2574,7 +2574,7 @@ button.reply-quote:hover {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale, 1));
   color: var(--muted);
   cursor: pointer;
 }
@@ -2675,7 +2675,7 @@ button.reply-quote:hover {
   border-radius: var(--radius-xs);
   background: var(--surface-2);
   color: var(--bg);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale, 1));
   line-height: var(--cell);
   cursor: crosshair;
 }
@@ -2710,7 +2710,7 @@ button.reply-quote:hover {
 
 .re-side h3 {
   margin: 0 0 6px;
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale, 1));
 }
 
 .re-doors {
@@ -2720,7 +2720,7 @@ button.reply-quote:hover {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale, 1));
 }
 
 .re-doors select {
@@ -2734,7 +2734,7 @@ button.reply-quote:hover {
 
 .re-hint {
   margin: 0;
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale, 1));
 }
 
 .re-foot {
@@ -2798,7 +2798,7 @@ button.reply-quote:hover {
   border-radius: var(--radius-lg);
   border: 1px solid var(--card-border);
   background: var(--card);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale, 1));
 }
 
 .ambient-panel[hidden] {
@@ -2876,17 +2876,17 @@ button.reply-quote:hover {
   top: -10px;
   left: 50%;
   transform: translateX(-50%);
-  font-size: 16px;
+  font-size: calc(16px * var(--font-scale, 1));
 }
 
 .board-note p {
   margin: 0;
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale, 1));
   line-height: 1.35;
 }
 
 .board-note small {
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale, 1));
   opacity: 0.7;
 }
 
@@ -3001,7 +3001,7 @@ button.reply-quote:hover {
 
 .wb-bar h2 {
   margin: 0;
-  font-size: 16px;
+  font-size: calc(16px * var(--font-scale, 1));
   white-space: nowrap;
 }
 
@@ -3022,7 +3022,7 @@ button.reply-quote:hover {
   background: none;
   color: var(--muted);
   font: inherit;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale, 1));
   font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
@@ -3137,7 +3137,7 @@ button.reply-quote:hover {
   align-items: center;
   gap: 6px;
   margin-left: auto;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale, 1));
   color: var(--muted);
   cursor: pointer;
 }
@@ -3148,7 +3148,7 @@ button.reply-quote:hover {
 
 .agenda-day {
   margin: 6px 0 0;
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale, 1));
   color: var(--muted);
 }
 
@@ -3174,11 +3174,11 @@ button.reply-quote:hover {
 }
 
 .agenda-time strong {
-  font-size: 17px;
+  font-size: calc(17px * var(--font-scale, 1));
 }
 
 .agenda-time span {
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale, 1));
 }
 
 .agenda-info {
@@ -3202,7 +3202,7 @@ button.reply-quote:hover {
 }
 
 .agenda-desc {
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale, 1));
 }
 
 .agenda-people {
@@ -3215,7 +3215,7 @@ button.reply-quote:hover {
 .agenda-person {
   padding: 1px 8px;
   border-radius: var(--radius-pill);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale, 1));
   border: 1px solid var(--border);
 }
 
@@ -3289,7 +3289,7 @@ button.reply-quote:hover {
 
 .agenda-invitees label {
   cursor: pointer;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale, 1));
 }
 
 .agenda-form-actions {
@@ -3379,7 +3379,7 @@ button.reply-quote:hover {
 
 .ttt-head h2 {
   margin: 0;
-  font-size: 15px;
+  font-size: calc(15px * var(--font-scale, 1));
 }
 
 .ttt-players {
@@ -3396,7 +3396,7 @@ button.reply-quote:hover {
   padding: 4px 6px;
   border: 1px solid transparent;
   border-radius: var(--radius-md);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale, 1));
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3410,7 +3410,7 @@ button.reply-quote:hover {
 .ttt-status {
   min-height: 2.8em;
   margin: 8px 0;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale, 1));
   text-align: center;
 }
 
@@ -3462,12 +3462,12 @@ button.reply-quote:hover {
   align-items: center;
   min-height: 34px;
   margin-top: 10px;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale, 1));
 }
 
 .ttt-scores {
   margin-top: 8px;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale, 1));
 }
 
 .ttt-scores summary {
@@ -3498,7 +3498,7 @@ button.reply-quote:hover {
 
 .profile-pet h3 {
   margin: 0 0 8px;
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale, 1));
 }
 
 .profile-pet canvas {
@@ -3517,7 +3517,7 @@ button.reply-quote:hover {
 }
 
 .pet-hint {
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale, 1));
 }
 
 .pet-actions {
@@ -3573,7 +3573,7 @@ button.reply-quote:hover {
   background: transparent;
   color: var(--muted);
   font: inherit;
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale, 1));
   cursor: pointer;
 }
 
@@ -3663,12 +3663,12 @@ button.reply-quote:hover {
 
 .profile-achievements h3 {
   margin: 0 0 4px;
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale, 1));
 }
 
 .achievements-hint {
   margin: 0 0 8px;
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale, 1));
 }
 
 .achievements-grid {
@@ -3711,11 +3711,11 @@ button.reply-quote:hover {
 }
 
 .achievement strong {
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale, 1));
 }
 
 .achievement small {
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale, 1));
 }
 
 .achievement-toast {
@@ -3746,13 +3746,13 @@ button.reply-quote:hover {
   color: var(--warn);
   font-weight: 700;
   text-transform: uppercase;
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale, 1));
   letter-spacing: 0.06em;
 }
 
 .achievement-toast span {
   color: var(--muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale, 1));
 }
 
 @keyframes achievement-in {
@@ -3772,7 +3772,7 @@ button.reply-quote:hover {
 
 .card-activity {
   margin: 4px 0;
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale, 1));
   color: var(--accent-text);
 }
 
@@ -3784,12 +3784,12 @@ button.reply-quote:hover {
 
 .profile-code h3 {
   margin: 0 0 6px;
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale, 1));
 }
 
 .code-intro {
   margin: 0 0 10px;
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale, 1));
 }
 
 .code-intro a {
@@ -3817,7 +3817,7 @@ button.reply-quote:hover {
   display: flex;
   gap: 8px;
   align-items: baseline;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale, 1));
 }
 
 .token-list li small {
@@ -3851,7 +3851,7 @@ button.reply-quote:hover {
   border: 1px solid rgba(111, 207, 151, 0.5);
   border-radius: var(--radius-lg);
   background: rgba(111, 207, 151, 0.08);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale, 1));
 }
 
 .token-fresh strong,
@@ -3867,7 +3867,7 @@ button.reply-quote:hover {
 
 .token-value {
   font-family: ui-monospace, monospace;
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale, 1));
 }
 
 /* ---------- Fase 21: Spotify ---------- */
@@ -3889,12 +3889,12 @@ button.reply-quote:hover {
 
 .profile-spotify h3 {
   margin: 0 0 6px;
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale, 1));
 }
 
 .spotify-intro {
   margin: 0 0 10px;
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale, 1));
 }
 
 .btn-spotify {
@@ -3922,14 +3922,14 @@ button.reply-quote:hover {
   gap: 6px;
   align-items: center;
   margin-right: auto;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale, 1));
 }
 
 /* ---------- Fase 22: backups ---------- */
 
 .backup-intro {
   margin: 0 0 10px;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale, 1));
 }
 
 .backup-list {
@@ -3948,7 +3948,7 @@ button.reply-quote:hover {
   padding: 6px 10px;
   border: 1px solid var(--card-border);
   border-radius: var(--radius-md);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale, 1));
 }
 
 .backup-name {
@@ -3997,12 +3997,12 @@ button.reply-quote:hover {
 
 .announcement-text small {
   color: var(--muted);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale, 1));
 }
 
 .announcement-text p {
   margin: 2px 0 0;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale, 1));
   white-space: pre-line;
   max-height: 6.5em;
   overflow: auto;
@@ -4025,7 +4025,7 @@ button.reply-quote:hover {
 
 .announcement-form h3 {
   margin: 0;
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale, 1));
 }
 
 .announcement-form textarea {
@@ -4046,7 +4046,7 @@ button.reply-quote:hover {
   display: flex;
   gap: 6px;
   align-items: center;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale, 1));
 }
 
 .announcement-list {
@@ -4078,7 +4078,7 @@ button.reply-quote:hover {
 
 .announcement-item p {
   margin: 0;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale, 1));
   white-space: pre-line;
 }
 
@@ -4110,7 +4110,7 @@ button.reply-quote:hover {
 }
 
 .poll-question {
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale, 1));
 }
 
 .poll-options {
@@ -4130,7 +4130,7 @@ button.reply-quote:hover {
   background: linear-gradient(90deg, rgba(122, 167, 255, 0.28) var(--pct), transparent var(--pct));
   color: var(--text);
   font: inherit;
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale, 1));
   text-align: left;
   cursor: pointer;
 }
@@ -4154,7 +4154,7 @@ button.reply-quote:hover {
   justify-content: space-between;
   align-items: baseline;
   gap: 8px;
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale, 1));
 }
 
 .poll-foot .btn-link {
@@ -4181,7 +4181,7 @@ button.reply-quote:hover {
   gap: 6px;
   align-items: center;
   margin: 8px 0;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale, 1));
 }
 
 /* ---------- Fase 26: elogios ---------- */
@@ -4207,12 +4207,12 @@ button.reply-quote:hover {
   background: transparent;
   color: var(--muted);
   font: inherit;
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale, 1));
   cursor: pointer;
 }
 
 .kudos-type .emoji {
-  font-size: 22px;
+  font-size: calc(22px * var(--font-scale, 1));
 }
 
 .kudos-type[aria-checked='true'] {
@@ -4255,7 +4255,7 @@ button.reply-quote:hover {
   background: transparent;
   color: var(--muted);
   font: inherit;
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale, 1));
   cursor: pointer;
 }
 
@@ -4296,7 +4296,7 @@ button.reply-quote:hover {
 }
 
 .kudos-item .kudos-emoji {
-  font-size: 20px;
+  font-size: calc(20px * var(--font-scale, 1));
 }
 
 .kudos-item .tag {
@@ -4307,7 +4307,7 @@ button.reply-quote:hover {
 
 .kudos-item p {
   margin: 0;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale, 1));
 }
 
 .kudos-item small {
@@ -4353,7 +4353,7 @@ button.reply-quote:hover {
   border-radius: var(--radius-lg);
   background: var(--surface-1);
   box-shadow: 0 12px 40px var(--backdrop);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale, 1));
 }
 
 .focus-popover p {
@@ -4384,7 +4384,7 @@ button.reply-quote:hover {
 
 .card-focus {
   margin: 4px 0;
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale, 1));
   color: var(--danger-text);
 }
 
@@ -4459,7 +4459,7 @@ button.reply-quote:hover {
   color: var(--text);
   font: inherit;
   font-weight: 700;
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale, 1));
   text-align: left;
   cursor: pointer;
 }
@@ -4475,7 +4475,7 @@ button.reply-quote:hover {
 
 .minimap-meeting {
   margin: 0;
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale, 1));
   color: var(--danger-text);
 }
 
@@ -4487,7 +4487,7 @@ button.reply-quote:hover {
   padding: 0;
   list-style: none;
   overflow: auto;
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale, 1));
 }
 
 .minimap-person {
@@ -4532,7 +4532,7 @@ button.reply-quote:hover {
   border-radius: var(--radius-md);
   border: 1px solid var(--border);
   background: var(--surface-2);
-  font-size: 16px;
+  font-size: calc(16px * var(--font-scale, 1));
   cursor: pointer;
 }
 
@@ -4548,7 +4548,7 @@ button.reply-quote:hover {
   border-left: 3px solid var(--ok);
   border-radius: var(--radius-md);
   background: var(--surface-2);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale, 1));
 }
 
 .attach-draft[hidden] {
@@ -4627,14 +4627,14 @@ button.reply-quote:hover {
 
 .attach-icon {
   grid-row: span 2;
-  font-size: 22px;
+  font-size: calc(22px * var(--font-scale, 1));
 }
 
 .attach-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale, 1));
 }
 
 .attach-file.attach-gone {
@@ -4659,7 +4659,7 @@ button.reply-quote:hover {
   background: var(--accent-tint-weak);
   color: var(--text);
   text-decoration: none;
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale, 1));
 }
 
 .link-preview[hidden] {
@@ -4690,7 +4690,7 @@ button.reply-quote:hover {
 
 .lightbox-name {
   color: #fff;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale, 1));
 }
 
 .lightbox-close {
@@ -4703,7 +4703,7 @@ button.reply-quote:hover {
   border: none;
   background: rgba(0, 0, 0, 0.6);
   color: #fff;
-  font-size: 18px;
+  font-size: calc(18px * var(--font-scale, 1));
   cursor: pointer;
 }
 
@@ -4732,7 +4732,7 @@ button.reply-quote:hover {
 
 .search-status {
   margin: 8px 12px;
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale, 1));
 }
 
 .search-results {
@@ -4765,11 +4765,11 @@ button.reply-quote:hover {
   display: flex;
   justify-content: space-between;
   gap: 8px;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale, 1));
 }
 
 .search-hit-text {
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale, 1));
   color: #cfd3dc;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -4811,7 +4811,7 @@ button.reply-quote:hover {
 
 .jira-info {
   margin-left: auto;
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale, 1));
 }
 
 .jira-columns {
@@ -4839,7 +4839,7 @@ button.reply-quote:hover {
 
 .jira-col h3 {
   margin: 0 0 8px;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale, 1));
 }
 
 .jira-col ul {
@@ -4860,13 +4860,13 @@ button.reply-quote:hover {
   padding: 7px 9px;
   border-radius: var(--radius-md);
   background: var(--surface-2);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale, 1));
 }
 
 .jira-key {
   color: var(--accent);
   font-weight: 600;
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale, 1));
 }
 
 .jira-title {
@@ -4924,11 +4924,11 @@ button.reply-quote:hover {
 }
 
 .effect-emoji {
-  font-size: 22px;
+  font-size: calc(22px * var(--font-scale, 1));
 }
 
 .effect-item small {
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale, 1));
   text-align: center;
 }
 
@@ -4962,7 +4962,7 @@ button.reply-quote:hover {
 
 .editor-count {
   white-space: nowrap;
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale, 1));
 }
 
 .editor-more {
@@ -4979,7 +4979,7 @@ button.reply-quote:hover {
   position: absolute;
   top: 2px;
   right: 3px;
-  font-size: 9px;
+  font-size: calc(9px * var(--font-scale, 1));
   font-weight: 700;
   color: var(--warn);
 }
@@ -4989,7 +4989,7 @@ button.reply-quote:hover {
   position: absolute;
   top: 2px;
   left: 3px;
-  font-size: 9px;
+  font-size: calc(9px * var(--font-scale, 1));
 }
 
 .set-item {
@@ -4999,7 +4999,7 @@ button.reply-quote:hover {
 .editor-looks {
   margin-top: 10px;
   width: 100%;
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale, 1));
 }
 
 .look-row {
@@ -5040,7 +5040,7 @@ button.reply-quote:hover {
   background: transparent;
   color: var(--text);
   cursor: pointer;
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale, 1));
 }
 
 .look-del {
@@ -5051,7 +5051,7 @@ button.reply-quote:hover {
 }
 
 .decor-nothumb {
-  font-size: 26px;
+  font-size: calc(26px * var(--font-scale, 1));
   opacity: 0.6;
 }
 
@@ -5093,7 +5093,7 @@ button.reply-quote:hover {
   background: var(--surface-2);
   color: var(--muted);
   font: inherit;
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale, 1));
   cursor: pointer;
 }
 
@@ -5211,7 +5211,7 @@ button svg.icon {
 
 .hud-card h1 {
   margin: 0;
-  font-size: 15px;
+  font-size: calc(15px * var(--font-scale, 1));
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -5280,7 +5280,7 @@ button svg.icon {
   border-radius: var(--radius-pill);
   background: var(--accent-strong);
   color: var(--on-accent);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale, 1));
   font-weight: 700;
   text-align: center;
 }
@@ -5605,7 +5605,7 @@ button svg.icon {
   border: 1px solid var(--card-border);
   border-radius: var(--radius-pill);
   box-shadow: var(--shadow-2);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale, 1));
   white-space: nowrap;
 }
 
@@ -5654,4 +5654,203 @@ button svg.icon {
     left: 50%;
     bottom: 124px;
   }
+}
+
+/* ---------- Fase 43: perfil em abas e configurações ---------- */
+
+/* Reduzir movimento (escolha em Configurações ou do sistema). */
+:root[data-motion='reduce'] {
+  --dur: 0ms;
+}
+
+:root[data-motion='reduce'] *,
+:root[data-motion='reduce'] *::before,
+:root[data-motion='reduce'] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* Abas (role=tablist): sublinhado no ativo, rolagem lateral se não couber. */
+.tabs {
+  display: flex;
+  gap: 2px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--line);
+  scrollbar-width: none;
+}
+
+.tab {
+  flex: none;
+  padding: 9px 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tab:hover {
+  color: var(--text);
+}
+
+.tab[aria-selected='true'] {
+  color: var(--accent-text);
+  border-bottom-color: var(--accent);
+}
+
+.profile-body {
+  gap: 14px;
+}
+
+.profile-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 280px;
+}
+
+.profile-panel[hidden] {
+  display: none;
+}
+
+.profile-panel:focus-visible {
+  outline: none;
+}
+
+.profile-password h3,
+.settings-section h3 {
+  margin: 0 0 4px;
+  font-size: calc(14px * var(--font-scale, 1));
+}
+
+/* Configurações */
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.settings-section:last-child {
+  border-bottom: 0;
+}
+
+.settings-choice {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.settings-choice legend {
+  padding: 0;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: calc(13px * var(--font-scale, 1));
+}
+
+.segmented-radios {
+  display: flex;
+  padding: 3px;
+  gap: 3px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.segmented-radios label {
+  flex: 1;
+  position: relative;
+}
+
+.segmented-radios input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  margin: 0;
+  cursor: pointer;
+}
+
+.segmented-radios span {
+  display: block;
+  padding: 7px 8px;
+  border-radius: var(--radius-sm);
+  text-align: center;
+  color: var(--muted);
+  transition: background-color var(--dur) var(--ease);
+}
+
+.segmented-radios input:checked + span {
+  background: var(--surface-1);
+  color: var(--text);
+  font-weight: 600;
+  box-shadow: var(--shadow-1);
+}
+
+.segmented-radios input:focus-visible + span {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.settings-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+}
+
+/* Interruptor: checkbox com cara de chave. */
+.settings-toggle input {
+  appearance: none;
+  flex: none;
+  width: 38px;
+  height: 22px;
+  margin: 0;
+  border-radius: var(--radius-pill);
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  position: relative;
+  cursor: pointer;
+  transition: background-color var(--dur) var(--ease);
+}
+
+.settings-toggle input::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--text);
+  transition: transform var(--dur) var(--ease);
+}
+
+.settings-toggle input:checked {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+}
+
+.settings-toggle input:checked::after {
+  transform: translateX(16px);
+  background: #fff;
+}
+
+.settings-volume {
+  width: 100%;
+}
+
+/* Perfil e Configurações um pouco mais largos: as abas cabem sem rolar. */
+.sheet.profile-sheet,
+.sheet.settings {
+  width: min(560px, 100%);
 }
