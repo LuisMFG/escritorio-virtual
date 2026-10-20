@@ -54,6 +54,12 @@ const PREVIEW_DEBOUNCE_MS = 250;
 
 const thumbQueue = new ThumbQueue();
 
+/** Categorias da cabeça: a miniatura "vestida" mostra a parte de cima do avatar. */
+const HEAD_TYPES = new Set(['hd', 'hr', 'ha', 'he', 'ea', 'fa']);
+
+/** Editor aberto agora (abrir de novo foca este em vez de empilhar outro). */
+let current: { promise: Promise<AvatarChoice | null>; dialog: HTMLElement } | null = null;
+
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
   props: Partial<HTMLElementTagNameMap[K]> & { className?: string } = {},
@@ -69,6 +75,15 @@ function el<K extends keyof HTMLElementTagNameMap>(
  * seletores de cor da paleta do manifesto. Resolve com o visual escolhido, ou `null` se cancelar.
  */
 export function openAvatarEditor(opts: AvatarEditorOptions): Promise<AvatarChoice | null> {
+  if (current?.dialog.isConnected) {
+    current.dialog.querySelector<HTMLElement>('[aria-selected=true]')?.focus();
+    return current.promise;
+  }
+  const promise = openEditor(opts);
+  return promise;
+}
+
+function openEditor(opts: AvatarEditorOptions): Promise<AvatarChoice | null> {
   const { manifest } = opts;
   let gender: Gender = opts.gender;
   let figure = validateFigure(opts.figure, gender, manifest).ok
@@ -143,6 +158,16 @@ export function openAvatarEditor(opts: AvatarEditorOptions): Promise<AvatarChoic
     className: 'btn-secondary',
     textContent: 'Aleatório',
   });
+  // Desfazer a última troca (botão e Ctrl+Z).
+  const undoBtn = el('button', {
+    type: 'button',
+    className: 'btn-secondary',
+    innerHTML: `${iconHtml('undo', 16)} Desfazer`,
+    disabled: true,
+  });
+  const history: { figure: string; gender: Gender }[] = [];
+  const looksStatus = el('small', { className: 'muted look-status' });
+  looksStatus.setAttribute('role', 'status');
 
   const tabs = el('div', { className: 'editor-tabs' });
   tabs.setAttribute('role', 'tablist');
@@ -200,7 +225,7 @@ export function openAvatarEditor(opts: AvatarEditorOptions): Promise<AvatarChoic
         previewStage,
         el('div', { className: 'editor-rotate' }, [rotateLeft, spinBtn, rotateRight]),
         genderGroup,
-        randomBtn,
+        el('div', { className: 'editor-actions-row' }, [randomBtn, undoBtn]),
         looksBox,
       ]),
       el('section', { className: 'editor-pick' }, [tabs, toolbar, setsGrid, moreBtn, colorsBox]),
@@ -223,11 +248,13 @@ export function openAvatarEditor(opts: AvatarEditorOptions): Promise<AvatarChoic
     return parseFigure(figure).find((p) => p.type === type);
   }
 
-  function schedulePreview(): void {
+  /** Prévia grande; `tryOn` mostra uma peça "no provador" (ao passar o mouse) sem escolher. */
+  function schedulePreview(tryOn?: string): void {
     clearTimeout(previewTimer);
     previewStage.classList.add('loading');
+    previewStage.classList.toggle('trying', Boolean(tryOn));
     previewTimer = window.setTimeout(() => {
-      const f = figure;
+      const f = tryOn ?? figure;
       const d = dir;
       previewImg.onload = () => previewStage.classList.remove('loading');
       loadWithFallback(
@@ -238,7 +265,7 @@ export function openAvatarEditor(opts: AvatarEditorOptions): Promise<AvatarChoic
         ],
         () => {
           void opts.fallbackPreview(f, d).then((url) => {
-            if (f === figure && d === dir) previewImg.src = url;
+            if (f === (tryOn ?? figure) && d === dir) previewImg.src = url;
           });
         },
       );
@@ -298,7 +325,8 @@ export function openAvatarEditor(opts: AvatarEditorOptions): Promise<AvatarChoic
     moreBtn.hidden = matching.length <= shown;
     moreBtn.textContent = `Mostrar mais (${matching.length - shown})`;
     for (const set of page) {
-      const img = el('img', { alt: '', loading: 'lazy', width: 34, height: 84 });
+      // Sem largura/altura fixas: cada prévia tem a sua proporção (o CSS encaixa sem esticar).
+      const img = el('img', { alt: '', loading: 'lazy', className: 'set-thumb' });
       const btn = el('button', { type: 'button', className: 'set-item' }, [img]);
       btn.title =
         set.library && !set.library.startsWith('hh_human_')
@@ -309,17 +337,32 @@ export function openAvatarEditor(opts: AvatarEditorOptions): Promise<AvatarChoic
       btn.setAttribute('aria-selected', String(set.id === selected));
       if (set.club > 0) btn.classList.add('set-club');
       if (set.animated) btn.classList.add('set-animated');
-      // Catálogo completo: prévia estática da CDN; peças básicas: o imager.
+      // Catálogo completo: prévia estática da CDN; peças básicas: o imager; sem nenhuma das
+      // duas, o seu avatar vestindo a peça (o imager monta qualquer peça).
+      const tryOn = withPart(figure, manifest, cat.type, set.id);
+      const wearing = avatarImageUrl(tryOn, { direction: 2, headDirection: 2 }, '/hh');
       const thumbs = [
         ...(set.rev && set.library ? [clothingPreviewUrl(set.library, set.id, set.rev)] : []),
         clothingSetImageUrl(set.id, { direction: 2 }, '/hh'),
         clothingSetImageUrl(set.id, { direction: 2 }),
+        wearing,
       ];
+      img.addEventListener('load', () => {
+        if (img.src === wearing)
+          img.classList.add('worn', HEAD_TYPES.has(cat.type) ? 'head' : 'body');
+      });
       const noThumb = () =>
         btn.replaceChildren(el('span', { className: 'set-fallback', textContent: `#${set.id}` }));
       if (opts.thumbnails === false) noThumb();
       else thumbQueue.load(img, thumbs, noThumb);
       btn.addEventListener('click', () => update(withPart(figure, manifest, cat.type, set.id)));
+      // Provador: passar o mouse mostra a peça na prévia grande.
+      btn.addEventListener('pointerenter', (e) => {
+        if (e.pointerType === 'mouse') schedulePreview(tryOn);
+      });
+      btn.addEventListener('pointerleave', (e) => {
+        if (e.pointerType === 'mouse') schedulePreview();
+      });
       items.push(btn);
     }
     setsGrid.setAttribute('aria-label', cat.label);
@@ -364,65 +407,91 @@ export function openAvatarEditor(opts: AvatarEditorOptions): Promise<AvatarChoic
     colorsBox.replaceChildren(...rows);
   }
 
+  /** Guarda o visual atual num slot (com aviso de sucesso ou erro embaixo dos looks). */
+  async function saveLook(slot: number): Promise<void> {
+    const res = validateFigure(figure, gender, manifest);
+    if (!res.ok) {
+      looksStatus.textContent = res.error;
+      return;
+    }
+    looksVersion++;
+    looksStatus.textContent = 'Guardando…';
+    try {
+      looks = await opts.looks!.save(slot, { figure: res.figure, gender });
+      renderLooks();
+      looksStatus.textContent = `Look ${slot + 1} guardado ✓`;
+    } catch (err) {
+      looksStatus.textContent = `Não deu para guardar: ${(err as Error).message}`;
+    }
+  }
+
+  /**
+   * Looks salvos (redesenho de 20/10/2026): o espaço vazio guarda o visual atual com um clique;
+   * o cheio mostra o look e veste ao clicar, com "Trocar" (guardar o atual por cima) e apagar.
+   */
   function renderLooks(): void {
     if (!opts.looks) return;
     const slots = Array.from({ length: LOOK_SLOTS }, (_, slot) => {
       const look = looks.find((l) => l.slot === slot);
       const box = el('div', { className: `look-slot${look ? '' : ' empty'}` });
-      const apply = el('button', { type: 'button', className: 'look-apply' });
-      apply.setAttribute('aria-label', look ? `Usar look ${slot + 1}` : `Look ${slot + 1} vazio`);
-      apply.disabled = !look;
-      if (look) {
-        const img = el('img', { alt: '', width: 32, height: 55, loading: 'lazy' });
-        img.src = avatarImageUrl(look.figure, { direction: 2, headDirection: 2 }, '/hh');
-        apply.append(img);
-        apply.addEventListener('click', () => {
-          if (look.gender !== gender) {
-            gender = look.gender;
-            renderGender();
-          }
-          update(look.figure);
-        });
-      } else apply.append(el('span', { textContent: String(slot + 1) }));
-      const save = el('button', { type: 'button', className: 'look-save', textContent: '💾' });
-      save.title = 'Guardar o visual atual aqui';
-      save.setAttribute('aria-label', `Guardar no look ${slot + 1}`);
-      save.addEventListener('click', async () => {
-        const res = validateFigure(figure, gender, manifest);
-        if (!res.ok) {
-          errorBox.hidden = false;
-          errorBox.textContent = res.error;
-          return;
-        }
-        looksVersion++;
-        try {
-          looks = await opts.looks!.save(slot, { figure: res.figure, gender });
-          renderLooks();
-        } catch (err) {
-          errorBox.hidden = false;
-          errorBox.textContent = (err as Error).message;
-        }
-      });
-      box.append(apply, save);
-      if (look) {
-        const del = el('button', {
-          type: 'button',
-          className: 'look-del',
-          innerHTML: iconHtml('x', 16),
-        });
-        del.setAttribute('aria-label', `Apagar look ${slot + 1}`);
-        del.addEventListener('click', async () => {
-          looksVersion++;
-          looks = await opts.looks!.remove(slot);
-          renderLooks();
-        });
-        box.append(del);
+      if (!look) {
+        const add = el('button', { type: 'button', className: 'look-add' });
+        add.innerHTML = `${iconHtml('plus', 18)}<span>Guardar</span>`;
+        add.title = 'Guardar o visual atual neste espaço';
+        add.setAttribute('aria-label', `Guardar o visual atual no look ${slot + 1}`);
+        add.addEventListener('click', () => void saveLook(slot));
+        box.append(add);
+        return box;
       }
+      const apply = el('button', { type: 'button', className: 'look-apply' });
+      apply.title = `Vestir o look ${slot + 1}`;
+      apply.setAttribute('aria-label', `Usar look ${slot + 1}`);
+      const img = el('img', { alt: '', loading: 'lazy', className: 'look-thumb' });
+      loadWithFallback(
+        img,
+        [
+          avatarImageUrl(look.figure, { direction: 2, headDirection: 2 }, '/hh'),
+          avatarImageUrl(look.figure, { direction: 2, headDirection: 2 }),
+        ],
+        () => {
+          void opts.fallbackPreview(look.figure, 2).then((url) => (img.src = url));
+        },
+      );
+      apply.append(img, el('span', { className: 'look-num', textContent: String(slot + 1) }));
+      apply.addEventListener('click', () => {
+        if (look.gender !== gender) {
+          history.push({ figure, gender });
+          gender = look.gender;
+          renderGender();
+        }
+        update(look.figure);
+        looksStatus.textContent = `Vestindo o look ${slot + 1}. Salve o visual para usar na sala.`;
+      });
+      const replace = el('button', { type: 'button', className: 'look-replace' });
+      replace.innerHTML = iconHtml('rotate-cw', 13);
+      replace.title = 'Trocar pelo visual atual';
+      replace.setAttribute('aria-label', `Guardar o visual atual no look ${slot + 1}`);
+      replace.addEventListener('click', () => void saveLook(slot));
+      const del = el('button', {
+        type: 'button',
+        className: 'look-del',
+        innerHTML: iconHtml('x', 13),
+      });
+      del.title = 'Apagar este look';
+      del.setAttribute('aria-label', `Apagar look ${slot + 1}`);
+      del.addEventListener('click', async () => {
+        looksVersion++;
+        looks = await opts.looks!.remove(slot);
+        renderLooks();
+        looksStatus.textContent = `Look ${slot + 1} apagado.`;
+      });
+      box.append(apply, el('div', { className: 'look-tools' }, [replace, del]));
       return box;
     });
     looksBox.replaceChildren(
       el('strong', { textContent: 'Looks salvos' }),
       el('div', { className: 'look-row' }, slots),
+      looksStatus,
     );
   }
 
@@ -433,7 +502,12 @@ export function openAvatarEditor(opts: AvatarEditorOptions): Promise<AvatarChoic
     renderColors();
   }
 
-  function update(next: string): void {
+  function update(next: string, record = true): void {
+    if (record && next !== figure) {
+      history.push({ figure, gender });
+      if (history.length > 40) history.shift();
+      undoBtn.disabled = false;
+    }
     figure = next;
     errorBox.hidden = true;
     renderSets();
@@ -457,6 +531,8 @@ export function openAvatarEditor(opts: AvatarEditorOptions): Promise<AvatarChoic
     b.addEventListener('click', () => {
       const g = b.dataset.gender as Gender;
       if (g === gender) return;
+      history.push({ figure, gender });
+      undoBtn.disabled = false;
       gender = g;
       figure = switchGender(figure, g, manifest);
       renderAll();
@@ -464,6 +540,17 @@ export function openAvatarEditor(opts: AvatarEditorOptions): Promise<AvatarChoic
     });
   }
   randomBtn.addEventListener('click', () => update(randomFigure(manifest, gender)));
+  const undo = () => {
+    const prev = history.pop();
+    if (!prev) return;
+    undoBtn.disabled = history.length === 0;
+    if (prev.gender !== gender) {
+      gender = prev.gender;
+      renderAll();
+    }
+    update(prev.figure, false);
+  };
+  undoBtn.addEventListener('click', undo);
   let searchTimer = 0;
   search.addEventListener('input', () => {
     clearTimeout(searchTimer);
@@ -509,17 +596,22 @@ export function openAvatarEditor(opts: AvatarEditorOptions): Promise<AvatarChoic
   schedulePreview();
   tabs.querySelector<HTMLButtonElement>('[aria-selected=true]')?.focus();
 
-  return new Promise((resolve) => {
+  const promise = new Promise<AvatarChoice | null>((resolve) => {
     const close = (result: AvatarChoice | null) => {
       clearTimeout(previewTimer);
       clearInterval(spinTimer);
       document.removeEventListener('keydown', onKey);
       backdrop.remove();
       opener?.focus();
+      current = null;
       resolve(result);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') close(null);
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      }
     };
     document.addEventListener('keydown', onKey);
     cancelBtn.addEventListener('click', () => close(null));
@@ -537,4 +629,6 @@ export function openAvatarEditor(opts: AvatarEditorOptions): Promise<AvatarChoic
       close({ figure: res.figure, gender });
     });
   });
+  current = { promise, dialog };
+  return promise;
 }

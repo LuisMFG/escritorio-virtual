@@ -6690,3 +6690,191 @@ kbd {
   outline: 2px solid var(--accent);
   outline-offset: 0;
 }
+
+/* ---------- Meu visual (20/10/2026): miniaturas, provador e looks ---------- */
+
+/* Cartões maiores; cada prévia encaixa sem esticar (proporção original). */
+.editor-sets {
+  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+}
+
+.set-item {
+  position: relative;
+  height: 92px;
+  overflow: hidden;
+  padding: 4px;
+}
+
+.set-item .set-thumb {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 80px;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+/* Reserva "vestido em você": mostra só a parte que importa do avatar. */
+.set-item .set-thumb.worn {
+  max-height: none;
+  height: 120px;
+  object-fit: cover;
+}
+
+.set-item .set-thumb.worn.head {
+  object-position: center top;
+  transform: translateY(8px);
+}
+
+.set-item .set-thumb.worn.body {
+  object-position: center 70%;
+}
+
+.set-fallback {
+  font-size: calc(11px * var(--font-scale, 1));
+  color: var(--muted);
+}
+
+/* Provando uma peça (mouse em cima): selo na prévia grande. */
+.preview-stage {
+  position: relative;
+}
+
+.preview-stage.trying::after {
+  content: 'Provando';
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-strong);
+  color: var(--on-accent);
+  font-size: calc(11px * var(--font-scale, 1));
+  font-weight: 700;
+}
+
+.editor-actions-row {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+}
+
+.editor-actions-row .btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Looks: espaço vazio = "Guardar"; cheio = vestir, com trocar/apagar. */
+.look-row {
+  gap: 6px;
+}
+
+.look-slot {
+  height: 76px;
+}
+
+.look-add,
+.look-apply {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 0;
+  border-radius: var(--radius-md);
+  font: inherit;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.look-add {
+  border: 1px dashed var(--border);
+  background: transparent;
+  color: var(--muted);
+  font-size: calc(11px * var(--font-scale, 1));
+}
+
+.look-add:hover {
+  border-color: var(--accent);
+  color: var(--accent-text);
+  background: var(--accent-tint-weak);
+}
+
+.look-apply {
+  position: relative;
+  border: 1px solid var(--border);
+  background: var(--surface-3);
+}
+
+.look-apply:hover {
+  border-color: var(--accent);
+}
+
+.look-thumb {
+  height: 72px;
+  width: auto;
+  object-fit: contain;
+  image-rendering: pixelated;
+  margin-top: 2px;
+}
+
+.look-num {
+  position: absolute;
+  bottom: 2px;
+  left: 4px;
+  color: var(--muted);
+  font-size: calc(10px * var(--font-scale, 1));
+  font-weight: 700;
+}
+
+.look-tools {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity var(--dur) var(--ease);
+}
+
+.look-slot:hover .look-tools,
+.look-slot:focus-within .look-tools {
+  opacity: 1;
+}
+
+.look-tools button {
+  position: static;
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--surface-1);
+  color: var(--text);
+  box-shadow: var(--shadow-1);
+  cursor: pointer;
+}
+
+.look-tools .look-del:hover {
+  background: var(--danger);
+  color: #fff;
+}
+
+.look-status {
+  display: block;
+  min-height: 1.2em;
+  margin-top: 4px;
+}
+
+@media (hover: none) {
+  .look-tools {
+    opacity: 1;
+  }
+}
