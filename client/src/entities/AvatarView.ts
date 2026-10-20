@@ -38,8 +38,11 @@ const NAME_Y = -88;
 const CARGO_LINE = 12;
 /** Pose sentada simulada (o imager não tem): desce o corpo e esconde as pernas abaixo do assento. */
 const SIT_DROP = 8;
-/** Com a pose sentada real, quanto o desenho desce para assentar no móvel. */
-const SIT_OFFSET = 0;
+/**
+ * Com a pose sentada real, quanto o desenho desce para assentar no móvel (meio tile: calibrado
+ * contra cadeiras e sofás desenhados pelas camadas do Habbo, 20/10/2026). No chão não desce.
+ */
+const SIT_OFFSET = 16;
 /**
  * Deitado, o desenho do Habbo fica todo de um lado do ponto dos pés (a cabeça ~60 px para trás):
  * empurra o corpo ao longo da cama (meio tile de x para cada tile de y, como a grade) e desce.
@@ -651,7 +654,8 @@ export class AvatarView extends Container {
     if (this.poser) {
       // Pose real: sem balanço simulado (a dança ainda pula um pouquinho).
       const hop = this.emote?.id === 'dance' && !this.step ? this.emoteOffset().y : 0;
-      const rest = this.step || this.lying ? 0 : this.sitting ? SIT_OFFSET : 0;
+      const onSeat = this.sitting && this.sitZ > this.heightAt(this.tile.x, this.tile.y) + 0.05;
+      const rest = this.step || this.lying || !onSeat ? 0 : SIT_OFFSET;
       this.body.position.set(0, rest + hop);
     } else if (this.step) {
       const quarter = Math.floor((this.walkTime / STEP_MS) * 4) % 4;

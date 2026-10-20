@@ -251,6 +251,7 @@ export class RoomScene implements DecorHost {
         this.deps.placeholders,
         this.deps.furniVisuals,
       );
+      view.enableSlices();
       this.furni.set(id, view);
       (def.wall ? this.wallItems : this.objects).addChild(view);
       if (this.games.has(id)) view.setGame(this.games.get(id)!);
@@ -666,9 +667,20 @@ export class RoomScene implements DecorHost {
 
   /** Reordena só quando alguma caixa muda (avatar troca de tile, móvel muda, alguém sai). */
   private sortDepth(): void {
-    const boxes: DepthBox[] = [...this.furni.values()]
-      .filter((f) => !f.def.wall)
-      .map((f) => f.depthBox);
+    const boxes: DepthBox[] = [];
+    const views = new Map<string, Container>();
+    for (const [id, f] of this.furni) {
+      if (f.def.wall) continue;
+      boxes.push(f.depthBox);
+      views.set(id, f);
+      // Fatias da frente dos assentos: objetos à parte na mesma camada de ordenação.
+      for (const sl of f.sliceBoxes) {
+        if (sl.view.parent !== this.objects) this.objects.addChild(sl.view);
+        sl.view.visible = f.visible;
+        boxes.push(sl.box);
+        views.set(sl.box.id, sl.view);
+      }
+    }
     for (const a of this.avatars.values()) boxes.push(a.depthBox);
     for (const p of this.pets.values()) boxes.push(p.depthBox);
     const key = boxes
@@ -677,7 +689,6 @@ export class RoomScene implements DecorHost {
     if (key === this.depthKey) return;
     this.depthKey = key;
 
-    const views = new Map<string, Container>([...this.furni].map(([id, f]) => [id, f]));
     for (const [id, a] of this.avatars) views.set(id, a);
     for (const p of this.pets.values()) views.set(p.label, p);
     depthOrder(boxes).forEach((id, i) => {

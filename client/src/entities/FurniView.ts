@@ -48,6 +48,13 @@ export class FurniView extends Container {
   private lastTick = -1;
   /** Imagens das camadas no quadro atual (`null` = imagem estática); para os testes. */
   layeredFrame: string | null = null;
+  /**
+   * Assentos: camadas da frente fatiadas por tile (fatia `j` = camadas com 0 < z ≤ j·1000, como
+   * a profundidade do Habbo). Cada fatia é um objeto à parte na cena, desenhado por cima de quem
+   * senta nos primeiros `j` tiles do móvel (encosto de costas, braços e almofadas do sofá).
+   */
+  readonly slices = new Map<number, Container>();
+  private sliced = false;
 
   constructor(
     public placed: PlacedFurni,
@@ -113,10 +120,27 @@ export class FurniView extends Container {
     this.drawGameBoard();
   }
 
-  /** Usa o desenho por camadas, se o móvel tiver um (carrega na primeira vez). */
+  /** Liga as fatias da frente (só móveis de verdade da sala; o fantasma do Decorar não). */
+  enableSlices(): void {
+    this.sliced = this.def.canSit || this.def.canLay;
+  }
+
+  /**
+   * Usa o desenho por camadas do SWF (posições do próprio Habbo, desde 20/10/2026 para todos os
+   * móveis do Habbo, não só os animados). Ficam na imagem pronta os de parede e os que
+   * desenham algo por cima da imagem (quadro branco e tabuleiro).
+   */
   private async loadLayered(): Promise<boolean> {
     const { def } = this;
-    if (!def.animated || !def.revision || def.wall || !this.visuals || this.layeredFailed) {
+    if (
+      def.source !== 'habboassets' ||
+      !def.revision ||
+      def.wall ||
+      def.surface ||
+      def.interaction === 'tictactoe' ||
+      !this.visuals ||
+      this.layeredFailed
+    ) {
       return false;
     }
     if (!this.layered) {
@@ -173,12 +197,13 @@ export class FurniView extends Container {
     const tick = Math.floor(((now - this.animStart) * FURNI_FPS) / 1000);
     if (!force && tick === this.lastTick) return;
     this.lastTick = tick;
-    // Origem do Habbo: vértice de cima do tile do móvel; o container fica no vértice da frente.
+    // Origem do Habbo: o **centro** do tile de origem do móvel (como no Nitro; a base das
+    // imagens termina meio tile abaixo dele). O container fica no vértice da frente.
     const fp = this.footprint;
     const o = tileToScreen(this.placed.x, this.placed.y);
     const c = tileToScreen(fp.maxX, fp.maxY);
     const ox = o.sx - c.sx;
-    const oy = o.sy - c.sy - TILE_H;
+    const oy = o.sy - c.sy - TILE_H / 2;
     const list = furniSprites(v, dir, anim, tick, color);
     this.layeredFrame = list.map((s) => s.image).join(',');
     while (l.sprites.length < list.length) {
@@ -187,10 +212,15 @@ export class FurniView extends Container {
       l.sprites.push(sp);
     }
     l.clickable.length = list.length;
+    const maxSlice = fp.maxX - fp.minX + (fp.maxY - fp.minY) + 1;
     l.sprites.forEach((sp, i) => {
       const s = list[i];
       sp.visible = Boolean(s);
       if (!s) return;
+      // Fatia da frente (assentos): para o container da fatia; o resto fica no do móvel.
+      const target =
+        this.sliced && s.z > 0 ? this.slice(Math.min(maxSlice, Math.ceil(s.z / 1000))) : l.layer;
+      if (sp.parent !== target) target.addChild(sp);
       const tex = l.lib.textures.get(s.image)!;
       sp.texture = tex;
       sp.scale.x = s.flip ? -1 : 1;
@@ -341,13 +371,50 @@ export class FurniView extends Container {
     if (!this.visible) return false;
     if (this.layered) {
       const l = this.layered;
-      return l.sprites.some((sp, i) => l.clickable[i] && spriteHitTest(sp, global));
+      return l.sprites.some((sp, i) => l.clickable[i] && sp.visible && spriteHitTest(sp, global));
     }
     return spriteHitTest(this.sprite, global);
   }
 
   get footprint() {
     return footprint(this.def, this.placed.x, this.placed.y, this.placed.rot);
+  }
+
+  private slice(j: number): Container {
+    let c = this.slices.get(j);
+    if (!c) {
+      c = new Container({ label: `furni:${this.placed.id}#${j}` });
+      c.position.copyFrom(this.position);
+      this.slices.set(j, c);
+    }
+    return c;
+  }
+
+  /**
+   * Caixas das fatias: os tiles dos primeiros `j` passos a partir da origem, acima do assento
+   * (quem senta nesses tiles fica atrás; quem senta mais à frente, na frente).
+   */
+  get sliceBoxes(): { j: number; view: Container; box: DepthBox }[] {
+    const fp = this.footprint;
+    const z = this.placed.z + this.def.sitHeight + 0.02;
+    return [...this.slices].map(([j, view]) => ({
+      j,
+      view,
+      box: {
+        id: `${this.placed.id}#${j}`,
+        minX: fp.minX,
+        minY: fp.minY,
+        maxX: Math.min(fp.maxX, fp.minX + j - 1),
+        maxY: Math.min(fp.maxY, fp.minY + j - 1),
+        z,
+      },
+    }));
+  }
+
+  override destroy(options?: Parameters<Container['destroy']>[0]): void {
+    for (const c of this.slices.values()) c.destroy({ children: true });
+    this.slices.clear();
+    super.destroy(options);
   }
 
   get depthBox(): DepthBox {
@@ -370,6 +437,7 @@ export class FurniView extends Container {
     const fp = this.footprint;
     const p = tileToScreen(fp.maxX, fp.maxY, this.placed.z);
     this.position.set(p.sx, p.sy + TILE_H / 2);
+    for (const c of this.slices.values()) c.position.copyFrom(this.position);
   }
 }
 
