@@ -1064,3 +1064,77 @@ Pedido (18/10/2026): prioridade para as **animações dos personagens**, **senta
 4. **Móveis:** catálogo inteiro com busca, e o admin esconde categorias? Ou uma seleção de escritório? (Sugestão: inteiro, com categorias de festa/jogos escondidas por padrão.)
 5. **Uso dos gráficos:** continua o mesmo: uso pessoal e privado, escritório fechado por convite, gráficos da Sulake via HabboAssets.
 6. **Fora deste roadmap:** deploy na Oracle e WebRTC continuam adiados.
+
+---
+
+## 14. Roadmap v6 — experiência do usuário (UI/UX) (proposta)
+
+Pedido em 20/10/2026, com o escritório já em uso pelo pessoal do trabalho (servidor no PC Windows): **melhorar a experiência de uso** — deixar tudo mais claro, mais rápido de achar e mais agradável, no computador e no celular. Mesmo fluxo de sempre: uma fase por vez, testada pelo mouse, com testes, commit e atualização do servidor (`git pull`, `docker compose up -d --build`, túnel).
+
+### O que a auditoria mostrou (20/10/2026)
+- **Tela cheia de coisa por cima da sala:** cartão "Clique no piso para andar…" sempre aberto, histórico da conversa cobrindo um terço da sala, selo técnico "Assets: HabboAssets (Habbo BR)", barra de 9 botões embaixo e uma coluna de 5 ícones à direita.
+- **Sala pequena demais:** com a Recepção nova (23×20), a câmera abre em 0,5× em telas comuns e os avatares ficam minúsculos; no celular a sala aparece cortada.
+- **Celular:** a barra de botões passa da largura da tela (os últimos somem), os botões viram só emoji, o painel de pessoas ocupa o rodapé.
+- **Painéis sem padrão:** cada painel com seu jeito (Perfil numa rolagem enorme com conquistas, pet, efeitos e integrações; Decorar com a grade espremida quando o rodapé cresce; Admin com abas); botões, espaçamentos e ícones misturados (emoji + texto).
+- **Pouco retorno:** "Preparando móvel…" pode levar 10 s sem progresso; erros aparecem e somem; não há "desfazer"; não fica claro quando a conexão caiu.
+- **Primeiro acesso:** depois de criar a conta a pessoa cai na sala sem saber que dá para sentar, decorar, usar `/dado` etc.
+- **Acessibilidade:** algumas listas de escolha anunciam o item escolhido em vez do nome do campo; vários botões só têm emoji.
+
+### Fases (ordem sugerida)
+
+#### Fase 40 — Base visual (design system)
+- Cores, espaçamentos, tipografia e raios num só lugar; **componentes únicos** (botão, painel, modal, abas, lista, campo, toast) usados por todas as telas.
+- **Ícones** desenhados e consistentes no lugar dos emojis soltos, sempre com nome (dica ao passar o mouse e para leitores de tela).
+- Tema escuro refinado e **tema claro** opcional; foco, hover e transições suaves iguais em tudo.
+- **Como testar:** abrir Perfil, Equipe, Admin e Decorar e ver o mesmo visual, botões e ícones.
+
+#### Fase 41 — Tela principal limpa
+- **HUD reorganizado:** barra inferior em grupos (Eu · Pessoas · Conversas · Escritório) com "mais" para o resto; a coluna da direita vira um controle compacto de câmera e som.
+- **Conversa que não cobre a sala:** painel lateral recolhível com contador de não lidas e as últimas falas em balões; o cartão de dicas e o selo de assets saem (o selo só para admin, nas configurações).
+- **Câmera que enquadra:** a sala abre no zoom que cabe na tela (com níveis intermediários, não só 0,5× e 1×), roda do mouse e pinça para zoom, e "centralizar em mim".
+- **Como testar:** entrar na Recepção numa tela de notebook e ver a sala inteira, com os avatares legíveis e nada cobrindo o meio.
+
+#### Fase 42 — Minha mesa e presença
+- **Minha mesa:** cada pessoa escolhe a sua estação na Recepção (com o nome numa plaquinha na mesa); ao entrar, um botão "Ir para minha mesa" leva e senta.
+- **Status sobre o avatar** mais legível (ocupado, ausente, em reunião, foco) e **nomes que não se sobrepõem** com muita gente.
+- **Achar alguém:** clicar numa pessoa na lista leva a câmera até ela e a destaca por um instante.
+- **Como testar:** escolher a mesa, sair e entrar de novo e ir direto para ela; clicar no nome de um colega e a câmera ir até ele.
+
+#### Fase 43 — Perfil e configurações
+- **Perfil em abas** (Visual · Pet · Conquistas · Efeitos · Integrações) no lugar da rolagem gigante; editor de visual com prévia maior e animada.
+- **Configurações num só lugar:** som, notificações, ambiente, tema, tamanho da letra e "reduzir movimento".
+- **Como testar:** trocar de aba no Perfil sem rolar; mudar tema e som em Configurações.
+
+#### Fase 44 — Primeira experiência e ajuda
+- **Tela de entrada** repaginada (avatar animado, explicação curta do escritório, erros claros nos campos).
+- **Tour guiado** no primeiro acesso: andar, sentar na sua mesa, falar, emotes, Decorar (pula quando quiser, refaz pela ajuda).
+- **Central de ajuda** (tecla `?`): comandos do chat, atalhos e o que cada botão faz; dicas no momento certo (ex.: a primeira vez que alguém abre o Decorar).
+- **Como testar:** criar uma conta nova e seguir o tour até sentar na mesa; abrir a ajuda com `?`.
+
+#### Fase 45 — Retorno, carregamento e erros
+- **Carregamento** com barra de progresso na entrada e esqueletos nos painéis; "Preparando móvel" com progresso.
+- **Avisos** empilhados e coerentes (sucesso, erro, info), erros com o que fazer e **desfazer** para remover móvel, apagar mensagem e soltar pet.
+- **Conexão:** faixa "Reconectando…" visível e volta automática sem perder o lugar.
+- **Como testar:** remover um móvel e desfazer; derrubar a internet por alguns segundos e ver a faixa e a volta.
+
+#### Fase 46 — Celular de verdade
+- Barra inferior com 5 ícones + "mais", **painéis como gaveta de baixo** (bottom sheet), sala enquadrada na tela.
+- **Toque:** tocar para andar, pinça para zoom, segurar sobre alguém para abrir o cartão; teclado que não cobre o campo do chat.
+- **Como testar:** num celular, andar, sentar, conversar e abrir o Perfil sem nada cortado.
+
+#### Fase 47 — Decorar sem esforço
+- Painel redesenhado: grade que não espreme, filtros como chips, **favoritos e recentes**, prévia maior do móvel e das cores.
+- Ferramentas grandes para girar, mover e remover, **desfazer/refazer**, grade de tiles visível ao arrastar e atalhos sempre à vista.
+- **Como testar:** montar um canto da sala usando recentes, girar, desfazer e refazer.
+
+#### Fase 48 — Acessibilidade e polimento final
+- Navegação completa por teclado nos painéis, nomes certos para leitores de tela, contraste adequado, foco visível.
+- Teste automático de acessibilidade (axe) nos testes de ponta a ponta e revisão final de textos e tamanhos.
+- **Como testar:** usar Perfil, Equipe e Mensagens só com o teclado; ver o relatório de acessibilidade sem erros graves.
+
+### Decisões para aprovar antes da Fase 40
+1. **Ordem:** a acima (base visual → tela principal → minha mesa → perfil/configurações → primeira experiência → retorno → celular → decorar → acessibilidade)? Alternativa: trazer o celular (46) para logo depois da tela principal, se muita gente for usar pelo celular.
+2. **Estilo dos ícones:** traço simples e moderno (estilo Lucide) ou pixel art no clima do Habbo?
+3. **Tema claro:** fazer junto na Fase 40 ou ficar só com o escuro por enquanto?
+4. **Minha mesa:** cada pessoa escolhe livremente uma mesa livre, ou o admin distribui as mesas?
+5. **Tour:** aparece só para contas novas ou também uma vez para quem já usa?
