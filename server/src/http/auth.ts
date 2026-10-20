@@ -63,8 +63,10 @@ function parse<S extends z.ZodType>(
 ): { data: z.output<S> } | { error: Result<never> } {
   const parsed = schema.safeParse(input);
   if (parsed.success) return { data: parsed.data };
-  const message = parsed.error.issues[0]?.message ?? ERROR_MESSAGES.INVALID_PAYLOAD;
-  return { error: fail(400, ErrorCode.InvalidPayload, { message }) };
+  const issue = parsed.error.issues[0];
+  const message = issue?.message ?? ERROR_MESSAGES.INVALID_PAYLOAD;
+  const field = typeof issue?.path[0] === 'string' ? issue.path[0] : undefined;
+  return { error: fail(400, ErrorCode.InvalidPayload, { message, ...(field ? { field } : {}) }) };
 }
 
 /** Papel na hora de entrar: admins do `.env` sempre; sem lista, a primeira conta. */

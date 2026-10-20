@@ -12,6 +12,18 @@ import {
 import { api, ApiRequestError } from '../net/api.js';
 import { loadSession, rememberSession, saveSession } from '../net/storage.js';
 import { openAvatarEditor } from './avatarEditor.js';
+import { motionReduced } from './prefs.js';
+import { markTourPending } from './tour.js';
+
+/** Campo do formulário que cada erro do servidor aponta. */
+const ERROR_FIELDS: Record<string, string> = {
+  INVALID_INVITE: 'invite',
+  USERNAME_TAKEN: 'username',
+  NAME_IN_USE: 'name',
+  INVALID_CREDENTIALS: 'password',
+};
+/** Nome no servidor → nome do campo aqui. */
+const PAYLOAD_FIELDS: Record<string, string> = { inviteCode: 'invite' };
 
 export interface LoginOptions {
   manifest: AvatarManifest;
@@ -38,11 +50,12 @@ export function showLogin(opts: LoginOptions): Promise<SessionResponse> {
   backdrop.innerHTML = `
     <form class="login-card" novalidate>
       <h1>Escritório Virtual</h1>
+      <p class="login-sub">O escritório do pessoal em pixel art: ande pela sala, sente na sua mesa e converse com quem estiver por perto.</p>
       <div class="login-tabs" role="tablist">
         <button type="button" role="tab" data-mode="login">Entrar</button>
         <button type="button" role="tab" data-mode="register">Criar conta</button>
       </div>
-      <div class="register-only login-avatar"><img alt="Prévia do seu avatar" width="64" height="110" /></div>
+      <div class="login-avatar"><img alt="Prévia do seu avatar" width="64" height="110" /></div>
       <button type="button" class="register-only btn-secondary login-edit">Editar visual</button>
       <label class="field register-only">
         <span>Código de convite</span>
@@ -90,12 +103,26 @@ export function showLogin(opts: LoginOptions): Promise<SessionResponse> {
     submit.textContent = mode === 'login' ? 'Entrar' : 'Criar conta e entrar';
     passInput.autocomplete = mode === 'login' ? 'current-password' : 'new-password';
     errorBox.hidden = true;
+    clearFieldErrors(form);
     (mode === 'login' ? (userInput.value ? passInput : userInput) : inviteInput).focus();
   }
   for (const t of tabs) t.addEventListener('click', () => setMode(t.dataset.mode as Mode));
 
-  const renderPreview = () => setAvatarPreview(img, figure, opts.fallbackPreview);
+  // Avatar girando (parado com "reduzir movimento"); no Entrar só se o navegador lembra dele.
+  let spinDir = 3;
+  const renderPreview = () => setAvatarPreview(img, figure, opts.fallbackPreview, spinDir);
   renderPreview();
+  img.closest<HTMLElement>('.login-avatar')!.dataset.known = String(Boolean(stored));
+  const spin = motionReduced()
+    ? 0
+    : window.setInterval(() => {
+        if (!backdrop.isConnected) return clearInterval(spin);
+        spinDir = (spinDir + 7) % 8;
+        renderPreview();
+      }, 900);
+  for (const el of [inviteInput, nameInput, userInput, passInput]) {
+    el.addEventListener('input', () => clearFieldError(el));
+  }
   form.querySelector('.login-edit')!.addEventListener('click', async () => {
     const choice = await openAvatarEditor({
       manifest: opts.manifest,
@@ -120,11 +147,21 @@ export function showLogin(opts: LoginOptions): Promise<SessionResponse> {
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       errorBox.hidden = true;
-      if (mode === 'register' && nameInput.value.trim().length < 2) {
-        return showError(errorBox, 'Digite seu nome (pelo menos 2 letras).');
+      clearFieldErrors(form);
+      let invalid = false;
+      if (mode === 'register' && !inviteInput.value.trim()) {
+        invalid =
+          fieldError(inviteInput, 'Digite o código de convite que você recebeu.') || invalid;
       }
-      if (!userInput.value.trim() || !passInput.value) {
-        return showError(errorBox, 'Preencha usuário e senha.');
+      if (mode === 'register' && nameInput.value.trim().length < 2) {
+        invalid = fieldError(nameInput, 'Digite seu nome (pelo menos 2 letras).') || invalid;
+      }
+      if (!userInput.value.trim())
+        invalid = fieldError(userInput, 'Digite seu usuário.') || invalid;
+      if (!passInput.value) invalid = fieldError(passInput, 'Digite sua senha.') || invalid;
+      if (invalid) {
+        form.querySelector<HTMLInputElement>('[aria-invalid=true]')?.focus();
+        return;
       }
       submit.disabled = true;
       const label = submit.textContent;
@@ -142,17 +179,32 @@ export function showLogin(opts: LoginOptions): Promise<SessionResponse> {
                 gender,
               });
         rememberSession(session);
+        // Conta nova: o tour guiado começa ao chegar na sala.
+        if (mode === 'register') markTourPending();
+        clearInterval(spin);
         backdrop.remove();
         resolve(session);
       } catch (err) {
         const body = err instanceof ApiRequestError ? err.body : {};
-        showError(errorBox, (err as Error).message, body.suggestion, (s) => {
-          nameInput.value = s;
-          form.requestSubmit();
-        });
-        if (body.error === 'INVALID_INVITE') inviteInput.focus();
-        else if (body.error === 'USERNAME_TAKEN') userInput.select();
-        else if (body.error === 'INVALID_CREDENTIALS') passInput.select();
+        const fieldName =
+          (body.error && ERROR_FIELDS[body.error]) ||
+          (body.field && (PAYLOAD_FIELDS[body.field] ?? body.field));
+        const field = fieldName
+          ? form.querySelector<HTMLInputElement>(`input[name=${fieldName}]`)
+          : null;
+        if (field && !field.closest<HTMLElement>('[hidden]')) {
+          fieldError(field, (err as Error).message, body.suggestion, (s) => {
+            nameInput.value = s;
+            form.requestSubmit();
+          });
+          field.focus();
+          field.select();
+        } else {
+          showError(errorBox, (err as Error).message, body.suggestion, (s) => {
+            nameInput.value = s;
+            form.requestSubmit();
+          });
+        }
       } finally {
         submit.disabled = false;
         submit.textContent = label;
@@ -228,17 +280,18 @@ export function setAvatarPreview(
   img: HTMLImageElement,
   figure: string,
   fallback?: (figure: string, dir: number) => Promise<string>,
+  direction = 3,
 ): void {
   const sources = [
-    avatarImageUrl(figure, { direction: 3 }, '/hh'),
-    avatarImageUrl(figure, { direction: 3 }),
+    avatarImageUrl(figure, { direction }, '/hh'),
+    avatarImageUrl(figure, { direction }),
   ];
   img.onerror = () => {
     const next = sources.shift();
     if (next) img.src = next;
     else {
       img.onerror = null;
-      if (fallback) void fallback(figure, 3).then((url) => (img.src = url));
+      if (fallback) void fallback(figure, direction).then((url) => (img.src = url));
       else img.hidden = true;
     }
   };
@@ -261,4 +314,43 @@ function showError(
     btn.addEventListener('click', () => useSuggestion(suggestion));
     box.append(' ', btn);
   }
+}
+
+/** Erro embaixo do campo (com `aria-invalid`); some quando a pessoa digita. Devolve `true`. */
+function fieldError(
+  input: HTMLInputElement,
+  message: string,
+  suggestion?: string,
+  useSuggestion?: (s: string) => void,
+): boolean {
+  clearFieldError(input);
+  const box = Object.assign(document.createElement('small'), {
+    className: 'field-error',
+    id: `erro-${input.name}`,
+    textContent: message,
+  });
+  if (suggestion && useSuggestion) {
+    const b = Object.assign(document.createElement('button'), {
+      type: 'button',
+      className: 'btn-link',
+      textContent: `Usar “${suggestion}”`,
+    });
+    b.addEventListener('click', () => useSuggestion(suggestion));
+    box.append(' ', b);
+  }
+  input.setAttribute('aria-invalid', 'true');
+  input.setAttribute('aria-describedby', box.id);
+  input.closest('.field')!.append(box);
+  return true;
+}
+
+function clearFieldError(input: HTMLInputElement): void {
+  input.removeAttribute('aria-invalid');
+  input.removeAttribute('aria-describedby');
+  input.closest('.field')?.querySelector('.field-error')?.remove();
+}
+
+function clearFieldErrors(form: HTMLElement): void {
+  for (const i of form.querySelectorAll<HTMLInputElement>('input[aria-invalid]'))
+    clearFieldError(i);
 }

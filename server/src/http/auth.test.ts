@@ -48,6 +48,13 @@ describe('cadastro', () => {
     ).toMatchObject({ status: 400, body: { error: 'INVALID_FIGURE' } });
   });
 
+  it('dado inválido diz qual campo do formulário corrigir', async () => {
+    expect(await register({ ...conta, password: '123' }, deps)).toMatchObject({
+      status: 400,
+      body: { error: 'INVALID_PAYLOAD', field: 'password' },
+    });
+  });
+
   it('nome exibido em uso por alguém online é recusado com sugestão', async () => {
     deps.presence.add({ sessionId: 's1', userId: 'outro', name: 'Ana', roomId: 'reception' });
     expect(await register(conta, deps)).toMatchObject({

@@ -213,6 +213,8 @@ export interface ApiError {
   message: string;
   /** Sugestão de nome livre quando `error = NAME_IN_USE`. */
   suggestion?: string;
+  /** Campo do formulário com problema (`INVALID_PAYLOAD`), para mostrar o erro nele. */
+  field?: string;
 }
 
 /** Opções enviadas no `joinOrCreate`. */
