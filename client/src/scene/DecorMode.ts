@@ -369,6 +369,8 @@ export class DecorMode {
     const g = this.host.overlay.clear();
     if (!this.active) return;
     const ghost = this.picking ?? this.drag?.ghost ?? null;
+    // Colocando ou arrastando: a grade de tiles do piso aparece (Fase 47).
+    if (ghost) this.drawTileGrid(g);
     if (ghost?.tile) {
       const def = this.host.defs.get(ghost.defId);
       if (def) this.drawFootprint(g, def, ghost.tile, ghost.rot, ghost.ok ? OK : BAD, true);
@@ -376,6 +378,19 @@ export class DecorMode {
     const sel = this.selectedId ? this.host.furniView(this.selectedId) : undefined;
     if (sel && !this.drag?.ghost)
       this.drawFootprint(g, sel.def, sel.placed, sel.placed.rot, SELECT, false);
+  }
+
+  /** Contorno fraquinho de todos os tiles do piso. */
+  private drawTileGrid(g: Graphics): void {
+    const { width, height } = this.host.map;
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const z = tileHeight(this.host.map, x, y);
+        if (z === null || z === undefined) continue;
+        const pts = tileCorners(x, y, z).flatMap((c) => [c.sx, c.sy]);
+        g.poly(pts, true).stroke({ width: 1, color: 0xffffff, alpha: 0.18 });
+      }
+    }
   }
 
   private drawFootprint(
