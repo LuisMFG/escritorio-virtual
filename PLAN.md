@@ -1089,11 +1089,13 @@ Pedido em 20/10/2026, com o escritório já em uso pelo pessoal do trabalho (ser
 - **Como testar:** abrir Perfil, Equipe, Admin e Decorar e ver o mesmo visual, botões e ícones.
 - **Feito:** tokens no topo do `client/src/style.css` (superfícies, bordas, texto, realce, ok/aviso/perigo, sombras, raios, espaços, fontes, transição) e as cores fixas do CSS trocadas por eles; **tema claro** com os mesmos nomes em `:root[data-theme='light']`, escolhido pelo botão sol/lua na coluna da direita (provisório até as configurações da Fase 43), salvo no navegador e aplicado antes de pintar a página; o fundo da cena acompanha. **Ícones SVG** de traço (desenhos do Lucide, ISC) em `client/src/ui/icons.ts` nos botões do canto, de câmera/som, do modo foco, do "Editar sala" e nos X de fechar, todos com nome para leitor de tela. Botões com a mesma transição, anel de foco e "apertar"; `prefers-reduced-motion` desliga as transições. Teste `e2e/tests/tema.spec.ts`.
 
-#### Fase 41 — Tela principal limpa
+#### Fase 41 — Tela principal limpa ✅ implementada
 - **HUD reorganizado:** barra inferior em grupos (Eu · Pessoas · Conversas · Escritório) com "mais" para o resto; a coluna da direita vira um controle compacto de câmera e som.
 - **Conversa que não cobre a sala:** painel lateral recolhível com contador de não lidas e as últimas falas em balões; o cartão de dicas e o selo de assets saem (o selo só para admin, nas configurações).
 - **Câmera que enquadra:** a sala abre no zoom que cabe na tela (com níveis intermediários, não só 0,5× e 1×), roda do mouse e pinça para zoom, e "centralizar em mim".
 - **Como testar:** entrar na Recepção numa tela de notebook e ver a sala inteira, com os avatares legíveis e nada cobrindo o meio.
+- **Feito:** barra de baixo em grupos (Eu: Perfil e Foco · Pessoas: Equipe e Mapa · Conversas: Mensagens e Avisos · Escritório: Agenda e Decorar) com **Mais** (Editar sala e Admin, só para quem pode), rótulos só em telas largas; coluna da direita virou uma barrinha (som ambiente, tema, som de mensagem | aproximar, afastar, **enquadrar a sala**, **centralizar em mim**). A **conversa** é um painel à esquerda, com as falas em balões (as suas à direita), recolhível num botão com contador de novas e lembrado no navegador; o campo de mensagem fica embaixo dele, com ícones. O cartão de dicas saiu (vira a ajuda da Fase 44) e o selo de assets só aparece para admins. **Câmera:** enquadra só o piso e as paredes na área livre (sem a conversa, a barra de baixo e a coluna da direita), com zoom contínuo abaixo de 1× e níveis 1×, 1,5×, 2× e 3× acima; reenquadra ao recolher a conversa e ao redimensionar; roda do mouse e **pinça** no celular. Testes `Camera.test.ts` e `e2e/tests/tela.spec.ts`.
+
 
 #### Fase 42 — Minha mesa e presença
 - **Minha mesa:** cada pessoa escolhe a sua estação na Recepção (com o nome numa plaquinha na mesa); ao entrar, um botão "Ir para minha mesa" leva e senta.
