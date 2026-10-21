@@ -9,6 +9,11 @@ import {
   emotePose,
   emoteBodyDy,
   EMOTES,
+  DANCES,
+  danceFrame,
+  danceFrameIndex,
+  type AnimFrame,
+  type DanceId,
   nextBlinkDelay,
   poseKey,
   TALK_FRAME_MS,
@@ -76,8 +81,6 @@ const STATUS_COLORS: Record<string, number> = {
 };
 const BADGE_R = 7;
 
-/** Direções percorridas na dança. */
-const DANCE_DIRS = [2, 3, 4, 5, 6, 5, 4, 3];
 /**
  * Entre um passo e o próximo (o pacote do servidor chega um pouco depois), continua com a pose
  * de andar por um instante em vez de piscar a pose parada (o andar "engasgava").
@@ -115,6 +118,10 @@ export interface AvatarSnapshot {
   effect: string;
   /** Item na mão (id do Habbo); 0 = nada. */
   handItem: number;
+  /** Dança em andamento (Fase 55); vazio = não. */
+  dance: string;
+  /** Começo do compasso da dança (epoch ms do servidor). */
+  danceStart: number;
 }
 
 interface Step {
@@ -156,6 +163,13 @@ export class AvatarView extends Container {
   private fxLayer: EffectLayer | null = null;
   /** "zZ" sobre a cabeça de quem está ausente (olhos fechados). */
   private readonly sleep: Text;
+  /** Nota 🎵 flutuando sobre quem dança. */
+  private readonly danceNote: Text;
+  /** Dança de agora (Fase 55) e o começo do compasso, no relógio do servidor. */
+  private dance: DanceId | null = null;
+  private danceStart = 0;
+  /** Hora do servidor (a cena liga no relógio da conexão; sem ela, a daqui). */
+  serverNow: () => number = Date.now;
   private readonly body = new Sprite();
   private readonly shadow = new Graphics();
   private readonly nameTag: Text;
@@ -259,6 +273,9 @@ export class AvatarView extends Container {
     });
     this.sleep.anchor.set(0, 1);
     this.sleep.visible = false;
+    this.danceNote = new Text({ text: '🎵', resolution: 2, style: { fontSize: 13 } });
+    this.danceNote.anchor.set(0.5, 1);
+    this.danceNote.visible = false;
     this.legMask.rect(-60, -220, 120, 220 + SIT_CUT_Y).fill(0xffffff);
     this.legMask.visible = false;
     this.statusBadge.visible = false;
@@ -286,6 +303,7 @@ export class AvatarView extends Container {
       this.cake,
       this.focusTag,
       this.sleep,
+      this.danceNote,
       this.typingBubble,
       this.cargoTag,
       this.nameTag,
@@ -352,8 +370,6 @@ export class AvatarView extends Container {
 
   /** Toca um emote: animação no corpo e o emoji subindo sobre a cabeça. */
   playEmote(id: EmoteId): void {
-    // Dançar sentado ou deitado não existe (o servidor também recusa).
-    if (id === 'dance' && (this.sitting || this.lying)) return;
     this.stopEmote();
     const emoji = new Text({ text: EMOTES[id].emoji, resolution: 2, style: { fontSize: 18 } });
     emoji.anchor.set(0.5, 1);
@@ -371,6 +387,13 @@ export class AvatarView extends Container {
     return this.emote?.id ?? null;
   }
 
+  /** Dança de agora e o quadro dela (`null` = não está dançando), para os testes. */
+  get currentDance(): { id: DanceId; frame: number } | null {
+    return this.dance
+      ? { id: this.dance, frame: danceFrameIndex(this.dance, this.serverNow() - this.danceStart) }
+      : null;
+  }
+
   /** Aplica um estado novo vindo do servidor. */
   applySnapshot(s: AvatarSnapshot): void {
     this.nameTag.text = s.birthday ? `${s.name} 🎂` : s.name;
@@ -385,6 +408,8 @@ export class AvatarView extends Container {
     this.alpha = s.away ? 0.45 : 1;
     this.lying = s.action === 'lay';
     this.handItem = s.handItem;
+    this.dance = s.dance in DANCES ? (s.dance as DanceId) : null;
+    this.danceStart = s.danceStart;
     this.serverDir = s.dir;
     this.serverAction = s.action;
     this.fxLayer?.setWorn(isEffect(s.effect) ? s.effect : null);
@@ -396,7 +421,7 @@ export class AvatarView extends Container {
     const last = this.queue.at(-1) ?? this.step?.to ?? this.tile;
     if (target.x === last.x && target.y === last.y) {
       // Andando ainda: a direção é aplicada quando o último passo acabar (ver `update`).
-      if (!this.isWalking && this.emote?.id !== 'dance' && s.dir !== this.dir) {
+      if (!this.isWalking && s.dir !== this.dir) {
         this.dir = s.dir;
         this.applyFrame();
       }
@@ -433,7 +458,7 @@ export class AvatarView extends Container {
         if (!this.step) {
           this.stepEndedAt = this.clock;
           // Chegou: vira para onde o servidor mandou (o assento, a cama, o móvel usado).
-          if (this.serverDir !== this.dir && this.emote?.id !== 'dance') {
+          if (this.serverDir !== this.dir) {
             this.dir = this.serverDir;
             this.applyFrame();
           }
@@ -453,6 +478,7 @@ export class AvatarView extends Container {
     this.updateEmote(dtMs);
     if (this.poser) this.applyFrame();
     this.updateSleep();
+    this.updateDanceNote();
     if (this.fxLayer) {
       this.fxLayer.update(dtMs, this.dir);
       // As camadas acompanham o corpo (sentado, pulando…).
@@ -571,19 +597,10 @@ export class AvatarView extends Container {
     if (!e) return;
     e.elapsed += dtMs;
     const def = EMOTES[e.id];
-    // Andar interrompe a dança (os outros emotes terminam sozinhos).
-    if (e.elapsed >= def.durationMs || (e.id === 'dance' && this.step)) return this.stopEmote();
+    if (e.elapsed >= def.durationMs) return this.stopEmote();
     const t = e.elapsed / def.durationMs;
-    const rise = e.id === 'dance' ? Math.abs(Math.sin(e.elapsed / 180)) * 4 : t * 28;
-    e.emoji.position.set(0, (this.nameVisible ? NAME_Y - 14 : EMOJI_Y) - rise);
+    e.emoji.position.set(0, (this.nameVisible ? NAME_Y - 14 : EMOJI_Y) - t * 28);
     e.emoji.alpha = t > 0.7 ? Math.max(0, (1 - t) / 0.3) : 1;
-    if (e.id === 'dance') {
-      const dir = DANCE_DIRS[Math.floor(e.elapsed / 280) % DANCE_DIRS.length]!;
-      if (dir !== this.dir) {
-        this.dir = dir;
-        this.applyFrame();
-      }
-    }
   }
 
   private stopEmote(): void {
@@ -591,11 +608,30 @@ export class AvatarView extends Container {
     if (!e) return;
     this.emote = null;
     e.emoji.destroy();
-    if (e.id === 'dance' && !this.step) {
-      // Volta para a direção do servidor (pode ter virado durante a dança).
-      this.dir = this.serverDir;
-      this.applyFrame();
+  }
+
+  /**
+   * Quadro da dança agora (Fase 55): pelo relógio do servidor, então todo mundo vê o mesmo.
+   * Andando, sentado, deitado ou no meio de um emote, a dança espera.
+   */
+  private danceNow(): AnimFrame | null {
+    if (!this.dance || this.step || this.walkGrace() || this.sitting || this.lying || this.emote) {
+      return null;
     }
+    return danceFrame(this.dance, this.serverNow() - this.danceStart);
+  }
+
+  /** "🎵" balançando sobre quem dança. */
+  private updateDanceNote(): void {
+    const on = this.dance !== null && !this.step;
+    this.danceNote.visible = on;
+    if (!on) return;
+    const t = (this.clock % 1600) / 1600;
+    this.danceNote.position.set(
+      14 + Math.round(Math.sin(t * Math.PI * 2) * 3),
+      -84 - Math.round(t * 8),
+    );
+    this.danceNote.alpha = t > 0.8 ? (1 - t) / 0.2 : 1;
   }
 
   /** Acabou um passo e o servidor ainda diz "andando": o próximo passo está chegando. */
@@ -622,8 +658,6 @@ export class AvatarView extends Container {
         return { x: Math.round(Math.sin(s * 18) * 2), y: 0 };
       case 'laugh':
         return { x: 0, y: -Math.round(Math.abs(Math.sin(s * 22)) * 2) };
-      case 'dance':
-        return { x: 0, y: -Math.round(Math.abs(Math.sin(s * 11)) * 4) };
       default:
         return { x: 0, y: s < 0.3 ? -Math.round(Math.sin((Math.PI * s) / 0.3) * 4) : 0 };
     }
@@ -687,9 +721,17 @@ export class AvatarView extends Container {
       // Sentado, o emote não mexe tronco e pernas; deitado, só o rosto (Fase 54).
       const posture = this.lying ? 'lay' : this.sitting && !this.step ? 'sit' : 'stand';
       Object.assign(pose, emotePose(this.emote.id, this.emote.elapsed, posture));
-      // Sentado ou deitado, o emote não muda a postura (a dança "andava" dentro da cadeira).
       if (!this.step && this.lying) pose.posture = 'lay';
       else if (!this.step && this.sitting) pose.posture = 'sit';
+    }
+    // Dança (Fase 55): o quadro do compasso, com o corpo girando quando a coreografia pede.
+    const dance = this.danceNow();
+    if (dance) {
+      if (dance.parts) pose.parts = dance.parts;
+      if (dance.expression) pose.expression = dance.expression;
+      if (dance.talk)
+        Object.assign(pose, { talk: true, talkFrame: Math.floor(this.clock / 120) % 2 });
+      if (dance.bodyDd) pose.direction = (this.dir + dance.bodyDd + 8) % 8;
     }
     // Roupa animada: 8 quadros por segundo (começa em 1; 0 = parada).
     if (this.poser?.animated) pose.clothingFrame = 1 + Math.floor(this.clock / 125);
@@ -762,10 +804,14 @@ export class AvatarView extends Container {
     if (this.poser) {
       // Pose real: sem balanço simulado (a dança ainda pula um pouquinho; pular e comemorar,
       // do jeito da animação, só em pé).
-      const hop = this.emote?.id === 'dance' && !this.step ? this.emoteOffset().y : this.animHop();
+      const hop = this.animHop();
       const onSeat = this.sitting && this.sitZ > this.heightAt(this.tile.x, this.tile.y) + 0.05;
       const rest = this.step || this.lying || !onSeat ? 0 : SIT_OFFSET;
-      this.body.position.set(0, rest + hop);
+      // Dança (Fase 55): o corpo inteiro pula e desliza (o moonwalk); no espelho, o x inverte.
+      const dance = this.danceNow();
+      const facing = (this.dir + (dance?.bodyDd ?? 0) + 8) % 8;
+      const flip = facing >= 4 && facing <= 6 ? -1 : 1;
+      this.body.position.set(flip * (dance?.bodyDx ?? 0), rest + hop + (dance?.bodyDy ?? 0));
     } else if (this.step) {
       const quarter = Math.floor((this.walkTime / STEP_MS) * 4) % 4;
       const sway = quarter === 2 ? (this.stepCount % 2 === 0 ? 1 : -1) : 0;

@@ -14,6 +14,10 @@ const CHAT_COMMANDS: Row[] = [
   ['/sentar · /deitar · /levantar', 'Senta ou deita no chão, e levanta.'],
   ['/largar', 'Solta o café ou a bebida da mão.'],
   ['/dado · /moeda', 'Sorteio feito pelo servidor; todos veem o mesmo resultado.'],
+  [
+    '/dancar · /parar',
+    'Escolhe uma dança (Macarena, Thriller, Gangnam Style, YMCA, Floss, Robô e Moonwalk; também /macarena…), em loop até andar ou /parar. Perto de quem dança a mesma, no mesmo tempo.',
+  ],
   ['/enquete Pergunta? | a | b', 'Cria uma enquete no chat (até 6 opções).'],
   ['/senta · /deita · /vem', 'Comandos para o seu pet.'],
 ];

@@ -83,6 +83,8 @@ export interface SceneDeps {
   furniVisuals?: FurniVisualLibrary;
   /** Busca a definição de um móvel do catálogo completo que ainda não está em `furniDefs`. */
   requestDef?: (defId: string) => Promise<FurniManifestEntry | null>;
+  /** Hora do servidor (epoch ms): o compasso das danças (Fase 55). */
+  serverNow?: () => number;
 }
 
 /** Ponto escolhido numa parede: tile, lado (2 ou 4) e altura acima do piso. */
@@ -634,6 +636,7 @@ export class RoomScene implements DecorHost {
   addAvatar(id: string, snapshot: AvatarSnapshot, isLocal: boolean): void {
     if (this.avatars.has(id)) return this.updateAvatar(id, snapshot);
     const view = new AvatarView(id, snapshot, isLocal, (x, y) => this.grid.heightAt(x, y));
+    if (this.deps.serverNow) view.serverNow = this.deps.serverNow;
     this.avatars.set(id, view);
     if (this.deps.effects) view.useEffects(this.deps.effects, snapshot.effect);
     if (isLocal) this.localId = id;

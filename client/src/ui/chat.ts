@@ -6,6 +6,10 @@ import {
   nameKey,
   normalizeChatText,
   emoteRefusal,
+  DANCES,
+  DANCE_IDS,
+  parseDanceCommand,
+  type DanceId,
   parseEmoteCommand,
   parseHighFiveCommand,
   parsePostureCommand,
@@ -57,6 +61,9 @@ export interface ChatHandlers {
   highFiveNearby(): void;
   /** Postura de agora: o menu apaga os emotes que não valem nela. */
   emotePosture?(): EmotePosture;
+  /** Danças (Fase 55): começar uma e `/parar`. */
+  dance(id: DanceId): void;
+  stopDance(): void;
   /** `/sentar`, `/deitar` (no chão) e `/levantar`. */
   posture(p: Posture): void;
   /** `/largar`: solta o item da mão. */
@@ -81,6 +88,9 @@ export class ChatPanel {
   private readonly emoteMenu = document.createElement('div');
   /** Botão de cada emote no menu (para apagar os que não valem na postura). */
   private readonly emoteButtons = new Map<EmoteId, HTMLButtonElement>();
+  /** Escolha da dança (Fase 55): o "Dançar" do menu e o `/dancar` abrem. */
+  private readonly danceMenu = document.createElement('div');
+  private danceButton: HTMLButtonElement | null = null;
   private readonly suggestions = document.createElement('ul');
   private readonly history = document.createElement('details');
   private readonly summary = document.createElement('summary');
@@ -142,6 +152,45 @@ export class ChatPanel {
       });
       this.emoteMenu.append(b);
     }
+    // Dançar (Fase 55): abre a escolha da dança (também `/dancar`, `/macarena`…).
+    {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.setAttribute('role', 'menuitem');
+      b.title = 'Dançar (/dancar, /macarena, /thriller…)';
+      b.dataset.title = b.title;
+      b.append(
+        Object.assign(document.createElement('span'), { className: 'emoji', textContent: '💃' }),
+        Object.assign(document.createElement('span'), { textContent: 'Dançar' }),
+      );
+      b.addEventListener('click', () => {
+        this.toggleEmoteMenu(false);
+        this.toggleDanceMenu(true);
+      });
+      this.danceButton = b;
+      this.emoteMenu.append(b);
+    }
+    this.danceMenu.className = 'emote-menu dance-menu';
+    this.danceMenu.hidden = true;
+    this.danceMenu.setAttribute('role', 'menu');
+    this.danceMenu.setAttribute('aria-label', 'Danças');
+    for (const id of DANCE_IDS) {
+      const def = DANCES[id];
+      this.danceMenu.append(
+        this.menuButton(def.emoji, def.label, `${def.label} (/${def.command})`, () => {
+          this.on.dance(id);
+          this.toggleDanceMenu(false);
+          this.input.focus();
+        }),
+      );
+    }
+    this.danceMenu.append(
+      this.menuButton('⏹️', 'Parar', 'Parar de dançar (/parar)', () => {
+        this.on.stopDance();
+        this.toggleDanceMenu(false);
+        this.input.focus();
+      }),
+    );
     // Enquete: abre o formulário (também dá para usar /enquete Pergunta? | a | b).
     {
       const b = document.createElement('button');
@@ -236,6 +285,7 @@ export class ChatPanel {
       searchBtn,
       send,
       this.emoteMenu,
+      this.danceMenu,
       this.suggestions,
     );
 
@@ -345,9 +395,11 @@ export class ChatPanel {
       const file = this.attach.current;
       if (!text && !file) return;
       const highFive = file ? null : parseHighFiveCommand(text);
+      const dance = file ? null : parseDanceCommand(text);
       const emote = file ? null : parseEmoteCommand(text);
       const posture = file ? null : parsePostureCommand(text);
       if (highFive !== null) this.on.highFive(highFive);
+      else if (dance) this.runDanceCommand(dance);
       else if (emote) this.on.emote(emote);
       else if (posture) this.on.posture(posture);
       else if (!file && isDropCommand(text)) this.on.dropItem();
@@ -402,6 +454,8 @@ export class ChatPanel {
     document.addEventListener('pointerdown', (e) => {
       if (!this.emoteMenu.hidden && !this.form.contains(e.target as Node))
         this.toggleEmoteMenu(false);
+      if (!this.danceMenu.hidden && !this.form.contains(e.target as Node))
+        this.toggleDanceMenu(false);
     });
 
     this.history.addEventListener('toggle', () => {
@@ -424,10 +478,64 @@ export class ChatPanel {
     });
   }
 
+  /** `/dancar` abre a escolha; `/macarena` dança; `/parar` para; nome errado avisa. */
+  private runDanceCommand(cmd: NonNullable<ReturnType<typeof parseDanceCommand>>): void {
+    if ('menu' in cmd) this.toggleDanceMenu(true);
+    else if ('stop' in cmd) this.on.stopDance();
+    else if ('dance' in cmd) this.on.dance(cmd.dance);
+    else {
+      const names = DANCE_IDS.map((id) => `/${DANCES[id].command}`).join(', ');
+      this.on.notify(`Não conheço a dança "${cmd.unknown}". Danças: ${names}.`);
+    }
+  }
+
+  private toggleDanceMenu(open: boolean): void {
+    this.danceMenu.hidden = !open;
+    if (open) this.toggleEmoteMenu(false);
+    // Sentado ou deitado não dá para dançar: as danças ficam apagadas (o Parar, não).
+    const refused = this.danceRefusal();
+    for (const b of this.danceMenu.querySelectorAll<HTMLButtonElement>('button')) {
+      if (b.dataset.stop) continue;
+      b.disabled = Boolean(refused);
+      b.title = refused ?? b.dataset.title ?? '';
+    }
+  }
+
+  private danceRefusal(): string | null {
+    const posture = this.on.emotePosture?.() ?? 'stand';
+    return posture === 'stand' ? null : 'Levante para dançar.';
+  }
+
+  private menuButton(
+    emoji: string,
+    label: string,
+    title: string,
+    onClick: () => void,
+  ): HTMLButtonElement {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.setAttribute('role', 'menuitem');
+    b.title = title;
+    b.dataset.title = title;
+    if (label === 'Parar') b.dataset.stop = '1';
+    b.append(
+      Object.assign(document.createElement('span'), { className: 'emoji', textContent: emoji }),
+      Object.assign(document.createElement('span'), { textContent: label }),
+    );
+    b.addEventListener('click', onClick);
+    return b;
+  }
+
   private toggleEmoteMenu(open: boolean): void {
     this.emoteMenu.hidden = !open;
     this.emoteBtn.setAttribute('aria-expanded', String(open));
     if (!open) return;
+    this.danceMenu.hidden = true;
+    if (this.danceButton) {
+      const why = this.danceRefusal();
+      this.danceButton.disabled = Boolean(why);
+      this.danceButton.title = why ?? this.danceButton.dataset.title ?? '';
+    }
     // Sentado, só os que fazem sentido; deitado, só os de rosto (Fase 54).
     const posture = this.on.emotePosture?.() ?? 'stand';
     for (const [id, b] of this.emoteButtons) {

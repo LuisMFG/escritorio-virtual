@@ -28,6 +28,7 @@ import {
   type EffectFlash,
   type EmoteMessage,
   type HighFiveMessage,
+  type DanceId,
   type Status,
   type ErrorMessage,
   type FurniMoveMessage,
@@ -47,6 +48,8 @@ export type OfficeRoomClient = Room<unknown, OfficeState>;
 
 /** Atrasos entre tentativas de reentrar depois que a reconexão automática desiste. */
 const REJOIN_DELAYS_MS = [1000, 2000, 4000, 8000, 15000];
+/** De quanto em quanto tempo o relógio do servidor é conferido de novo (danças, Fase 55). */
+const CLOCK_RESYNC_MS = 60_000;
 
 export function serverEndpoint(): string {
   const fromEnv = import.meta.env.VITE_SERVER_URL as string | undefined;
@@ -186,6 +189,41 @@ export class OfficeConnection {
   /** Toca aqui com a pessoa desta sessão (o servidor confere distância e se ela pode). */
   highFive(target: string): void {
     this.room?.send(ClientMessage.HighFive, { target });
+  }
+
+  /** Começa uma dança; vazio para (Fase 55). */
+  dance(dance: DanceId | ''): void {
+    this.room?.send(ClientMessage.Dance, { dance });
+  }
+
+  private clockTimer = 0;
+  /** Diferença entre o relógio do servidor e o daqui (ms), da amostra com menor atraso. */
+  private clockOffset = 0;
+  private clockRtt = Infinity;
+
+  /** Hora do servidor agora (epoch ms): o compasso das danças é o mesmo em todas as telas. */
+  serverNow(): number {
+    return Date.now() + this.clockOffset;
+  }
+
+  /**
+   * Acerta o relógio (como o NTP): pergunta a hora algumas vezes e fica com a resposta mais rápida,
+   * supondo a ida igual à volta.
+   */
+  private async syncClock(room: OfficeRoomClient, samples = 3): Promise<void> {
+    for (let i = 0; i < samples && this.room === room; i++) {
+      const sent = Date.now();
+      try {
+        const server = (await room.request(ClientMessage.Time)) as number;
+        const rtt = Date.now() - sent;
+        if (rtt <= this.clockRtt) {
+          this.clockRtt = rtt;
+          this.clockOffset = server + rtt / 2 - Date.now();
+        }
+      } catch {
+        return;
+      }
+    }
   }
 
   /** Sentar/deitar no chão ou levantar. */
@@ -378,6 +416,12 @@ export class OfficeConnection {
     this.ticket = undefined;
     const room = await this.client.joinOrCreate(OFFICE_ROOM, options, OfficeState);
     this.room = room;
+    // Relógio do servidor (danças): ao entrar e, depois, de vez em quando (o melhor fica).
+    void this.syncClock(room);
+    window.clearInterval(this.clockTimer);
+    this.clockTimer = window.setInterval(() => {
+      if (this.room) void this.syncClock(this.room, 1);
+    }, CLOCK_RESYNC_MS);
     room.onMessage(ServerMessage.Error, (err: ErrorMessage) => this.on.serverError(err));
     room.onMessage(ServerMessage.Chat, (msg: ChatMessage) => this.on.chat(msg));
     room.onMessage(ServerMessage.Emote, (msg: EmoteMessage) => this.on.emote(msg));

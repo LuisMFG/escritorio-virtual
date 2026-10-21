@@ -183,6 +183,8 @@ function snapshot(p: Player): AvatarSnapshot {
     focusKind: p.focusKind,
     effect: p.effect,
     handItem: p.handItem,
+    dance: p.dance,
+    danceStart: p.danceStart,
   };
 }
 
@@ -228,6 +230,8 @@ async function start(): Promise<void> {
     avatars: new AvatarTextureCache(figureRenderer ?? imagerRenderer),
     furniDefs: furniStore.defs,
     requestDef: (id) => furniStore.ensure(id),
+    // Compasso das danças (Fase 55): a hora do servidor, acertada pela conexão.
+    serverNow: () => connection?.serverNow() ?? Date.now(),
     effects: new EffectLibrary(!OFFLINE_ASSETS),
     furniVisuals: new FurniVisualLibrary(!OFFLINE_ASSETS),
   };
@@ -373,6 +377,9 @@ async function start(): Promise<void> {
         overlay.notify('Tem mais de uma pessoa perto: clique em quem você quer e use "Toca aqui".');
       } else connection?.highFive(near[0]!.id);
     },
+    // Danças (Fase 55): o servidor guarda qual e quando começou.
+    dance: (id) => connection?.dance(id),
+    stopDance: () => connection?.dance(''),
     emotePosture: () => {
       const room = connection?.currentRoom;
       return emotePosture(room?.state.players.get(room.sessionId)?.action ?? 'idle');
