@@ -40,6 +40,7 @@ interface Hook {
   tile(x: number, y: number): { x: number; y: number };
   furni(id: string): { x: number; y: number } | null;
   avatar(sessionId: string): { x: number; y: number } | null;
+  avatarDir(sessionId: string): number | null;
   wall(x: number, y: number, rot: 2 | 4, h: number): { x: number; y: number };
   furniZ(id: string): number | null;
   furniFrame(id: string): string | null;
@@ -57,6 +58,7 @@ interface Hook {
     name: string;
     x: number;
     y: number;
+    dir: number;
     action: string;
     effect: string;
     handItem: number;

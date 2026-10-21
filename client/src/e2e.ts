@@ -37,12 +37,15 @@ export interface E2EHook {
   furni(id: string): Point | null;
   /** Ponto da página no meio do corpo de um avatar (sessão). */
   avatar(sessionId: string): Point | null;
+  /** Direção em que o avatar está desenhado (a que se vê, não a do servidor). */
+  avatarDir(sessionId: string): number | null;
   furniList(): { id: string; defId: string; x: number; y: number; z: number }[];
   players(): {
     id: string;
     name: string;
     x: number;
     y: number;
+    dir: number;
     action: string;
     effect: string;
     handItem: number;
@@ -109,6 +112,7 @@ export function exposeForTests(scene: RoomScene, room: OfficeRoomClient): void {
       const r = canvas();
       return { x: Math.round(r.left + c.x), y: Math.round(r.top + c.y) };
     },
+    avatarDir: (id) => scene.avatarView(id)?.dir ?? null,
     furniAt: (x, y) => {
       const r = canvas();
       return scene.pickFurni(new PixiPoint(x - r.left, y - r.top))?.placed.id ?? null;
@@ -130,6 +134,7 @@ export function exposeForTests(scene: RoomScene, room: OfficeRoomClient): void {
         name: p.name,
         x: p.x,
         y: p.y,
+        dir: p.dir,
         action: p.action,
         effect: p.effect,
         handItem: p.handItem,
