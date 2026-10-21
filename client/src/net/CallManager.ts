@@ -1,4 +1,5 @@
 import {
+  CALL_ICE_BATCH_MAX,
   callInitiator,
   type CallInvite,
   type CallInviteResult,
@@ -14,6 +15,8 @@ const FALLBACK_ICE: IceServer[] = [{ urls: ['stun:stun.cloudflare.com:3478'] }];
 /** Quanto de volume conta como "falando" (RMS de 0 a 1) e de quanto em quanto medir (ms). */
 const SPEAKING_LEVEL = 0.035;
 const SPEAKING_EVERY_MS = 150;
+/** Candidatos ICE saem juntos a cada tanto (ms), em vez de um por mensagem. */
+const ICE_BATCH_MS = 100;
 /** Dispositivos escolhidos (lembrados no navegador). */
 const MIC_KEY = 'ev-call-mic';
 const CAM_KEY = 'ev-call-cam';
@@ -49,6 +52,9 @@ interface Peer {
   audio: HTMLAudioElement;
   /** Candidatos que chegaram antes da descrição remota. */
   pendingIce: RTCIceCandidateInit[];
+  /** Candidatos meus esperando para sair no próximo lote. */
+  outIce: RTCIceCandidateInit[];
+  iceTimer: number;
   level: (() => number) | null;
   video: MediaStream | null;
 }
@@ -351,15 +357,33 @@ export class CallManager {
     audio.dataset.callPeer = userId;
     audio.hidden = true;
     document.body.append(audio);
-    const peer: Peer = { pc, audio, pendingIce: [], level: null, video: null };
+    const peer: Peer = {
+      pc,
+      audio,
+      pendingIce: [],
+      outIce: [],
+      iceTimer: 0,
+      level: null,
+      video: null,
+    };
+    const flushIce = () => {
+      clearTimeout(peer.iceTimer);
+      peer.iceTimer = 0;
+      if (!peer.outIce.length || pc.signalingState === 'closed') return;
+      const candidates = peer.outIce.splice(0).map((c) => ({
+        candidate: c.candidate ?? '',
+        sdpMid: c.sdpMid ?? null,
+        sdpMLineIndex: c.sdpMLineIndex ?? null,
+      }));
+      this.lobby.callSignal(userId, { kind: 'ice', candidates });
+    };
     pc.onicecandidate = (e) => {
-      if (!e.candidate) return;
-      this.lobby.callSignal(userId, {
-        kind: 'ice',
-        candidate: e.candidate.candidate,
-        sdpMid: e.candidate.sdpMid,
-        sdpMLineIndex: e.candidate.sdpMLineIndex,
-      });
+      // Fim da coleta: manda o que sobrou.
+      if (!e.candidate) return flushIce();
+      if (!e.candidate.candidate) return;
+      peer.outIce.push(e.candidate.toJSON());
+      if (peer.outIce.length >= CALL_ICE_BATCH_MAX) flushIce();
+      else peer.iceTimer ||= window.setTimeout(flushIce, ICE_BATCH_MS);
     };
     pc.ontrack = (e) => {
       if (e.track.kind === 'video') {
@@ -430,19 +454,20 @@ export class CallManager {
           await pc.setLocalDescription(answer);
           this.lobby.callSignal(from, { kind: 'sdp', type: 'answer', sdp: answer.sdp ?? '' });
         }
-        for (const c of peer.pendingIce.splice(0)) await pc.addIceCandidate(c);
+        for (const c of peer.pendingIce.splice(0)) await this.addIce(pc, c);
+      } else if (pc.remoteDescription) {
+        for (const c of data.candidates) await this.addIce(pc, c);
       } else {
-        const cand: RTCIceCandidateInit = {
-          candidate: data.candidate,
-          sdpMid: data.sdpMid,
-          sdpMLineIndex: data.sdpMLineIndex,
-        };
-        if (pc.remoteDescription) await pc.addIceCandidate(cand);
-        else peer.pendingIce.push(cand);
+        peer.pendingIce.push(...data.candidates);
       }
     } catch (err) {
       console.warn('[chamada] sinalização falhou', err);
     }
+  }
+
+  /** Um candidato ruim (rede que sumiu, etc.) não impede os outros. */
+  private async addIce(pc: RTCPeerConnection, c: RTCIceCandidateInit): Promise<void> {
+    await pc.addIceCandidate(c).catch((err) => console.warn('[chamada] candidato recusado', err));
   }
 
   /** Vídeos para o painel: dos outros (pelo que eles anunciaram) e a sua prévia. */
@@ -464,6 +489,7 @@ export class CallManager {
   private closePeer(userId: string): void {
     const peer = this.peers.get(userId);
     if (!peer) return;
+    clearTimeout(peer.iceTimer);
     peer.pc.close();
     peer.audio.srcObject = null;
     peer.audio.remove();

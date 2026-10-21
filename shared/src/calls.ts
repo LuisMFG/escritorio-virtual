@@ -84,6 +84,9 @@ export interface CallState extends CallView {
   here: boolean;
 }
 
+/** Candidatos ICE por mensagem (no máximo). */
+export const CALL_ICE_BATCH_MAX = 20;
+
 /** Sinalização WebRTC repassada pelo servidor (descrição de sessão ou candidato ICE). */
 export const callSignalDataSchema = z.union([
   z.object({
@@ -93,9 +96,18 @@ export const callSignalDataSchema = z.union([
   }),
   z.object({
     kind: z.literal('ice'),
-    candidate: z.string().max(2_000),
-    sdpMid: z.string().max(64).nullable(),
-    sdpMLineIndex: z.number().int().min(0).max(64).nullable(),
+    // Em lotes: no começo da chamada (com TURN) o navegador acha dezenas de candidatos de uma
+    // vez, e um por mensagem estourava o limite de mensagens por segundo do canal global.
+    candidates: z
+      .array(
+        z.object({
+          candidate: z.string().max(1_000),
+          sdpMid: z.string().max(64).nullable(),
+          sdpMLineIndex: z.number().int().min(0).max(64).nullable(),
+        }),
+      )
+      .min(1)
+      .max(CALL_ICE_BATCH_MAX),
   }),
 ]);
 export type CallSignalData = z.infer<typeof callSignalDataSchema>;
