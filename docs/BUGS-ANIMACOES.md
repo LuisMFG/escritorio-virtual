@@ -23,7 +23,9 @@ Alguns achados das revisões foram confirmados rodando o próprio código de mon
 
 Cada bug tem um código (AN = animação, IN = interação, DE = Decorar/empilhar), usado no roadmap (seção 19 do `PLAN.md`).
 
-**Situação:** a Fase 52 corrigiu AN1–AN8, AN10, AN11, AN13, AN14, IN1–IN11, IN13, IN15 e o IN16 (achado na conferência). Os DE ficam para a Fase 53.
+**Situação:**
+- A Fase 52 corrigiu AN1–AN8, AN10, AN11, AN13, AN14, IN1–IN11, IN13, IN15 e o IN16 (achado na conferência).
+- A Fase 53 corrigiu DE1–DE10, DE13–DE17 e DE20. DE11, DE12, DE18 e DE19 ficaram de fora do roadmap.
 
 ---
 
@@ -211,43 +213,43 @@ Cada bug tem um código (AN = animação, IN = interação, DE = Decorar/empilha
 
 ## Decorar e empilhar (DE)
 
-### DE1 · Arrastar um objeto empilhado pela parte de cima faz ele pular para o chão atrás da mesa — **alta**
+### DE1 · Arrastar um objeto empilhado pela parte de cima faz ele pular para o chão atrás da mesa — **alta** · ✅ corrigido na Fase 53
 - **Reproduzir:** computador em cima de uma mesinha; arraste-o pela tela. O fantasma vai para o chão 2 tiles atrás, verde; soltando, ele desce para lá.
 - **Causa:**
   - O alvo do arrasto é o tile do piso sob o ponteiro. No isométrico, esse tile fica atrás do objeto.
   - O modo "tampo" só acerta dentro do losango do tampo.
   - Código: `client/src/scene/DecorMode.ts`, `RoomScene.pickTile/pickSurfaceTile`.
 
-### DE2 · Ao arrastar perto de mesas, o fantasma pula e empilha sem querer — **alta**
+### DE2 · Ao arrastar perto de mesas, o fantasma pula e empilha sem querer — **alta** · ✅ corrigido na Fase 53
 - **Reproduzir:** arraste uma mesa pelo canto e passe por cima de outra: ela salta um tile e sobe na outra. Soltando, empilha mesa sobre mesa.
 - **Causa:** o ponto de pega é descontado no piso, mas não no tampo, e o tampo tem prioridade.
 
-### DE3 · Móveis altos encostados na parede do fundo não arrastam pela parte de cima — **alta**
+### DE3 · Móveis altos encostados na parede do fundo não arrastam pela parte de cima — **alta** · ✅ corrigido na Fase 53
 - **Exemplos:** estante, geladeira, quadro, divisória de vidro.
 - **Reproduzir:** pegue pela metade de cima e arraste: nada aparece, e soltar não faz nada, em silêncio.
 - **Causa:** sobre a parede não existe tile de piso, então o fantasma some.
 
-### DE4 · O contorno verde/vermelho e o da seleção ficam escondidos ao empilhar — **média**
+### DE4 · O contorno verde/vermelho e o da seleção ficam escondidos ao empilhar — **média** · ✅ corrigido na Fase 53
 - **Reproduzir:** aponte a impressora para o tile da mesa ocupado pelo computador. O vermelho fica embaixo da mesa e o fantasma aparece no chão. Só ao clicar vem o erro.
 - **Causa:** a camada de contornos fica por baixo dos móveis e é desenhada na altura do piso; o fantasma inválido desce para o chão e não muda de cor.
 
-### DE5 · Sem atualização na hora: o móvel volta ao lugar antigo até o servidor responder; R rápido perde um giro; R durante o arrasto é desfeito — **média**
+### DE5 · Sem atualização na hora: o móvel volta ao lugar antigo até o servidor responder; R rápido perde um giro; R durante o arrasto é desfeito — **média** · ✅ corrigido na Fase 53
 
-### DE6 · Desfazer/refazer sai de sincronia e pode duplicar um móvel empilhado — **média**
+### DE6 · Desfazer/refazer sai de sincronia e pode duplicar um móvel empilhado — **média** · ✅ corrigido na Fase 53
 - **Exemplos:**
   - Remover uma base com coisas em cima mostra "removido [Desfazer]" junto com o erro.
   - O Desfazer do aviso desfaz a última ação, não aquela.
   - Um desfazer recusado pelo servidor, refeito depois, põe uma segunda mesa em cima da primeira.
 - **Causa:** o histórico grava antes da confirmação do servidor e não percebe falhas.
 
-### DE7 · Duplo clique (ou o modo "colocar" que continua) empilha cópias — **média**
+### DE7 · Duplo clique (ou o modo "colocar" que continua) empilha cópias — **média** · ✅ corrigido na Fase 53
 
-### DE8 · Trocar a cor de uma base com coisas em cima deixa os itens flutuando — **média**
+### DE8 · Trocar a cor de uma base com coisas em cima deixa os itens flutuando — **média** · ✅ corrigido na Fase 53
 - **Exemplo:** o cofre (`safe_silo`) tem tampo, mas as outras cores dele vêm do catálogo sem tampo.
 
-### DE9 · No celular: colocar é às cegas e um 2º dedo durante o arrasto embaralha tudo — **média**
+### DE9 · No celular: colocar é às cegas e um 2º dedo durante o arrasto embaralha tudo — **média** · ✅ corrigido na Fase 53
 
-### DE10 · O clique pega o móvel errado — **média**
+### DE10 · O clique pega o móvel errado — **média** · ✅ corrigido na Fase 53
 - O acerto é exato por pixel, sem folga: 1–2 px fora do item pequeno pegam a mesa.
 - No Decorar, arrastar sobre um tapete move o tapete em vez da câmera.
 - O fallback por tile não olha a altura.
@@ -256,15 +258,15 @@ Cada bug tem um código (AN = animação, IN = interação, DE = Decorar/empilha
 
 ### DE12 · Itens de parede: o centro pula para o ponteiro e o x fica preso no meio de cada tile — **baixa**
 
-### DE13 · Braços e encosto dos sofás ficam opacos no lugar antigo durante o arrasto — **baixa**
+### DE13 · Braços e encosto dos sofás ficam opacos no lugar antigo durante o arrasto — **baixa** · ✅ corrigido na Fase 53
 
-### DE14 · Teclado: Esc não cancela o arrasto; segurar R ou Ctrl+Z manda dezenas de ações por segundo ("Calma!") — **baixa**
+### DE14 · Teclado: Esc não cancela o arrasto; segurar R ou Ctrl+Z manda dezenas de ações por segundo ("Calma!") — **baixa** · ✅ corrigido na Fase 53
 
-### DE15 · Validação desatualizada: o fantasma fica verde onde alguém acabou de entrar ou num assento com gente — **baixa**
+### DE15 · Validação desatualizada: o fantasma fica verde onde alguém acabou de entrar ou num assento com gente — **baixa** · ✅ corrigido na Fase 53
 
-### DE16 · Girar sem aviso em móveis de uma direção só; uma base quadrada com coisas em cima não gira — **baixa**
+### DE16 · Girar sem aviso em móveis de uma direção só; uma base quadrada com coisas em cima não gira — **baixa** · ✅ corrigido na Fase 53
 
-### DE17 · Corrida no painel: o "Preparando…" de um item do catálogo substitui uma escolha mais nova — **baixa**
+### DE17 · Corrida no painel: o "Preparando…" de um item do catálogo substitui uma escolha mais nova — **baixa** · ✅ corrigido na Fase 53
 
 ### DE18 · Desempenho do arrasto — **baixa**
 - A cada movimento do mouse: validação completa (com caminho até cada porta) e redesenho da grade.
@@ -273,7 +275,7 @@ Cada bug tem um código (AN = animação, IN = interação, DE = Decorar/empilha
 - **Falsos positivos:** luminárias e velas "de mesa", cortinas.
 - **Falsos negativos:** blocos e plataformas.
 
-### DE20 · Botão direito ou do meio pode iniciar um arrasto que fica "armado" — **baixa/média** (provável no macOS)
+### DE20 · Botão direito ou do meio pode iniciar um arrasto que fica "armado" — **baixa/média** (provável no macOS) · ✅ corrigido na Fase 53
 
 ---
 

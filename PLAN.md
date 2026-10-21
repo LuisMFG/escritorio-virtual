@@ -1286,7 +1286,7 @@ As fases 52 e 53 vêm primeiro porque corrigem o que já existe e é usado todo 
   3. Acene com o copo na mão.
   4. Sente chegando pelo lado de uma cadeira.
 
-### Fase 53 — Decorar sem frustração
+### Fase 53 — Decorar sem frustração ✅ implementada
 - **Corrige:** DE1–DE10, DE13–DE17 e DE20.
 - **Critérios de aceite:**
   1. Ao pegar um objeto por qualquer ponto do desenho e arrastar, ele acompanha o ponteiro sem pular para trás. Vale também para a parte de cima, para móveis altos no fundo e para coisas em cima de mesas.
@@ -1307,6 +1307,41 @@ As fases 52 e 53 vêm primeiro porque corrigem o que já existe e é usado todo 
 - **Testes:**
   - ponta a ponta de arrasto com mouse: pela parte de cima, por cima de mesa, móvel alto, R no arrasto, desfazer depois de uma recusa;
   - unidade: escolha do tile com altura, histórico com falha.
+- **Feito:**
+  - **Arrastar por qualquer ponto** (`DecorMode`, `surfaceTileAt` em `shared/src/placement.ts`):
+    - o objeto guarda onde foi pego (o tile mais perto do ponteiro e a distância até ele) e segue o ponteiro por esse ponto;
+    - o tile de destino considera a altura dos tampos: apontar para o tampo escolhe a mesa, e não o piso atrás dela;
+    - a frente ou a lateral de um móvel com tampo esconde o piso de trás. Ali, no arrasto, o fantasma fica onde estava; colocando, ele vai para o tampo daquele móvel. Achado na conferência: com a mesa da Recepção (tampo a 1,1), o computador pulava para trás numa faixa de 3 px, e o arquivo do fundo subia no vizinho;
+    - o arrasto começa no lugar atual do móvel.
+  - **Fantasma visível:** contorno verde/vermelho e seleção azul numa camada por cima dos móveis, na altura do apoio. O fantasma inválido fica na altura do alvo, avermelhado.
+  - **Resposta do servidor** (`FurniResult`): colocar, mover, girar, trocar a cor e remover viraram pedidos com resposta.
+    - A tela mostra o resultado na hora e volta atrás se o servidor recusar (`FurniPending`): soltar não pisca, R R gira 180°, e remover some na hora e volta se for recusado.
+    - O desfazer grava só o que foi aceito, e desfazer/refazer só mudam de pilha com a confirmação.
+    - O aviso "removido" só aparece depois da confirmação, e o "Desfazer" dele desfaz aquela remoção.
+  - **Teclado e ponteiro:**
+    - R no arrasto gira o fantasma e Esc cancela;
+    - segurar R, Delete ou Ctrl+Z vale um toque;
+    - botão direito/do meio não arrasta nem move a câmera, e um "soltar" perdido (menu de contexto, janela trocada) cancela o arrasto;
+    - tapete só arrasta selecionado (senão move a câmera);
+    - clique com folga de 3 px para objetos pequenos em cima de uma mesa;
+    - sem pixel do desenho, o clique usa o tile do móvel na altura dele.
+  - **Colocar:** duplo clique (ou clique enquanto o servidor responde) põe uma cópia só. No celular, tocar posiciona o fantasma e **Colocar aqui** confirma; um segundo dedo cancela o arrasto. O fantasma não segue o mouse por cima do painel.
+  - **Regras:**
+    - uma base com coisas em cima gira no lugar quando os tiles não mudam (base quadrada ou meia-volta);
+    - não move nem gira um assento com alguém sentado (antes o fantasma ficava verde);
+    - trocar a cor de uma base com coisas em cima exige o mesmo tampo;
+    - as cores de um móvel curado herdam dele o tampo, a altura e o assento (o cofre);
+    - móvel de uma direção só avisa ao girar;
+    - o verde/vermelho se atualiza quando alguém entra, anda ou sai;
+    - braços e encosto do sofá ficam transparentes junto no arrasto;
+    - um "Preparando…" antigo do catálogo não troca uma escolha mais nova.
+  - **Testes:** `placement.test.ts` (tile com altura, frente da mesa, giro de base com coisas em cima, assento com gente), `DecorHistory.test.ts` (recusa fica no histórico, refazer não duplica, "Desfazer" do aviso), `FurniPending.test.ts`, `FurniDefService.test.ts` (cores do curado), três testes de sala em `OfficeRoom.test.ts` (respostas, troca de cor, giro no lugar) e `e2e/tests/arrastar.spec.ts` (mouse pela parte de cima, na mesa, R, Esc, desfazer depois da recusa, móvel alto do fundo, botão direito, uma direção só, duplo clique, toque no celular e fantasma que fica vermelho quando alguém entra).
+- **Como testar:**
+  1. No Decorar, arraste o computador de uma mesa pela tela dele.
+  2. Arraste um arquivo do fundo pela parte de cima.
+  3. Aperte R no meio de um arrasto, e Esc em outro.
+  4. Tente tirar uma mesa com coisas em cima e depois aperte Ctrl+Z.
+  5. No celular, toque no piso com um móvel escolhido.
 
 ### Fase 54 — Emotes novos e "toca aqui"
 - **Base:**
