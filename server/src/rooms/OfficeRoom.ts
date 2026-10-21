@@ -56,6 +56,9 @@ import {
   deskSeatIds,
   type ChatDeletedMessage,
   type KickedMessage,
+  danceSchema,
+  danceStartFor,
+  type DanceId,
   emoteSchema,
   highFiveSchema,
   emoteRefusal,
@@ -160,7 +163,9 @@ type Intent =
   | SitIntent
   | { kind: 'use'; furniId: string; at: TilePoint }
   /** Andando até alguém para o toca aqui (Fase 54): bate ao chegar. */
-  | { kind: 'highfive'; target: string; at: TilePoint };
+  | { kind: 'highfive'; target: string; at: TilePoint }
+  /** Pediu para dançar andando (Fase 55): começa quando terminar o passo. */
+  | { kind: 'dance'; dance: DanceId };
 
 export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient }> {
   override maxClients = 30;
@@ -297,6 +302,11 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     [ClientMessage.HighFive]: validate(highFiveSchema, (client, msg) =>
       this.handleHighFive(client as OfficeClient, msg.target),
     ),
+    [ClientMessage.Dance]: validate(danceSchema, (client, msg) =>
+      this.handleDance(client as OfficeClient, msg.dance),
+    ),
+    /** A hora do servidor: o cliente acerta o relógio para o compasso das danças (Fase 55). */
+    [ClientMessage.Time]: () => Date.now(),
     [ClientMessage.Posture]: validate(postureSchema, (client, msg) =>
       this.handlePosture(client as OfficeClient, msg.posture),
     ),
@@ -652,6 +662,11 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     });
     this.setSimulationInterval((dt) => {
       this.movement.tick(dt, this.state.players.entries());
+      // A dança para ao andar, sentar ou deitar (Fase 55): vale para qualquer caminho até isso
+      // (clique no chão, ir sentar, usar um móvel, toca aqui longe, teleporte…).
+      for (const p of this.state.players.values()) {
+        if (p.dance && p.action !== 'idle') p.dance = '';
+      }
       this.pets.tick(dt);
     }, TICK_MS);
     services().users.events.on('updated', this.onUserUpdated);
@@ -822,6 +837,13 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     if (intent?.kind === 'use' && intent.at.x === m.x && intent.at.y === m.y) {
       this.intents.delete(sessionId);
       this.arriveToUse(sessionId, intent.furniId);
+      return true;
+    }
+    if (intent?.kind === 'dance') {
+      // Pediu para dançar andando: parou aqui e começa.
+      this.intents.delete(sessionId);
+      m.action = 'idle';
+      this.startDance(sessionId, intent.dance);
       return true;
     }
     if (intent?.kind === 'highfive' && intent.at.x === m.x && intent.at.y === m.y) {
@@ -1879,6 +1901,43 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       sessionId: client.sessionId,
       emote: msg.emote,
     } satisfies EmoteMessage);
+  }
+
+  // ---------- Danças (Fase 55) ----------
+
+  /** Começa uma dança (ou para, com `''`). Sentado ou deitado, não; andando, começa ao parar. */
+  private handleDance(client: OfficeClient, dance: DanceId | ''): void {
+    const player = this.state.players.get(client.sessionId);
+    if (!player) return;
+    if (!this.emoteLimiter.tryTake(client.sessionId))
+      return this.sendError(client, ErrorCode.RateLimit);
+    if (!dance) {
+      player.dance = '';
+      if (this.intents.get(client.sessionId)?.kind === 'dance')
+        this.intents.delete(client.sessionId);
+      return;
+    }
+    if (player.action === 'sit' || player.action === 'lay') {
+      return this.sendError(client, ErrorCode.InvalidMove, 'Levante para dançar.');
+    }
+    if (player.nextX !== player.x || player.nextY !== player.y) {
+      this.movement.stop(client.sessionId);
+      this.intents.set(client.sessionId, { kind: 'dance', dance });
+      return;
+    }
+    this.intents.delete(client.sessionId);
+    this.startDance(client.sessionId, dance);
+  }
+
+  /** Entra no compasso de quem já dança a mesma dança perto (até `DANCE_NEAR`), ou começa agora. */
+  private startDance(sessionId: string, dance: DanceId): void {
+    const player = this.state.players.get(sessionId);
+    if (!player) return;
+    const others = [...this.state.players.entries()]
+      .filter(([id, p]) => id !== sessionId && p.dance)
+      .map(([, p]) => p);
+    player.danceStart = danceStartFor(dance, player, Date.now(), others);
+    player.dance = dance;
   }
 
   // ---------- Toca aqui (Fase 54) ----------

@@ -495,7 +495,7 @@ describe('OfficeRoom', () => {
       a.send(ClientMessage.Emote, { emote: 'wave' });
       expect((await seen) as EmoteMessage).toEqual({ sessionId: a.sessionId, emote: 'wave' });
 
-      for (let i = 0; i < 3; i++) a.send(ClientMessage.Emote, { emote: 'dance' });
+      for (let i = 0; i < 3; i++) a.send(ClientMessage.Emote, { emote: 'clap' });
       const err = (await a.waitForMessage(ServerMessage.Error)) as ErrorMessage;
       expect(err.code).toBe('RATE_LIMIT');
     });
@@ -1489,7 +1489,7 @@ describe('OfficeRoom', () => {
       await wait(STEP_MS * 5);
       expect(me()).toMatchObject({ x: 4, y: 2, action: 'sit' });
       const err = room.waitForMessage(ServerMessage.Error) as Promise<ErrorMessage>;
-      room.send(ClientMessage.Emote, { emote: 'dance' });
+      room.send(ClientMessage.Dance, { dance: 'macarena' });
       expect((await err).message).toBe('Levante para dançar.');
       room.send(ClientMessage.Posture, { posture: 'stand' });
       await wait(150);
@@ -1700,6 +1700,79 @@ describe('OfficeRoom', () => {
       const sleep = room.waitForMessage(ServerMessage.Emote) as Promise<EmoteMessage>;
       room.send(ClientMessage.Emote, { emote: 'sleep' });
       expect((await sleep).emote).toBe('sleep');
+    });
+  });
+  describe('danças sincronizadas (Fase 55)', () => {
+    /** Sala vazia 8×6 (entrada em 1,4); cada um entra e anda até o seu tile. */
+    async function dancers(...spots: [string, number, number][]) {
+      const roomId = svc.rooms.create('Teste Fase 55', svc.furniDefs).id;
+      const out: { room: Awaited<ReturnType<typeof join>>; me: () => DancePlayer }[] = [];
+      for (const [name, x, y] of spots) {
+        const room = await join(newUser(name).token, roomId);
+        const me = () => room.state.players.get(room.sessionId)! as unknown as DancePlayer;
+        room.send(ClientMessage.Move, { x, y });
+        out.push({ room, me });
+        await waitFor(() => me().x === x && me().y === y && me().action === 'idle', 6000);
+      }
+      return out;
+    }
+    type DancePlayer = { x: number; y: number; action: string; dance: string; danceStart: number };
+
+    it('começa, fica em loop e para com /parar ou ao andar', async () => {
+      const [ana] = await dancers(['Ana', 3, 3]);
+      const before = Date.now();
+      ana!.room.send(ClientMessage.Dance, { dance: 'macarena' });
+      await waitFor(() => ana!.me().dance === 'macarena');
+      expect(ana!.me().danceStart).toBeGreaterThanOrEqual(before - 5);
+      ana!.room.send(ClientMessage.Dance, { dance: '' });
+      await waitFor(() => ana!.me().dance === '');
+      // Andar também para.
+      ana!.room.send(ClientMessage.Dance, { dance: 'floss' });
+      await waitFor(() => ana!.me().dance === 'floss');
+      ana!.room.send(ClientMessage.Move, { x: 5, y: 3 });
+      await waitFor(() => ana!.me().dance === '');
+    }, 10_000);
+
+    it('perto de quem já dança a mesma, entra no mesmo compasso; longe ou outra dança, não', async () => {
+      const [ana, beto, carla] = await dancers(['Ana', 1, 1], ['Beto', 2, 1], ['Carla', 8, 6]);
+      ana!.room.send(ClientMessage.Dance, { dance: 'thriller' });
+      await waitFor(() => ana!.me().dance === 'thriller');
+      await wait(300);
+      beto!.room.send(ClientMessage.Dance, { dance: 'thriller' });
+      carla!.room.send(ClientMessage.Dance, { dance: 'thriller' });
+      await waitFor(() => beto!.me().dance === 'thriller' && carla!.me().dance === 'thriller');
+      // Beto (1 tile) entra no tempo da Ana; Carla (6+ tiles dos dois) começa o dela.
+      expect(beto!.me().danceStart).toBe(ana!.me().danceStart);
+      expect(carla!.me().danceStart).toBeGreaterThan(ana!.me().danceStart + 200);
+      // Outra dança perto não sincroniza.
+      beto!.room.send(ClientMessage.Dance, { dance: 'ymca' });
+      await waitFor(() => beto!.me().dance === 'ymca');
+      expect(beto!.me().danceStart).not.toBe(ana!.me().danceStart);
+    }, 15_000);
+
+    it('sentado não dança (com aviso); andando, começa quando parar', async () => {
+      const [ana] = await dancers(['Ana', 3, 3]);
+      ana!.room.send(ClientMessage.Posture, { posture: 'sit' });
+      await wait(150);
+      const err = ana!.room.waitForMessage(ServerMessage.Error) as Promise<ErrorMessage>;
+      ana!.room.send(ClientMessage.Dance, { dance: 'robot' });
+      expect((await err).message).toBe('Levante para dançar.');
+      ana!.room.send(ClientMessage.Posture, { posture: 'stand' });
+      await wait(150);
+      // Pede a dança no meio de uma caminhada: termina o passo, para e dança.
+      ana!.room.send(ClientMessage.Move, { x: 8, y: 3 });
+      await waitFor(() => ana!.me().action === 'walk');
+      ana!.room.send(ClientMessage.Dance, { dance: 'robot' });
+      await waitFor(() => ana!.me().dance === 'robot' && ana!.me().action === 'idle', 3000);
+      expect(ana!.me().x).toBeLessThan(8);
+    }, 10_000);
+
+    it('responde a hora do servidor (o compasso de todo mundo)', async () => {
+      const [ana] = await dancers(['Ana', 3, 3]);
+      const before = Date.now();
+      const now = (await ana!.room.request(ClientMessage.Time)) as number;
+      expect(now).toBeGreaterThanOrEqual(before - 5);
+      expect(now).toBeLessThanOrEqual(Date.now() + 5);
     });
   });
 });
