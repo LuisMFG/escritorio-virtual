@@ -1,6 +1,15 @@
 import { randomInt } from 'node:crypto';
 import { CloseCode, Room, ServerError, validate, type Client, type Deferred } from '@colyseus/core';
 import {
+  TV_ERRORS,
+  TvMessage,
+  tvAddSchema,
+  tvControlSchema,
+  tvDurationSchema,
+  tvEndedSchema,
+  tvRefSchema,
+  tvRemoveSchema,
+  type TvScreens,
   canPlace,
   focusStartSchema,
   type FocusPhase,
@@ -152,6 +161,8 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
   private readonly draftLimiter = new KeyedRateLimiter(40, 25);
   /** Jogo da velha: 10 ações seguidas, recarregando 4 por segundo. */
   private readonly gameLimiter = new KeyedRateLimiter(10, 4);
+  /** TV: 10 ações seguidas (tocar, pular, adicionar…), recarregando 3 por segundo. */
+  private readonly tvLimiter = new KeyedRateLimiter(10, 3);
   /** Decorar: rajada de 10 ações, recarregando 4 por segundo. */
   private readonly editLimiter = new KeyedRateLimiter(10, 4);
   /** Quem clicou numa cadeira e está andando até ela (sessionId → móvel e assento). */
@@ -188,6 +199,47 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     [ClientMessage.FurniColor]: validate(furniColorSchema, (client, msg) =>
       this.handleColor(client as OfficeClient, msg),
     ),
+    // ---------- TV com YouTube (Fase 51) ----------
+    [TvMessage.Open]: validate(tvRefSchema, (client, msg) => {
+      const c = client as OfficeClient;
+      if (!c.auth || !this.isTv(msg.furniId)) return;
+      services().tv.open(msg.furniId, c.sessionId, { userId: c.auth.id, name: c.auth.name });
+    }),
+    [TvMessage.Close]: validate(tvRefSchema, (client, msg) =>
+      services().tv.close(msg.furniId, client.sessionId),
+    ),
+    [TvMessage.Add]: validate(tvAddSchema, (client, msg) => {
+      const c = client as OfficeClient;
+      if (!c.auth || !this.isTv(msg.furniId) || !this.tvLimiter.tryTake(c.sessionId)) return;
+      void services()
+        .tv.add(msg.furniId, { userId: c.auth.id, name: c.auth.name }, msg.videoIds)
+        .then((err) => {
+          if (err) c.send(TvMessage.Error, { message: TV_ERRORS[err] });
+        });
+    }),
+    [TvMessage.Remove]: validate(tvRemoveSchema, (client, msg) => {
+      const c = client as OfficeClient;
+      if (!c.auth || !this.tvLimiter.tryTake(c.sessionId)) return;
+      services().tv.remove(msg.furniId, c.auth.id, msg.id, c.auth.role === 'admin');
+    }),
+    [TvMessage.Control]: validate(tvControlSchema, (client, msg) => {
+      if (!this.tvViewer(client, msg.furniId)) return;
+      services().tv.control(msg.furniId, msg.action, msg.position);
+    }),
+    [TvMessage.Skip]: validate(tvRefSchema, (client, msg) => {
+      const c = client as OfficeClient;
+      if (!c.auth || !this.tvViewer(client, msg.furniId)) return;
+      services().tv.skip(msg.furniId, c.auth.id, c.auth.role === 'admin');
+    }),
+    [TvMessage.Duration]: validate(tvDurationSchema, (client, msg) => {
+      if (this.tvViewer(client, msg.furniId))
+        services().tv.duration(msg.furniId, msg.itemId, msg.duration);
+    }),
+    [TvMessage.Ended]: validate(tvEndedSchema, (client, msg) => {
+      if (this.tvViewer(client, msg.furniId)) services().tv.ended(msg.furniId, msg.itemId);
+    }),
+    /** Pedido de quem acabou de entrar: o que passa em cada TV da sala. */
+    [TvMessage.Screens]: () => this.tvScreens(),
     [ClientMessage.FurniRemove]: validate(furniRefSchema, (client, msg) =>
       this.handleRemove(client as OfficeClient, msg.furniId),
     ),
@@ -490,6 +542,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     );
     for (const id of [...this.state.furni.keys()]) {
       if (kept.has(id)) continue;
+      if (this.isTv(id)) services().tv.drop(id);
       this.state.furni.delete(id);
       this.state.games.delete(id);
     }
@@ -562,6 +615,12 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     services().focus.events.on('changed', this.onFocus);
     services().achievements.events.on('unlocked', this.onAchievement);
     services().kudos.events.on('given', this.onKudos);
+    services().tv.events.on('changed', this.onTvChanged);
+    services().tv.events.on('screen', this.onTvScreen);
+    // TVs que continuaram passando enquanto a sala estava vazia: tela ligada.
+    for (const [id, f] of this.state.furni.entries()) {
+      if (this.isTv(id) && services().tv.screen(id)) this.setTvOn(f, true);
+    }
   }
 
   override onDispose(): void {
@@ -574,6 +633,8 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     services().focus.events.off('changed', this.onFocus);
     services().achievements.events.off('unlocked', this.onAchievement);
     services().kudos.events.off('given', this.onKudos);
+    services().tv.events.off('changed', this.onTvChanged);
+    services().tv.events.off('screen', this.onTvScreen);
     for (const t of this.handTimers.values()) t.clear();
   }
 
@@ -682,6 +743,8 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     this.wbLimiter.delete(client.sessionId);
     this.draftLimiter.delete(client.sessionId);
     this.gameLimiter.delete(client.sessionId);
+    this.tvLimiter.delete(client.sessionId);
+    services().tv.leave(client.sessionId);
     this.pendingUse.delete(client.sessionId);
     this.pendingSit.delete(client.sessionId);
     this.handTimers.get(client.sessionId)?.clear();
@@ -1063,6 +1126,53 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
   private readonly onAchievement = (userId: string): void => this.celebrate(userId, 'achievement');
   private readonly onKudos = (k: { toUserId: string }): void => this.celebrate(k.toUserId, 'kudos');
 
+  // ---------- TV com YouTube (Fase 51) ----------
+
+  private isTv(furniId: string): boolean {
+    const f = this.state.furni.get(furniId);
+    return services().furniDefs.get(f?.defId ?? '')?.interaction === 'tv';
+  }
+
+  /** Só quem está com a TV aberta controla e vota. */
+  private tvViewer(client: Client, furniId: string): boolean {
+    return (
+      this.tvLimiter.tryTake(client.sessionId) &&
+      services().tv.viewerSessions(furniId).includes(client.sessionId)
+    );
+  }
+
+  /** Liga/desliga a tela do móvel (estado 1), sem gravar: o que passa fica só na memória. */
+  private setTvOn(f: Furni, on: boolean): void {
+    const def = services().furniDefs.get(f.defId);
+    const lit = def?.states.find((s) => s > 0);
+    if (lit !== undefined) f.state = on ? lit : 0;
+  }
+
+  private readonly onTvChanged = (furniId: string): void => {
+    if (!this.state.furni.has(furniId)) return;
+    const viewers = new Set(services().tv.viewerSessions(furniId));
+    if (!viewers.size) return;
+    const st = services().tv.state(furniId);
+    for (const c of this.clients) if (viewers.has(c.sessionId)) c.send(TvMessage.State, st);
+  };
+
+  private readonly onTvScreen = (furniId: string, videoId: string | null): void => {
+    const f = this.state.furni.get(furniId);
+    if (!f) return;
+    this.setTvOn(f, Boolean(videoId));
+    this.broadcast(TvMessage.Screens, { [furniId]: videoId } satisfies TvScreens);
+  };
+
+  /** O que passa nas TVs da sala (para quem acabou de entrar). */
+  private tvScreens(): TvScreens {
+    const out: TvScreens = {};
+    for (const id of this.state.furni.keys()) {
+      const v = this.isTv(id) ? services().tv.screen(id) : null;
+      if (v) out[id] = v;
+    }
+    return out;
+  }
+
   /** Virar sem sair do lugar: parado (8 direções) ou sentado no chão (4). */
   private handleTurn(client: OfficeClient, dir: number): void {
     const player = this.state.players.get(client.sessionId);
@@ -1300,6 +1410,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     if (this.someoneSeatedOn(f)) {
       return this.sendError(client, ErrorCode.InvalidPlacement, 'Tem alguém sentado aí.');
     }
+    if (this.isTv(furniId)) services().tv.drop(furniId);
     services().furni.remove(this.layout.roomId, furniId);
     this.state.furni.delete(furniId);
     this.state.games.delete(furniId);

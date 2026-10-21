@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import express, { type Application, type Request, type Response } from 'express';
 import { createAssetRouter } from '../assets/AssetProxy.js';
 import { HabboAssetsClient } from '../assets/HabboAssetsClient.js';
+import { createTvThumbRouter } from './tvThumbs.js';
 import type { Config } from '../config.js';
 import type { Services } from '../services/index.js';
 import { KeyedRateLimiter } from '../util/rateLimiter.js';
@@ -41,14 +42,16 @@ import {
 /**
  * Política de conteúdo em produção: tudo da própria origem, mais as imagens da HabboAssets
  * (o cliente cai para o imager direto se o proxy falhar). Estilos inline são usados nas
- * amostras de cor do editor; scripts só os do build.
+ * amostras de cor do editor; scripts só os do build e o player do YouTube da TV.
  */
 const CSP = [
   "default-src 'self'",
   "img-src 'self' data: blob: https://www.habboassets.com https://cdn.habboassets.com",
   "connect-src 'self'",
   "style-src 'self' 'unsafe-inline'",
-  "script-src 'self'",
+  // TV com YouTube (Fase 51): a API do player e o próprio player (num iframe).
+  "script-src 'self' https://www.youtube.com https://s.ytimg.com",
+  'frame-src https://www.youtube-nocookie.com https://www.youtube.com',
   "worker-src 'self' blob:",
   "frame-ancestors 'none'",
   "base-uri 'self'",
@@ -576,6 +579,9 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
     res.setHeader('Cache-Control', 'no-store');
     res.json(body);
   });
+
+  // Capas dos vídeos da TV (Fase 51).
+  app.use(createTvThumbRouter(cfg.assetCacheDir, { offline: process.env.TV_OEMBED === 'offline' }));
 
   const habbo = new HabboAssetsClient({ apiKey: cfg.habboAssetsApiKey });
   app.use(

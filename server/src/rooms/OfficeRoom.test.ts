@@ -20,6 +20,9 @@ import {
   type FurniManifestEntry,
   hasWall,
   parseHeightmap,
+  TvMessage,
+  type TvScreens,
+  type TvState,
 } from '@office/shared';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import type { Config } from '../config.js';
@@ -27,12 +30,16 @@ import { openDatabase } from '../db/client.js';
 import { configureApp } from '../http/app.js';
 import { createServices, setServices, type Services } from '../services/index.js';
 import { OfficeRoom } from './OfficeRoom.js';
+import { OfflineTvMeta } from '../services/TvService.js';
 
 let colyseus: ColyseusTestServer;
 let svc: Services;
 
 beforeAll(async () => {
-  svc = createServices(openDatabase(':memory:'));
+  // TV (Fase 51): títulos sem ir ao YouTube.
+  svc = createServices(openDatabase(':memory:'), undefined, undefined, undefined, undefined, {
+    tvMeta: new OfflineTvMeta(),
+  });
   setServices(svc);
   const server = defineServer({
     rooms: { [OFFICE_ROOM]: defineRoom(OfficeRoom).filterBy(['officeRoomId']) },
@@ -1237,5 +1244,81 @@ describe('OfficeRoom', () => {
         expect(me().action).not.toBe('lay');
       },
     );
+  });
+
+  describe('TV com YouTube (Fase 51)', () => {
+    async function tvRoom() {
+      const roomId = svc.rooms.create('Cinema', svc.furniDefs).id;
+      const tv = svc.furni.add(
+        roomId,
+        { defId: 'hc_tv', x: 3, y: 2, z: 0, rot: 2 },
+        newUser('Dono').user.id,
+      );
+      return { roomId, tv };
+    }
+
+    it('quem abre a TV recebe a fila; adicionar começa para todos e liga a tela', async () => {
+      const { roomId, tv } = await tvRoom();
+      const a = await join(newUser('Ana').token, roomId);
+      const b = await join(newUser('Beto').token, roomId);
+      const c = await join(newUser('Caio').token, roomId); // na sala, mas sem abrir a TV
+      a.send(TvMessage.Open, { furniId: tv.id });
+      b.send(TvMessage.Open, { furniId: tv.id });
+      await wait(100);
+      const atB = b.waitForMessage(TvMessage.State) as Promise<TvState>;
+      const screen = c.waitForMessage(TvMessage.Screens) as Promise<TvScreens>;
+      a.send(TvMessage.Add, { furniId: tv.id, videoIds: ['dQw4w9WgXcQ'] });
+      const st = await atB;
+      expect(st.playing?.item).toMatchObject({ videoId: 'dQw4w9WgXcQ', addedByName: 'Ana' });
+      expect(st.viewers.map((v) => v.name).sort()).toEqual(['Ana', 'Beto']);
+      expect(await screen).toEqual({ [tv.id]: 'dQw4w9WgXcQ' });
+      await wait(50);
+      expect(a.state.furni.get(tv.id)?.state).toBe(1);
+      // Quem chega depois pergunta o que passa nas TVs.
+      const d = await join(newUser('Duda').token, roomId);
+      expect(await d.request(TvMessage.Screens)).toEqual({ [tv.id]: 'dQw4w9WgXcQ' });
+    });
+
+    it('pausar vale para todos; só quem assiste controla e vota', async () => {
+      const { roomId, tv } = await tvRoom();
+      const a = await join(newUser('Ana').token, roomId);
+      const b = await join(newUser('Beto').token, roomId);
+      a.send(TvMessage.Open, { furniId: tv.id });
+      await wait(50);
+      a.send(TvMessage.Add, { furniId: tv.id, videoIds: ['dQw4w9WgXcQ', 'jNQXAC9IVRw'] });
+      await wait(100);
+      // Beto não abriu a TV: o pause dele não conta.
+      b.send(TvMessage.Control, { furniId: tv.id, action: 'pause', position: 3 });
+      await wait(100);
+      expect(svc.tv.state(tv.id).playing?.pausedAt).toBeNull();
+      b.send(TvMessage.Open, { furniId: tv.id });
+      await wait(50);
+      const paused = a.waitForMessage(TvMessage.State) as Promise<TvState>;
+      b.send(TvMessage.Control, { furniId: tv.id, action: 'pause', position: 3 });
+      expect((await paused).playing?.pausedAt).toBe(3);
+      // Beto vota (1 de 2); Ana adicionou e pula na hora.
+      b.send(TvMessage.Skip, { furniId: tv.id });
+      await wait(80);
+      expect(svc.tv.state(tv.id).skipVotes).toHaveLength(1);
+      const skipped = b.waitForMessage(TvMessage.State) as Promise<TvState>;
+      a.send(TvMessage.Skip, { furniId: tv.id });
+      expect((await skipped).playing?.item.videoId).toBe('jNQXAC9IVRw');
+    });
+
+    it('sair da sala fecha a TV; apagar a TV desliga a fila', async () => {
+      const { roomId, tv } = await tvRoom();
+      const a = await join(newUser('Ana').token, roomId);
+      a.send(TvMessage.Open, { furniId: tv.id });
+      await wait(50);
+      a.send(TvMessage.Add, { furniId: tv.id, videoIds: ['dQw4w9WgXcQ'] });
+      await wait(100);
+      expect(svc.tv.viewerSessions(tv.id)).toEqual([a.sessionId]);
+      a.send(ClientMessage.FurniRemove, { furniId: tv.id });
+      await wait(100);
+      expect(svc.tv.screen(tv.id)).toBeNull();
+      await a.leave();
+      await wait(50);
+      expect(svc.tv.viewerSessions(tv.id)).toEqual([]);
+    });
   });
 });
