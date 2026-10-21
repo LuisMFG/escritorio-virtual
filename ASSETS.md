@@ -19,6 +19,7 @@ Desde a Fase 2 as imagens passam pelo proxy do servidor (`/hh/avatar.png`, `/hh/
 | Avatar pelo imager (reserva, e `?imager=1`) | `/imaging/avatar.png?figure=…&direction=0-7` | `client/src/assets/AvatarTextureCache.ts` |
 | Miniaturas de roupa (peça no boneco "fantasma") | `/imaging/clothing/set/{id}.png?direction=2` | `client/src/ui/avatarEditor.ts` |
 | Catálogo de roupas e paletas (dados) | lista `/api/v2/swfs/libraries?kind=clothing` + `/imaging/info/clothing/{lib}` de cada biblioteca (todas, inclusive NFT) | `server/scripts/figure-sync.ts` → `client/public/assets/avatar/manifest.json` |
+| Miniaturas das fantasias (Meu visual) | `/imaging/avatar.png` de cada fantasia no visual padrão de cada gênero, gerado uma vez por `npm run assets:costumes` → `client/public/assets/costumes/{id}-{M,F}.png` (sem render na hora) | `client/src/ui/avatarEditor.ts` |
 | Miniaturas das roupas do catálogo completo | prévias estáticas da CDN `derived/clothing/{lib}/{rev}/set_{id}.png` (pelo servidor em `/hh/clothing/preview/…`) | `client/src/ui/avatarEditor.ts` |
 | Mobis (render por direção, revisão fixada) | `/imaging/furniture/{classname}.png?revision=…&direction=…` | `client/src/entities/FurniView.ts` |
 | Catálogo completo de móveis (Fase 36) | `/api/v2/furniture` (com token; nome em português, categoria, tamanho, lógica, variações de cor) | `server/scripts/furni-sync.ts` → `client/public/assets/furni/catalog.json` |
