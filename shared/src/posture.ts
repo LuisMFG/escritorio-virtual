@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { layFacing, sitFacing } from './figureRender.js';
 import { footprint, type FurniDef, type PlacedFurni } from './furni.js';
 import type { TilePoint } from './iso.js';
 import { nameKey } from './protocol.js';
@@ -27,12 +28,12 @@ export function parsePostureCommand(text: string): Posture | null {
 
 /** Sentado só existe nas direções pares: arredonda para a anterior. */
 export function sitDirection(dir: number): number {
-  return dir & ~1;
+  return sitFacing(dir);
 }
 
 /** Deitado só de lado: virado para a direita (2) ou, espelhado, para a esquerda (4). */
 export function layDirection(dir: number): number {
-  return dir >= 3 && dir <= 6 ? 4 : 2;
+  return layFacing(dir);
 }
 
 /** Na cama, deita no sentido do comprimento, com a cabeça na cabeceira. */

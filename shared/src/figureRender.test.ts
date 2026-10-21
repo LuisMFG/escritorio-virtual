@@ -7,7 +7,9 @@ import {
   type FigureData,
   type FigureLib,
   LAY_CANVAS,
+  layFacing,
   needsWideCanvas,
+  sitFacing,
   poseKey,
   resolveFigure,
   STAND_CANVAS,
@@ -198,10 +200,148 @@ describe('montagem do avatar', () => {
     expect([on(blink, 12), on(blink, 14), on(blink, 16)]).toEqual([false, true, true]);
     const kiss = composeFigure(parts, libs, { direction: 2, gesture: 'blw' });
     expect([on(kiss, 4), on(kiss, 6)]).toEqual([false, true]);
-    // Direção 4: aceno com desenho próprio fica no lugar (sem espelho); o resto espelha.
+    // Direção 4: aceno com desenho próprio fica no lugar (sem espelho). O braço direito usa o
+    // desenho do esquerdo da direção 2, espelhado (como no Habbo): fica um braço de cada lado.
     const wave4 = composeFigure(parts, libs, { direction: 4, gesture: 'wav', gestureFrame: 1 });
     expect(on(wave4, 22)).toBe(true);
-    expect(on(wave4, FIGURE_WIDTH - 1 - 4)).toBe(true);
+    expect(on(wave4, FIGURE_WIDTH - 1 - 0)).toBe(true);
+    expect(on(wave4, FIGURE_WIDTH - 1 - 4)).toBe(false);
+  });
+
+  describe('braços, gestos e itens (Fase 52)', () => {
+    const data: FigureData = {
+      ...DATA,
+      libs: { ...DATA.libs, hh_human_item: 1 },
+      partLib: { ...DATA.partLib, 'lh:1': 'body', 'rh:1': 'body', 'ls:1': 'body' },
+      sets: {
+        'hd:1': {
+          p: 1,
+          parts: [
+            ['lh', 1, 0, 1],
+            ['rh', 1, 0, 1],
+            ['ls', 1, 0, 1],
+            ['hd', 1, 0, 1],
+          ],
+        },
+      },
+    };
+    const at = (x: number) => ({ x: -x, y: 50 });
+    const on = (out: Uint8ClampedArray, x: number) => px(out, x, 50)[3] === 255;
+    const parts = resolveFigure('hd-1', data).parts;
+    const mirror = (x: number) => FIGURE_WIDTH - 1 - x;
+
+    it('segurando o copo nas direções 4–6 aparecem os dois braços (antes o da frente sumia)', () => {
+      const libs = new Map([
+        [
+          'body',
+          lib({
+            h_std_lh_1_2_0: at(0),
+            h_std_rh_1_2_0: at(4),
+            // Braço direito segurando, com desenho próprio da direção 4 (é o braço de trás).
+            h_crr_rh_1_4_0: at(30),
+            h_std_hd_1_2_0: at(8),
+          }),
+        ],
+        ['hh_human_item', lib({ h_crr_ri_43_4_0: at(34) })],
+      ]);
+      const out = composeFigure(parts, libs, { direction: 4, gesture: 'crr', handItem: 43 });
+      expect(on(out, 30)).toBe(true); // braço que segura (de trás)
+      expect(on(out, 34)).toBe(true); // o copo
+      // O braço da frente é o esquerdo, com o desenho do direito da direção 2 espelhado.
+      expect(on(out, mirror(4))).toBe(true);
+      expect(on(out, mirror(0))).toBe(false);
+    });
+
+    it('deitado não faz gesto com o braço (só o rosto muda)', () => {
+      const libs = new Map([
+        [
+          'body',
+          lib({
+            h_lay_lh_1_2_0: at(0),
+            h_wav_lh_1_2_0: at(2),
+            h_lay_hd_1_2_0: at(8),
+          }),
+        ],
+      ]);
+      const out = composeFigure(
+        parts,
+        libs,
+        { direction: 2, posture: 'lay', gesture: 'wav' },
+        LAY_CANVAS,
+      );
+      // No quadro de deitado (128 de largura, eixo em 32): braço deitado, nada do aceno.
+      const pxl = (x: number) => out[(50 * LAY_CANVAS.width + LAY_CANVAS.regX + x) * 4 + 3] === 255;
+      expect([pxl(0), pxl(2)]).toEqual([true, false]);
+    });
+
+    it('acenando com o copo na mão: o braço esquerdo acena e o direito segura o item', () => {
+      const libs = new Map([
+        [
+          'body',
+          lib({
+            h_std_lh_1_2_0: at(0),
+            h_wav_lh_1_2_0: at(2),
+            h_std_rh_1_2_0: at(4),
+            h_crr_rh_1_2_0: at(6),
+            h_std_hd_1_2_0: at(8),
+          }),
+        ],
+        ['hh_human_item', lib({ h_crr_ri_43_2_0: at(10) })],
+      ]);
+      const out = composeFigure(parts, libs, {
+        direction: 2,
+        gesture: 'wav',
+        handGesture: 'crr',
+        handItem: 43,
+      });
+      expect([on(out, 0), on(out, 2), on(out, 4), on(out, 6), on(out, 10)]).toEqual([
+        false,
+        true,
+        false,
+        true,
+        true,
+      ]);
+    });
+
+    it('falando, o quadro que falta cai na pose parada (o cabelo não pula)', () => {
+      const libs = new Map([
+        [
+          'body',
+          lib({
+            h_std_hd_1_2_0: at(8),
+            // Só o quadro 0 da fala, deslocado.
+            h_spk_hd_1_2_0: at(12),
+          }),
+        ],
+      ]);
+      const f1 = composeFigure(parts, libs, { direction: 2, talk: true, talkFrame: 1 });
+      expect([on(f1, 8), on(f1, 12)]).toEqual([true, false]);
+      const f0 = composeFigure(parts, libs, { direction: 2, talk: true, talkFrame: 0 });
+      expect([on(f0, 8), on(f0, 12)]).toEqual([false, true]);
+    });
+
+    it('a manga acompanha o joinha (usa o desenho do aceno) em vez de ficar parada', () => {
+      const libs = new Map([
+        [
+          'body',
+          lib({
+            h_std_lh_1_2_0: at(0),
+            h_respect_lh_1_2_0: at(2),
+            h_std_ls_1_2_0: at(14),
+            h_wav_ls_1_2_0: at(16),
+            h_std_hd_1_2_0: at(8),
+          }),
+        ],
+      ]);
+      const out = composeFigure(parts, libs, { direction: 2, gesture: 'respect' });
+      expect([on(out, 2), on(out, 14), on(out, 16)]).toEqual([true, false, true]);
+    });
+
+    it('a chave de cache separa o item segurado durante um gesto', () => {
+      expect(poseKey({ direction: 2, gesture: 'wav' })).not.toBe(
+        poseKey({ direction: 2, gesture: 'wav', handGesture: 'crr' }),
+      );
+    });
   });
 
   it('deitado usa a direção 2 (ou o espelho, 4) e a cabeça deitada', () => {
@@ -216,10 +356,32 @@ describe('montagem do avatar', () => {
       ],
     ]);
     const parts = resolveFigure('hd-180-1', DATA).parts;
-    const lay = composeFigure(parts, libs, { direction: 3, posture: 'lay' });
+    const lay = composeFigure(parts, libs, { direction: 2, posture: 'lay' });
     expect([px(lay, 5, 70)[3], px(lay, 7, 70)[3], px(lay, 9, 70)[3]]).toEqual([255, 255, 0]);
     const lay6 = composeFigure(parts, libs, { direction: 6, posture: 'lay' });
     expect(px(lay6, FIGURE_WIDTH - 1 - 5, 70)[3]).toBe(255);
+    // A mesma regra do servidor (`layDirection`): 3 deita para a esquerda (espelho), 7 e 0 para
+    // a direita.
+    expect([0, 1, 2, 3, 4, 5, 6, 7].map(layFacing)).toEqual([2, 2, 2, 4, 4, 4, 4, 2]);
+    const lay3 = composeFigure(parts, libs, { direction: 3, posture: 'lay' });
+    expect(px(lay3, FIGURE_WIDTH - 1 - 5, 70)[3]).toBe(255);
+  });
+
+  it('sentado numa direção ímpar usa a par anterior (antes caía no desenho em pé)', () => {
+    const libs = new Map([
+      [
+        'body',
+        lib({
+          h_std_bd_1_2_0: { x: -10, y: 50 },
+          h_std_bd_1_3_0: { x: -12, y: 50 },
+          h_sit_bd_1_2_0: { x: -20, y: 50 },
+        }),
+      ],
+    ]);
+    const parts = resolveFigure('hd-180-1', DATA).parts;
+    const sit3 = composeFigure(parts, libs, { direction: 3, posture: 'sit' });
+    expect([px(sit3, 20, 50)[3], px(sit3, 12, 50)[3]]).toEqual([255, 0]);
+    expect([1, 3, 5, 7].map(sitFacing)).toEqual([0, 2, 4, 6]);
   });
 
   it('roupa animada alterna os quadros da pose em pé', () => {

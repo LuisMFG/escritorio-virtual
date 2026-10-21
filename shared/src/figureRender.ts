@@ -210,17 +210,67 @@ export interface FigurePose {
   expression?: FigureExpression;
   /** Item na mão (id do Habbo em `hh_human_item`); aparece carregando ou bebendo. */
   handItem?: number;
+  /**
+   * Braço direito com o item, junto com um gesto do braço esquerdo (acenar segurando o copo).
+   * Sem gesto, `gesture: 'crr' | 'drk'` faz o mesmo.
+   */
+  handGesture?: 'crr' | 'drk';
   /** Quadro das roupas animadas (cresce sem parar; cada peça usa o resto pelo seu total). */
   clothingFrame?: number;
+}
+
+/**
+ * Deitado só existe de lado: direita (2) ou, espelhado, esquerda (4). Uma regra só para o
+ * servidor, a montagem e o deslocamento na cama (antes cada um arredondava de um jeito).
+ */
+export function layFacing(dir: number): 2 | 4 {
+  return dir >= 3 && dir <= 6 ? 4 : 2;
+}
+
+/** Sentado só existe nas direções pares: uma ímpar arredonda para a anterior. */
+export function sitFacing(dir: number): number {
+  return dir & ~1;
 }
 
 /** Quadros de cada animação no Habbo (o resto tem um só). */
 export const POSE_FRAMES = { wlk: 4, wav: 2, blw: 2, respect: 2, spk: 2 } as const;
 
-const LEFT_ARM = new Set(['lh', 'ls', 'lc']);
-const RIGHT_ARM = new Set(['rh', 'rs', 'rc']);
+const LEFT_ARM = new Set(['lh', 'ls', 'lc', 'mcl']);
+const RIGHT_ARM = new Set(['rh', 'rs', 'rc', 'mcr']);
 /** Carregar e beber: o braço direito e o item na mão (`ri`, da biblioteca `hh_human_item`). */
-const RIGHT_ARM_ITEM = new Set(['rh', 'rs', 'rc', 'ri']);
+const RIGHT_ARM_ITEM = new Set(['rh', 'rs', 'rc', 'mcr', 'ri']);
+/**
+ * Mangas e acessórios sem desenho de alguns gestos (joinha, placa, beijo): usam o desenho mais
+ * parecido em vez de ficar na pose do corpo (a mão faz o gesto e a manga não).
+ */
+const SLEEVE_ALIAS: Partial<Record<FigureGesture, FigureGesture>> = {
+  respect: 'wav',
+  sig: 'wav',
+  blw: 'drk',
+};
+const GESTURE_SLEEVES = new Set(['ls', 'lc', 'rs', 'rc', 'mcl', 'mcr']);
+/**
+ * Espelho das direções 4–6: como no Habbo, cada parte de um lado usa o desenho da parte do
+ * outro lado (o braço esquerdo espelhado da direção 2 é o direito da 4). Sem a troca, os dois
+ * braços desenhados eram os de trás e o da frente sumia (segurando copo, acenando).
+ */
+const FLIPPED_TYPE: Record<string, string> = {
+  lh: 'rh',
+  rh: 'lh',
+  ls: 'rs',
+  rs: 'ls',
+  lc: 'rc',
+  rc: 'lc',
+  li: 'ri',
+  ri: 'li',
+  mcl: 'mcr',
+  mcr: 'mcl',
+  ptl: 'ptr',
+  ptr: 'ptl',
+};
+const flippedType = (type: string) => FLIPPED_TYPE[type] ?? type;
+/** Ações de fala: quadro que falta cai na pose parada, não no quadro 0 da fala (deslocado). */
+const TALK_ACTIONS = new Set(['spk', 'lsp']);
 /** Que braço cada gesto usa. */
 const GESTURE_ARM: Record<FigureGesture, Set<string>> = {
   wav: LEFT_ARM,
@@ -255,8 +305,19 @@ function actionsFor(type: string, pose: FigurePose): [string, number][] {
     }
   } else if (HEAD_PARTS.has(type)) {
     if (talk >= 0) list.push([lay ? 'lsp' : 'spk', talk]);
-  } else if (pose.gesture && GESTURE_ARM[pose.gesture].has(type)) {
-    list.push([pose.gesture, pose.gestureFrame ?? 0]);
+  } else if (!lay) {
+    // Deitado não há desenho de gesto (o braço ficava em pé, no ar): só o rosto muda.
+    const gesture = pose.gesture;
+    if (gesture && GESTURE_ARM[gesture].has(type)) {
+      list.push([gesture, pose.gestureFrame ?? 0]);
+      const alias = GESTURE_SLEEVES.has(type) ? SLEEVE_ALIAS[gesture] : undefined;
+      if (alias) list.push([alias, 0]);
+    }
+    // Segurando o item enquanto o outro braço faz um gesto (acenar com o copo na mão).
+    const hand = pose.handGesture;
+    if (hand && RIGHT_ARM_ITEM.has(type) && !(gesture && GESTURE_ARM[gesture].has(type))) {
+      list.push([hand, 0]);
+    }
   }
   if (HEAD_PARTS.has(type)) list.push([lay ? 'lay' : 'std', 0]);
   else list.push([posture, pose.frame ?? 0]);
@@ -276,9 +337,14 @@ export function composeFigure(
   canvas: FigureCanvas = STAND_CANVAS,
 ): Uint8ClampedArray {
   const out = new Uint8ClampedArray(canvas.width * canvas.height * 4);
-  // Deitado só existe de lado (direção 2, e a 4 espelhada).
+  // Deitado só existe de lado (2, e a 4 espelhada); sentado, nas pares. Com outra direção
+  // (chegou de lado, virou), a pose antes caía no desenho em pé.
   const wanted =
-    pose.posture === 'lay' ? (pose.direction >= 4 && pose.direction <= 6 ? 4 : 2) : pose.direction;
+    pose.posture === 'lay'
+      ? layFacing(pose.direction)
+      : pose.posture === 'sit'
+        ? sitFacing(pose.direction)
+        : pose.direction;
   const mirror = wanted >= 4 && wanted <= 6;
   const dir = mirror ? 6 - wanted : wanted;
   const order = ORDER[dir] ?? ORDER[2]!;
@@ -286,7 +352,9 @@ export function composeFigure(
     pose.handItem && libs.has('hh_human_item')
       ? [...parts, { type: 'ri', id: pose.handItem, lib: 'hh_human_item', tint: null }]
       : parts;
-  const sorted = [...all].sort((a, b) => rank(order, a.type) - rank(order, b.type));
+  // No espelho, cada parte ocupa o lugar (e a camada) da parte do outro lado.
+  const layer = (type: string) => rank(order, mirror ? flippedType(type) : type);
+  const sorted = [...all].sort((a, b) => layer(a.type) - layer(b.type));
   for (const part of sorted) {
     const lib = libs.get(part.lib);
     if (!lib) continue;
@@ -298,9 +366,20 @@ export function composeFigure(
           ? pose.clothingFrame % animFrames(lib, part, dir)
           : f;
       const base = `h_${act}_${part.type}_${part.id}_`;
+      // Quadro de fala que falta: vai para a próxima ação (a pose parada), não para o quadro 0.
+      const zero = TALK_ACTIONS.has(act) && frame > 0 ? null : 0;
       const tries: [string, boolean][] = [];
-      if (mirror) tries.push([`${base}${wanted}_${frame}`, false], [`${base}${wanted}_0`, false]);
-      tries.push([`${base}${dir}_${frame}`, mirror], [`${base}${dir}_0`, mirror]);
+      // Desenho próprio da direção pedida (alguns gestos e itens nas direções 4–6): sem espelho.
+      if (mirror) tries.push([`${base}${wanted}_${frame}`, false]);
+      if (mirror && zero !== null) tries.push([`${base}${wanted}_0`, false]);
+      if (mirror) {
+        // Espelho com a parte do outro lado; se o conjunto não tiver, a própria (como antes).
+        const other = `h_${act}_${flippedType(part.type)}_${part.id}_`;
+        tries.push([`${other}${dir}_${frame}`, true]);
+        if (zero !== null) tries.push([`${other}${dir}_0`, true]);
+      }
+      tries.push([`${base}${dir}_${frame}`, mirror]);
+      if (zero !== null) tries.push([`${base}${dir}_0`, mirror]);
       const hit = tries.find(([k]) => lib.assets[k]);
       if (hit) {
         found = { key: hit[0], flip: hit[1] };
@@ -336,8 +415,30 @@ export function poseKey(p: FigurePose): string {
     p.talk ? `t${p.talkFrame ?? 0}` : '',
     p.expression ?? '',
     p.handItem ?? '',
+    p.handGesture ?? '',
     p.clothingFrame ?? '',
   ].join('|');
+}
+
+/**
+ * Depois de quantos quadros as roupas animadas de uma figura se repetem, numa direção (MMC dos
+ * quadros de cada peça animada). Quem guarda poses usa para não montar a mesma de novo.
+ */
+export function clothingPeriod(
+  parts: readonly FigureLayer[],
+  libs: ReadonlyMap<string, FigureLib>,
+  direction: number,
+): number {
+  const dir = direction >= 4 && direction <= 6 ? 6 - direction : direction;
+  const gcd = (a: number, b: number): number => (b ? gcd(b, a % b) : a);
+  let period = 1;
+  for (const part of parts) {
+    const lib = part.animated ? libs.get(part.lib) : undefined;
+    if (!lib) continue;
+    const n = animFrames(lib, part, dir);
+    period = Math.min(840, (period * n) / gcd(period, n));
+  }
+  return period;
 }
 
 /** Quantos quadros a pose em pé da peça tem (roupas animadas). */
