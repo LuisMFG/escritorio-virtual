@@ -43,6 +43,8 @@ export const ClientMessage = {
   Typing: 'typing',
   /** `{ emote }`: acenar, rir, dançar… */
   Emote: 'emote',
+  /** `{ target }` (sessão): toca aqui com outra pessoa (Fase 54). */
+  HighFive: 'emote.highfive',
   /** `{ posture }`: sentar/deitar no chão ou levantar (`/sentar`, `/deitar`, `/levantar`). */
   Posture: 'posture',
   /** `{ dir }`: virar sem sair do lugar (setas do teclado). */
@@ -100,6 +102,8 @@ export const ServerMessage = {
   RoomTransfer: 'room.transfer',
   /** Alguém tocou um emote (`EmoteMessage`). */
   Emote: 'emote.played',
+  /** Duas pessoas bateram as mãos (`HighFiveMessage`). */
+  HighFive: 'emote.highfive.played',
   /** Mensagem apagada (`ChatDeletedMessage`): some do histórico de todos. */
   ChatDeleted: 'chat.deleted',
   /** Efeito por alguns segundos sobre alguém (`EffectFlash`): comemorações. */
