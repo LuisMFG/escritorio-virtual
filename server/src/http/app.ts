@@ -64,7 +64,11 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'same-origin');
     res.setHeader('X-Frame-Options', 'DENY');
-    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    // Chamadas (Fase 49): microfone, câmera e captura de tela só para o próprio site.
+    res.setHeader(
+      'Permissions-Policy',
+      'camera=(self), microphone=(self), display-capture=(self), geolocation=()',
+    );
     if (cfg.isProduction) res.setHeader('Content-Security-Policy', CSP);
     next();
   });

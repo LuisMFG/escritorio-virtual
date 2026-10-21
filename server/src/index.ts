@@ -12,6 +12,9 @@ import { loadSecretKey } from './util/secretBox.js';
 import { HabboAssetsClient } from './assets/HabboAssetsClient.js';
 import { imagerMeasure, offlineMeasure } from './services/FurniDefService.js';
 
+/** Tamanho máximo de uma mensagem do WebSocket (a oferta WebRTC tem uns 5–8 KB). */
+const WS_MAX_PAYLOAD = 32 * 1024;
+
 const services = createServices(
   openDatabase(config.databasePath),
   { inviteCode: config.inviteCode, jiraSite: config.jiraSite },
@@ -20,6 +23,7 @@ const services = createServices(
   config.uploadDir,
   {
     secretKey: loadSecretKey(config.secretKey, config.secretKeyFile),
+    turn: config.turn,
     // Testes de ponta a ponta: sem depender do imager pela internet.
     measureFurni:
       process.env.FURNI_MEASURE === 'offline'
@@ -28,6 +32,7 @@ const services = createServices(
   },
 );
 if (config.spotify) console.log('[spotify] integração ligada');
+console.log(config.turn ? '[chamadas] TURN da Cloudflare ligado' : '[chamadas] só STUN (sem TURN)');
 setServices(services);
 
 const server = defineServer({
@@ -37,6 +42,9 @@ const server = defineServer({
   },
   express: (app) => configureApp(app, config, services),
   greet: false,
+  // Opções do transporte WebSocket (repassadas pelo Colyseus): a oferta WebRTC das chamadas
+  // (Fase 49) passa dos 4 KB padrão.
+  ...({ maxPayload: WS_MAX_PAYLOAD } as object),
 });
 
 await server.listen(config.port);

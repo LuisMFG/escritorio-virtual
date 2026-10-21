@@ -1,0 +1,201 @@
+import { randomUUID } from 'node:crypto';
+import { EventEmitter } from 'node:events';
+import {
+  CALL_INVITE_MS,
+  CALL_MAX_PEOPLE,
+  type CallInvite,
+  type CallInviteOutcome,
+  type CallInviteResult,
+  type CallMedia,
+  type CallView,
+} from '@office/shared';
+
+/** O que o serviço precisa saber de quem está online (presença e foco). */
+export interface CallDirectory {
+  isOnline(userId: string): boolean;
+  nameOf(userId: string): string;
+  /** Em Foco ou Ocupado: o convite chega sem som. */
+  isQuiet(userId: string): boolean;
+}
+
+interface Call {
+  id: string;
+  startedAt: number;
+  members: Map<string, { name: string } & CallMedia>;
+}
+
+interface PendingInvite {
+  invite: CallInvite;
+  toUserId: string;
+  timer: ReturnType<typeof setTimeout>;
+}
+
+/**
+ * Chamadas por convite (Fase 49), só em memória: quem está em qual chamada e os convites
+ * pendentes. Quem usa (o canal global) escuta os eventos e manda as mensagens.
+ */
+export class CallService {
+  readonly events = new EventEmitter<{
+    /** Convite novo para `toUserId`. */
+    invited: [toUserId: string, invite: CallInvite];
+    /** O convite não vale mais (para quem recebeu). */
+    inviteGone: [toUserId: string, inviteId: string];
+    /** Resposta para quem convidou. */
+    result: [fromUserId: string, result: CallInviteResult];
+    /** A chamada dessas pessoas mudou (cada uma recebe `callOf`). */
+    changed: [userIds: string[]];
+  }>();
+
+  private readonly calls = new Map<string, Call>();
+  private readonly userCall = new Map<string, string>();
+  private readonly invites = new Map<string, PendingInvite>();
+
+  constructor(
+    private readonly dir: CallDirectory,
+    private readonly now: () => number = Date.now,
+    private readonly timers: {
+      set: (fn: () => void, ms: number) => ReturnType<typeof setTimeout>;
+      clear: (t: ReturnType<typeof setTimeout>) => void;
+    } = { set: (fn, ms) => setTimeout(fn, ms), clear: (t) => clearTimeout(t) },
+  ) {}
+
+  /** Chamada de alguém, como os participantes veem. */
+  callOf(userId: string): CallView | null {
+    const call = this.callFor(userId);
+    if (!call) return null;
+    return {
+      id: call.id,
+      startedAt: call.startedAt,
+      members: [...call.members].map(([id, m]) => ({ userId: id, ...m })),
+    };
+  }
+
+  /** Os dois estão na mesma chamada (só então a sinalização passa). */
+  sameCall(a: string, b: string): boolean {
+    const ca = this.userCall.get(a);
+    return Boolean(ca && ca === this.userCall.get(b));
+  }
+
+  invite(fromUserId: string, toUserId: string, reason: string): CallInviteOutcome {
+    if (fromUserId === toUserId) return 'busy';
+    if (!this.dir.isOnline(toUserId)) return 'offline';
+    const call = this.callFor(fromUserId);
+    if (this.userCall.has(toUserId)) return 'busy';
+    if (call && call.members.size >= CALL_MAX_PEOPLE) return 'full';
+    // Um convite por par: chamar de novo troca o anterior.
+    for (const [id, p] of this.invites) {
+      if (p.invite.fromUserId === fromUserId && p.toUserId === toUserId) this.drop(id);
+    }
+    const invite: CallInvite = {
+      id: randomUUID(),
+      callId: call?.id ?? null,
+      fromUserId,
+      fromName: this.dir.nameOf(fromUserId),
+      reason,
+      members: call ? [...call.members.values()].map((m) => m.name) : [this.dir.nameOf(fromUserId)],
+      expiresAt: this.now() + CALL_INVITE_MS,
+      quiet: this.dir.isQuiet(toUserId),
+    };
+    const timer = this.timers.set(() => this.expire(invite.id), CALL_INVITE_MS);
+    this.invites.set(invite.id, { invite, toUserId, timer });
+    this.events.emit('invited', toUserId, invite);
+    return 'sent';
+  }
+
+  answer(userId: string, inviteId: string, accept: boolean): void {
+    const pending = this.invites.get(inviteId);
+    if (!pending || pending.toUserId !== userId) return;
+    this.drop(inviteId);
+    const { invite } = pending;
+    if (!accept) return this.report(invite, userId, 'declined');
+    if (!this.dir.isOnline(invite.fromUserId)) return this.report(invite, userId, 'offline');
+    // Entra na chamada de quem chamou (a do convite, ou a que ele estiver agora).
+    let call = this.callFor(invite.fromUserId);
+    if (call && call.members.size >= CALL_MAX_PEOPLE) return this.report(invite, userId, 'full');
+    if (this.userCall.has(userId)) this.leave(userId);
+    if (!call) {
+      call = { id: randomUUID(), startedAt: this.now(), members: new Map() };
+      this.calls.set(call.id, call);
+      this.join(call, invite.fromUserId);
+    }
+    this.join(call, userId);
+    this.report(invite, userId, 'accepted');
+    this.events.emit('changed', [...call.members.keys()]);
+  }
+
+  setMedia(userId: string, media: CallMedia): void {
+    const call = this.callFor(userId);
+    const me = call?.members.get(userId);
+    if (!call || !me) return;
+    Object.assign(me, media);
+    this.events.emit('changed', [...call.members.keys()]);
+  }
+
+  /** Sai da chamada; com uma pessoa só, a chamada acaba. */
+  leave(userId: string): void {
+    const call = this.callFor(userId);
+    if (!call) return;
+    call.members.delete(userId);
+    this.userCall.delete(userId);
+    const affected = [userId, ...call.members.keys()];
+    if (call.members.size < 2) {
+      for (const id of call.members.keys()) this.userCall.delete(id);
+      call.members.clear();
+      this.calls.delete(call.id);
+    }
+    this.events.emit('changed', affected);
+  }
+
+  /** Saiu do escritório: sai da chamada e os convites dele/para ele acabam. */
+  disconnect(userId: string): void {
+    this.leave(userId);
+    for (const [id, p] of this.invites) {
+      if (p.toUserId === userId) {
+        this.drop(id);
+        this.report(p.invite, userId, 'offline');
+      } else if (p.invite.fromUserId === userId) {
+        this.drop(id);
+      }
+    }
+  }
+
+  private callFor(userId: string): Call | undefined {
+    const id = this.userCall.get(userId);
+    return id ? this.calls.get(id) : undefined;
+  }
+
+  private join(call: Call, userId: string): void {
+    call.members.set(userId, {
+      name: this.dir.nameOf(userId),
+      mic: true,
+      cam: false,
+      screen: false,
+    });
+    this.userCall.set(userId, call.id);
+  }
+
+  private expire(inviteId: string): void {
+    const pending = this.invites.get(inviteId);
+    if (!pending) return;
+    this.drop(inviteId);
+    this.report(pending.invite, pending.toUserId, 'expired');
+  }
+
+  /** Tira o convite e avisa quem recebeu que ele não vale mais. */
+  private drop(inviteId: string): void {
+    const pending = this.invites.get(inviteId);
+    if (!pending) return;
+    this.timers.clear(pending.timer);
+    this.invites.delete(inviteId);
+    this.events.emit('inviteGone', pending.toUserId, inviteId);
+  }
+
+  private report(invite: CallInvite, toUserId: string, outcome: CallInviteOutcome): void {
+    this.events.emit('result', invite.fromUserId, {
+      inviteId: invite.id,
+      toUserId,
+      toName: this.dir.nameOf(toUserId),
+      outcome,
+    });
+  }
+}

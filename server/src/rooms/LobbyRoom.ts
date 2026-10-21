@@ -27,6 +27,14 @@ import {
   type MeetingNotice,
   type DmReadReceipt,
   type ErrorMessage,
+  CallMessage,
+  callAnswerSchema,
+  callInviteSchema,
+  callMediaSchema,
+  callSignalSchema,
+  type CallInvite,
+  type CallInviteResult,
+  type CallState,
 } from '@office/shared';
 import { z } from 'zod';
 import type { UserRow } from '../db/schema.js';
@@ -49,6 +57,10 @@ export class LobbyRoom extends Room<{ state: LobbyState; client: LobbyClient }> 
   /** DMs: 5 seguidas, depois 1 por segundo. */
   private readonly dmLimiter = new KeyedRateLimiter(5, 1);
   private readonly reactLimiter = new KeyedRateLimiter(10, 3);
+  /** Convites de chamada: 4 seguidos, depois 1 a cada 3 s. */
+  private readonly callLimiter = new KeyedRateLimiter(4, 1 / 3);
+  /** Pessoa → aba que fala na chamada (com duas abas abertas, só uma conecta o áudio). */
+  private readonly callSession = new Map<string, string>();
 
   override messages = {
     [LobbyClientMessage.DmSend]: validate(dmSendSchema, (client, msg) =>
@@ -88,7 +100,83 @@ export class LobbyRoom extends Room<{ state: LobbyState; client: LobbyClient }> 
     [LobbyClientMessage.DmRead]: validate(dmReadSchema, (client, msg) =>
       this.handleRead(client as LobbyClient, msg.withUserId),
     ),
+    // ---------- Chamadas (Fase 49) ----------
+    [CallMessage.Invite]: validate(callInviteSchema, (client, msg) => {
+      const c = client as LobbyClient;
+      const me = c.auth?.id;
+      if (!me) return;
+      if (!this.callLimiter.tryTake(c.sessionId)) return this.sendError(c, ErrorCode.RateLimit);
+      const calls = services().calls;
+      // Quem chama sem estar em chamada: esta aba é a que vai falar.
+      if (!calls.callOf(me)) this.callSession.set(me, c.sessionId);
+      const outcome = calls.invite(me, msg.toUserId, msg.reason);
+      if (outcome !== 'sent') {
+        c.send(CallMessage.InviteResult, {
+          inviteId: '',
+          toUserId: msg.toUserId,
+          toName: services().users.findById(msg.toUserId)?.name ?? '',
+          outcome,
+        } satisfies CallInviteResult);
+      }
+    }),
+    [CallMessage.Answer]: validate(callAnswerSchema, (client, msg) => {
+      const c = client as LobbyClient;
+      const me = c.auth?.id;
+      if (!me) return;
+      if (msg.accept) this.callSession.set(me, c.sessionId);
+      services().calls.answer(me, msg.inviteId, msg.accept);
+    }),
+    [CallMessage.Leave]: (client: Client) => {
+      const c = client as LobbyClient;
+      const me = c.auth?.id;
+      if (!me) return;
+      services().calls.leave(me);
+    },
+    [CallMessage.Media]: validate(callMediaSchema, (client, msg) => {
+      const me = (client as LobbyClient).auth?.id;
+      if (me) services().calls.setMedia(me, msg);
+    }),
+    [CallMessage.Signal]: validate(callSignalSchema, (client, msg) => {
+      const c = client as LobbyClient;
+      const me = c.auth?.id;
+      if (!me) return;
+      // Só entre participantes da mesma chamada, e só da/para a aba que fala.
+      if (this.callSession.get(me) !== c.sessionId) return;
+      if (!services().calls.sameCall(me, msg.toUserId)) return;
+      const target = this.clients.find((x) => x.sessionId === this.callSession.get(msg.toUserId));
+      target?.send(CallMessage.Signal, { fromUserId: me, data: msg.data });
+    }),
+    [CallMessage.Ice]: async () => services().turn.iceServers(),
   };
+
+  private readonly onCallInvited = (toUserId: string, invite: CallInvite): void => {
+    for (const c of this.clientsOf(toUserId)) c.send(CallMessage.Invited, invite);
+  };
+
+  private readonly onCallInviteGone = (toUserId: string, inviteId: string): void => {
+    for (const c of this.clientsOf(toUserId)) c.send(CallMessage.InviteGone, { inviteId });
+  };
+
+  private readonly onCallResult = (fromUserId: string, result: CallInviteResult): void => {
+    for (const c of this.clientsOf(fromUserId)) c.send(CallMessage.InviteResult, result);
+  };
+
+  /** A chamada dessas pessoas mudou: cada aba recebe a sua visão (ou `null`). */
+  private readonly onCallChanged = (userIds: string[]): void => {
+    for (const id of userIds) this.sendCallState(id);
+  };
+
+  private sendCallState(userId: string): void {
+    const view = services().calls.callOf(userId);
+    if (!view) this.callSession.delete(userId);
+    const owner = this.callSession.get(userId);
+    for (const c of this.clientsOf(userId)) {
+      c.send(
+        CallMessage.State,
+        view ? ({ ...view, here: c.sessionId === owner } satisfies CallState) : null,
+      );
+    }
+  }
 
   private readonly syncPeople = (): void => {
     // Uma entrada por pessoa (a conexão mais recente vence se houver duas abas).
@@ -200,9 +288,19 @@ export class LobbyRoom extends Room<{ state: LobbyState; client: LobbyClient }> 
     services().announcements.events.on('created', this.onAnnouncement);
     services().announcements.events.on('removed', this.onAnnouncementRemoved);
     services().kudos.events.on('given', this.onKudos);
+    const calls = services().calls.events;
+    calls.on('invited', this.onCallInvited);
+    calls.on('inviteGone', this.onCallInviteGone);
+    calls.on('result', this.onCallResult);
+    calls.on('changed', this.onCallChanged);
   }
 
   override onDispose(): void {
+    const calls = services().calls.events;
+    calls.off('invited', this.onCallInvited);
+    calls.off('inviteGone', this.onCallInviteGone);
+    calls.off('result', this.onCallResult);
+    calls.off('changed', this.onCallChanged);
     services().presence.events.off('changed', this.syncPeople);
     services().moderation.off('rooms', this.syncRooms);
     const ev = services().meetings.events;
@@ -230,9 +328,24 @@ export class LobbyRoom extends Room<{ state: LobbyState; client: LobbyClient }> 
     this.allowReconnection(client, RECONNECT_SECONDS).catch(() => undefined);
   }
 
+  override onJoin(client: LobbyClient): void {
+    // Voltou (outra aba ou reconexão): vê a chamada em que já está.
+    const me = client.auth?.id;
+    if (me && services().calls.callOf(me)) this.sendCallState(me);
+  }
+
   override onLeave(client: LobbyClient): void {
     this.dmLimiter.delete(client.sessionId);
     this.reactLimiter.delete(client.sessionId);
+    this.callLimiter.delete(client.sessionId);
+    const userId = client.auth?.id;
+    if (!userId) return;
+    // Fechou a aba que falava, ou saiu de vez: sai da chamada (e os convites acabam).
+    if (this.clientsOf(userId).every((c) => c.sessionId === client.sessionId)) {
+      services().calls.disconnect(userId);
+    } else if (this.callSession.get(userId) === client.sessionId) {
+      services().calls.leave(userId);
+    }
   }
 
   /** Todas as conexões (abas/aparelhos) de uma pessoa. */

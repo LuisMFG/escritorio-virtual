@@ -15,6 +15,10 @@ import {
   type ErrorMessage,
   MeetingMessage,
   type MeetingNotice,
+  CallMessage,
+  type CallInvite,
+  type CallInviteResult,
+  type CallState,
 } from '@office/shared';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { openDatabase } from '../db/client.js';
@@ -201,5 +205,47 @@ describe('LobbyRoom', () => {
     const left = new Promise((resolve) => b.onLeave(resolve));
     svc.moderation.emit('kick', { userId: beto.user.id, scope: 'office', byName: 'Ana' });
     await left;
+  });
+
+  describe('chamadas (Fase 49)', () => {
+    it('convite com motivo, aceitar: os dois recebem a chamada; sinalização só entre eles', async () => {
+      const ana = newUser('Ana');
+      const beto = newUser('Beto');
+      // Online = numa sala do escritório.
+      svc.presence.add({ sessionId: 'sa', userId: ana.user.id, name: 'Ana', roomId: 'reception' });
+      svc.presence.add({
+        sessionId: 'sb',
+        userId: beto.user.id,
+        name: 'Beto',
+        roomId: 'reception',
+      });
+      const a = await lobby(ana.token);
+      const b = await lobby(beto.token);
+      const invited = b.waitForMessage(CallMessage.Invited) as Promise<CallInvite>;
+      a.send(CallMessage.Invite, { toUserId: beto.user.id, reason: 'Dúvida no deploy' });
+      const inv = await invited;
+      expect(inv).toMatchObject({ fromName: 'Ana', reason: 'Dúvida no deploy' });
+
+      const stateA = a.waitForMessage(CallMessage.State) as Promise<CallState>;
+      const stateB = b.waitForMessage(CallMessage.State) as Promise<CallState>;
+      const result = a.waitForMessage(CallMessage.InviteResult) as Promise<CallInviteResult>;
+      b.send(CallMessage.Answer, { inviteId: inv.id, accept: true });
+      expect((await result).outcome).toBe('accepted');
+      const [sa, sb] = await Promise.all([stateA, stateB]);
+      expect(sa.members.map((m) => m.name).sort()).toEqual(['Ana', 'Beto']);
+      expect(sa.here && sb.here).toBe(true);
+
+      const sig = b.waitForMessage(CallMessage.Signal) as Promise<{ fromUserId: string }>;
+      a.send(CallMessage.Signal, {
+        toUserId: beto.user.id,
+        data: { kind: 'sdp', type: 'offer', sdp: 'v=0' },
+      });
+      expect((await sig).fromUserId).toBe(ana.user.id);
+
+      const ice = await a.request(CallMessage.Ice);
+      expect(Array.isArray(ice)).toBe(true);
+      svc.presence.remove('sa');
+      svc.presence.remove('sb');
+    });
   });
 });

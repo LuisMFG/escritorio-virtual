@@ -68,6 +68,8 @@ export interface Config {
   backupKeep: number;
   /** Tentativas de entrada/cadastro por minuto por IP (os testes de ponta a ponta sobem isso). */
   loginRateLimit: number;
+  /** TURN da Cloudflare para as chamadas (Fase 49); sem ele, só STUN. */
+  turn?: { keyId: string; apiToken: string };
 }
 
 export const config: Config = {
@@ -90,4 +92,11 @@ export const config: Config = {
   uploadDir: fromRoot(process.env.UPLOAD_DIR ?? './data/uploads'),
   backupKeep: Math.max(1, Number(process.env.BACKUP_KEEP ?? 7) || 7),
   loginRateLimit: Math.max(1, Number(process.env.LOGIN_RATE_LIMIT ?? 10) || 10),
+  turn: turnConfig(),
 };
+
+function turnConfig(): Config['turn'] {
+  const keyId = process.env.CLOUDFLARE_TURN_KEY_ID?.trim();
+  const apiToken = process.env.CLOUDFLARE_TURN_API_TOKEN?.trim();
+  return keyId && apiToken ? { keyId, apiToken } : undefined;
+}

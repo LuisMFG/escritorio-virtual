@@ -37,6 +37,8 @@ import { AuditService } from './AuditService.js';
 import { SettingsService } from './SettingsService.js';
 import { EventEmitter } from 'node:events';
 import type { KickScope } from '@office/shared';
+import { CallService } from './CallService.js';
+import { TurnService, type TurnConfig } from './TurnService.js';
 
 /** Ações de moderação que as salas abertas precisam aplicar. */
 export interface ModerationEvents {
@@ -86,6 +88,9 @@ export interface Services {
   /** Catálogo completo: mede e guarda móveis novos na primeira vez (Fase 36). */
   furniCatalog: FurniDefService;
   avatarManifest: AvatarManifest;
+  /** Chamadas de áudio por convite (Fase 49). */
+  calls: CallService;
+  turn: TurnService;
 }
 
 export function createServices(
@@ -97,6 +102,8 @@ export function createServices(
   opts: {
     secretKey?: Buffer;
     http?: typeof fetch;
+    /** TURN da Cloudflare (chamadas); sem ele, só STUN. */
+    turn?: TurnConfig;
     /** Mede um móvel do catálogo (no servidor: pelo imager). */
     measureFurni?: (item: CatalogItem, id: string) => Promise<FurniManifestEntry>;
     catalogFile?: string;
@@ -127,6 +134,16 @@ export function createServices(
   pets.events.on('changed', (userId, pet) => {
     if (pet) achievements.unlock(userId, 'pet_owner');
   });
+  const focus = new FocusService();
+  // Chamadas: online, nome e status vêm da presença (quem está em alguma sala).
+  const calls = new CallService({
+    isOnline: (id) => presence.list().some((e) => e.userId === id),
+    nameOf: (id) =>
+      presence.list().find((e) => e.userId === id)?.name ?? users.findById(id)?.name ?? '?',
+    isQuiet: (id) =>
+      focus.get(id)?.kind === 'focus' ||
+      presence.list().some((e) => e.userId === id && e.status === 'busy'),
+  });
   const furniCatalog = new FurniDefService(
     db,
     loadFurniDefs(),
@@ -154,7 +171,7 @@ export function createServices(
     announcements: new AnnouncementService(db),
     polls: new PollService(db),
     kudos: new KudosService(db),
-    focus: new FocusService(),
+    focus,
     uploads: new UploadService(db, uploadDir),
     linkPreviews: new LinkPreviewService(),
     search: new SearchService(db),
@@ -168,6 +185,8 @@ export function createServices(
     furniDefs: furniCatalog.defs,
     furniCatalog,
     avatarManifest: loadAvatarManifest(),
+    calls,
+    turn: new TurnService(opts.turn, opts.http),
   };
 }
 
