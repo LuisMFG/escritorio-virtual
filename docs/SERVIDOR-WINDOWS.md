@@ -111,6 +111,9 @@ fora do PC (Google Drive, por exemplo).
 
 ## Observações
 
+- **Chamadas de áudio:** para funcionar com quem está em rede de empresa ou 4G, configure o
+  TURN da Cloudflare: [TURN-CLOUDFLARE.md](TURN-CLOUDFLARE.md).
+
 - **Spotify:** o endereço de retorno cadastrado no painel do Spotify precisa ser
   `https://ENDERECO-PUBLICO/api/spotify/callback` (e o mesmo no `SPOTIFY_REDIRECT_URI` do
   `.env`). Com o túnel rápido o endereço muda a cada reinício, então o Spotify só fica prático

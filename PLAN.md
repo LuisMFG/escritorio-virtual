@@ -1161,3 +1161,22 @@ Pedido em 20/10/2026, com o escritório já em uso pelo pessoal do trabalho (ser
 3. **Tema claro:** fazer junto na Fase 40 ou ficar só com o escuro por enquanto?
 4. **Minha mesa:** cada pessoa escolhe livremente uma mesa livre, ou o admin distribui as mesas?
 5. **Tour:** aparece só para contas novas ou também uma vez para quem já usa?
+
+## 15. Chamadas de áudio e vídeo (aprovado em 20/10/2026)
+
+Pedido: chamar uma pessoa específica pelo cartão dela, com o motivo, e ela aceita ou recusa;
+aceitando, abre um canal de áudio só para as duas (e dá para chamar mais gente para o mesmo
+canal). Vídeo e compartilhar tela ficam para a fase seguinte, com a estrutura já preparada.
+
+### Fase 49 — Chamadas de áudio por convite ✅ implementada
+- **Convidar:** "Chamar para conversa" no cartão da pessoa, com o motivo (sugestões rápidas). Quem está numa chamada vê "Adicionar à chamada".
+- **Receber:** convite com quem chama, o motivo e quem já está na conversa, com **Aceitar** e **Recusar**; som e notificação do navegador (sem som em Foco/Ocupado); expira em 45 s e quem chamou fica sabendo (recusou, não respondeu, está em outra chamada, saiu).
+- **Chamada:** canal de áudio entre os participantes, em qualquer sala; painel flutuante com quem está, tempo, **mudo** e **sair**; anel de "falando" no avatar e na lista. Até 6 pessoas (cada um conectado com cada um, WebRTC). Com uma pessoa só, a chamada acaba.
+- **Rede:** sinalização pelo canal global (lobby); STUN da Cloudflare sempre; **TURN da Cloudflare** quando houver `CLOUDFLARE_TURN_KEY_ID` e `CLOUDFLARE_TURN_API_TOKEN` no `.env` (credenciais temporárias geradas pelo servidor). Guia em `docs/TURN-CLOUDFLARE.md`.
+- **Estrutura pronta para a Fase 50:** cada participante já anuncia `mic`/`cam`/`screen` e a conexão já tem transceptores de vídeo prontos para receber trilhas.
+- **Como testar:** chamar alguém, a pessoa aceitar e conversar; chamar uma terceira; recusar; deixar expirar.
+
+- **Feito:** `shared/src/calls.ts` (protocolo), `server/src/services/CallService.ts` (convites, chamadas, limite de 6, expirar, sair), `TurnService.ts` (credenciais temporárias da Cloudflare, 12 h, renovadas a cada 6 h; sem chave, só STUN), canal global repassando convites, estado e sinalização (só entre participantes e só para a aba que fala), `client/src/net/CallManager.ts` (malha WebRTC; quem tem o id menor oferece; transceptor de vídeo já reservado; quem está falando pelo volume) e `client/src/ui/calls.ts` (caixa de convite com motivo e sugestões, cartão "está chamando você" com tempo e Aceitar/Recusar, painel com tempo, participantes, mudo e sair). Toque de chamada (mesmo com o som de mensagem desligado; sem som em Foco/Ocupado) e notificação do navegador; anel verde nos pés de quem fala. Dois ajustes no servidor que bloqueavam: o cabeçalho `Permissions-Policy` proibia o microfone (agora microfone, câmera e tela só para o próprio site) e o limite de mensagem do WebSocket (4 KB) era menor que a oferta WebRTC (agora 32 KB). Testes: `CallService.test.ts`, `TurnService.test.ts`, `LobbyRoom.test.ts` (chamadas) e `e2e/tests/chamada.spec.ts` (3 navegadores com microfone falso, áudio conectado de verdade).
+
+### Fase 50 — Vídeo e compartilhar tela (próxima)
+- Câmera e tela na mesma chamada (troca de trilha sem renegociar tudo), grade de vídeo no painel, tela compartilhada em destaque, escolha de microfone e câmera.

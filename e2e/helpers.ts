@@ -39,6 +39,7 @@ interface Hook {
   mySessionId(): string;
   tile(x: number, y: number): { x: number; y: number };
   furni(id: string): { x: number; y: number } | null;
+  avatar(sessionId: string): { x: number; y: number } | null;
   wall(x: number, y: number, rot: 2 | 4, h: number): { x: number; y: number };
   furniZ(id: string): number | null;
   furniFrame(id: string): string | null;
@@ -186,4 +187,15 @@ export async function openChatHistory(page: Page): Promise<void> {
   await page.locator('details.chat-history').evaluate((d) => {
     (d as HTMLDetailsElement).open = true;
   });
+}
+
+/** Abre o cartão de uma pessoa clicando no avatar dela (pelo nome). */
+export async function openCard(page: Page, name: string): Promise<void> {
+  const p = await page.evaluate((n) => {
+    const hook = window.__e2e!;
+    const who = hook.players().find((x) => x.name === n);
+    return who ? hook.avatar(who.id) : null;
+  }, name);
+  if (!p) throw new Error(`Avatar de ${name} não está na sala`);
+  await page.mouse.click(p.x, p.y);
 }
