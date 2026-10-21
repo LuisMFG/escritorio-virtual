@@ -43,6 +43,7 @@ interface Hook {
   avatar(sessionId: string): { x: number; y: number } | null;
   avatarDir(sessionId: string): number | null;
   avatarEmote(sessionId: string): string | null;
+  avatarDance(sessionId: string): { id: string; frame: number; frames: number } | null;
   wall(x: number, y: number, rot: 2 | 4, h: number): { x: number; y: number };
   furniZ(id: string): number | null;
   furniFrame(id: string): string | null;

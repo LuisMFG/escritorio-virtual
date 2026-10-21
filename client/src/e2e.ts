@@ -1,4 +1,4 @@
-import { TILE_H, TILE_W, tileHeight, tileToScreen } from '@office/shared';
+import { DANCES, TILE_H, TILE_W, tileHeight, tileToScreen } from '@office/shared';
 import { Point as PixiPoint } from 'pixi.js';
 import type { OfficeRoomClient } from './net/OfficeConnection.js';
 import type { RoomScene } from './scene/RoomScene.js';
@@ -41,6 +41,8 @@ export interface E2EHook {
   avatarDir(sessionId: string): number | null;
   /** Emote que o avatar está fazendo agora (Fase 54). */
   avatarEmote(sessionId: string): string | null;
+  /** Dança e quadro que a tela mostra agora (Fase 55). */
+  avatarDance(sessionId: string): { id: string; frame: number; frames: number } | null;
   furniList(): { id: string; defId: string; x: number; y: number; z: number }[];
   players(): {
     id: string;
@@ -122,6 +124,10 @@ export function exposeForTests(scene: RoomScene, room: OfficeRoomClient): void {
     },
     avatarDir: (id) => scene.avatarView(id)?.dir ?? null,
     avatarEmote: (id) => scene.avatarView(id)?.currentEmote ?? null,
+    avatarDance: (id) => {
+      const d = scene.avatarView(id)?.currentDance;
+      return d ? { ...d, frames: DANCES[d.id].anim.frames.length } : null;
+    },
     furniShown: (id) => {
       const p = scene.furniView(id)?.placed;
       return p ? { x: p.x, y: p.y, z: p.z, rot: p.rot } : null;
