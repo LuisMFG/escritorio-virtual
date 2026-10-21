@@ -3,6 +3,7 @@ import {
   expect,
   type Browser,
   type BrowserContext,
+  type BrowserContextOptions,
   type Page,
 } from '@playwright/test';
 
@@ -65,6 +66,9 @@ interface Hook {
     figure: string;
   }[];
   furniAt(x: number, y: number): string | null;
+  furniShown(id: string): { x: number; y: number; z: number; rot: number } | null;
+  decorGhost(): { x: number; y: number; z: number; rot: number; ok: boolean } | null;
+  look(x: number, y: number, zoom: number): void;
   leave(): Promise<void>;
 }
 declare global {
@@ -97,12 +101,12 @@ export interface Person {
 export async function newPerson(
   browser: Browser,
   base: string,
-  opts: { username?: string; tour?: boolean } = {},
+  opts: { username?: string; tour?: boolean; context?: BrowserContextOptions } = {},
 ): Promise<Person> {
   const id = uniq();
   const name = `${base} ${id}`;
   const username = opts.username ?? `${base.toLowerCase()}.${id}`;
-  const context = await browser.newContext();
+  const context = await browser.newContext(opts.context);
   openContexts.push(context);
   const page = await context.newPage();
   await page.goto(opts.tour ? `${APP}&tour=1` : APP);

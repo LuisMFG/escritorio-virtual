@@ -53,6 +53,12 @@ export interface E2EHook {
   }[];
   /** Que móvel o clique pegaria neste ponto da página (diagnóstico). */
   furniAt(x: number, y: number): string | null;
+  /** Onde a tela mostra o móvel agora (antes de o servidor confirmar um arrasto, Fase 53). */
+  furniShown(id: string): { x: number; y: number; z: number; rot: number } | null;
+  /** Fantasma do Decorar (colocando ou arrastando): tile, altura e se dá para soltar ali. */
+  decorGhost(): { x: number; y: number; z: number; rot: number; ok: boolean } | null;
+  /** Aproxima a câmera (nível de zoom) e centraliza num tile. */
+  look(x: number, y: number, zoom: number): void;
   /** Sai da sala de verdade (fechar a aba deixaria o avatar parado 30 s esperando reconexão). */
   leave(): Promise<void>;
 }
@@ -113,6 +119,19 @@ export function exposeForTests(scene: RoomScene, room: OfficeRoomClient): void {
       return { x: Math.round(r.left + c.x), y: Math.round(r.top + c.y) };
     },
     avatarDir: (id) => scene.avatarView(id)?.dir ?? null,
+    furniShown: (id) => {
+      const p = scene.furniView(id)?.placed;
+      return p ? { x: p.x, y: p.y, z: p.z, rot: p.rot } : null;
+    },
+    decorGhost: () => {
+      const g = scene.decor.ghostState();
+      return g ? { ...g } : null;
+    },
+    look: (x, y, zoom) => {
+      while (scene.camera.zoom < zoom - 0.001) scene.camera.zoomIn();
+      const c = tileToScreen(x, y, tileHeight(scene.map, x, y) ?? 0);
+      scene.camera.lookAt(c.sx, c.sy);
+    },
     furniAt: (x, y) => {
       const r = canvas();
       return scene.pickFurni(new PixiPoint(x - r.left, y - r.top))?.placed.id ?? null;
