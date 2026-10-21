@@ -120,9 +120,13 @@ export class FurniView extends Container {
     this.drawGameBoard();
   }
 
-  /** Liga as fatias da frente (só móveis de verdade da sala; o fantasma do Decorar não). */
+  /**
+   * Liga as fatias da frente (só móveis de verdade da sala; o fantasma do Decorar não). Só em
+   * assentos: na cama as camadas altas (cabeceira, cobertor) cobriam quem deita quase inteiro
+   * (Fase 52); deitado, o avatar fica por cima da cama, como no Habbo.
+   */
   enableSlices(): void {
-    this.sliced = this.def.canSit || this.def.canLay;
+    this.sliced = this.def.canSit && !this.def.canLay;
   }
 
   /**

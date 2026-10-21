@@ -17,6 +17,11 @@ export type AvatarFrames = readonly AvatarFrame[];
 /** Quadros sob demanda de um avatar montado: qualquer pose (andar, sentar, acenar…). */
 export interface AvatarPoser {
   frame(pose: FigurePose): AvatarFrame;
+  /**
+   * Muda quando o posador passa a desenhar algo que antes não podia (a biblioteca de itens da
+   * mão chegou): a cena pede a pose de novo em vez de ficar com a sem o copo.
+   */
+  readonly revision?: number;
   /** Veste alguma roupa animada (a cena avança `clothingFrame`). */
   readonly animated?: boolean;
   /** Poses guardadas agora (diagnóstico de memória). */

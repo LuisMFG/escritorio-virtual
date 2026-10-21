@@ -1,5 +1,6 @@
 import {
   canvasFor,
+  clothingPeriod,
   composeFigure,
   figureSheetUrl,
   HAND_ITEM_LIB,
@@ -23,6 +24,7 @@ import type {
   AvatarPoser,
   AvatarRenderer,
 } from './AvatarTextureCache.js';
+import { disposeTexture } from './textureHold.js';
 
 /**
  * Avatar montado no navegador a partir das partes do Habbo (Fase 31): o servidor converte cada
@@ -115,9 +117,12 @@ export const MAX_POSES = 160;
 /** Espera antes de liberar uma textura descartada (pode estar na tela neste quadro). */
 const RELEASE_DELAY_MS = 2000;
 
-/** Libera a textura da GPU um pouco depois (Fase 39: sem isso a memória só crescia). */
+/**
+ * Libera a textura da GPU um pouco depois (Fase 39: sem isso a memória só crescia). Se alguém
+ * ainda a mostra, espera largar (Fase 52).
+ */
 function releaseLater(texture: Texture): void {
-  setTimeout(() => texture.destroy(true), RELEASE_DELAY_MS);
+  setTimeout(() => disposeTexture(texture), RELEASE_DELAY_MS);
 }
 
 /** Monta cada pose uma vez e guarda a textura (a cena pede a pose a cada quadro). */
@@ -125,8 +130,15 @@ class FigurePoser implements AvatarPoser {
   private readonly cache = new Map<string, AvatarFrame>();
 
   private itemLib: 'none' | 'loading' | 'ready' = 'none';
+  private rev = 0;
+  /** Período das roupas animadas por direção (o quadro se repete depois dele). */
+  private readonly periods = new Map<number, number>();
   get animated(): boolean {
     return this.parts.some((p) => p.animated);
+  }
+
+  get revision(): number {
+    return this.rev;
   }
 
   constructor(
@@ -145,10 +157,22 @@ class FigurePoser implements AvatarPoser {
           .then((lib) => {
             this.libs.set(HAND_ITEM_LIB, lib);
             this.itemLib = 'ready';
+            // A cena pede a pose de novo: o copo aparece já, não só no próximo piscar.
+            this.rev++;
           })
           .catch(() => (this.itemLib = 'none'));
       }
-      pose = { ...pose, handItem: undefined };
+      pose = { ...pose, handItem: undefined, handGesture: undefined };
+    }
+    if (pose.clothingFrame) {
+      // O quadro da roupa animada cresce sem parar: reduz ao período (antes cada quadro era uma
+      // pose nova, 8 por segundo, e o cache nunca acertava).
+      let period = this.periods.get(pose.direction);
+      if (period === undefined) {
+        period = clothingPeriod(this.parts, this.libs, pose.direction);
+        this.periods.set(pose.direction, period);
+      }
+      pose = { ...pose, clothingFrame: 1 + ((pose.clothingFrame - 1) % period) };
     }
     const key = poseKey(pose);
     const hit = this.cache.get(key);

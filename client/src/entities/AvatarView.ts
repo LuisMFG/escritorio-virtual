@@ -14,6 +14,7 @@ import {
   walkFrame,
   type FigurePose,
   focusLeft,
+  layFacing,
   STEP_MS,
   type EmoteId,
   tileToScreen,
@@ -22,6 +23,7 @@ import {
 } from '@office/shared';
 import { Container, Graphics, Sprite, Text, type Point } from 'pixi.js';
 import type { AvatarFrame, AvatarFrames, AvatarPoser } from '../assets/AvatarTextureCache.js';
+import { dropTexture, holdTexture } from '../assets/textureHold.js';
 import { spriteHitTest } from '../assets/hitTest.js';
 import type { EffectLibrary } from '../assets/EffectLibrary.js';
 import { EffectLayer } from './EffectLayer.js';
@@ -52,6 +54,15 @@ const LAY_OFFSET: Record<number, { x: number; y: number }> = {
   2: { x: 36, y: 24 },
   4: { x: -36, y: 24 },
 };
+/**
+ * Sem o avatar montado (só o desenho parado do imager), deitar inclina o boneco ao longo da cama,
+ * girando em volta dos pés até a cabeça chegar ao travesseiro. Antes era desenhado sentado.
+ */
+const FAKE_LAY_TILT = Math.atan2(2, 1);
+const FAKE_LAY_FEET: Record<number, { x: number; y: number }> = {
+  2: { x: 36, y: 12 },
+  4: { x: -36, y: 12 },
+};
 const SIT_CUT_Y = -2;
 /** Altura do "…" de digitando e do emoji dos emotes. */
 const TYPING_Y = -96;
@@ -66,6 +77,13 @@ const BADGE_R = 7;
 
 /** Direções percorridas na dança. */
 const DANCE_DIRS = [2, 3, 4, 5, 6, 5, 4, 3];
+/**
+ * Entre um passo e o próximo (o pacote do servidor chega um pouco depois), continua com a pose
+ * de andar por um instante em vez de piscar a pose parada (o andar "engasgava").
+ */
+const WALK_GRACE_MS = 160;
+/** Gestos de um braço só (o esquerdo): dá para fazer segurando o item no direito. */
+const LEFT_ARM_GESTURES = new Set(['wav', 'respect', 'sig']);
 
 /** O que a cena sabe de um jogador do estado sincronizado. */
 export interface AvatarSnapshot {
@@ -124,6 +142,15 @@ export class AvatarView extends Container {
   private blinkAt = nextBlinkDelay();
   private lying = false;
   private handItem = 0;
+  /**
+   * Direção e ação que o servidor mandou por último. A direção de sentar/deitar chega no mesmo
+   * pacote do último passo; se o passo ainda está animando, é aplicada quando ele acaba (antes
+   * se perdia: sentava de lado, de costas ou "em pé" na diagonal).
+   */
+  private serverDir = 0;
+  private serverAction = 'idle';
+  private stepEndedAt = -Infinity;
+  private shownTexture: AvatarFrame['texture'] | null = null;
   /** Efeitos do Habbo (em uso e comemorações), quando a cena tem a biblioteca. */
   private fxLayer: EffectLayer | null = null;
   /** "zZ" sobre a cabeça de quem está ausente (olhos fechados). */
@@ -303,6 +330,12 @@ export class AvatarView extends Container {
     return this.queue.at(-1) ?? this.step?.to ?? this.tile;
   }
 
+  override destroy(options?: Parameters<Container['destroy']>[0]): void {
+    if (this.shownTexture) dropTexture(this.shownTexture);
+    this.shownTexture = null;
+    super.destroy(options);
+  }
+
   /** O ponteiro está sobre o desenho do avatar? */
   hitTest(global: Point): boolean {
     return spriteHitTest(this.body, global);
@@ -318,6 +351,8 @@ export class AvatarView extends Container {
 
   /** Toca um emote: animação no corpo e o emoji subindo sobre a cabeça. */
   playEmote(id: EmoteId): void {
+    // Dançar sentado ou deitado não existe (o servidor também recusa).
+    if (id === 'dance' && (this.sitting || this.lying)) return;
     this.stopEmote();
     const emoji = new Text({ text: EMOTES[id].emoji, resolution: 2, style: { fontSize: 18 } });
     emoji.anchor.set(0.5, 1);
@@ -344,6 +379,8 @@ export class AvatarView extends Container {
     this.alpha = s.away ? 0.45 : 1;
     this.lying = s.action === 'lay';
     this.handItem = s.handItem;
+    this.serverDir = s.dir;
+    this.serverAction = s.action;
     this.fxLayer?.setWorn(isEffect(s.effect) ? s.effect : null);
     this.setSitting(s.action === 'sit' || this.lying, s.z);
     this.setStatus(s.status);
@@ -352,7 +389,8 @@ export class AvatarView extends Container {
     const target = { x: s.nextX, y: s.nextY };
     const last = this.queue.at(-1) ?? this.step?.to ?? this.tile;
     if (target.x === last.x && target.y === last.y) {
-      if (!this.isWalking && s.dir !== this.dir) {
+      // Andando ainda: a direção é aplicada quando o último passo acabar (ver `update`).
+      if (!this.isWalking && this.emote?.id !== 'dance' && s.dir !== this.dir) {
         this.dir = s.dir;
         this.applyFrame();
       }
@@ -386,9 +424,18 @@ export class AvatarView extends Container {
         this.step = null;
         this.stepCount++;
         this.startNextStep();
+        if (!this.step) {
+          this.stepEndedAt = this.clock;
+          // Chegou: vira para onde o servidor mandou (o assento, a cama, o móvel usado).
+          if (this.serverDir !== this.dir && this.emote?.id !== 'dance') {
+            this.dir = this.serverDir;
+            this.applyFrame();
+          }
+        }
       }
     }
-    this.walkTime = this.step ? this.walkTime + dtMs * speed : 0;
+    const grace = !this.step && this.walkGrace();
+    this.walkTime = this.step || grace ? this.walkTime + dtMs * speed : 0;
     // O 🍅 conta os minutos (redesenha só quando o texto muda).
     if (
       this.focusKind &&
@@ -539,9 +586,15 @@ export class AvatarView extends Container {
     this.emote = null;
     e.emoji.destroy();
     if (e.id === 'dance' && !this.step) {
-      this.dir = e.baseDir;
+      // Volta para a direção do servidor (pode ter virado durante a dança).
+      this.dir = this.serverDir;
       this.applyFrame();
     }
+  }
+
+  /** Acabou um passo e o servidor ainda diz "andando": o próximo passo está chegando. */
+  private walkGrace(): boolean {
+    return this.serverAction === 'walk' && this.clock - this.stepEndedAt < WALK_GRACE_MS;
   }
 
   /** Deslocamento extra do corpo durante um emote (aceno, risada, pulinho, dança). */
@@ -577,7 +630,7 @@ export class AvatarView extends Container {
     this.sitting = on;
     this.sitZ = z;
     // A pose sentada simulada esconde as pernas; com o avatar montado a pose já é real.
-    const fake = on && !this.poser;
+    const fake = on && !this.poser && !this.lying;
     this.body.mask = fake ? this.legMask : null;
     this.legMask.visible = fake;
     this.shadow.visible = !on;
@@ -594,7 +647,8 @@ export class AvatarView extends Container {
   private applyFrame(): void {
     if (this.poser) {
       const pose = this.currentPose();
-      const key = poseKey(pose);
+      // A revisão muda quando o posador passa a ter o item da mão: pede a pose de novo.
+      const key = `${poseKey(pose)}#${this.poser.revision ?? 0}`;
       if (key === this.poseShown) return;
       this.poseShown = key;
       return this.showFrame(this.poser.frame(pose));
@@ -606,7 +660,7 @@ export class AvatarView extends Container {
   /** Pose de agora: postura, gesto/expressão do emote, fala, piscar e sono. */
   private currentPose(): FigurePose {
     const pose: FigurePose = { direction: this.dir };
-    if (this.step) {
+    if (this.step || this.walkGrace()) {
       pose.posture = 'wlk';
       pose.frame = walkFrame(this.walkTime);
     } else if (this.lying) {
@@ -614,14 +668,22 @@ export class AvatarView extends Container {
     } else if (this.sitting) {
       pose.posture = 'sit';
     }
-    if (this.emote) Object.assign(pose, emotePose(this.emote.id, this.emote.elapsed));
+    if (this.emote) {
+      Object.assign(pose, emotePose(this.emote.id, this.emote.elapsed));
+      // Sentado ou deitado, o emote não muda a postura (a dança "andava" dentro da cadeira).
+      if (!this.step && this.lying) pose.posture = 'lay';
+      else if (!this.step && this.sitting) pose.posture = 'sit';
+    }
     // Roupa animada: 8 quadros por segundo (começa em 1; 0 = parada).
     if (this.poser?.animated) pose.clothingFrame = 1 + Math.floor(this.clock / 125);
     // Item na mão: segura o tempo todo e dá um gole de vez em quando (o ☕ também mostra a xícara).
     const item = this.handItem || (this.emote?.id === 'coffee' ? COFFEE_ITEM : 0);
     if (item && !this.lying) {
       pose.handItem = item;
-      if (!pose.gesture) pose.gesture = this.clock % SIP_EVERY_MS < SIP_MS ? 'drk' : 'crr';
+      const hold = this.clock % SIP_EVERY_MS < SIP_MS ? 'drk' : 'crr';
+      // Com um gesto do braço esquerdo (acenar, joinha), o direito continua segurando o item.
+      if (!pose.gesture) pose.gesture = hold;
+      else if (LEFT_ARM_GESTURES.has(pose.gesture)) pose.handGesture = 'crr';
     }
     if (this.step && pose.posture !== 'wlk') pose.posture = 'wlk';
     if (this.clock < this.talkUntil && !pose.talk) {
@@ -649,6 +711,12 @@ export class AvatarView extends Container {
   }
 
   private showFrame(frame: AvatarFrame): void {
+    // Segura a textura enquanto estiver na tela (os caches não a destroem nesse tempo).
+    if (frame.texture !== this.shownTexture) {
+      holdTexture(frame.texture);
+      if (this.shownTexture) dropTexture(this.shownTexture);
+      this.shownTexture = frame.texture;
+    }
     this.body.texture = frame.texture;
     this.body.anchor.set(
       frame.anchor.x / frame.texture.width,
@@ -669,10 +737,11 @@ export class AvatarView extends Container {
     }
     const p = tileToScreen(x, y, z);
     // Deitado, o avatar inteiro (corpo, nome, selo) vai para cima da cama.
-    const lay =
-      this.poser && !this.step && this.lying ? (LAY_OFFSET[this.dir] ?? LAY_OFFSET[2]!) : null;
+    // A mesma regra de direção da montagem (2 ou o espelho 4), para o corpo cair na cama.
+    const lay = !this.step && this.lying ? LAY_OFFSET[layFacing(this.dir)]! : null;
     this.position.set(Math.round(p.sx) + (lay?.x ?? 0), Math.round(p.sy) + (lay?.y ?? 0));
 
+    this.body.rotation = 0;
     if (this.poser) {
       // Pose real: sem balanço simulado (a dança ainda pula um pouquinho).
       const hop = this.emote?.id === 'dance' && !this.step ? this.emoteOffset().y : 0;
@@ -683,6 +752,11 @@ export class AvatarView extends Container {
       const quarter = Math.floor((this.walkTime / STEP_MS) * 4) % 4;
       const sway = quarter === 2 ? (this.stepCount % 2 === 0 ? 1 : -1) : 0;
       this.body.position.set(sway, BOB_Y[quarter]!);
+    } else if (this.lying) {
+      const facing = layFacing(this.dir);
+      const feet = FAKE_LAY_FEET[facing]!;
+      this.body.rotation = facing === 4 ? FAKE_LAY_TILT : -FAKE_LAY_TILT;
+      this.body.position.set(feet.x, feet.y);
     } else {
       const o = this.emoteOffset();
       this.body.position.set(o.x, (this.sitting ? SIT_DROP : 0) + o.y);
