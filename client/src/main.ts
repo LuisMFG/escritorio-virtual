@@ -29,9 +29,13 @@ import {
   type FurniPlaceMessage,
   deskSeatIds,
 } from '@office/shared';
-import { Application, TextureSource } from 'pixi.js';
+import { Application, Container, Sprite, TextureSource } from 'pixi.js';
 import { AssetLoader } from './assets/AssetLoader.js';
-import { AvatarTextureCache, ImagerAvatarRenderer } from './assets/AvatarTextureCache.js';
+import {
+  AvatarTextureCache,
+  ImagerAvatarRenderer,
+  type AvatarPoser,
+} from './assets/AvatarTextureCache.js';
 import { FigureAvatarRenderer } from './assets/FigureAvatarRenderer.js';
 import { EffectLibrary } from './assets/EffectLibrary.js';
 import { PlaceholderFactory } from './assets/PlaceholderFactory.js';
@@ -210,17 +214,14 @@ async function start(): Promise<void> {
   );
   const loader = new AssetLoader(OFFLINE_ASSETS);
   const placeholders = new PlaceholderFactory(app.renderer, avatarManifest);
+  // Avatar montado no navegador (Fase 31); `?imager=1` volta ao imager, para comparar.
+  const imagerRenderer = new ImagerAvatarRenderer(loader, placeholders, avatarManifest.imager);
+  const figureRenderer =
+    OFFLINE_ASSETS || FORCE_IMAGER ? null : new FigureAvatarRenderer(imagerRenderer);
   const deps: SceneDeps = {
     loader,
     placeholders,
-    // Avatar montado no navegador (Fase 31); `?imager=1` volta ao imager, para comparar.
-    avatars: new AvatarTextureCache(
-      OFFLINE_ASSETS || FORCE_IMAGER
-        ? new ImagerAvatarRenderer(loader, placeholders, avatarManifest.imager)
-        : new FigureAvatarRenderer(
-            new ImagerAvatarRenderer(loader, placeholders, avatarManifest.imager),
-          ),
-    ),
+    avatars: new AvatarTextureCache(figureRenderer ?? imagerRenderer),
     furniDefs: furniStore.defs,
     requestDef: (id) => furniStore.ensure(id),
     effects: new EffectLibrary(!OFFLINE_ASSETS),
@@ -230,6 +231,43 @@ async function start(): Promise<void> {
   /** Prévia do editor quando o imager falha: o avatar provisório em camadas, como imagem. */
   const fallbackPreview = (figure: string, dir: number) =>
     app.renderer.extract.base64(placeholders.avatar(figure, dir).texture);
+  /**
+   * Prévia do editor montada aqui mesmo, como na sala (sem gastar renders do imager, que têm
+   * cota no servidor). Um posador só, do visual da vez (fora do cache da sala, para não tirar de
+   * lá o avatar de ninguém); `null` se não der para montar.
+   */
+  /** Miniatura de uma peça no editor: você vestindo a peça, montado aqui (ver acima). */
+  const composedThumb = async (figure: string): Promise<string | null> => {
+    const poser = await figureRenderer?.poser(figure);
+    if (!poser) return null;
+    const box = new Container();
+    box.addChild(new Sprite(poser.frame({ direction: 2 }).texture));
+    try {
+      return await app.renderer.extract.base64(box);
+    } finally {
+      box.destroy({ children: true });
+      poser.dispose?.();
+    }
+  };
+  let previewPoser: { figure: string; poser: Promise<AvatarPoser | null> } | null = null;
+  const composedPreview = async (figure: string, dir: number): Promise<string | null> => {
+    if (!figureRenderer) return null;
+    if (previewPoser?.figure !== figure) {
+      void previewPoser?.poser.then((p) => p?.dispose?.());
+      previewPoser = { figure, poser: figureRenderer.poser(figure) };
+    }
+    const poser = await previewPoser.poser;
+    if (!poser) return null;
+    // Em dobro, como o tamanho grande do imager (a prévia é pixelada de propósito).
+    // Num container: a escala do próprio alvo não entra na extração, a de um filho entra.
+    const box = new Container();
+    box.addChild(new Sprite(poser.frame({ direction: dir }).texture)).scale.set(2);
+    try {
+      return await app.renderer.extract.base64(box);
+    } finally {
+      box.destroy({ children: true });
+    }
+  };
 
   let scene: RoomScene | undefined;
   let connection: OfficeConnection | undefined;
@@ -813,6 +851,8 @@ async function start(): Promise<void> {
         figure: session.figure,
         gender: session.gender,
         fallbackPreview,
+        composedPreview,
+        composedThumb,
         thumbnails: !OFFLINE_ASSETS,
         looks: {
           load: () => looksApi.list(session!.token),
@@ -820,6 +860,8 @@ async function start(): Promise<void> {
           remove: (slot) => looksApi.remove(session!.token, slot),
         },
       });
+      void previewPoser?.poser.then((p) => p?.dispose?.());
+      previewPoser = null;
       if (!choice) return;
       // O servidor valida e propaga pelo estado; erros chegam como aviso.
       connection.updateAvatar(choice);

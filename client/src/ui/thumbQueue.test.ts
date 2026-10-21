@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ThumbQueue } from './thumbQueue.js';
 
 /** Imagem de mentira: só guarda o `src` (nunca termina de carregar sozinha). */
@@ -32,4 +32,46 @@ describe('ThumbQueue', () => {
     for (const img of fresh) q.load(img as unknown as HTMLImageElement, ['b.png'], () => {});
     expect(fresh.map((i) => i.src)).toEqual(['b.png', 'b.png']);
   });
+
+  it('servidor que não responde libera a vez depois de um tempo', () => {
+    vi.useFakeTimers();
+    const q = new ThumbQueue(1, 1000);
+    const stuck = fakeImg();
+    const next = fakeImg();
+    q.load(stuck as unknown as HTMLImageElement, ['lento.png'], () => {});
+    q.load(next as unknown as HTMLImageElement, ['b.png'], () => {});
+    expect(next.src).toBe('');
+    vi.advanceTimersByTime(1000);
+    expect(next.src).toBe('b.png');
+  });
+
+  it('só começa quando aparece na tela', () => {
+    const observed: Element[] = [];
+    let notify: (entries: { target: Element; isIntersecting: boolean }[]) => void = () => {};
+    vi.stubGlobal(
+      'IntersectionObserver',
+      class {
+        constructor(cb: typeof notify) {
+          notify = cb;
+        }
+        observe(el: Element) {
+          observed.push(el);
+        }
+        unobserve() {}
+      },
+    );
+    const q = new ThumbQueue();
+    const card = {} as Element;
+    let started = false;
+    q.whenVisible(card, () => (started = true));
+    expect(observed).toEqual([card]);
+    expect(started).toBe(false);
+    notify([{ target: card, isIntersecting: true }]);
+    expect(started).toBe(true);
+  });
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
 });

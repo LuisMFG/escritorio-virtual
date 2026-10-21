@@ -22,8 +22,36 @@ export class ThumbQueue {
   private loading = 0;
   /** Muda a cada `clear()`: as que estavam carregando da lista anterior não contam mais. */
   private generation = 0;
+  private observer: IntersectionObserver | null = null;
+  private readonly visible = new Map<Element, () => void>();
 
-  constructor(private readonly max = 3) {}
+  constructor(
+    private readonly max = 3,
+    /** Uma miniatura que não responde em tanto tempo libera a vez (ms). */
+    private readonly slowMs = 10_000,
+  ) {}
+
+  /**
+   * Chama `fn` quando o elemento aparecer na tela (ou chegar perto). Assim só entram na fila as
+   * miniaturas que alguém está vendo: as de baixo não ocupam a vez das que estão à vista.
+   */
+  whenVisible(target: Element, fn: () => void): void {
+    if (typeof IntersectionObserver === 'undefined') return fn();
+    this.observer ??= new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (!e.isIntersecting) continue;
+          const run = this.visible.get(e.target);
+          this.visible.delete(e.target);
+          this.observer?.unobserve(e.target);
+          run?.();
+        }
+      },
+      { rootMargin: '200px' },
+    );
+    this.visible.set(target, fn);
+    this.observer.observe(target);
+  }
 
   load(img: HTMLImageElement, urls: string[], onFail: () => void): void {
     const start = () => {
@@ -37,6 +65,8 @@ export class ThumbQueue {
         this.waiting.shift()?.();
       };
       img.addEventListener('load', done, { once: true });
+      // Servidor demorando: libera a vez (a imagem ainda pode chegar depois).
+      setTimeout(done, this.slowMs);
       loadWithFallback(img, urls, () => {
         done();
         onFail();
@@ -54,5 +84,7 @@ export class ThumbQueue {
     this.waiting.length = 0;
     this.loading = 0;
     this.generation++;
+    for (const el of this.visible.keys()) this.observer?.unobserve(el);
+    this.visible.clear();
   }
 }

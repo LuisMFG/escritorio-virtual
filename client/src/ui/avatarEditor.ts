@@ -39,6 +39,10 @@ export interface AvatarEditorOptions extends AvatarChoice {
   manifest: AvatarManifest;
   /** Prévia gerada por código quando o imager não responde (data URL). */
   fallbackPreview: (figure: string, dir: number) => Promise<string>;
+  /** Prévia montada no navegador (como na sala); `null` se não der. Sem ela, só o imager. */
+  composedPreview?: (figure: string, dir: number) => Promise<string | null>;
+  /** Miniatura "você vestindo a peça" montada no navegador (quando a imagem da peça falha). */
+  composedThumb?: (figure: string) => Promise<string | null>;
   saveLabel?: string;
   /** Miniaturas das peças (desligadas no modo sem internet, `?offline=1`). */
   thumbnails?: boolean;
@@ -57,6 +61,8 @@ type ClubFilter = 'all' | 'free' | 'club';
 const PREVIEW_DEBOUNCE_MS = 250;
 
 const thumbQueue = new ThumbQueue();
+/** Miniatura que não carregou de jeito nenhum: tenta de novo depois disso (ms). */
+const THUMB_RETRY_MS = 8000;
 
 /** Categorias da cabeça: a miniatura "vestida" mostra a parte de cima do avatar. */
 const HEAD_TYPES = new Set(['hd', 'hr', 'ha', 'he', 'ea', 'fa']);
@@ -99,6 +105,10 @@ function openEditor(opts: AvatarEditorOptions): Promise<AvatarChoice | null> {
   let dir = 3;
   let activeType = manifest.categories[0]!.type;
   let previewTimer = 0;
+  /** Cada prévia pedida ganha um número: só a mais recente aparece. */
+  let previewSeq = 0;
+  /** Prévias já montadas (visual + direção): girar não remonta. */
+  const previewCache = new Map<string, string>();
   let query = '';
   let club: ClubFilter = 'all';
   let shown = PAGE;
@@ -262,27 +272,49 @@ function openEditor(opts: AvatarEditorOptions): Promise<AvatarChoice | null> {
   }
 
   /** Prévia grande; `tryOn` mostra uma peça "no provador" (ao passar o mouse) sem escolher. */
+  /**
+   * Prévia grande; `tryOn` mostra uma peça "no provador" (ao passar o mouse) sem escolher.
+   * Monta no navegador primeiro (sem gastar a cota de renders do imager, que é do servidor
+   * todo); se não der, o imager; por último, o boneco provisório. A imagem nova só entra quando
+   * está pronta (a anterior fica até lá, em vez de sumir).
+   */
   function schedulePreview(tryOn?: string): void {
     clearTimeout(previewTimer);
     previewStage.classList.add('loading');
     previewStage.classList.toggle('trying', Boolean(tryOn));
-    previewTimer = window.setTimeout(() => {
-      const f = tryOn ?? figure;
-      const d = dir;
-      previewImg.onload = () => previewStage.classList.remove('loading');
-      loadWithFallback(
-        previewImg,
-        [
-          avatarImageUrl(f, { direction: d, size: 'l' }, '/hh'),
-          avatarImageUrl(f, { direction: d, size: 'l' }),
-        ],
-        () => {
-          void opts.fallbackPreview(f, d).then((url) => {
-            if (f === (tryOn ?? figure) && d === dir) previewImg.src = url;
-          });
-        },
-      );
-    }, PREVIEW_DEBOUNCE_MS);
+    previewTimer = window.setTimeout(
+      () => void showPreview(tryOn ?? figure, dir),
+      PREVIEW_DEBOUNCE_MS,
+    );
+  }
+
+  async function showPreview(f: string, d: number): Promise<void> {
+    const seq = ++previewSeq;
+    const done = (src: string) => {
+      if (seq !== previewSeq) return;
+      previewImg.src = src;
+      previewStage.classList.remove('loading');
+    };
+    const key = `${f}|${d}`;
+    const cached = previewCache.get(key);
+    if (cached) return done(cached);
+    const composed = await opts.composedPreview?.(f, d).catch(() => null);
+    if (seq !== previewSeq) return;
+    if (composed) {
+      if (previewCache.size > 120) previewCache.clear();
+      previewCache.set(key, composed);
+      return done(composed);
+    }
+    const tmp = new Image();
+    tmp.onload = () => done(tmp.src);
+    loadWithFallback(
+      tmp,
+      [
+        avatarImageUrl(f, { direction: d, size: 'l' }, '/hh'),
+        avatarImageUrl(f, { direction: d, size: 'l' }),
+      ],
+      () => void opts.fallbackPreview(f, d).then(done, () => done(previewImg.src)),
+    );
   }
 
   function renderGender(): void {
@@ -346,7 +378,8 @@ function openEditor(opts: AvatarEditorOptions): Promise<AvatarChoice | null> {
     moreBtn.textContent = `Mostrar mais (${matching.length - shown})`;
     for (const set of page) {
       // Sem largura/altura fixas: cada prévia tem a sua proporção (o CSS encaixa sem esticar).
-      const img = el('img', { alt: '', loading: 'lazy', className: 'set-thumb' });
+      // Sem `loading=lazy`: quem decide a hora é a fila (só as que estão à vista).
+      const img = el('img', { alt: '', className: 'set-thumb' });
       const btn = el('button', { type: 'button', className: 'set-item' }, [img]);
       btn.title =
         set.library && !set.library.startsWith('hh_human_')
@@ -357,24 +390,40 @@ function openEditor(opts: AvatarEditorOptions): Promise<AvatarChoice | null> {
       btn.setAttribute('aria-selected', String(set.id === selected));
       if (set.club > 0) btn.classList.add('set-club');
       if (set.animated) btn.classList.add('set-animated');
-      // Catálogo completo: prévia estática da CDN; peças básicas: o imager; sem nenhuma das
-      // duas, o seu avatar vestindo a peça (o imager monta qualquer peça).
+      // Miniatura, do mais rápido ao mais garantido: prévia estática da CDN (catálogo
+      // completo), a imagem da peça pelo servidor (imager, com cache), o seu avatar vestindo a
+      // peça montado aqui mesmo (não depende da cota do imager), o imager direto e, se nada
+      // der certo agora, tenta de novo daqui a pouco em vez de ficar só o número.
       const tryOn = withPart(figure, manifest, cat.type, set.id);
-      const wearing = avatarImageUrl(tryOn, { direction: 2, headDirection: 2 }, '/hh');
       const thumbs = [
         ...(set.rev && set.library ? [clothingPreviewUrl(set.library, set.id, set.rev)] : []),
         clothingSetImageUrl(set.id, { direction: 2 }, '/hh'),
-        clothingSetImageUrl(set.id, { direction: 2 }),
-        wearing,
       ];
-      img.addEventListener('load', () => {
-        if (img.src === wearing)
-          img.classList.add('worn', HEAD_TYPES.has(cat.type) ? 'head' : 'body');
-      });
+      const worn = (src: string) => {
+        if (!img.isConnected && !btn.contains(img)) btn.replaceChildren(img);
+        img.src = src;
+        img.classList.add('worn', HEAD_TYPES.has(cat.type) ? 'head' : 'body');
+      };
       const noThumb = () =>
         btn.replaceChildren(el('span', { className: 'set-fallback', textContent: `#${set.id}` }));
+      const lastResort = (retry: boolean) => {
+        void (opts.composedThumb?.(tryOn) ?? Promise.resolve(null))
+          .catch(() => null)
+          .then((url) => {
+            if (url) return worn(url);
+            loadWithFallback(img, [clothingSetImageUrl(set.id, { direction: 2 })], () => {
+              noThumb();
+              if (!retry) return;
+              window.setTimeout(() => {
+                if (!btn.isConnected) return;
+                btn.replaceChildren(img);
+                thumbQueue.load(img, thumbs, () => lastResort(false));
+              }, THUMB_RETRY_MS);
+            });
+          });
+      };
       if (opts.thumbnails === false) noThumb();
-      else thumbQueue.load(img, thumbs, noThumb);
+      else thumbQueue.whenVisible(btn, () => thumbQueue.load(img, thumbs, () => lastResort(true)));
       btn.addEventListener('click', () => update(withPart(figure, manifest, cat.type, set.id)));
       // Provador: passar o mouse mostra a peça na prévia grande.
       btn.addEventListener('pointerenter', (e) => {
@@ -408,7 +457,6 @@ function openEditor(opts: AvatarEditorOptions): Promise<AvatarChoice | null> {
     countInfo.textContent = `${total} ${total === 1 ? 'fantasia' : 'fantasias'}`;
     const groups = themes.map(({ theme, costumes }) => {
       const items = costumes.map((c) => {
-        const tryOn = applyCostume(figure, c, gender);
         const img = el('img', { alt: '', loading: 'lazy', className: 'set-thumb worn body' });
         const btn = el('button', { type: 'button', className: 'set-item costume-item' }, [
           img,
@@ -417,25 +465,11 @@ function openEditor(opts: AvatarEditorOptions): Promise<AvatarChoice | null> {
         btn.setAttribute('role', 'option');
         btn.setAttribute('aria-label', `${theme}: ${c.label}`);
         btn.setAttribute('aria-selected', String(wearsCostume(figure, c, gender)));
-        const thumbs = [
-          avatarImageUrl(tryOn, { direction: 2, headDirection: 2 }, '/hh'),
-          avatarImageUrl(tryOn, { direction: 2, headDirection: 2 }),
-        ];
-        // Sem o imager: o avatar montado aqui mesmo (como a prévia grande).
-        const local = () =>
-          void opts
-            .fallbackPreview(tryOn, 2)
-            .then((url) => (img.src = url))
-            .catch(() => img.remove());
-        if (opts.thumbnails === false) local();
-        else thumbQueue.load(img, thumbs, local);
+        // Miniatura pronta (no visual padrão; gerada por `npm run assets:costumes`): sem gastar
+        // renders do imager, que atrasavam a prévia e as roupas do avatar novo.
+        img.src = `/assets/costumes/${c.id}-${gender}.png`;
+        img.addEventListener('error', () => img.remove(), { once: true });
         btn.addEventListener('click', () => update(applyCostume(figure, c, gender)));
-        btn.addEventListener('pointerenter', (e) => {
-          if (e.pointerType === 'mouse') schedulePreview(tryOn);
-        });
-        btn.addEventListener('pointerleave', (e) => {
-          if (e.pointerType === 'mouse') schedulePreview();
-        });
         return btn;
       });
       const list = el('div', { className: 'costume-list' }, items);
