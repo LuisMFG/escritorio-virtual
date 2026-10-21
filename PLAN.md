@@ -1212,3 +1212,226 @@ Pedido: uma TV onde todo mundo que interage assiste vídeos do YouTube juntos, c
 - **Fantasias lentas e "salvar não funciona" (21/10):** a causa era a cota de renders do imager no servidor (45 por minuto, para respeitar o limite público de 60/IP da HabboAssets). A aba Fantasias pedia 25 renders de uma vez (cada miniatura era você vestindo a fantasia), mais um por fantasia sob o mouse e até 8 por visual com a prévia girando; a cota acabava, a prévia ficava em branco e — o pior — o download das roupas (SWF) usava a mesma cota, então o avatar novo não montava na sala depois de salvar. Correções: o SWF agora usa a cota da CDN; as miniaturas das fantasias são imagens prontas (`npm run assets:costumes`, 50 PNG); passar o mouse numa fantasia não pede render; a prévia grande é montada no navegador como na sala (o imager vira reserva) e a imagem antiga fica até a nova estar pronta; e um avatar que não montou é tentado de novo (4 s, 15 s, 45 s) em vez de ficar na reserva para sempre.
 - **Miniaturas do Meu visual sempre aparecem:** só entram na fila as que estão à vista (antes as de fora da tela seguravam a vez); servidor lento libera a vez em 10 s; se a imagem da peça falhar (cota do imager), a miniatura é você vestindo a peça montado no navegador; e, se nada der certo, tenta de novo em 8 s em vez de ficar só o número. Conferido simulando o imager fora do ar: todas as miniaturas visíveis apareceram.
 
+
+## 19. Animações perfeitas, danças, emotes, empilhamento e Salão de Jogos (proposto em 21/10/2026)
+
+Pedido: revisar animações, interação com objetos e empilhamento. Encontrar e documentar os bugs, depois implementar:
+1. as correções;
+2. danças sincronizadas;
+3. emotes novos com "toca aqui";
+4. empilhamento melhor;
+5. um Salão de Jogos com sinuca (estilo 8 Ball Pool) e ping-pong em tempo real.
+
+O levantamento completo dos bugs está em [`docs/BUGS-ANIMACOES.md`](docs/BUGS-ANIMACOES.md): 20 de animação (AN), 15 de interação (IN) e 20 de Decorar/empilhar (DE), cada um com como reproduzir, causa provável e gravidade.
+
+**Decisões (21/10):**
+
+| Assunto | Decisão |
+|---|---|
+| Sinuca e ping-pong | Jogados num **painel na tela, com vista de cima**. O avatar fica ao lado da mesa e quem assiste abre o mesmo painel. |
+| Danças | **Sem som**, porque as músicas têm direitos autorais. |
+| Raquete do ping-pong | Pelo **mouse ou toque**. |
+| Sinuca | **30 s por tacada**. Se o tempo acabar é falta, com bola na mão para o adversário. |
+| Danças "perto" | Até 5 tiles. |
+| Toca aqui | Valida sozinho se a outra pessoa está perto, sem pedir confirmação. |
+
+**Ordem por impacto e esforço** (esforço relativo):
+
+| Fase | O quê | Impacto | Esforço |
+|---|---|---|---|
+| 52 | Animação e interação sem bugs | alto | médio |
+| 53 | Decorar sem frustração | alto | médio |
+| 54 | Emotes novos e "toca aqui" | médio-alto | médio |
+| 55 | Danças sincronizadas | médio | médio-alto |
+| 56 | Empilhamento avançado | médio | médio-alto |
+| 57 | Salão de Jogos: sala, mesas, assistir e placar | alto | médio |
+| 58 | Ping-pong em tempo real | alto | alto |
+| 59 | Sinuca 8 Ball | alto | muito alto |
+
+As fases 52 e 53 vêm primeiro porque corrigem o que já existe e é usado todo dia. A base de poses por parte do corpo da Fase 54 é usada pelas danças (55). O Salão (57) prepara as mesas e os espectadores para os dois jogos (58 e 59).
+
+### Fase 52 — Animação e interação sem bugs
+- **Corrige:**
+  - animação: AN1–AN8, AN10, AN11, AN13 e AN14;
+  - interação: IN1–IN11, IN13 e IN15.
+- **Critérios de aceite:**
+  1. Nas 8 direções, segurar e beber mostram os dois braços e o copo. Acenar, joinha e placa usam um braço de cada lado. Teste da montagem por direção e grade de poses conferida.
+  2. Clicar em qualquer cama, do escritório ou do catálogo e com ou sem estados, faz o avatar ir até ela e deitar por qualquer tile livre. Também funciona encostada na parede, com cabeça e corpo à vista.
+  3. Chegando no assento por qualquer lado (inclusive na diagonal) e com atraso de rede, o avatar termina sentado e virado como o assento. Nunca fica em pé, de lado ou de costas.
+  4. Sentado ou deitado:
+     - clicar num tile que não dá para alcançar não tira a pessoa do lugar;
+     - `/levantar` sai para um tile livre ao lado;
+     - usar um móvel não gira o corpo.
+  5. Criar, editar ou excluir sala não levanta ninguém. Quem estava num móvel apagado levanta no chão.
+  6. Uma recusa ao ir sentar ou usar não trava os comandos, e vale sempre a última intenção.
+  7. Um computador em cima de uma mesa é usável de qualquer lado da mesa, inclusive por quem está sentado em frente.
+  8. Duplo clique usa o móvel uma vez só, e o teleporte não dispara duas vezes.
+  9. Avatar nunca some nem trava a cena por textura liberada em uso. Teste do cache com textura na tela.
+  10. Deitado, gestos só mudam o rosto. Dança sentado ou deitado é recusada com aviso.
+  11. O copo aparece já no primeiro uso, e o item não some durante o aceno.
+- **Testes:**
+  - unidade: montagem por direção, posturas, caminho, movimento;
+  - sala: deitar, sentar, levantar, editar sala, usar em cima da mesa;
+  - ponta a ponta: deitar, sentar chegando de lado, bebida.
+
+### Fase 53 — Decorar sem frustração
+- **Corrige:** DE1–DE10, DE13–DE17 e DE20.
+- **Critérios de aceite:**
+  1. Ao pegar um objeto por qualquer ponto do desenho e arrastar, ele acompanha o ponteiro sem pular para trás. Vale também para a parte de cima, para móveis altos no fundo e para coisas em cima de mesas.
+  2. Só empilha quando o ponteiro está sobre o tampo. Encostar ao lado de uma mesa não sobe nela.
+  3. O fantasma verde ou vermelho fica visível na altura do alvo, por cima dos móveis, e a seleção também aparece.
+  4. Teclas e soltar:
+     - soltar não pisca de volta para o lugar antigo;
+     - R R gira 180°;
+     - R durante o arrasto gira o fantasma;
+     - Esc cancela.
+  5. Desfazer e refazer:
+     - só mudam depois da confirmação do servidor;
+     - nunca duplicam;
+     - o Desfazer do aviso desfaz aquela ação.
+  6. Duplo clique não cria cópias empilhadas.
+  7. Trocar a cor de uma base com coisas em cima é recusado se a cor nova não tiver o mesmo tampo.
+  8. No celular, tocar posiciona o fantasma e um botão confirma. Dois dedos não bagunçam.
+- **Testes:**
+  - ponta a ponta de arrasto com mouse: pela parte de cima, por cima de mesa, móvel alto, R no arrasto, desfazer depois de uma recusa;
+  - unidade: escolha do tile com altura, histórico com falha.
+
+### Fase 54 — Emotes novos e "toca aqui"
+- **Base:**
+  - poses por parte do corpo (ação, quadro, deslocamento e direção por grupo: cabeça, tronco, braço esquerdo, braço direito, pernas);
+  - animações descritas como dados (quadros e tempo).
+  - A arte do Habbo não tem esses movimentos prontos: eles são montados com os desenhos que existem, como nas danças do próprio Habbo.
+- **Emotes, cada um com comando e no menu:**
+
+  | Emote | Comando |
+  |---|---|
+  | palmas | `/palmas` |
+  | facepalm | `/facepalm` |
+  | apontar | `/apontar` |
+  | reverência | `/reverencia` |
+  | pular | `/pular` |
+  | chorar | `/chorar` |
+  | dormir | `/dormir` |
+  | pensar | `/pensar` |
+  | comemorar | `/comemorar` |
+  | toca aqui, entre dois avatares | `/tocaaqui nome` ou o botão "Toca aqui" no cartão da pessoa |
+
+- **Critérios de aceite:**
+  1. Cada emote está no menu e tem comando. A animação é reconhecível nas 8 direções, sem braços trocados (grade de poses conferida).
+  2. Sentado, só tocam os que fazem sentido. Deitado, só os de rosto, como dormir e chorar.
+  3. Toca aqui:
+     - com a outra pessoa a até 1 tile (ou andando até ela), os dois se viram e batem as mãos ao mesmo tempo, com um efeito, e todos na sala veem;
+     - se ela estiver longe ou ocupada, aparece um aviso.
+- **Testes:**
+  - unidade: pose e duração de cada emote, comandos;
+  - sala: toca aqui valida a distância e vira os dois;
+  - ponta a ponta: menu, comando e toca aqui em dois navegadores.
+
+### Fase 55 — Danças sincronizadas
+- **Danças:** Macarena, Thriller, Gangnam Style, YMCA, Floss, Robô e Moonwalk. São inspiradas nas músicas e montadas quadro a quadro com a arte do Habbo (base da Fase 54).
+- **Funcionamento:**
+  - Começa com `/dancar nome` (ou `/macarena`…) ou pelo menu de danças.
+  - Fica em loop até andar, sentar, deitar, trocar de sala ou usar `/parar`.
+  - A dança é estado no servidor (qual dança e quando começou), não um emote passageiro.
+  - O relógio do servidor dá o compasso. Quem começa a mesma dança perto de alguém que já dança (até 5 tiles) entra no mesmo tempo.
+- **Critérios de aceite:**
+  1. Cada dança roda em loop e para ao andar ou com `/parar`.
+  2. Em dois navegadores, duas pessoas dançando a mesma dança perto ficam no mesmo quadro (diferença de no máximo 1). Quem entra depois na sala vê a dança no tempo certo.
+  3. Não dá para dançar sentado ou deitado (com aviso). O antigo `/dancar` vira a escolha de dança.
+- **Testes:**
+  - unidade: quadro a partir do relógio, regra de "perto";
+  - sala: começa e para;
+  - ponta a ponta: dois navegadores no mesmo tempo.
+
+### Fase 56 — Empilhamento avançado
+- **Qualquer móvel empilhável sobre outro.**
+  - A regra de tampo nova vale para todo móvel sólido com altura, menos assentos, camas e uma lista de exceções.
+  - Blocos e plataformas servem de base.
+  - Corrige DE19 e IN14.
+- **Altura e profundidade corretas.**
+  - Os móveis do escritório passam a usar o tampo do catálogo.
+  - A profundidade considera a faixa de altura, para itens acima da cabeça de quem passa.
+- **Ajuste fino de altura, como a ferramenta do Habbo.**
+  - Com o móvel selecionado: Shift + roda do mouse ou botões ▲▼ no painel, em passos de 0,1, até 6.
+  - Fica salvo e visível para todos.
+- **Mover a base leva junto o que está em cima**, inclusive ao girar. O desfazer devolve tudo.
+- **Sentar em móveis empilhados** (cadeira em cima de plataforma ou bloco): o avatar fica na altura do assento e levanta para o lado.
+- **Critérios de aceite:** os cinco itens acima funcionando e testados. Um item empilhado nunca é desenhado atrás da base em nenhuma das 4 rotações, nem atrás de quem passa por trás.
+- **Testes:**
+  - unidade: regras de tampo, ajuste, grupo;
+  - sala: mover em grupo, sentar empilhado;
+  - ponta a ponta: empilhar, ajustar a altura, mover em grupo.
+
+### Fase 57 — Salão de Jogos: sala, mesas, assistir e placar
+- **Sala nova "Salão de Jogos"** com porta na Recepção (e de volta). Ela aparece sozinha nos servidores já instalados ao atualizar, como foi feito com a Recepção.
+- **Mesas:**
+  - sinuca: a mesa "Snooker" do catálogo do Habbo;
+  - ping-pong: arte própria em pixel art, porque o Habbo não tem;
+  - mais lugares para a torcida.
+- **Base comum das mesas de jogo:**
+  - entrar como jogador nas vagas (1×1 ou 2×2), começar e desistir;
+  - qualquer pessoa da sala abre a mesa e assiste;
+  - placar flutuando sobre a mesa na sala;
+  - quem sai da sala ou fecha a aba perde a vaga, com W.O. depois de alguns segundos.
+- **Critérios de aceite:**
+  1. A porta existe nas duas instalações (nova e atualizada).
+  2. Clicar na mesa abre o painel com as vagas. Quem não joga assiste com placar ao vivo, e o placar também aparece sobre a mesa na sala.
+  3. Sair libera a vaga.
+- **Testes:** sala (vagas, assistir, W.O.) e ponta a ponta (porta, abrir a mesa, assistir).
+
+### Fase 58 — Ping-pong em tempo real
+- **Jogo:** painel com vista de cima e arte própria.
+  - raquete pelo mouse ou toque;
+  - bola com altura, que quica na mesa;
+  - física no servidor a 60 Hz, com a raquete local respondendo na hora e a bola suavizada no cliente.
+- **Regras:**
+  - saque alternado a cada 2 pontos (a cada ponto no 10–10);
+  - set de 11 com 2 de vantagem;
+  - melhor de 3.
+- **Critérios de aceite:**
+  1. Uma partida completa em dois navegadores, com placar, sets, saque e deuce certos.
+  2. Com 150 ms de atraso simulado continua jogável.
+  3. Espectadores veem a bola e o placar em tempo real.
+- **Testes:**
+  - unidade: pontuação, saque, sets, física da rebatida e do quique;
+  - sala: partida simulada;
+  - ponta a ponta: dois navegadores marcando pontos.
+
+### Fase 59 — Sinuca 8 Ball
+- **Física no servidor.**
+  - Bolas com atrito, tabelas e caçapas, e efeito na branca (alto, baixo e de lado).
+  - É determinística e compartilhada, para o cliente animar igual. O servidor manda as posições finais.
+- **Controles no estilo do 8 Ball Pool:**
+  - mira arrastando, com linha-guia (bola-fantasma e direção da bola acertada);
+  - força puxando o taco;
+  - efeito na branca;
+  - bola na mão depois de falta (arrastar a branca);
+  - cantar a caçapa da 8;
+  - tempo por tacada.
+- **Regras:**
+  - abertura;
+  - mesa aberta até a primeira bola encaçapada definir lisas ou listradas;
+  - faltas: branca na caçapa, não acertar nenhuma, acertar primeiro a bola errada, nenhuma bola na tabela depois do contato;
+  - bola na mão;
+  - vitória e derrota com a 8: cedo, na caçapa errada ou com falta;
+  - 1×1 ou 2×2, com as duplas alternando tacadas.
+- **Visual próprio:** mesa, bolas numeradas e taco, sem copiar a arte do jogo original. Espectadores veem o placar e as bolas restantes.
+- **Critérios de aceite:**
+  1. Partida completa 1×1 e 2×2 com todas as regras, inclusive cantar a 8 e bola na mão.
+  2. A linha-guia mostra a bola-fantasma e o caminho da bola acertada. Força e efeito mudam a tacada de forma perceptível; com efeito para trás, a branca volta.
+  3. Jogadores e espectadores veem as mesmas posições no fim de cada tacada.
+- **Testes:**
+  - unidade: colisões, tabelas, caçapas e efeito; cada falta, atribuição de grupo e a 8;
+  - sala: partidas 1×1 e 2×2 simuladas;
+  - ponta a ponta: tacada e placar em dois navegadores.
+
+### Extras sugeridos (fora do pedido; dá para encaixar depois)
+
+| Código | Ideia | Impacto | Esforço |
+|---|---|---|---|
+| X1 | **Olhar para quem fala:** a cabeça vira para quem fala por perto (usa a direção da cabeça da Fase 54) | médio | baixo |
+| X2 | **Cochilo automático:** ausente há 10 min, fecha os olhos e mostra "Zzz" (usa o emote dormir) | baixo | baixo |
+| X3 | **Ranking e conquistas do Salão de Jogos:** vitórias, sequência, "Mestre da Sinuca", "Rei do Ping-pong" | médio | médio |
+| X4 | **Torcida:** botões de reação para quem assiste (aplausos, "uuh!") sobre a mesa | médio | baixo |
+| X5 | **Gesto de "pegar"** na geladeira ou no café antes de ficar com o item | baixo | baixo |
+| X6 | **Teste visual automático das poses:** grade comparada com imagens de referência, para pegar regressões de animação | médio | médio |
