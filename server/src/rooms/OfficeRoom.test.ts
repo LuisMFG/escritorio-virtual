@@ -12,6 +12,7 @@ import {
   STEP_MS,
   type ChatMessage,
   type EmoteMessage,
+  type HighFiveMessage,
   type Furni,
   type PresenceResponse,
   type RoomTransferMessage,
@@ -1608,6 +1609,97 @@ describe('OfficeRoom', () => {
         y: 2,
         z: expect.closeTo(0.8, 3),
       });
+    });
+  });
+  describe('emotes e toca aqui (Fase 54)', () => {
+    /** Sala vazia 8×6 (entrada em 1,4); cada um entra e anda até o seu tile. */
+    async function people(...spots: [string, number, number][]) {
+      const roomId = svc.rooms.create('Teste Fase 54', svc.furniDefs).id;
+      const out: { room: Awaited<ReturnType<typeof join>>; me: () => Player }[] = [];
+      for (const [name, x, y] of spots) {
+        const room = await join(newUser(name).token, roomId);
+        const me = () => room.state.players.get(room.sessionId)! as unknown as Player;
+        room.send(ClientMessage.Move, { x, y });
+        out.push({ room, me });
+        await waitFor(() => me().x === x && me().y === y && me().action === 'idle', 6000);
+      }
+      return out;
+    }
+    type Player = { x: number; y: number; dir: number; action: string };
+
+    it('lado a lado: os dois se viram e batem as mãos, e todos na sala veem', async () => {
+      const [ana, beto, carla] = await people(['Ana', 3, 2], ['Beto', 4, 2], ['Carla', 6, 5]);
+      const seen = carla!.room.waitForMessage(ServerMessage.HighFive) as Promise<HighFiveMessage>;
+      ana!.room.send(ClientMessage.HighFive, { target: beto!.room.sessionId });
+      expect(await seen).toEqual({ a: ana!.room.sessionId, b: beto!.room.sessionId });
+      await waitFor(() => ana!.me().dir === 2 && beto!.me().dir === 6);
+    }, 15_000);
+
+    it('um pouco longe: anda até o lado da pessoa e bate ao chegar', async () => {
+      const [ana, beto] = await people(['Ana', 1, 4], ['Beto', 5, 4]);
+      const seen = beto!.room.waitForMessage(ServerMessage.HighFive) as Promise<HighFiveMessage>;
+      ana!.room.send(ClientMessage.HighFive, { target: beto!.room.sessionId });
+      expect(await seen).toMatchObject({ a: ana!.room.sessionId });
+      // O aviso chega antes da atualização do estado: espera a posição final.
+      await waitFor(() => Math.max(Math.abs(ana!.me().x - 5), Math.abs(ana!.me().y - 4)) === 1);
+      expect(ana!.me().action).toBe('idle');
+    }, 15_000);
+
+    it('longe demais, ocupada ou sentado: avisa e não bate', async () => {
+      const [ana, beto] = await people(['Ana', 1, 4], ['Beto', 8, 1]);
+      const err = (room: Awaited<ReturnType<typeof join>>) =>
+        room.waitForMessage(ServerMessage.Error) as Promise<ErrorMessage>;
+      let e = err(ana!.room);
+      ana!.room.send(ClientMessage.HighFive, { target: beto!.room.sessionId });
+      expect((await e).message).toMatch(/está longe/);
+
+      // Ocupado (status) também não.
+      beto!.room.send(ClientMessage.Move, { x: 2, y: 4 });
+      await waitFor(() => beto!.me().x === 2 && beto!.me().action === 'idle', 6000);
+      beto!.room.send(ClientMessage.SetStatus, { status: 'busy' });
+      await wait(100);
+      e = err(ana!.room);
+      ana!.room.send(ClientMessage.HighFive, { target: beto!.room.sessionId });
+      expect((await e).message).toMatch(/status Ocupado/);
+
+      // Sentado no chão: levante antes.
+      beto!.room.send(ClientMessage.SetStatus, { status: 'available' });
+      ana!.room.send(ClientMessage.Posture, { posture: 'sit' });
+      await wait(150);
+      e = err(ana!.room);
+      ana!.room.send(ClientMessage.HighFive, { target: beto!.room.sessionId });
+      expect((await e).message).toBe('Levante para tocar aqui.');
+    }, 15_000);
+
+    it('emotes respeitam a postura; o toca aqui não vale como emote solto', async () => {
+      const [ana] = await people(['Ana', 3, 3]);
+      const room = ana!.room;
+      const err = () => room.waitForMessage(ServerMessage.Error) as Promise<ErrorMessage>;
+      let e = err();
+      room.send(ClientMessage.Emote, { emote: 'highfive' });
+      expect((await e).message).toMatch(/tocaaqui/);
+      room.send(ClientMessage.Posture, { posture: 'sit' });
+      await wait(150);
+      e = err();
+      room.send(ClientMessage.Emote, { emote: 'jump' });
+      expect((await e).message).toBe('Levante para pular.');
+      // Sentado, palmas vale: todos veem.
+      const played = room.waitForMessage(ServerMessage.Emote) as Promise<EmoteMessage>;
+      room.send(ClientMessage.Emote, { emote: 'clap' });
+      expect((await played).emote).toBe('clap');
+    });
+
+    it('deitado, só os emotes de rosto', async () => {
+      const [ana] = await people(['Ana', 3, 3]);
+      const room = ana!.room;
+      room.send(ClientMessage.Posture, { posture: 'lay' });
+      await wait(150);
+      const e = room.waitForMessage(ServerMessage.Error) as Promise<ErrorMessage>;
+      room.send(ClientMessage.Emote, { emote: 'clap' });
+      expect((await e).message).toMatch(/Deitado, só dá para emotes de rosto/);
+      const sleep = room.waitForMessage(ServerMessage.Emote) as Promise<EmoteMessage>;
+      room.send(ClientMessage.Emote, { emote: 'sleep' });
+      expect((await sleep).emote).toBe('sleep');
     });
   });
 });

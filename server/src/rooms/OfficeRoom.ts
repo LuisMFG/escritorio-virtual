@@ -57,6 +57,13 @@ import {
   type ChatDeletedMessage,
   type KickedMessage,
   emoteSchema,
+  highFiveSchema,
+  emoteRefusal,
+  emotePosture,
+  EMOTES,
+  HIGH_FIVE_RANGE,
+  type EmoteDef,
+  type HighFiveMessage,
   statusSchema,
   typingSchema,
   ClientMessage,
@@ -149,7 +156,11 @@ interface SitIntent {
   seat: TilePoint;
   entry: TilePoint;
 }
-type Intent = SitIntent | { kind: 'use'; furniId: string; at: TilePoint };
+type Intent =
+  | SitIntent
+  | { kind: 'use'; furniId: string; at: TilePoint }
+  /** Andando até alguém para o toca aqui (Fase 54): bate ao chegar. */
+  | { kind: 'highfive'; target: string; at: TilePoint };
 
 export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient }> {
   override maxClients = 30;
@@ -282,6 +293,9 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     }),
     [ClientMessage.Emote]: validate(emoteSchema, (client, msg) =>
       this.handleEmote(client as OfficeClient, msg),
+    ),
+    [ClientMessage.HighFive]: validate(highFiveSchema, (client, msg) =>
+      this.handleHighFive(client as OfficeClient, msg.target),
     ),
     [ClientMessage.Posture]: validate(postureSchema, (client, msg) =>
       this.handlePosture(client as OfficeClient, msg.posture),
@@ -808,6 +822,17 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     if (intent?.kind === 'use' && intent.at.x === m.x && intent.at.y === m.y) {
       this.intents.delete(sessionId);
       this.arriveToUse(sessionId, intent.furniId);
+      return true;
+    }
+    if (intent?.kind === 'highfive' && intent.at.x === m.x && intent.at.y === m.y) {
+      this.intents.delete(sessionId);
+      // Parou ao lado: confere de novo (a pessoa pode ter saído de perto) e bate.
+      m.action = 'idle';
+      const refusal = this.highFiveRefusal(sessionId, intent.target, 1);
+      const client = this.clients.getById(sessionId) as OfficeClient | undefined;
+      if (refusal) {
+        if (client) this.sendError(client, ErrorCode.InvalidMove, refusal);
+      } else this.highFive(sessionId, intent.target);
       return true;
     }
     const door = this.layout.doors.find((d) => d.x === m.x && d.y === m.y);
@@ -1839,13 +1864,95 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     if (!player) return;
     if (!this.emoteLimiter.tryTake(client.sessionId))
       return this.sendError(client, ErrorCode.RateLimit);
-    if (msg.emote === 'dance' && (player.action === 'sit' || player.action === 'lay')) {
-      return this.sendError(client, ErrorCode.InvalidMove, 'Levante para dançar.');
+    // O toca aqui precisa de outra pessoa: vem pela mensagem própria (Fase 54).
+    if ((EMOTES[msg.emote] as EmoteDef).needsTarget) {
+      return this.sendError(
+        client,
+        ErrorCode.InvalidMove,
+        'Use /tocaaqui nome ou o botão "Toca aqui" no cartão da pessoa.',
+      );
     }
+    // Sentado, só os que fazem sentido; deitado, só os de rosto (Fase 54).
+    const refusal = emoteRefusal(msg.emote, emotePosture(player.action));
+    if (refusal) return this.sendError(client, ErrorCode.InvalidMove, refusal);
     this.broadcast(ServerMessage.Emote, {
       sessionId: client.sessionId,
       emote: msg.emote,
     } satisfies EmoteMessage);
+  }
+
+  // ---------- Toca aqui (Fase 54) ----------
+
+  /**
+   * Toca aqui com outra pessoa: a até 1 tile, bate na hora; até `HIGH_FIVE_RANGE`, anda até o
+   * lado dela e bate ao chegar. Longe ou ocupada, avisa quem pediu.
+   */
+  private handleHighFive(client: OfficeClient, targetId: string): void {
+    const me = this.state.players.get(client.sessionId);
+    if (!me) return;
+    if (!this.emoteLimiter.tryTake(client.sessionId))
+      return this.sendError(client, ErrorCode.RateLimit);
+    const refusal = this.highFiveRefusal(client.sessionId, targetId, HIGH_FIVE_RANGE);
+    if (refusal) return this.sendError(client, ErrorCode.InvalidMove, refusal);
+    const other = this.state.players.get(targetId)!;
+    const here = me.nextX === me.x && me.nextY === me.y;
+    if (here && Math.max(Math.abs(me.x - other.x), Math.abs(me.y - other.y)) <= 1) {
+      this.intents.delete(client.sessionId);
+      return this.highFive(client.sessionId, targetId);
+    }
+    this.intents.delete(client.sessionId);
+    const fp = { minX: other.x, maxX: other.x, minY: other.y, maxY: other.y };
+    const at = this.walkNextTo(client.sessionId, me, fp);
+    if (!at) {
+      return this.sendError(
+        client,
+        ErrorCode.InvalidMove,
+        `Não dá para chegar perto de ${other.name}.`,
+      );
+    }
+    this.intents.set(client.sessionId, { kind: 'highfive', target: targetId, at });
+  }
+
+  /** Por que não dá para tocar aqui agora (`null` = dá). `range`: até onde vale a distância. */
+  private highFiveRefusal(sessionId: string, targetId: string, range: number): string | null {
+    const me = this.state.players.get(sessionId);
+    const other = this.state.players.get(targetId);
+    if (!me) return 'Você saiu da sala.';
+    if (!other) return 'Essa pessoa não está nesta sala.';
+    // A mesma pessoa em outra aba também conta como "você mesmo".
+    if (targetId === sessionId || other.userId === me.userId) {
+      return 'Não dá para tocar aqui em você mesmo.';
+    }
+    if (me.action === 'sit' || me.action === 'lay') return 'Levante para tocar aqui.';
+    if (
+      other.action === 'sit' ||
+      other.action === 'lay' ||
+      other.nextX !== other.x ||
+      other.nextY !== other.y
+    ) {
+      return `${other.name} não pode tocar aqui agora.`;
+    }
+    if (other.focusKind === 'focus' && other.focusUntil > Date.now()) {
+      return `${other.name} está em modo foco.`;
+    }
+    if (other.status === 'busy') return `${other.name} está com o status Ocupado.`;
+    const from = me.nextX !== me.x || me.nextY !== me.y ? { x: me.nextX, y: me.nextY } : me;
+    if (Math.max(Math.abs(from.x - other.x), Math.abs(from.y - other.y)) > range) {
+      return range > 1
+        ? `${other.name} está longe. Chegue mais perto para tocar aqui.`
+        : `${other.name} saiu de perto.`;
+    }
+    return null;
+  }
+
+  /** Os dois se viram um para o outro e batem as mãos; todos na sala veem. */
+  private highFive(a: string, b: string): void {
+    const pa = this.state.players.get(a);
+    const pb = this.state.players.get(b);
+    if (!pa || !pb) return;
+    pa.dir = directionBetween(pa, pb, pa.dir);
+    pb.dir = directionBetween(pb, pa, pb.dir);
+    this.broadcast(ServerMessage.HighFive, { a, b } satisfies HighFiveMessage);
   }
 
   private handleUpdateAvatar(client: OfficeClient, msg: UpdateAvatarMessage): void {
