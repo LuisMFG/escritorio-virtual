@@ -11,6 +11,7 @@ import { BackupScheduler } from './services/BackupService.js';
 import { loadSecretKey } from './util/secretBox.js';
 import { HabboAssetsClient } from './assets/HabboAssetsClient.js';
 import { imagerMeasure, offlineMeasure } from './services/FurniDefService.js';
+import { OfflineTvMeta } from './services/TvService.js';
 
 /** Tamanho máximo de uma mensagem do WebSocket (a oferta WebRTC tem uns 5–8 KB). */
 const WS_MAX_PAYLOAD = 32 * 1024;
@@ -29,6 +30,8 @@ const services = createServices(
       process.env.FURNI_MEASURE === 'offline'
         ? offlineMeasure()
         : imagerMeasure(new HabboAssetsClient(), config.assetCacheDir),
+    // TV (Fase 51): nos testes, sem buscar o título no YouTube.
+    ...(process.env.TV_OEMBED === 'offline' ? { tvMeta: new OfflineTvMeta() } : {}),
   },
 );
 if (config.spotify) console.log('[spotify] integração ligada');

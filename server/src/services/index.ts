@@ -38,6 +38,7 @@ import { SettingsService } from './SettingsService.js';
 import { EventEmitter } from 'node:events';
 import type { KickScope } from '@office/shared';
 import { CallService } from './CallService.js';
+import { OEmbedTvMeta, TvService, type TvMeta } from './TvService.js';
 import { TurnService, type TurnConfig } from './TurnService.js';
 
 /** Ações de moderação que as salas abertas precisam aplicar. */
@@ -91,6 +92,8 @@ export interface Services {
   /** Chamadas de áudio por convite (Fase 49). */
   calls: CallService;
   turn: TurnService;
+  /** TVs com YouTube (Fase 51). */
+  tv: TvService;
 }
 
 export function createServices(
@@ -107,6 +110,8 @@ export function createServices(
     /** Mede um móvel do catálogo (no servidor: pelo imager). */
     measureFurni?: (item: CatalogItem, id: string) => Promise<FurniManifestEntry>;
     catalogFile?: string;
+    /** Título dos vídeos da TV (padrão: oEmbed do YouTube). */
+    tvMeta?: TvMeta;
   } = {},
 ): Services {
   const users = new UserService(db);
@@ -187,6 +192,7 @@ export function createServices(
     avatarManifest: loadAvatarManifest(),
     calls,
     turn: new TurnService(opts.turn, opts.http),
+    tv: new TvService(opts.tvMeta ?? new OEmbedTvMeta(opts.http)),
   };
 }
 

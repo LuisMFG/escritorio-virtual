@@ -66,6 +66,8 @@ export default defineConfig({
         JIRA_SITE: 'http://127.0.0.1:2601',
         // Catálogo completo sem o imager (Fase 36).
         FURNI_MEASURE: 'offline',
+        // TV (Fase 51): títulos sem ir ao YouTube.
+        TV_OEMBED: 'offline',
       },
     },
   ],
