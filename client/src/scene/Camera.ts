@@ -35,6 +35,12 @@ export function fitZoom(w: number, h: number, areaW: number, areaH: number): num
 /** Distância (px) a partir da qual um clique vira arrasto. */
 const DRAG_THRESHOLD = 5;
 
+/** De onde veio um toque/clique: dedo ou mouse, e qual ponteiro. */
+export interface TapInfo {
+  touch: boolean;
+  id: number;
+}
+
 /**
  * Câmera 2D: arrastar para mover; roda do mouse, pinça ou botões para zoom. Ao abrir, a sala é
  * enquadrada na área livre da tela (descontando a interface). Cliques sem arrasto vão para `onTap`.
@@ -43,12 +49,20 @@ export class Camera {
   private zoomValue = DEFAULT_ZOOM;
   /** A pessoa escolheu o zoom (botões/roda): o enquadramento automático não mexe mais. */
   private userZoomed = false;
-  private pointerDown: { x: number; y: number; worldX: number; worldY: number } | null = null;
+  private pointerDown: {
+    x: number;
+    y: number;
+    worldX: number;
+    worldY: number;
+    touch: boolean;
+    id: number;
+  } | null = null;
   private dragging = false;
   private userMoved = false;
   /** Acumula a roda do mouse para trackpads não pularem vários níveis de uma vez. */
   private wheelAccum = 0;
-  private readonly tapListeners: ((global: Point) => void)[] = [];
+  private readonly tapListeners: ((global: Point, info: TapInfo) => void)[] = [];
+  private readonly pinchListeners: (() => void)[] = [];
   private readonly longPressListeners: ((global: Point) => void)[] = [];
   private longPressTimer = 0;
   /** O gesto atual já virou "segurar": soltar não conta como toque. */
@@ -60,7 +74,7 @@ export class Camera {
   /** Durante e logo após a pinça nada vira toque nem arrasto até todos os dedos saírem. */
   private pinching = false;
   /** Se devolver true no pointerdown, a câmera ignora o gesto (ex.: arrastar um móvel). */
-  private pointerGuard: ((global: Point) => boolean) | null = null;
+  private pointerGuard: ((e: FederatedPointerEvent) => boolean) | null = null;
 
   constructor(
     private readonly app: Application,
@@ -102,6 +116,7 @@ export class Camera {
     window.removeEventListener('pointercancel', this.handleTouchUp);
     this.app.renderer.off('resize', this.onResize, this);
     this.tapListeners.length = 0;
+    this.pinchListeners.length = 0;
   }
 
   private readonly handleWheel = (e: WheelEvent) => this.onWheel(e);
@@ -114,12 +129,17 @@ export class Camera {
     return this.zoomValue;
   }
 
-  setPointerGuard(guard: ((global: Point) => boolean) | null): void {
+  setPointerGuard(guard: ((e: FederatedPointerEvent) => boolean) | null): void {
     this.pointerGuard = guard;
   }
 
-  onTap(listener: (global: Point) => void): void {
+  onTap(listener: (global: Point, info: TapInfo) => void): void {
     this.tapListeners.push(listener);
+  }
+
+  /** O segundo dedo encostou (começou a pinça). */
+  onPinchStart(listener: () => void): void {
+    this.pinchListeners.push(listener);
   }
 
   /** Segurar o dedo (ou o botão) parado num ponto. */
@@ -221,11 +241,21 @@ export class Camera {
 
   private onDown(e: FederatedPointerEvent): void {
     if (this.pinching) return;
-    if (this.pointerGuard?.(e.global)) {
+    // Só o botão principal: o direito (menu de contexto) perdia o "soltar" e a câmera seguia o
+    // mouse sozinha.
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    if (this.pointerGuard?.(e)) {
       this.reset();
       return;
     }
-    this.pointerDown = { x: e.global.x, y: e.global.y, worldX: this.world.x, worldY: this.world.y };
+    this.pointerDown = {
+      x: e.global.x,
+      y: e.global.y,
+      worldX: this.world.x,
+      worldY: this.world.y,
+      touch: e.pointerType === 'touch',
+      id: e.pointerId,
+    };
     this.dragging = false;
     this.longPressed = false;
     clearTimeout(this.longPressTimer);
@@ -242,6 +272,8 @@ export class Camera {
   private onMove(e: FederatedPointerEvent): void {
     const d = this.pointerDown;
     if (!d || this.pinching) return;
+    // O "soltar" se perdeu (menu de contexto, janela trocada): solta agora.
+    if (!d.touch && e.buttons === 0) return this.reset();
     const dx = e.global.x - d.x;
     const dy = e.global.y - d.y;
     if (!this.dragging && Math.hypot(dx, dy) > DRAG_THRESHOLD) {
@@ -255,9 +287,10 @@ export class Camera {
   }
 
   private onUp(e: FederatedPointerEvent): void {
-    const wasTap = this.pointerDown && !this.dragging && !this.pinching && !this.longPressed;
+    const d = this.pointerDown;
+    const wasTap = d && !this.dragging && !this.pinching && !this.longPressed;
     this.reset();
-    if (wasTap) for (const l of this.tapListeners) l(e.global);
+    if (wasTap) for (const l of this.tapListeners) l(e.global, { touch: d.touch, id: d.id });
   }
 
   private reset(): void {
@@ -287,6 +320,7 @@ export class Camera {
       this.pinching = true;
       this.pinchBase = this.touchDistance();
       this.reset();
+      for (const l of this.pinchListeners) l();
     }
   };
 

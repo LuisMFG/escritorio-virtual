@@ -1,18 +1,22 @@
-import type { FurniColorMessage, FurniMoveMessage, FurniPlaceMessage } from '@office/shared';
+import type {
+  FurniColorMessage,
+  FurniMoveMessage,
+  FurniPlaceMessage,
+  FurniResult,
+} from '@office/shared';
 
-/** O que o histórico precisa para refazer as ações (a conexão e o estado da sala). */
+/** O que o histórico precisa para refazer as ações: a conexão, que responde se deu certo. */
 export interface DecorHistoryApi {
-  place(msg: FurniPlaceMessage): void;
-  move(msg: FurniMoveMessage): void;
-  remove(furniId: string): void;
-  color(msg: FurniColorMessage): void;
-  /** Espera o móvel recém-colocado aparecer no estado e devolve o id (ou `null`). */
-  awaitPlaced(msg: FurniPlaceMessage): Promise<string | null>;
+  place(msg: FurniPlaceMessage): Promise<FurniResult>;
+  move(msg: FurniMoveMessage): Promise<FurniResult>;
+  remove(furniId: string): Promise<FurniResult>;
+  color(msg: FurniColorMessage): Promise<FurniResult>;
 }
 
 type Spot = Omit<FurniMoveMessage, 'furniId'>;
 
-type Op =
+/** Uma ação do Decorar já aceita pelo servidor (o "Desfazer" do aviso guarda a sua). */
+export type DecorOp =
   | { kind: 'place'; id: string; msg: FurniPlaceMessage }
   | { kind: 'remove'; id: string; msg: FurniPlaceMessage }
   | { kind: 'move'; id: string; before: Spot; after: Spot }
@@ -25,10 +29,14 @@ const LIMIT = 50;
  * Desfazer/refazer do Decorar (Fase 47): colocar, mover/girar, remover e trocar cor. Um
  * móvel tirado e posto de volta ganha outro id no servidor; `alias` segue a troca para as
  * ações antigas continuarem valendo.
+ *
+ * Fase 53: só entra no histórico o que o servidor aceitou, e desfazer/refazer só mudam de pilha
+ * quando o servidor confirma. Antes gravava antes da resposta: uma recusa ficava no histórico e,
+ * refeita, punha uma segunda mesa em cima da primeira.
  */
 export class DecorHistory {
-  private done: Op[] = [];
-  private undone: Op[] = [];
+  private done: DecorOp[] = [];
+  private undone: DecorOp[] = [];
   private readonly alias = new Map<string, string>();
   private busy = false;
 
@@ -52,45 +60,60 @@ export class DecorHistory {
     this.emit();
   }
 
-  async recordPlace(msg: FurniPlaceMessage): Promise<void> {
-    const id = await this.api.awaitPlaced(msg);
-    if (id) this.push({ kind: 'place', id, msg });
+  recordPlace(id: string, msg: FurniPlaceMessage): DecorOp {
+    return this.push({ kind: 'place', id, msg });
   }
 
-  recordRemove(id: string, msg: FurniPlaceMessage): void {
-    this.push({ kind: 'remove', id, msg });
+  recordRemove(id: string, msg: FurniPlaceMessage): DecorOp {
+    return this.push({ kind: 'remove', id, msg });
   }
 
-  recordMove(id: string, before: Spot, after: Spot): void {
+  recordMove(id: string, before: Spot, after: Spot): DecorOp | null {
     if (
       before.x === after.x &&
       before.y === after.y &&
       before.rot === after.rot &&
       before.z === after.z
     ) {
-      return;
+      return null;
     }
-    this.push({ kind: 'move', id, before, after });
+    return this.push({ kind: 'move', id, before, after });
   }
 
-  recordColor(id: string, before: string, after: string): void {
-    if (before !== after) this.push({ kind: 'color', id, before, after });
+  recordColor(id: string, before: string, after: string): DecorOp | null {
+    return before !== after ? this.push({ kind: 'color', id, before, after }) : null;
   }
 
-  async undo(): Promise<void> {
-    const op = this.done.pop();
-    if (!op || this.busy) return;
-    await this.run(op, true);
+  /** Desfaz a última ação. Recusada pelo servidor, ela continua no histórico. */
+  async undo(): Promise<boolean> {
+    const op = this.done.at(-1);
+    if (!op || this.busy || !(await this.run(op, true))) return false;
+    this.done.splice(this.done.lastIndexOf(op), 1);
     this.undone.push(op);
     this.emit();
+    return true;
   }
 
-  async redo(): Promise<void> {
-    const op = this.undone.pop();
-    if (!op || this.busy) return;
-    await this.run(op, false);
+  async redo(): Promise<boolean> {
+    const op = this.undone.at(-1);
+    if (!op || this.busy || !(await this.run(op, false))) return false;
+    this.undone.splice(this.undone.lastIndexOf(op), 1);
     this.done.push(op);
     this.emit();
+    return true;
+  }
+
+  /**
+   * Desfaz uma ação específica (o "Desfazer" do aviso de remoção). Se outras vieram depois, ela
+   * só sai do histórico, sem dar para refazer (refazer depois das outras embaralharia a ordem).
+   */
+  async undoOp(op: DecorOp): Promise<boolean> {
+    if (this.done.at(-1) === op) return this.undo();
+    const i = this.done.indexOf(op);
+    if (i < 0 || this.busy || !(await this.run(op, true))) return false;
+    this.done.splice(this.done.indexOf(op), 1);
+    this.emit();
+    return true;
   }
 
   private resolve(id: string): string {
@@ -100,43 +123,40 @@ export class DecorHistory {
   }
 
   /** Põe o móvel (de novo) e segue o id novo. */
-  private async placeAgain(id: string, msg: FurniPlaceMessage): Promise<void> {
-    this.api.place(msg);
-    const fresh = await this.api.awaitPlaced(msg);
+  private async placeAgain(id: string, msg: FurniPlaceMessage): Promise<boolean> {
+    const res = await this.api.place(msg);
+    const fresh = res.ok ? res.furni?.id : undefined;
     if (fresh && fresh !== this.resolve(id)) this.alias.set(this.resolve(id), fresh);
+    return res.ok;
   }
 
-  private async run(op: Op, undo: boolean): Promise<void> {
+  private async run(op: DecorOp, undo: boolean): Promise<boolean> {
     this.busy = true;
     this.emit();
     try {
       const id = this.resolve(op.id);
       switch (op.kind) {
         case 'place':
-          if (undo) this.api.remove(id);
-          else await this.placeAgain(op.id, op.msg);
-          break;
+          return undo ? (await this.api.remove(id)).ok : await this.placeAgain(op.id, op.msg);
         case 'remove':
-          if (undo) await this.placeAgain(op.id, op.msg);
-          else this.api.remove(id);
-          break;
+          return undo ? await this.placeAgain(op.id, op.msg) : (await this.api.remove(id)).ok;
         case 'move':
-          this.api.move({ furniId: id, ...(undo ? op.before : op.after) });
-          break;
+          return (await this.api.move({ furniId: id, ...(undo ? op.before : op.after) })).ok;
         case 'color':
-          this.api.color({ furniId: id, defId: undo ? op.before : op.after });
-          break;
+          return (await this.api.color({ furniId: id, defId: undo ? op.before : op.after })).ok;
       }
     } finally {
       this.busy = false;
+      this.emit();
     }
   }
 
-  private push(op: Op): void {
+  private push(op: DecorOp): DecorOp {
     this.done.push(op);
     if (this.done.length > LIMIT) this.done.shift();
     this.undone = [];
     this.emit();
+    return op;
   }
 
   private emit(): void {

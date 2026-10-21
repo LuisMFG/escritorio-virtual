@@ -9,7 +9,7 @@ import {
   Z_UNIT,
   pointInTile,
   acceptsOnTop,
-  topHeight,
+  stackedOn,
   RoomGrid,
   talkDurationMs,
   tileCorners,
@@ -18,6 +18,7 @@ import {
   type EmoteId,
   type EffectId,
   type FurniManifestEntry,
+  type FurniResult,
   type Heightmap,
   type PlacedFurni,
   type PlacementContext,
@@ -26,7 +27,14 @@ import {
   type TilePoint,
   type DayLight,
 } from '@office/shared';
-import { Container, Graphics, Text, type Application, type Point } from 'pixi.js';
+import {
+  Container,
+  Graphics,
+  Text,
+  type Application,
+  type FederatedPointerEvent,
+  type Point,
+} from 'pixi.js';
 import type { AssetLoader } from '../assets/AssetLoader.js';
 import type { EffectLibrary } from '../assets/EffectLibrary.js';
 import type { FurniVisualLibrary } from '../assets/FurniVisualLibrary.js';
@@ -37,8 +45,15 @@ import { AvatarView, type AvatarSnapshot } from '../entities/AvatarView.js';
 import { ChatBubble } from '../entities/ChatBubble.js';
 import { FurniView } from '../entities/FurniView.js';
 import { PetView, type PetSnapshot } from '../entities/PetView.js';
-import { Camera } from './Camera.js';
-import { DecorMode, type DecorActions, type DecorHost, type DecorListener } from './DecorMode.js';
+import { Camera, type TapInfo } from './Camera.js';
+import {
+  DecorMode,
+  type DecorActions,
+  type DecorHost,
+  type DecorListener,
+  type DecorPointer,
+} from './DecorMode.js';
+import { FurniPending } from './FurniPending.js';
 import { drawRoom } from './RoomRenderer.js';
 
 /** Destaque ao achar a pessoa pela lista (ms). */
@@ -49,6 +64,8 @@ const HEAD_OFFSET_Y = -100;
 const MAX_BUBBLES = 10;
 /** zIndex do fantasma do modo decorar: sempre por cima. */
 const GHOST_Z = 1_000_000;
+/** Folga (px de tela) do clique em objetos pequenos em cima de uma mesa (DE10). */
+const PICK_SLACK_PX = 3;
 
 /** Novas tentativas de montar um avatar que falhou (ms). */
 const POSER_RETRY_MS = [4_000, 15_000, 45_000];
@@ -104,6 +121,12 @@ export class RoomScene implements DecorHost {
   readonly map: Heightmap;
   readonly decor: DecorMode;
   readonly overlay = new Graphics({ label: 'decor-overlay' });
+  /** Contornos do Decorar por cima dos móveis, na altura do alvo (Fase 53). */
+  readonly overlayTop = new Graphics({ label: 'decor-overlay-top' });
+  /** Mover/girar esperando o servidor: a tela mostra o esperado (Fase 53). */
+  private readonly pendingFurni = new FurniPending();
+  /** Algum avatar mudou: o verde/vermelho do Decorar é refeito no próximo quadro. */
+  private avatarsDirty = false;
   private grid: RoomGrid;
   /** Piso e paredes: o que a câmera enquadra. */
   private readonly roomArt: Container;
@@ -177,6 +200,7 @@ export class RoomScene implements DecorHost {
       this.objects,
       this.nightShade,
       this.glows,
+      this.overlayTop,
       this.debugLayer,
       this.plaques,
       this.spotlight,
@@ -188,14 +212,18 @@ export class RoomScene implements DecorHost {
     this.nightShade.eventMode = 'none';
     this.glows.blendMode = 'add';
     this.glows.eventMode = 'none';
+    this.overlay.eventMode = 'none';
+    this.overlayTop.eventMode = 'none';
     this.doorLabel.anchor.set(0.5, 1);
     this.doorLabel.visible = false;
     app.stage.addChild(this.world);
 
     this.decor = new DecorMode(this, actions, decorListener);
     this.camera = new Camera(app, this.world, () => this.roomArt.getLocalBounds());
-    this.camera.setPointerGuard((g) => this.decor.pointerDown(g));
-    this.camera.onTap((p) => this.handleTap(p));
+    this.camera.setPointerGuard((e) => this.decor.pointerDown(decorPointer(e)));
+    this.camera.onTap((p, info) => this.handleTap(p, info));
+    // Segundo dedo (pinça) durante um arrasto: cancela, em vez de embaralhar o fantasma (DE9).
+    this.camera.onPinchStart(() => this.decor.cancelDrag());
     // Segurar sobre alguém (celular): abre o cartão sem andar.
     this.camera.onLongPress((p) => {
       if (this.decor.active) return;
@@ -206,6 +234,7 @@ export class RoomScene implements DecorHost {
     app.stage.on('pointerup', this.onPointerUp, this);
     app.stage.on('pointerupoutside', this.onPointerUp, this);
     app.canvas.addEventListener('pointerleave', this.onPointerLeave);
+    window.addEventListener('blur', this.onWindowBlur);
   }
 
   get defs(): ReadonlyMap<string, FurniManifestEntry> {
@@ -231,8 +260,10 @@ export class RoomScene implements DecorHost {
       this.removeFurni(id);
       existing = undefined;
     }
+    // Mover/girar esperando o servidor: guarda o estado e mostra quando ele responder.
+    const shown = this.pendingFurni.server(placed);
     if (existing) {
-      existing.update(placed);
+      if (shown) existing.update(shown);
     } else {
       const def = this.deps.furniDefs.get(placed.defId);
       if (!def) {
@@ -441,6 +472,7 @@ export class RoomScene implements DecorHost {
   removeFurni(id: string): void {
     if (this.deskOwners.size) this.plaquesDirty = true;
     this.waitingDef.delete(id);
+    this.pendingFurni.forget(id);
     const view = this.furni.get(id);
     if (!view) return;
     this.furni.delete(id);
@@ -451,6 +483,34 @@ export class RoomScene implements DecorHost {
 
   furniView(id: string): FurniView | undefined {
     return this.furni.get(id);
+  }
+
+  toWorld(global: Point): { x: number; y: number } {
+    return this.world.toLocal(global);
+  }
+
+  previewFurni(id: string, spot: Pick<PlacedFurni, 'x' | 'y' | 'z' | 'rot'>): void {
+    const view = this.furni.get(id);
+    if (!view) return;
+    this.pendingFurni.start(id);
+    view.update({ ...view.placed, ...spot });
+    this.onFurniChanged();
+  }
+
+  settleFurni(id: string, result: FurniResult): void {
+    const show = this.pendingFurni.finish(id, result.ok ? (result.furni ?? null) : null);
+    const view = this.furni.get(id);
+    if (!show || !view || show.defId !== view.def.id) return;
+    view.update(show);
+    this.onFurniChanged();
+  }
+
+  hideFurni(id: string, hidden: boolean): void {
+    const view = this.furni.get(id);
+    if (!view) return;
+    view.visible = !hidden;
+    for (const c of view.slices.values()) c.visible = !hidden;
+    this.decor.refresh();
   }
 
   createGhost(defId: string, x: number, y: number, rot: number): FurniView {
@@ -482,28 +542,64 @@ export class RoomScene implements DecorHost {
   }
 
   /**
-   * Móvel sob o ponteiro: o desenho mais à frente com pixel visível no ponto; senão, o que
-   * ocupa o tile apontado (sólido antes de tapete).
+   * Móvel sob o ponteiro: o desenho mais à frente com pixel visível no ponto. Sobre uma mesa, um
+   * objeto pequeno em cima dela ganha mesmo com o ponteiro 1–3 px fora dele (antes pegava a mesa).
+   * Sem pixel nenhum, vale o tile do móvel na altura em que ele está (sólido antes de tapete).
    */
   pickFurni(global: Point): FurniView | null {
-    const views = [...this.furni.values()];
-    const drawn = views
-      .filter((f) => !f.def.canWalk && !f.def.wall && f.hitTest(global))
-      .sort((a, b) => b.zIndex - a.zIndex)[0];
+    const views = [...this.furni.values()].filter((f) => f.visible);
+    const front = (list: FurniView[]) => list.sort((a, b) => b.zIndex - a.zIndex)[0] ?? null;
+    const solid = views.filter((f) => !f.def.canWalk && !f.def.wall);
+    const drawn = front(solid.filter((f) => f.hitTest(global)));
+    if (drawn && acceptsOnTop(drawn.def)) {
+      const placed = views.map((v) => v.placed);
+      const onTop = new Set(stackedOn(drawn.placed, placed, this.deps.furniDefs).map((f) => f.id));
+      const near = front(solid.filter((f) => onTop.has(f.placed.id) && this.hitNear(f, global)));
+      if (near) return near;
+    }
     if (drawn) return drawn;
     // Itens de parede ficam atrás de tudo que está no piso.
     const onWall = views.find((f) => f.def.wall && f.hitTest(global));
     if (onWall) return onWall;
-    const tile = this.pickTile(global);
-    if (!tile) return null;
-    const onTile = views
-      .filter((f) => {
-        if (f.def.wall) return false;
-        const fp = f.footprint;
-        return tile.x >= fp.minX && tile.x <= fp.maxX && tile.y >= fp.minY && tile.y <= fp.maxY;
-      })
-      .sort((a, b) => Number(a.def.canWalk) - Number(b.def.canWalk));
+    const nearby = front(solid.filter((f) => this.hitNear(f, global)));
+    if (nearby) return nearby;
+    const p = this.world.toLocal(global);
+    const onTile = views.filter((f) => {
+      if (f.def.wall) return false;
+      const fp = f.footprint;
+      for (let y = fp.minY; y <= fp.maxY; y++) {
+        for (let x = fp.minX; x <= fp.maxX; x++) {
+          if (pointInTile(p.x, p.y, x, y, f.placed.z)) return true;
+        }
+      }
+      return false;
+    });
+    onTile.sort(
+      (a, b) =>
+        Number(a.def.canWalk) - Number(b.def.canWalk) ||
+        b.placed.z - a.placed.z ||
+        b.zIndex - a.zIndex,
+    );
     return onTile[0] ?? null;
+  }
+
+  /** Pixel do desenho no ponto ou a até `PICK_SLACK_PX` dele. */
+  private hitNear(f: FurniView, global: Point): boolean {
+    if (f.hitTest(global)) return true;
+    const r = PICK_SLACK_PX;
+    for (const [dx, dy] of [
+      [r, 0],
+      [-r, 0],
+      [0, r],
+      [0, -r],
+      [r, r],
+      [-r, r],
+      [r, -r],
+      [-r, -r],
+    ] as const) {
+      if (f.hitTest(global.clone().set(global.x + dx, global.y + dy))) return true;
+    }
+    return false;
   }
 
   private onFurniChanged(): void {
@@ -549,6 +645,7 @@ export class RoomScene implements DecorHost {
     const view = this.avatars.get(id);
     if (!view) return;
     view.applySnapshot(snapshot);
+    this.avatarsDirty = true;
     if (view.figure !== snapshot.figure) this.loadFrames(view, snapshot.figure);
   }
 
@@ -633,6 +730,7 @@ export class RoomScene implements DecorHost {
     if (!view) return;
     if (this.hoveredAvatar === view) this.hoveredAvatar = null;
     this.avatars.delete(id);
+    this.avatarsDirty = true;
     view.destroy({ children: true });
   }
 
@@ -673,6 +771,11 @@ export class RoomScene implements DecorHost {
     }
     for (const a of this.avatars.values()) a.update(dtMs);
     for (const p of this.pets.values()) p.update(dtMs);
+    // Alguém entrou, andou ou saiu: o fantasma verde/vermelho do Decorar se atualiza (DE15).
+    if (this.avatarsDirty) {
+      this.avatarsDirty = false;
+      if (this.decor.active) this.decor.refresh();
+    }
     for (const b of [...this.bubbles.children] as ChatBubble[]) {
       b.update(dtMs);
       if (b.expired) b.destroy({ children: true });
@@ -691,6 +794,7 @@ export class RoomScene implements DecorHost {
     this.app.stage.off('pointerup', this.onPointerUp, this);
     this.app.stage.off('pointerupoutside', this.onPointerUp, this);
     this.app.canvas.removeEventListener('pointerleave', this.onPointerLeave);
+    window.removeEventListener('blur', this.onWindowBlur);
     this.world.destroy({ children: true });
   }
 
@@ -706,6 +810,8 @@ export class RoomScene implements DecorHost {
       for (const sl of f.sliceBoxes) {
         if (sl.view.parent !== this.objects) this.objects.addChild(sl.view);
         sl.view.visible = f.visible;
+        // Arrastando um sofá, braços e encosto ficam transparentes junto (DE13).
+        sl.view.alpha = f.alpha;
         boxes.push(sl.box);
         views.set(sl.box.id, sl.view);
       }
@@ -729,31 +835,7 @@ export class RoomScene implements DecorHost {
 
   // ---------- Entrada ----------
 
-  /** Tile sob um ponto da tela, considerando a altura (testa de frente para trás). */
-  /**
-   * Tile do tampo de um móvel sob o ponteiro (mesa, balcão…), calculado na altura do tampo: no
-   * modo decorar, apontar para cima da mesa coloca em cima dela, e não no piso atrás dela.
-   */
-  pickSurfaceTile(global: Point, excludeId?: string): TilePoint | null {
-    const p = this.world.toLocal(global);
-    const surfaces = [...this.furni.values()]
-      .filter((f) => f.placed.id !== excludeId && acceptsOnTop(f.def) && f.hitTest(global))
-      .sort((a, b) => b.zIndex - a.zIndex);
-    for (const f of surfaces) {
-      const top = f.placed.z + topHeight(f.def);
-      const fp = f.footprint;
-      let best: TilePoint | null = null;
-      for (let y = fp.minY; y <= fp.maxY; y++) {
-        for (let x = fp.minX; x <= fp.maxX; x++) {
-          if (pointInTile(p.x, p.y, x, y, top) && (!best || x + y > best.x + best.y))
-            best = { x, y };
-        }
-      }
-      if (best) return best;
-    }
-    return null;
-  }
-
+  /** Tile sob um ponto da tela, considerando a altura do piso (testa de frente para trás). */
   pickTile(global: Point): TilePoint | null {
     const p = this.world.toLocal(global);
     let best: TilePoint | null = null;
@@ -796,8 +878,17 @@ export class RoomScene implements DecorHost {
     return null;
   }
 
-  private handleTap(global: Point): void {
-    if (this.decor.active) return this.decor.tap(global);
+  private handleTap(global: Point, info: TapInfo): void {
+    if (this.decor.active) {
+      return this.decor.tap({
+        global,
+        id: info.id,
+        button: 0,
+        buttons: 0,
+        touch: info.touch,
+        overScene: true,
+      });
+    }
     const tile = this.pickTile(global);
     if (!this.localId) return;
 
@@ -855,9 +946,12 @@ export class RoomScene implements DecorHost {
     return onTile ? f : null;
   }
 
-  private onPointerUp(): void {
-    this.decor.pointerUp();
+  private onPointerUp(e: FederatedPointerEvent): void {
+    this.decor.pointerUp(decorPointer(e));
   }
+
+  /** A janela perdeu o foco no meio de um arrasto: o "soltar" não vai chegar. */
+  private readonly onWindowBlur = (): void => this.decor.cancelDrag();
 
   /** O ponteiro foi para um painel HTML: esconde o nome e o destaque do tile. */
   private readonly onPointerLeave = (): void => {
@@ -868,8 +962,8 @@ export class RoomScene implements DecorHost {
     this.doorLabel.visible = false;
   };
 
-  private onPointerMove(e: { global: Point }): void {
-    this.decor.pointerMove(e.global);
+  private onPointerMove(e: FederatedPointerEvent): void {
+    this.decor.pointerMove(decorPointer(e));
     // Nome só de quem está sob o ponteiro.
     const avatar = this.decor.active ? null : this.pickAvatar(e.global);
     if (avatar !== this.hoveredAvatar) {
@@ -936,4 +1030,16 @@ export class RoomScene implements DecorHost {
       g.poly(pts, true).stroke({ width: 1, color: 0x00e0ff, alpha: 0.8 });
     }
   }
+}
+
+/** O ponteiro como o Decorar usa: qual dedo/botão, os botões apertados e se é toque. */
+function decorPointer(e: FederatedPointerEvent): DecorPointer {
+  return {
+    global: e.global,
+    id: e.pointerId,
+    button: e.button,
+    buttons: e.buttons,
+    touch: e.pointerType === 'touch',
+    overScene: (e.nativeEvent?.target as Element | null)?.tagName === 'CANVAS',
+  };
 }

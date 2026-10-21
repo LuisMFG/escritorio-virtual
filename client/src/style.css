@@ -1020,7 +1020,8 @@ body {
   font-size: calc(13px * var(--font-scale, 1));
 }
 
-.decor-status .btn-secondary {
+.decor-status .btn-secondary,
+.decor-status .btn-primary {
   padding: 5px 10px;
   font-size: calc(12px * var(--font-scale, 1));
 }
@@ -1143,6 +1144,17 @@ body.decorating .hud-decor {
     top: auto;
     bottom: 64px;
     height: 46vh;
+    /* Muitas cores ou o teleporte não cabem: o painel rola em vez de vazar por cima da barra. */
+    overflow-y: auto;
+  }
+
+  .decor-grid {
+    min-height: 96px;
+  }
+
+  .decor-swatches {
+    max-height: 76px;
+    overflow-y: auto;
   }
 
   .hud-decor {

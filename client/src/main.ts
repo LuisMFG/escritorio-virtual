@@ -27,6 +27,7 @@ import {
   STATUSES,
   DESK_ROOM_ID,
   type FurniPlaceMessage,
+  type FurniResult,
   deskSeatIds,
 } from '@office/shared';
 import { Application, Container, Sprite, TextureSource } from 'pixi.js';
@@ -636,6 +637,7 @@ async function start(): Promise<void> {
     furniManifest.items,
     {
       pick: (defId) => scene?.decor.pick(defId),
+      confirmPlace: () => scene?.decor.confirmPlace(),
       rotate: () => scene?.decor.rotate(),
       remove: () => scene?.decor.removeSelected(),
       color: (defId) => {
@@ -661,36 +663,15 @@ async function start(): Promise<void> {
       },
     },
     !OFFLINE_ASSETS,
-  ); // Desfazer/refazer do Decorar (Fase 47): espera o móvel colocado aparecer para saber o id.
-  const placedWaiters: { msg: FurniPlaceMessage; done: (id: string | null) => void }[] = [];
-  const resolvePlaced = (defId: string, x: number, y: number, id: string) => {
-    const i = placedWaiters.findIndex(
-      (w) => w.msg.defId === defId && w.msg.x === x && w.msg.y === y,
-    );
-    if (i >= 0) placedWaiters.splice(i, 1)[0]!.done(id);
-  };
+  );
+  // Desfazer/refazer do Decorar (Fase 47); só grava o que o servidor aceitou (Fase 53).
+  const refused = Promise.resolve<FurniResult>({ ok: false });
   const decorHistory = new DecorHistory(
     {
-      place: (m) => connection?.placeFurni(m),
-      move: (m) => connection?.moveFurni(m),
-      remove: (id) => connection?.removeFurni(id),
-      color: (m) => connection?.colorFurni(m),
-      awaitPlaced: (msg) =>
-        new Promise((resolve) => {
-          const w = {
-            msg,
-            done: (id: string | null) => {
-              clearTimeout(timer);
-              resolve(id);
-            },
-          };
-          const timer = window.setTimeout(() => {
-            const k = placedWaiters.indexOf(w);
-            if (k >= 0) placedWaiters.splice(k, 1);
-            resolve(null);
-          }, 4000);
-          placedWaiters.push(w);
-        }),
+      place: (m) => connection?.placeFurni(m) ?? refused,
+      move: (m) => connection?.moveFurni(m) ?? refused,
+      remove: (id) => connection?.removeFurni(id) ?? refused,
+      color: (m) => connection?.colorFurni(m) ?? refused,
     },
     (canUndo, canRedo) => decorPanel.setHistory(canUndo, canRedo),
   );
@@ -698,6 +679,8 @@ async function start(): Promise<void> {
     if (!decorating || !(e.ctrlKey || e.metaKey)) return;
     if ((e.target as HTMLElement).closest('input, textarea, [role=dialog]')) return;
     const key = e.key.toLowerCase();
+    // Segurar Ctrl+Z mandava dezenas de pedidos por segundo ("Calma!"): um por toque (DE14).
+    if (e.repeat && (key === 'z' || key === 'y')) return e.preventDefault();
     if (key === 'z' && !e.shiftKey) {
       e.preventDefault();
       void decorHistory.undo();
@@ -1014,50 +997,61 @@ async function start(): Promise<void> {
             remove: (noteId) => connection.boardRemove(noteId),
           });
         },
-        placeFurni: (msg) => {
-          connection.placeFurni(msg);
-          decorPanel.markRecent(msg.defId);
-          void decorHistory.recordPlace(msg);
-        },
-        moveFurni: (msg) => {
-          const f = room.state.furni.get(msg.furniId);
-          if (f) {
-            decorHistory.recordMove(
-              msg.furniId,
-              {
-                x: f.x,
-                y: f.y,
-                rot: f.rot as FurniPlaceMessage['rot'],
-                ...(msg.z !== undefined ? { z: f.z } : {}),
-              },
-              { x: msg.x, y: msg.y, rot: msg.rot, ...(msg.z !== undefined ? { z: msg.z } : {}) },
-            );
+        // Fase 53: o histórico e os avisos só depois de o servidor aceitar (a recusa já chega
+        // como erro). Antes gravava antes e mostrava "removido [Desfazer]" junto do erro.
+        placeFurni: async (msg) => {
+          const res = await connection.placeFurni(msg);
+          if (res.ok && res.furni) {
+            decorPanel.markRecent(msg.defId);
+            decorHistory.recordPlace(res.furni.id, msg);
           }
-          connection.moveFurni(msg);
+          return res;
         },
-        removeFurni: (furniId) => {
+        moveFurni: async (msg) => {
+          const f = room.state.furni.get(msg.furniId);
+          const before = f && {
+            x: f.x,
+            y: f.y,
+            rot: f.rot as FurniPlaceMessage['rot'],
+            ...(msg.z !== undefined ? { z: f.z } : {}),
+          };
+          const res = await connection.moveFurni(msg);
+          if (res.ok && before) {
+            decorHistory.recordMove(msg.furniId, before, {
+              x: msg.x,
+              y: msg.y,
+              rot: msg.rot,
+              ...(msg.z !== undefined ? { z: msg.z } : {}),
+            });
+          }
+          return res;
+        },
+        removeFurni: async (furniId) => {
           // Desfazer (Fase 45): guarda onde estava e põe de volta igual.
           const f = room.state.furni.get(furniId);
-          connection.removeFurni(furniId);
-          if (!f) return;
-          const wall = deps.furniDefs.get(f.defId)?.wall ?? false;
-          const back: FurniPlaceMessage = {
+          const back: FurniPlaceMessage | undefined = f && {
             defId: f.defId,
             x: f.x,
             y: f.y,
             rot: f.rot as FurniPlaceMessage['rot'],
-            ...(wall ? { z: f.z } : {}),
+            ...(deps.furniDefs.get(f.defId)?.wall ? { z: f.z } : {}),
           };
-          decorHistory.recordRemove(furniId, back);
-          const name = deps.furniDefs.get(f.defId)?.name ?? 'Móvel';
-          overlay.notify(`${name} removido.`, {
-            action: { label: 'Desfazer', run: () => void decorHistory.undo() },
-          });
+          const res = await connection.removeFurni(furniId);
+          if (res.ok && back) {
+            const op = decorHistory.recordRemove(furniId, back);
+            const name = deps.furniDefs.get(back.defId)?.name ?? 'Móvel';
+            // O "Desfazer" do aviso desfaz esta remoção, mesmo que outras ações venham depois.
+            overlay.notify(`${name} removido.`, {
+              action: { label: 'Desfazer', run: () => void decorHistory.undoOp(op) },
+            });
+          }
+          return res;
         },
-        colorFurni: (msg) => {
+        colorFurni: async (msg) => {
           const before = room.state.furni.get(msg.furniId)?.defId;
-          if (before) decorHistory.recordColor(msg.furniId, before, msg.defId);
-          connection.colorFurni(msg);
+          const res = await connection.colorFurni(msg);
+          if (res.ok && before) decorHistory.recordColor(msg.furniId, before, msg.defId);
+          return res;
         },
         avatarClick: (sessionId, at) => {
           const info = s.avatarInfo(sessionId);
@@ -1099,6 +1093,7 @@ async function start(): Promise<void> {
         onPickChange: (defId) => decorPanel.setPicked(defId),
         onSelectionChange: (sel) => decorPanel.setSelected(sel),
         onError: (message) => overlay.notify(message),
+        onPlaceReady: (ready) => decorPanel.setPlaceReady(ready),
       },
     );
     scene = s;
@@ -1226,7 +1221,6 @@ async function start(): Promise<void> {
     });
     keep(
       cb.onAdd('furni', (f, id) => {
-        resolvePlaced(f.defId, f.x, f.y, id);
         s.setFurni(id, placed(f));
         refreshJukebox();
         const interaction = deps.furniDefs.get(f.defId)?.interaction;

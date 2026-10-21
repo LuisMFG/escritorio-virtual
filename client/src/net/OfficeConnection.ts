@@ -31,6 +31,7 @@ import {
   type ErrorMessage,
   type FurniMoveMessage,
   type FurniColorMessage,
+  type FurniResult,
   type FurniPlaceMessage,
   type JoinOptions,
   type MoveMessage,
@@ -138,20 +139,33 @@ export class OfficeConnection {
     this.room?.send(ClientMessage.Interact, { furniId });
   }
 
-  placeFurni(msg: FurniPlaceMessage): void {
-    this.room?.send(ClientMessage.FurniPlace, msg);
+  /**
+   * Ações do Decorar esperam a resposta do servidor (Fase 53): o desfazer só grava o que foi
+   * aceito e a tela volta atrás no que foi recusado. Sem conexão ou sem resposta, conta como recusa.
+   */
+  private async furniRequest(type: string, msg: object): Promise<FurniResult> {
+    if (!this.room) return { ok: false };
+    try {
+      return ((await this.room.request(type, msg)) as FurniResult | undefined) ?? { ok: false };
+    } catch {
+      return { ok: false };
+    }
   }
 
-  moveFurni(msg: FurniMoveMessage): void {
-    this.room?.send(ClientMessage.FurniMove, msg);
+  placeFurni(msg: FurniPlaceMessage): Promise<FurniResult> {
+    return this.furniRequest(ClientMessage.FurniPlace, msg);
   }
 
-  colorFurni(msg: FurniColorMessage): void {
-    this.room?.send(ClientMessage.FurniColor, msg);
+  moveFurni(msg: FurniMoveMessage): Promise<FurniResult> {
+    return this.furniRequest(ClientMessage.FurniMove, msg);
   }
 
-  removeFurni(furniId: string): void {
-    this.room?.send(ClientMessage.FurniRemove, { furniId });
+  colorFurni(msg: FurniColorMessage): Promise<FurniResult> {
+    return this.furniRequest(ClientMessage.FurniColor, msg);
+  }
+
+  removeFurni(furniId: string): Promise<FurniResult> {
+    return this.furniRequest(ClientMessage.FurniRemove, { furniId });
   }
 
   setStatus(status: Status): void {

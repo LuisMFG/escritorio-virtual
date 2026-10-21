@@ -16,6 +16,8 @@ import { ThumbQueue } from './thumbQueue.js';
 
 export interface DecorPanelHandlers {
   pick(defId: string | null): void;
+  /** "Colocar aqui": no toque, o toque só posiciona o fantasma (Fase 53). */
+  confirmPlace(): void;
   rotate(): void;
   remove(): void;
   /** Outra cor do móvel selecionado. */
@@ -96,7 +98,10 @@ export class DecorPanel {
   private shown = DECOR_PAGE;
   private picked: string | null = null;
   private selected: DecorSelection | null = null;
-  private preparing: string | null = null;
+  /** Escolhas feitas: um "Preparando…" antigo não substitui uma escolha mais nova (DE17). */
+  private pickSeq = 0;
+  /** No toque, o fantasma já está num lugar (mostra "Colocar aqui"). */
+  private placeReady = false;
   private catalog: CatalogItem[] = [];
   private hidden = new Set<string>();
   /** Classname (com ou sem cor) → item do catálogo. */
@@ -209,20 +214,41 @@ export class DecorPanel {
 
   setPicked(defId: string | null): void {
     this.picked = defId;
+    if (!defId) this.placeReady = false;
     this.markPressed();
     if (defId) {
       this.showPreview(defId);
-      this.status.replaceChildren(
-        Object.assign(document.createElement('span'), {
-          textContent: `Colocando: ${this.nameOf(defId)}`,
-        }),
-        this.swatches(defId, (id) => void this.pickItem(id)),
-        this.button('Cancelar', () => this.on.pick(null)),
-      );
+      this.renderPicking(defId);
     } else {
       this.renderSelected();
     }
     this.renderTools();
+  }
+
+  /** No toque: o fantasma está posicionado e o botão "Colocar aqui" aparece. */
+  setPlaceReady(ready: boolean): void {
+    if (this.placeReady === ready) return;
+    this.placeReady = ready;
+    if (this.picked) this.renderPicking(this.picked);
+  }
+
+  private renderPicking(defId: string): void {
+    const children: HTMLElement[] = [
+      Object.assign(document.createElement('span'), {
+        textContent: `Colocando: ${this.nameOf(defId)}`,
+      }),
+    ];
+    // Os botões antes das cores: no celular, as cores empurravam "Colocar aqui" para fora.
+    if (this.placeReady) {
+      const place = this.button('Colocar aqui', () => this.on.confirmPlace());
+      place.className = 'btn-primary decor-place';
+      children.push(place);
+    }
+    children.push(
+      this.button('Cancelar', () => this.on.pick(null)),
+      this.swatches(defId, (id) => void this.pickItem(id)),
+    );
+    this.status.replaceChildren(...children);
   }
 
   /** Estado do desfazer/refazer. */
@@ -603,8 +629,8 @@ export class DecorPanel {
 
   /** Escolhe um item: os do catálogo completo são preparados antes (medidos no servidor). */
   private async pickItem(id: string): Promise<void> {
+    const seq = ++this.pickSeq;
     if (this.items.some((i) => i.id === id)) return this.on.pick(id);
-    this.preparing = id;
     const spinner = Object.assign(document.createElement('span'), { className: 'spinner' });
     spinner.setAttribute('aria-hidden', 'true');
     this.status.replaceChildren(
@@ -618,8 +644,7 @@ export class DecorPanel {
       }),
     );
     const ok = await this.on.prepare(id);
-    if (this.preparing !== id) return;
-    this.preparing = null;
+    if (seq !== this.pickSeq) return;
     if (ok) this.on.pick(id);
     else {
       this.status.replaceChildren(
