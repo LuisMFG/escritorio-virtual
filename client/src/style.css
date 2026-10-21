@@ -1226,9 +1226,17 @@ body.decorating .hud-decor {
 
 .emote-menu {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 4px;
   padding: 6px;
+  /* Com os emotes da Fase 54 o menu cresceu: rola em telas baixas em vez de sair por cima. */
+  max-height: calc(100vh - 140px);
+  overflow-y: auto;
+}
+
+.emote-menu button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 
 .emote-menu[hidden],

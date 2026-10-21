@@ -7,6 +7,7 @@ import {
   type EffectId,
   directionBetween,
   emotePose,
+  emoteBodyDy,
   EMOTES,
   nextBlinkDelay,
   poseKey,
@@ -365,6 +366,11 @@ export class AvatarView extends Container {
     return this.step !== null || this.queue.length > 0;
   }
 
+  /** Emote tocando agora (`null` = nenhum). */
+  get currentEmote(): EmoteId | null {
+    return this.emote?.id ?? null;
+  }
+
   /** Aplica um estado novo vindo do servidor. */
   applySnapshot(s: AvatarSnapshot): void {
     this.nameTag.text = s.birthday ? `${s.name} 🎂` : s.name;
@@ -597,10 +603,19 @@ export class AvatarView extends Container {
     return this.serverAction === 'walk' && this.clock - this.stepEndedAt < WALK_GRACE_MS;
   }
 
+  /** Corpo inteiro subindo nos emotes animados (Fase 54): só em pé e parado. */
+  private animHop(): number {
+    const e = this.emote;
+    if (!e || this.step || this.sitting || this.lying) return 0;
+    return emoteBodyDy(e.id, e.elapsed) ?? 0;
+  }
+
   /** Deslocamento extra do corpo durante um emote (aceno, risada, pulinho, dança). */
   private emoteOffset(): { x: number; y: number } {
     const e = this.emote;
     if (!e || this.step) return { x: 0, y: 0 };
+    // Emote animado (Fase 54): o pulo da própria animação, sem o pulinho genérico.
+    if (emoteBodyDy(e.id, e.elapsed) !== null) return { x: 0, y: this.animHop() };
     const s = e.elapsed / 1000;
     switch (e.id) {
       case 'wave':
@@ -669,7 +684,9 @@ export class AvatarView extends Container {
       pose.posture = 'sit';
     }
     if (this.emote) {
-      Object.assign(pose, emotePose(this.emote.id, this.emote.elapsed));
+      // Sentado, o emote não mexe tronco e pernas; deitado, só o rosto (Fase 54).
+      const posture = this.lying ? 'lay' : this.sitting && !this.step ? 'sit' : 'stand';
+      Object.assign(pose, emotePose(this.emote.id, this.emote.elapsed, posture));
       // Sentado ou deitado, o emote não muda a postura (a dança "andava" dentro da cadeira).
       if (!this.step && this.lying) pose.posture = 'lay';
       else if (!this.step && this.sitting) pose.posture = 'sit';
@@ -743,8 +760,9 @@ export class AvatarView extends Container {
 
     this.body.rotation = 0;
     if (this.poser) {
-      // Pose real: sem balanço simulado (a dança ainda pula um pouquinho).
-      const hop = this.emote?.id === 'dance' && !this.step ? this.emoteOffset().y : 0;
+      // Pose real: sem balanço simulado (a dança ainda pula um pouquinho; pular e comemorar,
+      // do jeito da animação, só em pé).
+      const hop = this.emote?.id === 'dance' && !this.step ? this.emoteOffset().y : this.animHop();
       const onSeat = this.sitting && this.sitZ > this.heightAt(this.tile.x, this.tile.y) + 0.05;
       const rest = this.step || this.lying || !onSeat ? 0 : SIT_OFFSET;
       this.body.position.set(0, rest + hop);

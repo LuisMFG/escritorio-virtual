@@ -27,6 +27,7 @@ import {
   type Posture,
   type EffectFlash,
   type EmoteMessage,
+  type HighFiveMessage,
   type Status,
   type ErrorMessage,
   type FurniMoveMessage,
@@ -61,6 +62,8 @@ interface Handlers {
   serverError: (err: ErrorMessage) => void;
   chat: (msg: ChatMessage) => void;
   emote: (msg: EmoteMessage) => void;
+  /** Duas pessoas bateram as mãos (Fase 54). */
+  highFive: (msg: HighFiveMessage) => void;
   chatDeleted: (msg: ChatDeletedMessage) => void;
   chatReactions: (msg: ReactionsUpdate) => void;
   /** Votos ou estado de uma enquete mudaram. */
@@ -178,6 +181,11 @@ export class OfficeConnection {
 
   emote(emote: EmoteId): void {
     this.room?.send(ClientMessage.Emote, { emote });
+  }
+
+  /** Toca aqui com a pessoa desta sessão (o servidor confere distância e se ela pode). */
+  highFive(target: string): void {
+    this.room?.send(ClientMessage.HighFive, { target });
   }
 
   /** Sentar/deitar no chão ou levantar. */
@@ -373,6 +381,7 @@ export class OfficeConnection {
     room.onMessage(ServerMessage.Error, (err: ErrorMessage) => this.on.serverError(err));
     room.onMessage(ServerMessage.Chat, (msg: ChatMessage) => this.on.chat(msg));
     room.onMessage(ServerMessage.Emote, (msg: EmoteMessage) => this.on.emote(msg));
+    room.onMessage(ServerMessage.HighFive, (msg: HighFiveMessage) => this.on.highFive(msg));
     room.onMessage(ServerMessage.ChatDeleted, (msg: ChatDeletedMessage) =>
       this.on.chatDeleted(msg),
     );

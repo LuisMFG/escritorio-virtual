@@ -5,14 +5,18 @@ import {
   findMentions,
   nameKey,
   normalizeChatText,
+  emoteRefusal,
   parseEmoteCommand,
+  parseHighFiveCommand,
   parsePostureCommand,
   isDropCommand,
   type Posture,
   TYPING_IDLE_MS,
   replyPreviewText,
   type ChatMessage,
+  type EmoteDef,
   type EmoteId,
+  type EmotePosture,
   type Reaction,
   type ReactionSummary,
 } from '@office/shared';
@@ -47,6 +51,12 @@ export interface ChatHandlers {
   /** Põe/tira reação numa mensagem. */
   react(id: number, emoji: Reaction): void;
   emote(id: EmoteId): void;
+  /** `/tocaaqui nome` (Fase 54): o nome digitado (vazio sem nome). */
+  highFive(name: string): void;
+  /** "Toca aqui" pelo menu: com quem estiver perto. */
+  highFiveNearby(): void;
+  /** Postura de agora: o menu apaga os emotes que não valem nela. */
+  emotePosture?(): EmotePosture;
   /** `/sentar`, `/deitar` (no chão) e `/levantar`. */
   posture(p: Posture): void;
   /** `/largar`: solta o item da mão. */
@@ -69,6 +79,8 @@ export class ChatPanel {
   private readonly input = document.createElement('input');
   private readonly emoteBtn = document.createElement('button');
   private readonly emoteMenu = document.createElement('div');
+  /** Botão de cada emote no menu (para apagar os que não valem na postura). */
+  private readonly emoteButtons = new Map<EmoteId, HTMLButtonElement>();
   private readonly suggestions = document.createElement('ul');
   private readonly history = document.createElement('details');
   private readonly summary = document.createElement('summary');
@@ -106,11 +118,15 @@ export class ChatPanel {
     this.emoteMenu.hidden = true;
     this.emoteMenu.setAttribute('role', 'menu');
     for (const id of EMOTE_IDS) {
-      const def = EMOTES[id];
+      const def: EmoteDef = EMOTES[id];
       const b = document.createElement('button');
       b.type = 'button';
       b.setAttribute('role', 'menuitem');
-      b.title = `${def.label} (/${def.command})`;
+      b.title = def.needsTarget
+        ? `${def.label} (/${def.command} nome, ou no cartão da pessoa)`
+        : `${def.label} (/${def.command})`;
+      b.dataset.title = b.title;
+      this.emoteButtons.set(id, b);
       b.append(
         Object.assign(document.createElement('span'), {
           className: 'emoji',
@@ -119,7 +135,8 @@ export class ChatPanel {
         Object.assign(document.createElement('span'), { textContent: def.label }),
       );
       b.addEventListener('click', () => {
-        this.on.emote(id);
+        if (def.needsTarget) this.on.highFiveNearby();
+        else this.on.emote(id);
         this.toggleEmoteMenu(false);
         this.input.focus();
       });
@@ -327,9 +344,11 @@ export class ChatPanel {
       const text = normalizeChatText(this.input.value);
       const file = this.attach.current;
       if (!text && !file) return;
+      const highFive = file ? null : parseHighFiveCommand(text);
       const emote = file ? null : parseEmoteCommand(text);
       const posture = file ? null : parsePostureCommand(text);
-      if (emote) this.on.emote(emote);
+      if (highFive !== null) this.on.highFive(highFive);
+      else if (emote) this.on.emote(emote);
       else if (posture) this.on.posture(posture);
       else if (!file && isDropCommand(text)) this.on.dropItem();
       else this.on.send(text, this.replyBar.current?.id, file?.id);
@@ -408,6 +427,14 @@ export class ChatPanel {
   private toggleEmoteMenu(open: boolean): void {
     this.emoteMenu.hidden = !open;
     this.emoteBtn.setAttribute('aria-expanded', String(open));
+    if (!open) return;
+    // Sentado, só os que fazem sentido; deitado, só os de rosto (Fase 54).
+    const posture = this.on.emotePosture?.() ?? 'stand';
+    for (const [id, b] of this.emoteButtons) {
+      const why = emoteRefusal(id, posture);
+      b.disabled = Boolean(why);
+      b.title = why ?? b.dataset.title ?? '';
+    }
   }
 
   /** "Digitando": avisa ao começar, renova enquanto digita e desliga parado/ao enviar. */

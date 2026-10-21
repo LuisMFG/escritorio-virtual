@@ -64,6 +64,8 @@ const HEAD_OFFSET_Y = -100;
 const MAX_BUBBLES = 10;
 /** zIndex do fantasma do modo decorar: sempre por cima. */
 const GHOST_Z = 1_000_000;
+/** Brilho sobre os dois no toca aqui (ms). */
+const HIGH_FIVE_SPARKLE_MS = 1400;
 /** Folga (px de tela) do clique em objetos pequenos em cima de uma mesa (DE10). */
 const PICK_SLACK_PX = 3;
 
@@ -677,6 +679,16 @@ export class RoomScene implements DecorHost {
   /** Toca um emote no avatar de quem mandou. */
   playEmote(sessionId: string, emote: EmoteId): void {
     this.avatars.get(sessionId)?.playEmote(emote);
+  }
+
+  /** Toca aqui (Fase 54): os dois batem as mãos ao mesmo tempo, com brilho. */
+  highFive(a: string, b: string): void {
+    for (const id of [a, b]) {
+      const view = this.avatars.get(id);
+      if (!view) continue;
+      view.playEmote('highfive');
+      view.flashEffect('twinkle', HIGH_FIVE_SPARKLE_MS);
+    }
   }
 
   /** Dados para o cartão do avatar. */

@@ -29,6 +29,9 @@ import {
   type FurniPlaceMessage,
   type FurniResult,
   deskSeatIds,
+  emotePosture,
+  findPersonByName,
+  HIGH_FIVE_RANGE,
 } from '@office/shared';
 import { Application, Container, Sprite, TextureSource } from 'pixi.js';
 import { AssetLoader } from './assets/AssetLoader.js';
@@ -338,6 +341,41 @@ async function start(): Promise<void> {
     emote: (id) => {
       connection?.emote(id);
       tour?.notify('emote');
+    },
+    // Toca aqui (Fase 54): pelo nome digitado ou com quem estiver mais perto.
+    highFive: (name) => {
+      const room = connection?.currentRoom;
+      if (!room) return;
+      if (!name) {
+        overlay.notify('Escreva o nome: /tocaaqui nome (ou use o botão no cartão da pessoa).');
+        return;
+      }
+      const people = [...room.state.players.entries()]
+        .filter(([id]) => id !== room.sessionId)
+        .map(([id, p]) => ({ id, name: p.name }));
+      const found = findPersonByName(name, people);
+      if (!found) overlay.notify(`Não achei "${name}" nesta sala.`);
+      else if ('ambiguous' in found) {
+        overlay.notify(`Mais de uma pessoa: ${found.ambiguous.map((p) => p.name).join(', ')}.`);
+      } else connection?.highFive(found.person.id);
+    },
+    highFiveNearby: () => {
+      const room = connection?.currentRoom;
+      const me = room?.state.players.get(room.sessionId);
+      if (!room || !me) return;
+      const near = [...room.state.players.entries()]
+        .filter(([id]) => id !== room.sessionId)
+        .map(([id, p]) => ({ id, d: Math.max(Math.abs(p.x - me.x), Math.abs(p.y - me.y)) }))
+        .filter((p) => p.d <= HIGH_FIVE_RANGE)
+        .sort((a, b) => a.d - b.d);
+      if (!near.length) overlay.notify('Ninguém perto para tocar aqui. Chegue perto de alguém.');
+      else if (near[1]?.d === near[0]!.d) {
+        overlay.notify('Tem mais de uma pessoa perto: clique em quem você quer e use "Toca aqui".');
+      } else connection?.highFive(near[0]!.id);
+    },
+    emotePosture: () => {
+      const room = connection?.currentRoom;
+      return emotePosture(room?.state.players.get(room.sessionId)?.action ?? 'idle');
     },
     posture: (p) => connection?.posture(p),
     dropItem: () => connection?.dropItem(),
@@ -853,6 +891,7 @@ async function start(): Promise<void> {
     }
   }
   const avatarCard = new AvatarCard({
+    highFive: (sessionId) => connection?.highFive(sessionId),
     goTo: (sessionId) => {
       const info = scene?.avatarInfo(sessionId);
       // O servidor leva até o tile livre mais perto da pessoa.
@@ -1521,6 +1560,7 @@ async function start(): Promise<void> {
         );
       },
       emote: (msg) => scene?.playEmote(msg.sessionId, msg.emote),
+      highFive: (msg) => scene?.highFive(msg.a, msg.b),
       chatDeleted: (msg) => chat.removeMessage(msg.id),
       wbStroke: (msg) => {
         const list = wbStrokes.get(msg.furniId) ?? [];

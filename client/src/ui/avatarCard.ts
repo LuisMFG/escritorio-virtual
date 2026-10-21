@@ -34,6 +34,8 @@ export interface AvatarCardInfo {
 
 export interface AvatarCardHandlers {
   goTo(sessionId: string): void;
+  /** Toca aqui (Fase 54): o servidor confere se a pessoa está perto e pode. */
+  highFive(sessionId: string): void;
   mention(name: string): void;
   editAvatar(): void;
   openProfile(): void;
@@ -180,6 +182,7 @@ export class AvatarCard {
       }
       actions.append(
         this.button('Ir até', () => this.on.goTo(info.sessionId)),
+        this.button('🤚 Toca aqui', () => this.on.highFive(info.sessionId)),
         this.button('Mensagem', () => this.on.message(info.userId, info.name)),
         this.button('Mencionar', () => this.on.mention(info.name)),
         this.button('🙌 Elogiar', () => this.on.praise(info.userId, info.name)),

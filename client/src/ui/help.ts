@@ -76,7 +76,9 @@ export function openHelp(deps: HelpDeps): void {
   const body = Object.assign(document.createElement('div'), { className: 'sheet-body' });
 
   const emotes = Object.assign(document.createElement('p'), { className: 'muted help-emotes' });
-  emotes.textContent = `Emotes: ${EMOTE_IDS.map((id) => `/${EMOTES[id].command}`).join(' · ')} (ou o botão de carinha ao lado do chat).`;
+  const cmd = (id: (typeof EMOTE_IDS)[number]) =>
+    'needsTarget' in EMOTES[id] ? `/${EMOTES[id].command} nome` : `/${EMOTES[id].command}`;
+  emotes.textContent = `Emotes: ${EMOTE_IDS.map(cmd).join(' · ')} (ou o botão de carinha ao lado do chat). Toca aqui também pelo cartão da pessoa.`;
   const panel = (...nodes: Node[]) => {
     const p = document.createElement('div');
     p.className = 'help-panel';
