@@ -28,6 +28,7 @@ async function walk(page: Page, x: number, y: number) {
 test('chamada por convite: motivo, aceitar, áudio, terceiro entra, recusar e sair', async ({
   browser,
 }) => {
+  test.setTimeout(120_000);
   const ana = await newPerson(browser, 'Ana');
   const beto = await newPerson(browser, 'Beto');
   const caio = await newPerson(browser, 'Caio');

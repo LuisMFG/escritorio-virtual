@@ -28,7 +28,12 @@ export default defineConfig({
     screenshot: 'only-on-failure',
     // Chamadas (Fase 49): microfone de mentira e permissão sem perguntar.
     launchOptions: {
-      args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'],
+      args: [
+        '--use-fake-ui-for-media-stream',
+        '--use-fake-device-for-media-stream',
+        // Fase 50: compartilhar tela sem a janela de escolha.
+        '--auto-select-desktop-capture-source=Entire screen',
+      ],
     },
   },
   webServer: [
