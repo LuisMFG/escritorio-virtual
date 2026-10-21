@@ -7577,3 +7577,170 @@ kbd {
     width: calc(100vw - 16px);
   }
 }
+
+/* ---------- Meu visual: áreas com rolagem própria (21/10/2026) ----------
+   Antes o corpo cortava o que não cabia (sem rolagem) e a lista de peças tinha altura fixa.
+   Agora: esquerda (prévia e looks) rola sozinha; à direita, categorias em cima, peças
+   ocupando o espaço que sobra (com rolagem) e cores embaixo, numa faixa própria. */
+.editor {
+  width: min(980px, 100%);
+  height: min(900px, calc(100dvh - 32px));
+  max-height: calc(100dvh - 32px);
+}
+
+.editor-body {
+  flex: 1;
+  grid-template-columns: 220px minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.editor-preview {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-bottom: 8px;
+  scrollbar-width: thin;
+}
+
+.editor-preview {
+  overflow-x: hidden;
+}
+
+.editor-preview > * {
+  flex: none;
+}
+
+/* Looks na coluna estreita: 3 por linha, sem vazar para o lado das peças. */
+.editor-preview .look-row {
+  grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+}
+
+.editor-preview .look-slot {
+  min-width: 0;
+}
+
+.editor-pick {
+  display: grid;
+  grid-template-rows: auto auto minmax(120px, 1fr) auto auto;
+  gap: 8px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.editor-tabs {
+  max-height: 112px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.editor-sets {
+  max-height: none;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  align-content: start;
+  scrollbar-width: thin;
+}
+
+.editor-more {
+  justify-self: center;
+}
+
+.editor-colors {
+  max-height: 168px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-top: 8px;
+  border-top: 1px solid var(--card-border);
+  scrollbar-width: thin;
+}
+
+.editor-colors:empty {
+  display: none;
+}
+
+/* A prévia encolhe junto com a caixa (sem vazar por baixo). */
+@media (min-width: 641px) {
+  .preview-stage {
+    overflow: hidden;
+  }
+
+  .preview-stage img {
+    width: auto;
+    height: auto;
+    max-height: 100%;
+  }
+}
+
+/* Tela baixa (notebook com zoom, janela pequena): prévia menor para sobrar espaço. */
+@media (max-height: 760px) and (min-width: 641px) {
+  .preview-stage {
+    width: 180px;
+    height: 220px;
+  }
+
+  .editor-colors {
+    max-height: 120px;
+  }
+}
+
+/* Bem baixa: categorias numa linha só (rolam de lado) e cores numa faixa menor. */
+@media (max-height: 650px) and (min-width: 641px) {
+  .editor-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 4px;
+  }
+
+  .editor-tabs button {
+    flex: none;
+  }
+
+  .editor-colors {
+    max-height: 84px;
+  }
+
+  .preview-stage {
+    width: 170px;
+    height: 190px;
+  }
+}
+
+/* Celular: uma coluna só e uma rolagem só (a gaveta inteira). */
+@media (max-width: 640px) {
+  .editor {
+    height: auto;
+  }
+
+  .editor-body {
+    grid-template-columns: 1fr;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .editor-preview {
+    overflow: visible;
+  }
+
+  .editor-pick {
+    display: flex;
+    overflow: visible;
+  }
+
+  .editor-tabs {
+    max-height: none;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+
+  .editor-tabs button {
+    flex: none;
+  }
+
+  .editor-sets,
+  .editor-colors {
+    max-height: none;
+    overflow: visible;
+  }
+}

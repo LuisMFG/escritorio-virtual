@@ -70,3 +70,29 @@ test('fantasia: veste a armadura de Pégaso sem mudar rosto e cabelo', async ({ 
   const after = (await mine()).split('.');
   expect(after).toEqual(expect.arrayContaining([...keep, 'cc-3609-92-96', 'lg-3607-92-96']));
 });
+
+test('meu visual em tela baixa: tudo à vista, peças e prévia com rolagem própria', async ({
+  browser,
+}) => {
+  const ana = await newPerson(browser, 'Ana');
+  const page = ana.page;
+  await page.setViewportSize({ width: 1280, height: 600 });
+  await page.getByRole('button', { name: 'Perfil' }).click();
+  await page.getByRole('button', { name: 'Meu visual' }).click();
+  const editor = page.locator('.editor');
+  await editor.getByRole('tab', { name: 'Blusa' }).click();
+  // O editor cabe na tela e os botões de baixo aparecem.
+  const box = (await editor.boundingBox())!;
+  expect(box.y + box.height).toBeLessThanOrEqual(600);
+  await expect(editor.getByRole('button', { name: 'Salvar visual' })).toBeInViewport();
+  // A lista de peças rola sozinha (a roda do mouse em cima dela).
+  const sets = editor.locator('.editor-sets');
+  const scroll = () => sets.evaluate((el) => el.scrollTop);
+  expect(await sets.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
+  await sets.hover();
+  await page.mouse.wheel(0, 400);
+  await expect.poll(scroll).toBeGreaterThan(0);
+  // A coluna da prévia (com os looks) também rola, em vez de cortar.
+  const preview = editor.locator('.editor-preview');
+  expect(await preview.evaluate((el) => getComputedStyle(el).overflowY)).toBe('auto');
+});
