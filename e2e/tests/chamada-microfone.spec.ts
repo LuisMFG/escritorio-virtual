@@ -83,3 +83,38 @@ test('chamada: quem demora a liberar o microfone também é ouvido', async ({ br
     await expect(beto.page.locator('.call-panel')).toBeHidden();
   }
 });
+
+test('chamada: a conexão do canal cai e volta, e a conversa continua', async ({ browser }) => {
+  test.setTimeout(120_000);
+  const ana = await newPerson(browser, 'Ana');
+  const beto = await newPerson(browser, 'Beto');
+  await holdMic(ana.page);
+  await holdMic(beto.page);
+  await clickTile(beto.page, 6, 17);
+  await beto.page.waitForTimeout(5000);
+  await openCard(ana.page, beto.name);
+  await ana.page.getByRole('button', { name: 'Chamar para conversa' }).click();
+  await ana.page.getByRole('dialog').getByRole('button', { name: 'Chamar' }).click();
+  await beto.page.locator('.call-card').getByRole('button', { name: 'Aceitar' }).click();
+  await expect(ana.page.locator('.call-members li')).toHaveCount(2);
+  for (const p of [ana.page, beto.page])
+    await p.evaluate(() => (window as unknown as { __releaseMic: () => void }).__releaseMic());
+  await expect
+    .poll(async () => Math.min(...Object.values(await audioBytes(beto.page))), { timeout: 20_000 })
+    .toBeGreaterThan(2000);
+
+  // O servidor derruba a conexão do Beto com o canal global e ela volta com outra sessão.
+  await beto.page.evaluate(() =>
+    (window as unknown as { __e2eLobby: { floodForTests(): void } }).__e2eLobby.floodForTests(),
+  );
+  await beto.page.waitForTimeout(4000);
+  await expect(beto.page.locator('.call-panel')).toBeVisible();
+  await expect(beto.page.getByText('O áudio está em outra aba.')).toHaveCount(0);
+  // O áudio segue indo e vindo.
+  const before = await audioBytes(beto.page);
+  await beto.page.waitForTimeout(2000);
+  const after = await audioBytes(beto.page);
+  expect(after.sent).toBeGreaterThan(before.sent + 1000);
+  expect(after.received).toBeGreaterThan(before.received + 1000);
+  await ana.page.getByRole('button', { name: /Sair/ }).click();
+});
