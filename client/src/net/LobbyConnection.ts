@@ -80,16 +80,29 @@ export class LobbyConnection {
   private leaving = false;
   private rejoining = false;
   private calls: CallHandlers | null = null;
+  /**
+   * Identidade desta aba: a mesma em todas as reconexões. Assim, se a conexão cair no meio de
+   * uma chamada, o servidor sabe que é a mesma aba que voltou e a chamada continua.
+   */
+  private readonly tab = Math.random().toString(36).slice(2, 12) + Date.now().toString(36);
 
   constructor(
     private readonly token: string,
     private readonly on: LobbyHandlers,
   ) {}
 
+  /**
+   * Só para os testes: manda mensagens demais de uma vez, e o servidor derruba a conexão (como
+   * acontecia com os candidatos ICE no começo das chamadas). Ela volta sozinha, com outra sessão.
+   */
+  floodForTests(): void {
+    for (let i = 0; i < 150; i++) this.room?.send('e2e.flood', {});
+  }
+
   async connect(): Promise<void> {
     const room: Room<unknown, LobbyState> = await this.client.joinOrCreate(
       LOBBY_ROOM,
-      { token: this.token },
+      { token: this.token, tab: this.tab },
       LobbyState,
     );
     this.room = room;

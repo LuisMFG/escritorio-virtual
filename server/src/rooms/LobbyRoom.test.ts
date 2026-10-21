@@ -52,8 +52,8 @@ afterAll(async () => colyseus.shutdown());
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const newUser = (name: string) => svc.users.create(name, 'hd-180-1.ch-210-66.lg-270-82');
 
-async function lobby(token: string) {
-  const room = await colyseus.sdk.joinOrCreate(LOBBY_ROOM, { token }, LobbyState);
+async function lobby(token: string, tab?: string) {
+  const room = await colyseus.sdk.joinOrCreate(LOBBY_ROOM, { token, tab }, LobbyState);
   await room.waitForInitialState();
   return room;
 }
@@ -244,6 +244,60 @@ describe('LobbyRoom', () => {
 
       const ice = await a.request(CallMessage.Ice);
       expect(Array.isArray(ice)).toBe(true);
+      svc.presence.remove('sa');
+      svc.presence.remove('sb');
+    });
+
+    it('a conexão da aba cai e volta com outra sessão: a chamada continua nela', async () => {
+      const ana = newUser('Ana');
+      const beto = newUser('Beto');
+      svc.presence.add({ sessionId: 'sa', userId: ana.user.id, name: 'Ana', roomId: 'reception' });
+      svc.presence.add({
+        sessionId: 'sb',
+        userId: beto.user.id,
+        name: 'Beto',
+        roomId: 'reception',
+      });
+      const a = await lobby(ana.token, 'aba-ana');
+      const b1 = await lobby(beto.token, 'aba-beto');
+      const invited = b1.waitForMessage(CallMessage.Invited) as Promise<CallInvite>;
+      a.send(CallMessage.Invite, { toUserId: beto.user.id, reason: '' });
+      const inv = await invited;
+      const started = b1.waitForMessage(CallMessage.State) as Promise<CallState>;
+      b1.send(CallMessage.Answer, { inviteId: inv.id, accept: true });
+      expect((await started).here).toBe(true);
+
+      // Mesma aba, conexão nova (a antiga caiu): continua sendo a que fala. Outra aba do Beto
+      // não fala. (O estado sai de novo quando algo muda na chamada.)
+      const b2 = await lobby(beto.token, 'aba-beto');
+      const other = await lobby(beto.token, 'outra-aba');
+      await wait(100);
+      const atB2 = b2.waitForMessage(CallMessage.State) as Promise<CallState>;
+      const atOther = other.waitForMessage(CallMessage.State) as Promise<CallState>;
+      a.send(CallMessage.Media, { mic: false, cam: false, screen: false });
+      expect((await atB2).here).toBe(true);
+      expect((await atOther).here).toBe(false);
+
+      await b1.leave();
+      await wait(100);
+      expect(svc.calls.callOf(beto.user.id)?.members).toHaveLength(2);
+      const sig = b2.waitForMessage(CallMessage.Signal) as Promise<{ fromUserId: string }>;
+      a.send(CallMessage.Signal, {
+        toUserId: beto.user.id,
+        data: {
+          kind: 'ice',
+          candidates: [
+            { candidate: 'candidate:1 1 udp 1 1.2.3.4 5 typ host', sdpMid: '0', sdpMLineIndex: 0 },
+          ],
+        },
+      });
+      expect((await sig).fromUserId).toBe(ana.user.id);
+
+      // Fechou a aba que fala (as duas conexões dela): sai da chamada.
+      await b2.leave();
+      await wait(100);
+      expect(svc.calls.callOf(beto.user.id)).toBeFalsy();
+      await other.leave();
       svc.presence.remove('sa');
       svc.presence.remove('sb');
     });

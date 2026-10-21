@@ -44,7 +44,11 @@ import { KeyedRateLimiter } from '../util/rateLimiter.js';
 type LobbyClient = Client<{ auth: UserRow }>;
 
 const RECONNECT_SECONDS = 30;
-const lobbyJoinSchema = z.object({ token: z.string().min(1).max(200) });
+const lobbyJoinSchema = z.object({
+  token: z.string().min(1).max(200),
+  /** Identidade da aba (fixa enquanto a página está aberta, mesmo se a conexão cair e voltar). */
+  tab: z.string().min(1).max(64).optional(),
+});
 
 /**
  * Canal global: todo mundo conectado fica aqui, em qualquer sala física. Leva as mensagens
@@ -52,15 +56,22 @@ const lobbyJoinSchema = z.object({ token: z.string().min(1).max(200) });
  */
 export class LobbyRoom extends Room<{ state: LobbyState; client: LobbyClient }> {
   override maxClients = 200;
-  override maxMessagesPerSecond = 20;
+  // Folga para o começo de uma chamada (descrições e lotes de candidatos ICE, Fase 49).
+  override maxMessagesPerSecond = 60;
 
   /** DMs: 5 seguidas, depois 1 por segundo. */
   private readonly dmLimiter = new KeyedRateLimiter(5, 1);
   private readonly reactLimiter = new KeyedRateLimiter(10, 3);
   /** Convites de chamada: 4 seguidos, depois 1 a cada 3 s. */
   private readonly callLimiter = new KeyedRateLimiter(4, 1 / 3);
-  /** Pessoa → aba que fala na chamada (com duas abas abertas, só uma conecta o áudio). */
-  private readonly callSession = new Map<string, string>();
+  /**
+   * Pessoa → aba que fala na chamada (com duas abas abertas, só uma conecta o áudio). Guarda a
+   * identidade da aba, não a sessão: se a conexão da aba cai e volta (sessão nova), a chamada
+   * continua nela em vez de virar "o áudio está em outra aba".
+   */
+  private readonly callTab = new Map<string, string>();
+  /** Sessão → identidade da aba. */
+  private readonly tabs = new Map<string, string>();
 
   override messages = {
     [LobbyClientMessage.DmSend]: validate(dmSendSchema, (client, msg) =>
@@ -108,7 +119,7 @@ export class LobbyRoom extends Room<{ state: LobbyState; client: LobbyClient }> 
       if (!this.callLimiter.tryTake(c.sessionId)) return this.sendError(c, ErrorCode.RateLimit);
       const calls = services().calls;
       // Quem chama sem estar em chamada: esta aba é a que vai falar.
-      if (!calls.callOf(me)) this.callSession.set(me, c.sessionId);
+      if (!calls.callOf(me)) this.callTab.set(me, this.tabOf(c));
       const outcome = calls.invite(me, msg.toUserId, msg.reason);
       if (outcome !== 'sent') {
         c.send(CallMessage.InviteResult, {
@@ -123,7 +134,7 @@ export class LobbyRoom extends Room<{ state: LobbyState; client: LobbyClient }> 
       const c = client as LobbyClient;
       const me = c.auth?.id;
       if (!me) return;
-      if (msg.accept) this.callSession.set(me, c.sessionId);
+      if (msg.accept) this.callTab.set(me, this.tabOf(c));
       services().calls.answer(me, msg.inviteId, msg.accept);
     }),
     [CallMessage.Leave]: (client: Client) => {
@@ -141,10 +152,9 @@ export class LobbyRoom extends Room<{ state: LobbyState; client: LobbyClient }> 
       const me = c.auth?.id;
       if (!me) return;
       // Só entre participantes da mesma chamada, e só da/para a aba que fala.
-      if (this.callSession.get(me) !== c.sessionId) return;
+      if (this.callTab.get(me) !== this.tabOf(c)) return;
       if (!services().calls.sameCall(me, msg.toUserId)) return;
-      const target = this.clients.find((x) => x.sessionId === this.callSession.get(msg.toUserId));
-      target?.send(CallMessage.Signal, { fromUserId: me, data: msg.data });
+      this.callClient(msg.toUserId)?.send(CallMessage.Signal, { fromUserId: me, data: msg.data });
     }),
     [CallMessage.Ice]: async () => services().turn.iceServers(),
   };
@@ -168,14 +178,26 @@ export class LobbyRoom extends Room<{ state: LobbyState; client: LobbyClient }> 
 
   private sendCallState(userId: string): void {
     const view = services().calls.callOf(userId);
-    if (!view) this.callSession.delete(userId);
-    const owner = this.callSession.get(userId);
+    if (!view) this.callTab.delete(userId);
+    const owner = this.callTab.get(userId);
     for (const c of this.clientsOf(userId)) {
       c.send(
         CallMessage.State,
-        view ? ({ ...view, here: c.sessionId === owner } satisfies CallState) : null,
+        view ? ({ ...view, here: this.tabOf(c) === owner } satisfies CallState) : null,
       );
     }
+  }
+
+  private tabOf(client: LobbyClient): string {
+    return this.tabs.get(client.sessionId) ?? client.sessionId;
+  }
+
+  /** Conexão (a mais recente) da aba que fala na chamada dessa pessoa. */
+  private callClient(userId: string): LobbyClient | undefined {
+    const tab = this.callTab.get(userId);
+    return this.clientsOf(userId)
+      .filter((c) => this.tabOf(c) === tab)
+      .at(-1);
   }
 
   private readonly syncPeople = (): void => {
@@ -317,10 +339,11 @@ export class LobbyRoom extends Room<{ state: LobbyState; client: LobbyClient }> 
     services().kudos.events.off('given', this.onKudos);
   }
 
-  override onAuth(_client: Client, options: unknown): UserRow {
+  override onAuth(client: Client, options: unknown): UserRow {
     const parsed = lobbyJoinSchema.safeParse(options);
     const user = parsed.success ? services().users.findByToken(parsed.data.token) : undefined;
     if (!user) throw new ServerError(401, ERROR_MESSAGES.INVALID_SESSION);
+    if (parsed.data?.tab) this.tabs.set(client.sessionId, `${user.id}:${parsed.data.tab}`);
     return user;
   }
 
@@ -338,12 +361,16 @@ export class LobbyRoom extends Room<{ state: LobbyState; client: LobbyClient }> 
     this.dmLimiter.delete(client.sessionId);
     this.reactLimiter.delete(client.sessionId);
     this.callLimiter.delete(client.sessionId);
+    const tab = this.tabOf(client);
+    this.tabs.delete(client.sessionId);
     const userId = client.auth?.id;
     if (!userId) return;
-    // Fechou a aba que falava, ou saiu de vez: sai da chamada (e os convites acabam).
-    if (this.clientsOf(userId).every((c) => c.sessionId === client.sessionId)) {
+    // Fechou a aba que falava, ou saiu de vez: sai da chamada (e os convites acabam). Se a
+    // mesma aba já voltou com outra conexão, a chamada segue.
+    const others = this.clientsOf(userId).filter((c) => c.sessionId !== client.sessionId);
+    if (!others.length) {
       services().calls.disconnect(userId);
-    } else if (this.callSession.get(userId) === client.sessionId) {
+    } else if (this.callTab.get(userId) === tab && !others.some((c) => this.tabOf(c) === tab)) {
       services().calls.leave(userId);
     }
   }
