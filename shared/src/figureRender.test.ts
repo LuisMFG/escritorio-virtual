@@ -439,3 +439,87 @@ describe('quadro largo (pet de ombro e itens diversos)', () => {
     expect(WIDE_CANVAS.regY).toBe(STAND_CANVAS.regY);
   });
 });
+
+describe('pose por parte do corpo (Fase 54)', () => {
+  const data: FigureData = {
+    ...DATA,
+    partLib: { ...DATA.partLib, 'lh:1': 'body', 'rh:1': 'body' },
+    sets: {
+      'hd:1': {
+        p: 1,
+        parts: [
+          ['lh', 1, 0, 1],
+          ['rh', 1, 0, 1],
+          ['hd', 1, 0, 1],
+        ],
+      },
+    },
+  };
+  const at = (x: number) => ({ x: -x, y: 50 });
+  const on = (out: Uint8ClampedArray, x: number, y = 50) => px(out, x, y)[3] === 255;
+  const parts = resolveFigure('hd-1', data).parts;
+  const mirror = (x: number) => FIGURE_WIDTH - 1 - x;
+  const libs = new Map([
+    [
+      'body',
+      lib({
+        h_std_lh_1_2_0: at(0),
+        h_crr_lh_1_2_0: at(10),
+        h_lay_lh_1_2_0: at(14),
+        h_std_rh_1_2_0: at(4),
+        h_std_hd_1_2_0: at(20),
+        h_std_hd_1_3_0: at(30),
+        h_lay_hd_1_2_0: at(40),
+      }),
+    ],
+  ]);
+
+  it('cada grupo usa a sua ação: o braço esquerdo carrega e o direito fica parado', () => {
+    const out = composeFigure(parts, libs, {
+      direction: 2,
+      parts: { leftArm: { action: 'crr' } },
+    });
+    expect(on(out, 10)).toBe(true);
+    expect(on(out, 0)).toBe(false);
+    expect(on(out, 4)).toBe(true);
+  });
+
+  it('deslocamento por grupo; no espelho o x inverte junto', () => {
+    const pose = { parts: { head: { dx: 3, dy: 2 } } };
+    const right = composeFigure(parts, libs, { direction: 2, ...pose });
+    expect(on(right, 23, 52)).toBe(true);
+    expect(on(right, 20, 50)).toBe(false);
+    // Direção 4 = espelho da 2: a cabeça vai 3 px para o outro lado.
+    const left = composeFigure(parts, libs, { direction: 4, ...pose });
+    expect(on(left, mirror(23), 52)).toBe(true);
+  });
+
+  it('giro do grupo: a cabeça olha para a direção vizinha', () => {
+    const out = composeFigure(parts, libs, { direction: 2, parts: { head: { dd: 1 } } });
+    expect(on(out, 30)).toBe(true);
+    expect(on(out, 20)).toBe(false);
+    // Da direção 4 (espelhada) girando −1 cai na 3, que não é espelho.
+    const back = composeFigure(parts, libs, { direction: 4, parts: { head: { dd: -1 } } });
+    expect(on(back, 30)).toBe(true);
+  });
+
+  it('deitado a pose por grupo não vale (só o rosto muda)', () => {
+    const out = composeFigure(
+      parts,
+      libs,
+      { direction: 2, posture: 'lay', parts: { leftArm: { action: 'crr', dx: 5 } } },
+      LAY_CANVAS,
+    );
+    const lay = (x: number) => out[(50 * LAY_CANVAS.width + LAY_CANVAS.regX + x) * 4 + 3] === 255;
+    expect(lay(14)).toBe(true);
+    expect(lay(10)).toBe(false);
+  });
+
+  it('a chave de cache muda com a pose dos grupos', () => {
+    const base = poseKey({ direction: 2 });
+    expect(poseKey({ direction: 2, parts: { leftArm: { action: 'crr' } } })).not.toBe(base);
+    expect(poseKey({ direction: 2, parts: { head: { dy: 1 } } })).not.toBe(
+      poseKey({ direction: 2, parts: { head: { dy: 2 } } }),
+    );
+  });
+});

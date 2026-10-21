@@ -197,6 +197,25 @@ export type FigureGesture = 'wav' | 'blw' | 'respect' | 'drk' | 'crr' | 'sig';
 /** Expressão do rosto (`eyb` = olhos fechados: piscar ou dormindo). */
 export type FigureExpression = 'sml' | 'sad' | 'agr' | 'srp' | 'eyb';
 
+/** Grupos do corpo que uma animação move cada um do seu jeito (como as danças do Habbo). */
+export type BodyGroup = 'head' | 'torso' | 'leftArm' | 'rightArm' | 'legs';
+export const BODY_GROUPS: readonly BodyGroup[] = ['head', 'torso', 'leftArm', 'rightArm', 'legs'];
+
+/**
+ * Pose de um grupo do corpo num quadro de animação (Fase 54). A arte do Habbo não tem palmas,
+ * pulo ou reverência: os movimentos novos combinam os desenhos que existem, parte por parte.
+ */
+export interface PartPose {
+  /** Ação do desenho (`std`, `wlk`, `wav`, `respect`, `sig`, `blw`, `drk`, `crr`…). */
+  action?: string;
+  frame?: number;
+  /** Deslocamento em px, no desenho virado para a direita (o espelho inverte o x). */
+  dx?: number;
+  dy?: number;
+  /** Giro em relação ao corpo, em direções (−1, +1…), como a cabeça do Habbo. */
+  dd?: number;
+}
+
 export interface FigurePose {
   direction: number;
   posture?: FigurePosture;
@@ -217,6 +236,21 @@ export interface FigurePose {
   handGesture?: 'crr' | 'drk';
   /** Quadro das roupas animadas (cresce sem parar; cada peça usa o resto pelo seu total). */
   clothingFrame?: number;
+  /** Pose por grupo do corpo (emotes e danças da Fase 54): vale antes do gesto e da postura. */
+  parts?: Partial<Record<BodyGroup, PartPose>>;
+}
+
+const TORSO_PARTS = new Set(['bd', 'ch', 'cp', 'cc', 'ca', 'wa', 'mc', 'mco', 'pt', 'ptl', 'ptr']);
+const LEG_PARTS = new Set(['lg', 'sh']);
+
+/** Grupo de cada parte (a sombra e o resto não se mexem com a animação). */
+export function bodyGroupOf(type: string): BodyGroup | null {
+  if (HEAD_PARTS.has(type)) return 'head';
+  if (LEFT_ARM.has(type) || type === 'li') return 'leftArm';
+  if (RIGHT_ARM_ITEM.has(type)) return 'rightArm';
+  if (LEG_PARTS.has(type)) return 'legs';
+  if (TORSO_PARTS.has(type)) return 'torso';
+  return null;
 }
 
 /**
@@ -295,6 +329,14 @@ function actionsFor(type: string, pose: FigurePose): [string, number][] {
   const lay = posture === 'lay';
   const talk = pose.talk ? (pose.talkFrame ?? 0) : -1;
   const list: [string, number][] = [];
+  // Pose do grupo na animação (Fase 54) vem antes de tudo; manga sem o desenho usa o parecido.
+  const group = bodyGroupOf(type);
+  const own = group ? pose.parts?.[group]?.action : undefined;
+  if (own && !lay && !(HEAD_PARTS.has(type) && (type === 'ey' || type === 'fc'))) {
+    list.push([own, pose.parts![group!]!.frame ?? 0]);
+    const alias = GESTURE_SLEEVES.has(type) ? SLEEVE_ALIAS[own as FigureGesture] : undefined;
+    if (alias) list.push([alias, 0]);
+  }
   if (type === 'ey') {
     if (pose.expression) list.push([lay ? LAY_FACE[pose.expression] : pose.expression, 0]);
   } else if (type === 'fc') {
@@ -348,6 +390,8 @@ export function composeFigure(
   const mirror = wanted >= 4 && wanted <= 6;
   const dir = mirror ? 6 - wanted : wanted;
   const order = ORDER[dir] ?? ORDER[2]!;
+  // Deitado não há pose por parte: só o rosto muda (o braço ficava em pé, no ar).
+  const groups = pose.posture === 'lay' ? undefined : pose.parts;
   const all =
     pose.handItem && libs.has('hh_human_item')
       ? [...parts, { type: 'ri', id: pose.handItem, lib: 'hh_human_item', tint: null }]
@@ -358,28 +402,34 @@ export function composeFigure(
   for (const part of sorted) {
     const lib = libs.get(part.lib);
     if (!lib) continue;
+    const group = bodyGroupOf(part.type);
+    const pp = group ? groups?.[group] : undefined;
+    // Giro do grupo (a cabeça olhando para o lado): direção e espelho próprios da parte.
+    const pWanted = pp?.dd ? (((wanted + pp.dd) % 8) + 8) % 8 : wanted;
+    const pMirror = pWanted >= 4 && pWanted <= 6;
+    const pDir = pMirror ? 6 - pWanted : pWanted;
     let found: { key: string; flip: boolean } | null = null;
     for (const [act, f] of actionsFor(part.type, pose)) {
       // Roupa animada: na pose em pé, o quadro da animação (pelo total de quadros da peça).
       const frame =
         part.animated && act === 'std' && f === 0 && pose.clothingFrame
-          ? pose.clothingFrame % animFrames(lib, part, dir)
+          ? pose.clothingFrame % animFrames(lib, part, pDir)
           : f;
       const base = `h_${act}_${part.type}_${part.id}_`;
       // Quadro de fala que falta: vai para a próxima ação (a pose parada), não para o quadro 0.
       const zero = TALK_ACTIONS.has(act) && frame > 0 ? null : 0;
       const tries: [string, boolean][] = [];
       // Desenho próprio da direção pedida (alguns gestos e itens nas direções 4–6): sem espelho.
-      if (mirror) tries.push([`${base}${wanted}_${frame}`, false]);
-      if (mirror && zero !== null) tries.push([`${base}${wanted}_0`, false]);
-      if (mirror) {
+      if (pMirror) tries.push([`${base}${pWanted}_${frame}`, false]);
+      if (pMirror && zero !== null) tries.push([`${base}${pWanted}_0`, false]);
+      if (pMirror) {
         // Espelho com a parte do outro lado; se o conjunto não tiver, a própria (como antes).
         const other = `h_${act}_${flippedType(part.type)}_${part.id}_`;
-        tries.push([`${other}${dir}_${frame}`, true]);
-        if (zero !== null) tries.push([`${other}${dir}_0`, true]);
+        tries.push([`${other}${pDir}_${frame}`, true]);
+        if (zero !== null) tries.push([`${other}${pDir}_0`, true]);
       }
-      tries.push([`${base}${dir}_${frame}`, mirror]);
-      if (zero !== null) tries.push([`${base}${dir}_0`, mirror]);
+      tries.push([`${base}${pDir}_${frame}`, pMirror]);
+      if (zero !== null) tries.push([`${base}${pDir}_0`, pMirror]);
       const hit = tries.find(([k]) => lib.assets[k]);
       if (hit) {
         found = { key: hit[0], flip: hit[1] };
@@ -390,13 +440,14 @@ export function composeFigure(
     const asset = lib.assets[found.key]!;
     const rect = lib.frames[asset.source ?? found.key] ?? lib.frames[found.key];
     if (!rect) continue;
+    // O deslocamento vale no desenho virado para a direita: no espelho, o x inverte junto.
     blit(
       out,
       canvas,
       lib,
       rect,
-      canvas.regX - asset.x,
-      canvas.regY - asset.y,
+      canvas.regX - asset.x + (pp?.dx ?? 0),
+      canvas.regY - asset.y + (pp?.dy ?? 0),
       found.flip,
       part.tint,
     );
@@ -417,7 +468,18 @@ export function poseKey(p: FigurePose): string {
     p.handItem ?? '',
     p.handGesture ?? '',
     p.clothingFrame ?? '',
+    partsKey(p.parts),
   ].join('|');
+}
+
+function partsKey(parts: FigurePose['parts']): string {
+  if (!parts) return '';
+  return BODY_GROUPS.map((g) => {
+    const pp = parts[g];
+    return pp
+      ? `${pp.action ?? ''},${pp.frame ?? 0},${pp.dx ?? 0},${pp.dy ?? 0},${pp.dd ?? 0}`
+      : '';
+  }).join(';');
 }
 
 /**
