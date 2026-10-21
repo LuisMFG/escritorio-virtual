@@ -1236,6 +1236,13 @@ async function start(): Promise<void> {
       mute: (m) => calls?.setMuted(m),
       leave: () => calls?.leave(),
       isMuted: () => calls?.isMuted ?? false,
+      camera: async (on) => (await calls?.setCamera(on)) ?? false,
+      screen: async (on) => (await calls?.setScreen(on)) ?? false,
+      cameraOn: () => calls?.cameraOn ?? false,
+      screenOn: () => calls?.screenOn ?? false,
+      devices: async () => (await calls?.devices()) ?? { mics: [], cams: [] },
+      useMic: async (id) => calls?.useMic(id),
+      useCam: async (id) => calls?.useCam(id),
     });
     const panel = callPanel;
     calls = new CallManager(l, me, {
@@ -1268,6 +1275,7 @@ async function start(): Promise<void> {
           if (ids.has(p.userId)) sessions.add(sid);
         scene?.setSpeaking(sessions);
       },
+      videos: (v) => panel.setVideos(v),
       error: (message) => overlay.notify(message, { kind: 'error', durationMs: 6000 }),
     });
   }

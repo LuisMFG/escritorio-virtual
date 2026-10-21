@@ -151,20 +151,56 @@ export class IncomingCalls {
   }
 }
 
-/** Painel da chamada: quem está, tempo, mudo e sair; anel em quem está falando. */
+/** O que o painel precisa da chamada (Fase 50: câmera, tela e dispositivos). */
+export interface CallPanelHandlers {
+  mute(muted: boolean): void;
+  leave(): void;
+  isMuted(): boolean;
+  camera(on: boolean): Promise<boolean>;
+  screen(on: boolean): Promise<boolean>;
+  cameraOn(): boolean;
+  screenOn(): boolean;
+  devices(): Promise<{
+    mics: MediaDeviceInfo[];
+    cams: MediaDeviceInfo[];
+    mic?: string;
+    cam?: string;
+  }>;
+  useMic(deviceId: string): Promise<void>;
+  useCam(deviceId: string): Promise<void>;
+}
+
+/** Vídeo no painel (câmera ou tela). */
+export interface PanelVideo {
+  stream: MediaStream;
+  kind: 'cam' | 'screen';
+}
+
+/**
+ * Painel da chamada: quem está, tempo, mudo, câmera, tela, dispositivos e sair; anel em quem
+ * está falando. Com vídeo, mostra a grade (a tela compartilhada em destaque) e dá para ampliar.
+ */
 export class CallPanel {
   private readonly el = document.createElement('section');
+  private readonly main = document.createElement('div');
+  private readonly videosBox = document.createElement('div');
+  private readonly tiles = new Map<string, { el: HTMLElement; video: HTMLVideoElement }>();
+  private videos: ReadonlyMap<string, PanelVideo> = new Map();
   private timer = 0;
   private state: CallState | null = null;
   private speaking: ReadonlySet<string> = new Set();
+  private expanded = false;
 
   constructor(
     private readonly myUserId: string,
-    private readonly on: { mute(muted: boolean): void; leave(): void; isMuted(): boolean },
+    private readonly on: CallPanelHandlers,
   ) {
     this.el.className = 'call-panel';
     this.el.setAttribute('aria-label', 'Chamada');
     this.el.hidden = true;
+    this.videosBox.className = 'call-videos';
+    this.videosBox.hidden = true;
+    this.el.append(this.videosBox, this.main);
     document.body.append(this.el);
   }
 
@@ -173,7 +209,8 @@ export class CallPanel {
     clearInterval(this.timer);
     if (!state) {
       this.el.hidden = true;
-      this.el.replaceChildren();
+      this.main.replaceChildren();
+      this.setExpanded(false);
       return;
     }
     this.el.hidden = false;
@@ -188,6 +225,68 @@ export class CallPanel {
     }
   }
 
+  /** Vídeos ativos: atualiza a grade sem recriar quem já estava (o vídeo não pisca). */
+  setVideos(videos: ReadonlyMap<string, PanelVideo>): void {
+    this.videos = videos;
+    for (const [id, t] of this.tiles) {
+      if (!videos.has(id)) {
+        t.video.srcObject = null;
+        t.el.remove();
+        this.tiles.delete(id);
+      }
+    }
+    const nameOf = (id: string) => this.state?.members.find((m) => m.userId === id)?.name ?? '';
+    for (const [id, v] of videos) {
+      let t = this.tiles.get(id);
+      if (!t) {
+        const el = document.createElement('figure');
+        el.className = 'call-tile';
+        el.dataset.user = id;
+        const video = document.createElement('video');
+        video.autoplay = true;
+        video.playsInline = true;
+        video.muted = true; // o áudio vem pela conexão de áudio
+        el.append(video, document.createElement('figcaption'));
+        el.addEventListener('dblclick', () => this.setExpanded(!this.expanded));
+        t = { el, video };
+        this.tiles.set(id, t);
+      }
+      if (t.video.srcObject !== v.stream) {
+        t.video.srcObject = v.stream;
+        void t.video.play().catch(() => undefined);
+      }
+      t.el.classList.toggle('screen', v.kind === 'screen');
+      t.el.classList.toggle('mine', id === this.myUserId);
+      t.el.classList.toggle('speaking', this.speaking.has(id));
+      t.el.querySelector('figcaption')!.textContent =
+        `${id === this.myUserId ? 'Você' : nameOf(id)}${v.kind === 'screen' ? ' · tela' : ''}`;
+    }
+    // Tela compartilhada primeiro (em destaque), depois as câmeras.
+    const order = [...this.tiles].sort(
+      ([, a], [, b]) =>
+        Number(b.el.classList.contains('screen')) - Number(a.el.classList.contains('screen')),
+    );
+    this.videosBox.replaceChildren(...order.map(([, t]) => t.el));
+    this.videosBox.hidden = this.tiles.size === 0;
+    this.videosBox.classList.toggle(
+      'has-screen',
+      [...videos.values()].some((v) => v.kind === 'screen'),
+    );
+    this.el.classList.toggle('with-video', this.tiles.size > 0);
+    if (this.state) this.render();
+  }
+
+  private setExpanded(on: boolean): void {
+    this.expanded = on;
+    this.el.classList.toggle('expanded', on);
+    const b = this.el.querySelector<HTMLButtonElement>('.call-expand');
+    if (b) {
+      b.replaceChildren(icon(on ? 'minimize' : 'maximize', 16));
+      b.setAttribute('aria-label', on ? 'Diminuir' : 'Ampliar');
+      b.title = on ? 'Diminuir' : 'Ampliar';
+    }
+  }
+
   private render(): void {
     const st = this.state!;
     const head = document.createElement('div');
@@ -197,6 +296,14 @@ export class CallPanel {
       Object.assign(document.createElement('strong'), { textContent: 'Em chamada' }),
       Object.assign(document.createElement('span'), { className: 'call-time muted' }),
     );
+    if (this.tiles.size) {
+      const expand = Object.assign(document.createElement('button'), {
+        type: 'button',
+        className: 'call-expand icon-btn',
+      });
+      expand.addEventListener('click', () => this.setExpanded(!this.expanded));
+      head.append(expand);
+    }
     const list = document.createElement('ul');
     list.className = 'call-members';
     for (const m of st.members) {
@@ -209,6 +316,8 @@ export class CallPanel {
         }),
       );
       if (!m.mic) li.append(icon('mic-off', 13));
+      if (m.cam) li.append(icon('video', 13));
+      if (m.screen) li.append(icon('screen-share', 13));
       list.append(li);
     }
     const parts: Node[] = [head, list];
@@ -222,31 +331,94 @@ export class CallPanel {
     }
     const actions = document.createElement('div');
     actions.className = 'call-panel-actions';
+    const btn = (
+      cls: string,
+      name: Parameters<typeof icon>[0],
+      label: string,
+      pressed: boolean | null,
+      onClick: () => void | Promise<void>,
+    ) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = `btn-secondary call-btn ${cls}${pressed ? ' on' : ''}`;
+      b.append(
+        icon(name, 16),
+        Object.assign(document.createElement('span'), { textContent: label }),
+      );
+      b.title = label;
+      b.setAttribute('aria-label', label);
+      if (pressed !== null) b.setAttribute('aria-pressed', String(pressed));
+      b.disabled = !st.here;
+      b.addEventListener('click', async () => {
+        b.disabled = true;
+        await onClick();
+        this.render();
+      });
+      actions.append(b);
+      return b;
+    };
     const muted = this.on.isMuted();
-    const mute = document.createElement('button');
-    mute.type = 'button';
-    mute.className = `btn-secondary call-mute${muted ? ' on' : ''}`;
-    mute.append(icon(muted ? 'mic-off' : 'mic', 16), muted ? ' Ativar som' : ' Mudo');
-    mute.setAttribute('aria-pressed', String(muted));
-    mute.disabled = !st.here;
-    mute.addEventListener('click', () => {
-      this.on.mute(!this.on.isMuted());
-      this.render();
+    btn('call-mute', muted ? 'mic-off' : 'mic', muted ? 'Ativar som' : 'Mudo', muted, () =>
+      this.on.mute(!muted),
+    );
+    const cam = this.on.cameraOn();
+    btn(
+      'call-cam',
+      cam ? 'video' : 'video-off',
+      cam ? 'Desligar câmera' : 'Câmera',
+      cam,
+      async () => {
+        await this.on.camera(!cam);
+      },
+    );
+    const screen = this.on.screenOn();
+    btn('call-screen', 'screen-share', screen ? 'Parar tela' : 'Tela', screen, async () => {
+      await this.on.screen(!screen);
     });
+    btn('call-devices', 'settings', 'Dispositivos', null, () => this.openDevices());
     const leave = document.createElement('button');
     leave.type = 'button';
     leave.className = 'btn-primary btn-danger call-leave';
     leave.append(icon('phone-off', 16), ' Sair');
     leave.addEventListener('click', () => this.on.leave());
-    actions.append(mute, leave);
+    actions.append(leave);
     parts.push(actions);
-    this.el.replaceChildren(...parts);
+    this.main.replaceChildren(...parts);
+    this.setExpanded(this.expanded);
     this.renderTime();
+  }
+
+  /** Escolher microfone e câmera (os nomes só aparecem depois de dar permissão). */
+  private async openDevices(): Promise<void> {
+    this.main.querySelector('.call-devices-box')?.remove();
+    const box = document.createElement('div');
+    box.className = 'call-devices-box';
+    const { mics, cams, mic, cam } = await this.on.devices();
+    const select = (
+      label: string,
+      list: MediaDeviceInfo[],
+      current: string | undefined,
+      use: (id: string) => Promise<void>,
+    ) => {
+      const wrap = Object.assign(document.createElement('label'), { className: 'field' });
+      const sel = document.createElement('select');
+      list.forEach((d, i) => sel.append(new Option(d.label || `${label} ${i + 1}`, d.deviceId)));
+      if (current) sel.value = current;
+      sel.disabled = list.length === 0;
+      sel.addEventListener('change', () => void use(sel.value));
+      wrap.append(Object.assign(document.createElement('span'), { textContent: label }), sel);
+      return wrap;
+    };
+    box.append(
+      select('Microfone', mics, mic, (id) => this.on.useMic(id)),
+      select('Câmera', cams, cam, (id) => this.on.useCam(id)),
+    );
+    this.main.append(box);
   }
 
   private renderTime(): void {
     const st = this.state;
-    const el = this.el.querySelector('.call-time');
+    const el = this.main.querySelector('.call-time');
     if (!st || !el) return;
     const s = Math.max(0, Math.floor((Date.now() - st.startedAt) / 1000));
     el.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;

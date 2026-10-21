@@ -7056,3 +7056,144 @@ kbd {
     top: 64px;
   }
 }
+
+/* ---------- Fase 50: vídeo e compartilhar tela ---------- */
+
+.call-panel.with-video {
+  width: min(520px, calc(100vw - 32px));
+}
+
+.call-panel.expanded {
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(1100px, calc(100vw - 48px));
+  max-height: calc(100dvh - 48px);
+  z-index: 46;
+}
+
+.call-videos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 6px;
+}
+
+.call-videos[hidden] {
+  display: none;
+}
+
+/* Tela compartilhada em destaque: ocupa a linha toda. */
+.call-videos.has-screen .call-tile.screen {
+  grid-column: 1 / -1;
+}
+
+.call-tile {
+  position: relative;
+  margin: 0;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: #000;
+  border: 2px solid transparent;
+  transition: border-color var(--dur) var(--ease);
+}
+
+.call-tile.speaking {
+  border-color: var(--ok);
+}
+
+.call-tile video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.call-tile.screen video {
+  object-fit: contain;
+}
+
+/* A própria câmera como espelho (a tela, não). */
+.call-tile.mine:not(.screen) video {
+  transform: scaleX(-1);
+}
+
+.call-tile figcaption {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: calc(11px * var(--font-scale, 1));
+}
+
+.call-panel.expanded .call-videos {
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  overflow-y: auto;
+  max-height: calc(100dvh - 220px);
+}
+
+.call-panel-head .call-expand {
+  width: 30px;
+  height: 30px;
+  margin-left: 4px;
+}
+
+.call-panel-actions {
+  flex-wrap: wrap;
+}
+
+.call-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.call-btn.on {
+  border-color: var(--accent);
+  color: var(--accent-text);
+  background: var(--accent-tint);
+}
+
+.call-mute.on {
+  border-color: var(--danger);
+  color: var(--danger-text);
+  background: var(--danger-tint);
+}
+
+.call-members li svg {
+  color: var(--muted);
+}
+
+.call-devices-box {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.call-devices-box select {
+  width: 100%;
+  min-width: 0;
+}
+
+@media (max-width: 700px) {
+  .call-btn span {
+    display: none;
+  }
+
+  .call-devices-box {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Ampliado com tela: a tela não empurra as câmeras para fora. */
+.call-panel.expanded .call-videos.has-screen .call-tile.screen {
+  aspect-ratio: auto;
+  height: calc(100dvh - 400px);
+  min-height: 240px;
+}
+
+.call-panel.expanded .call-videos.has-screen .call-tile:not(.screen) {
+  max-height: 150px;
+}
