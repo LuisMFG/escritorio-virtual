@@ -64,6 +64,34 @@ export class FurniDefService {
       if (item && hasTop(item)) this.defs.set(id, { ...def, hasTop: true });
     }
     for (const [id, def] of this.defs) this.defs.set(id, withVisual(def, this.itemFor(def)));
+    // Cores de um móvel curado medidas antes da Fase 53: o tampo e o assento passam a ser os dele.
+    for (const [id, def] of this.defs) this.defs.set(id, this.withCuratedBase(def));
+  }
+
+  /**
+   * Outra cor de um móvel curado (`classname*N`): altura, tampo, assento e interação são os do
+   * curado. Do catálogo vinham diferentes (o cofre tem tampo, as outras cores dele não), e trocar
+   * a cor deixava o que estava em cima flutuando.
+   */
+  private withCuratedBase(def: FurniManifestEntry): FurniManifestEntry {
+    const base = baseClassname(def.id);
+    const curatedColor = base !== def.id && this.curated.has(base) && !this.curated.has(def.id);
+    const c = curatedColor ? this.defs.get(base) : undefined;
+    if (!c || c.wall !== def.wall) return def;
+    const out: FurniManifestEntry = {
+      ...def,
+      height: c.height,
+      canSit: c.canSit,
+      canLay: c.canLay,
+      canWalk: c.canWalk,
+      sitHeight: c.sitHeight,
+      light: c.light,
+    };
+    for (const k of ['stackHeight', 'hasTop', 'interaction'] as const) {
+      if (c[k] === undefined) delete out[k];
+      else (out as Record<string, unknown>)[k] = c[k];
+    }
+    return out;
   }
 
   /**
@@ -129,7 +157,7 @@ export class FurniDefService {
     let p = this.pending.get(id);
     if (!p) {
       p = this.measure(item, id).then((measured) => {
-        const entry = withVisual(measured, item);
+        const entry = this.withCuratedBase(withVisual(measured, item));
         this.defs.set(id, entry);
         this.db
           .insert(furniDefs)

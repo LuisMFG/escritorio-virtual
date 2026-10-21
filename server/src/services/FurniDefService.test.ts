@@ -92,3 +92,51 @@ describe('altura de deitar das camas do catálogo (Fase 52)', () => {
     expect(svc.defs.get('cama_velha')?.sitHeight).toBe(0.5);
   });
 });
+
+describe('cores de um móvel curado (Fase 53)', () => {
+  const entry = (over: Partial<FurniManifestEntry> & { id: string }): FurniManifestEntry => ({
+    name: over.id,
+    category: 'teste',
+    width: 1,
+    depth: 1,
+    height: 1,
+    canSit: false,
+    canLay: false,
+    wall: false,
+    canWalk: false,
+    sitHeight: 0,
+    directions: [0, 2],
+    source: 'habboassets',
+    anchors: {},
+    states: [],
+    stateAnchors: {},
+    light: false,
+    animated: false,
+    ...over,
+  });
+
+  it('herdam o tampo e a altura do curado (as gravadas e as medidas agora)', async () => {
+    const db = openDatabase(':memory:');
+    // Uma cor medida antes, sem tampo (como vinha do catálogo).
+    const old = entry({ id: 'cofre*2', height: 1.4 });
+    db.insert(furniDefs)
+      .values({ id: old.id, json: JSON.stringify(old), createdAt: new Date() })
+      .run();
+    const file = join(mkdtempSync(join(tmpdir(), 'catalogo-')), 'catalog.json');
+    const catalog: FurniCatalog = {
+      version: 1,
+      generatedAt: '',
+      items: [item({ id: 'cofre', n: 'Cofre', h: 1.4, colors: ['cofre', 'cofre*2', 'cofre*3'] })],
+    };
+    writeFileSync(file, JSON.stringify(catalog));
+    const curated = new Map([['cofre', entry({ id: 'cofre', hasTop: true, stackHeight: 0.9 })]]);
+    const svc = new FurniDefService(
+      db,
+      curated,
+      async (_item, id) => entry({ id, height: 1.4 }),
+      file,
+    );
+    expect(svc.defs.get('cofre*2')).toMatchObject({ hasTop: true, stackHeight: 0.9, height: 1 });
+    expect(await svc.ensure('cofre*3')).toMatchObject({ hasTop: true, stackHeight: 0.9 });
+  });
+});
