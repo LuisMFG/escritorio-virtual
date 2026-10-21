@@ -20,15 +20,18 @@ export function loadWithFallback(img: HTMLImageElement, urls: string[], onFail: 
 export class ThumbQueue {
   private readonly waiting: (() => void)[] = [];
   private loading = 0;
+  /** Muda a cada `clear()`: as que estavam carregando da lista anterior não contam mais. */
+  private generation = 0;
 
   constructor(private readonly max = 3) {}
 
   load(img: HTMLImageElement, urls: string[], onFail: () => void): void {
     const start = () => {
       this.loading++;
+      const generation = this.generation;
       let finished = false;
       const done = () => {
-        if (finished) return;
+        if (finished || generation !== this.generation) return;
         finished = true;
         this.loading--;
         this.waiting.shift()?.();
@@ -43,8 +46,13 @@ export class ThumbQueue {
     else this.waiting.push(start);
   }
 
-  /** As que ainda não começaram não interessam mais (a lista mudou). */
+  /**
+   * A lista mudou: as que ainda não começaram não interessam mais, e as que estavam carregando
+   * liberam a vez (fora da tela, uma imagem `loading=lazy` nunca termina e travaria a fila).
+   */
   clear(): void {
     this.waiting.length = 0;
+    this.loading = 0;
+    this.generation++;
   }
 }
