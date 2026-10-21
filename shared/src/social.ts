@@ -48,14 +48,6 @@ export const EMOTES = {
   thumbs: { emoji: '👍', label: 'Joinha', command: 'joinha', durationMs: 2000, postures: ARMS },
   heart: { emoji: '❤️', label: 'Coração', command: 'coracao', durationMs: 2200, postures: ARMS },
   coffee: { emoji: '☕', label: 'Café', command: 'cafe', durationMs: 2500, postures: ARMS },
-  dance: {
-    emoji: '💃',
-    label: 'Dançar',
-    command: 'dancar',
-    durationMs: 6000,
-    postures: BODY,
-    verb: 'dançar',
-  },
   // Fase 32: expressões do rosto e mão levantada (com o avatar montado, o rosto muda de verdade).
   hand: { emoji: '✋', label: 'Levantar a mão', command: 'mao', durationMs: 3000, postures: ARMS },
   smile: { emoji: '😊', label: 'Sorrir', command: 'sorrir', durationMs: 3000 },
@@ -135,9 +127,10 @@ export function emoteRefusal(id: EmoteId, posture: EmotePosture): string | null 
 }
 
 /**
- * Reconhece um comando de emote digitado no chat: `/acenar`, `/Coração`, `/dancar`…
+ * Reconhece um comando de emote digitado no chat: `/acenar`, `/Coração`, `/palmas`…
  * (sem diferenciar maiúsculas e acentos). Devolve `null` se não for um comando conhecido.
- * O toca aqui precisa do nome da pessoa: é o `parseHighFiveCommand`.
+ * O toca aqui precisa do nome da pessoa (`parseHighFiveCommand`), e as danças são à parte
+ * (`parseDanceCommand`, Fase 55).
  */
 export function parseEmoteCommand(text: string): EmoteId | null {
   const m = /^\s*\/(\S+)\s*$/.exec(text);

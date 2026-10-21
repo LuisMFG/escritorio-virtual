@@ -52,6 +52,10 @@ export const Player = schema(
     handItem: t.uint16(),
     /** Minha mesa (Fase 42): id da cadeira da estação escolhida na Recepção; vazio = nenhuma. */
     desk: t.string(),
+    /** Dança em andamento (Fase 55, ids de `DANCES`); vazio = não está dançando. */
+    dance: t.string(),
+    /** Começo do compasso da dança (epoch ms do servidor): todos calculam o mesmo quadro. */
+    danceStart: t.float64(),
   },
   'Player',
 );

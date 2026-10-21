@@ -45,6 +45,10 @@ export const ClientMessage = {
   Emote: 'emote',
   /** `{ target }` (sessão): toca aqui com outra pessoa (Fase 54). */
   HighFive: 'emote.highfive',
+  /** `{ dance }`: começa a dança (vazio para) (Fase 55). */
+  Dance: 'dance',
+  /** Requisição: responde a hora do servidor (epoch ms), para o compasso das danças. */
+  Time: 'time',
   /** `{ posture }`: sentar/deitar no chão ou levantar (`/sentar`, `/deitar`, `/levantar`). */
   Posture: 'posture',
   /** `{ dir }`: virar sem sair do lugar (setas do teclado). */

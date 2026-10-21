@@ -34,6 +34,10 @@ export interface AnimFrame {
   talk?: boolean;
   /** Corpo inteiro para cima (negativo) ou para baixo, em px: pulos. */
   bodyDy?: number;
+  /** Corpo inteiro para os lados, em px, no desenho virado para a direita (o espelho inverte). */
+  bodyDx?: number;
+  /** Corpo inteiro girado, em direções (a virada da Macarena, o giro do moonwalk). */
+  bodyDd?: number;
 }
 
 /** Animação descrita como dados (Fase 54): os quadros e o tempo de cada um. */
@@ -241,9 +245,6 @@ export function emotePose(
       return { expression: 'agr' };
     case 'surprised':
       return { expression: 'srp' };
-    case 'dance':
-      // A dança gira o corpo e "anda" no lugar (a cena cuida da direção).
-      return { posture: 'wlk', frame: Math.floor(elapsedMs / 150) % 4, expression: 'sml' };
     default:
       return {};
   }

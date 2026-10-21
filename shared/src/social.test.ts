@@ -6,7 +6,9 @@ describe('parseEmoteCommand', () => {
     expect(parseEmoteCommand('/acenar')).toBe('wave');
     expect(parseEmoteCommand('  /Coração ')).toBe('heart');
     expect(parseEmoteCommand('/CAFÉ')).toBe('coffee');
-    expect(parseEmoteCommand('/dançar')).toBe('dance');
+    expect(parseEmoteCommand('/Reverência')).toBe('bow');
+    // Dançar virou a escolha de dança (Fase 55): não é mais um emote.
+    expect(parseEmoteCommand('/dançar')).toBeNull();
   });
 
   it('ignora texto comum e comandos desconhecidos', () => {
@@ -24,7 +26,8 @@ describe('schemas', () => {
   });
 
   it('emote só aceita os conhecidos', () => {
-    expect(emoteSchema.safeParse({ emote: 'dance' }).success).toBe(true);
+    expect(emoteSchema.safeParse({ emote: 'clap' }).success).toBe(true);
+    expect(emoteSchema.safeParse({ emote: 'dance' }).success).toBe(false);
     expect(emoteSchema.safeParse({ emote: 'explodir' }).success).toBe(false);
   });
 });

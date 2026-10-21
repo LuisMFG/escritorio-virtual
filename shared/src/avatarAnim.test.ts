@@ -47,7 +47,6 @@ describe('animações do avatar', () => {
     expect(
       ['smile', 'sad', 'angry', 'surprised'].map((id) => emotePose(id as 'smile', 0).expression),
     ).toEqual(['sml', 'sad', 'agr', 'srp']);
-    expect(emotePose('dance', 160)).toMatchObject({ posture: 'wlk', frame: 1 });
     // Todo emote tem pose (o `switch` cobre todos).
     for (const id of EMOTE_IDS) expect(emotePose(id, 0)).toBeTypeOf('object');
   });
@@ -135,7 +134,6 @@ describe('emotes novos (Fase 54)', () => {
     expect(emotePosture('sit')).toBe('sit');
     expect(emotePosture('walk')).toBe('stand');
     expect(emoteRefusal('jump', 'sit')).toBe('Levante para pular.');
-    expect(emoteRefusal('dance', 'sit')).toBe('Levante para dançar.');
     expect(emoteRefusal('bow', 'sit')).toBe('Levante para fazer a reverência.');
     expect(emoteRefusal('clap', 'sit')).toBeNull();
     expect(emoteRefusal('clap', 'lay')).toMatch(/Deitado, só dá para emotes de rosto/);
