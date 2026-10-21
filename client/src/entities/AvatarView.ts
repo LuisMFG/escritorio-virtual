@@ -139,6 +139,8 @@ export class AvatarView extends Container {
   private focusKind = '';
   private readonly legMask = new Graphics();
   private readonly statusBadge = new Graphics();
+  /** Falando numa chamada (Fase 49): anel verde nos pés. */
+  private readonly speakRing = new Graphics();
   /** Em reunião (a sala tem reunião agora): selo roxo se a pessoa estiver disponível. */
   private inMeeting = false;
   /** Deslocamento do nome para cima (px do mundo) para não encavalar com outros nomes. */
@@ -248,6 +250,7 @@ export class AvatarView extends Container {
     this.typingBubble.position.set(0, TYPING_Y);
 
     this.addChild(
+      this.speakRing,
       this.shadow,
       this.body,
       this.legMask,
@@ -433,6 +436,19 @@ export class AvatarView extends Container {
     this.drawBadge();
   }
 
+  setSpeaking(on: boolean): void {
+    if (on === this.speakRing.visible && this.speakRing.width > 0) return;
+    this.speakRing.clear();
+    if (on) {
+      this.speakRing
+        .ellipse(0, 0, 17, 8)
+        .stroke({ width: 3, color: 0x3fbf6f, alpha: 0.95 })
+        .ellipse(0, 0, 21, 10)
+        .stroke({ width: 1.5, color: 0x3fbf6f, alpha: 0.45 });
+    }
+    this.speakRing.visible = on;
+  }
+
   /** A sala está em reunião: mostra o selo de reunião em quem está disponível. */
   setMeeting(on: boolean): void {
     if (this.inMeeting === on) return;
@@ -473,6 +489,12 @@ export class AvatarView extends Container {
     if (this.nameShift === px) return;
     this.nameShift = px;
     this.layoutOverlays();
+  }
+
+  /** Meio do desenho do corpo na tela (testes de ponta a ponta clicam aqui). */
+  bodyCenter(): { x: number; y: number } {
+    const b = this.body.getBounds();
+    return { x: b.x + b.width / 2, y: b.y + b.height * 0.55 };
   }
 
   /** Retângulo do nome na tela (para afastar nomes que se encostam). */

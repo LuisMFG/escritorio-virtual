@@ -19,6 +19,13 @@ import {
   type AnnouncementNotice,
   KudosMessage,
   type KudosNotice,
+  CallMessage,
+  type CallInvite,
+  type CallInviteResult,
+  type CallMedia,
+  type CallSignalData,
+  type CallState,
+  type IceServer,
 } from '@office/shared';
 import { isSessionError, serverEndpoint } from './OfficeConnection.js';
 
@@ -52,6 +59,15 @@ interface LobbyHandlers {
   ready(): void;
 }
 
+/** Mensagens das chamadas (Fase 49), ligadas depois pelo `CallManager`. */
+export interface CallHandlers {
+  invited(invite: CallInvite): void;
+  inviteGone(inviteId: string): void;
+  result(result: CallInviteResult): void;
+  state(state: CallState | null): void;
+  signal(fromUserId: string, data: CallSignalData): void;
+}
+
 const REJOIN_DELAYS_MS = [1000, 2000, 4000, 8000, 15000];
 
 /**
@@ -63,6 +79,7 @@ export class LobbyConnection {
   private room: Room<unknown, LobbyState> | null = null;
   private leaving = false;
   private rejoining = false;
+  private calls: CallHandlers | null = null;
 
   constructor(
     private readonly token: string,
@@ -89,6 +106,15 @@ export class LobbyConnection {
     room.onMessage(KudosMessage.Changed, () => this.on.kudosChanged());
     room.onMessage(AnnouncementMessage.Removed, (n: { id: number }) =>
       this.on.announcementRemoved(n.id),
+    );
+    room.onMessage(CallMessage.Invited, (i: CallInvite) => this.calls?.invited(i));
+    room.onMessage(CallMessage.InviteGone, (m: { inviteId: string }) =>
+      this.calls?.inviteGone(m.inviteId),
+    );
+    room.onMessage(CallMessage.InviteResult, (r: CallInviteResult) => this.calls?.result(r));
+    room.onMessage(CallMessage.State, (st: CallState | null) => this.calls?.state(st));
+    room.onMessage(CallMessage.Signal, (m: { fromUserId: string; data: CallSignalData }) =>
+      this.calls?.signal(m.fromUserId, m.data),
     );
     const cb = Callbacks.get(room);
     const emit = () => this.on.people(this.people());
@@ -149,6 +175,37 @@ export class LobbyConnection {
       withUserId,
       beforeId,
     })) as DirectMessage[];
+  }
+
+  // ---------- Chamadas (Fase 49) ----------
+
+  onCalls(handlers: CallHandlers): void {
+    this.calls = handlers;
+  }
+
+  callInvite(toUserId: string, reason: string): void {
+    this.room?.send(CallMessage.Invite, { toUserId, reason });
+  }
+
+  callAnswer(inviteId: string, accept: boolean): void {
+    this.room?.send(CallMessage.Answer, { inviteId, accept });
+  }
+
+  callLeave(): void {
+    this.room?.send(CallMessage.Leave, {});
+  }
+
+  callSignal(toUserId: string, data: CallSignalData): void {
+    this.room?.send(CallMessage.Signal, { toUserId, data });
+  }
+
+  callMedia(media: CallMedia): void {
+    this.room?.send(CallMessage.Media, media);
+  }
+
+  async iceServers(): Promise<IceServer[]> {
+    if (!this.room) return [];
+    return (await this.room.request(CallMessage.Ice)) as IceServer[];
   }
 
   async leave(): Promise<void> {

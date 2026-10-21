@@ -100,6 +100,8 @@ import { takeTourPending, Tour } from './ui/tour.js';
 import { BootScreen } from './ui/boot.js';
 import { DecorHistory } from './scene/DecorHistory.js';
 import { installModalFocus } from './ui/a11y.js';
+import { CallManager } from './net/CallManager.js';
+import { CallPanel, IncomingCalls, openCallInvite } from './ui/calls.js';
 
 const E2E_MODE = new URLSearchParams(location.search).has('e2e');
 const TOUR_IN_E2E = new URLSearchParams(location.search).has('tour');
@@ -770,6 +772,7 @@ async function start(): Promise<void> {
   async function logout(all: boolean): Promise<void> {
     if (session) await api.logout(session.token, all).catch(() => undefined);
     await connection?.leave();
+    calls?.leave();
     await lobby?.leave();
     forgetToken();
     location.reload();
@@ -807,6 +810,19 @@ async function start(): Promise<void> {
     openProfile: () => showProfile(),
     message: openDm,
     praise: (userId, name) => praise(userId, name),
+    callMode: (userId) => {
+      if (!calls) return 'none';
+      if (calls.hasMember(userId)) return 'with';
+      return calls.state ? 'add' : 'call';
+    },
+    call: (userId, name) => {
+      const c = calls;
+      if (!c) return;
+      openCallInvite({ name }, Boolean(c.state), (reason) => {
+        c.invite(userId, reason);
+        overlay.notify(`Chamando ${name}…`);
+      });
+    },
     kick: async (userId, name, scope) => {
       if (!session) return;
       if (scope === 'office') {
@@ -1201,6 +1217,61 @@ async function start(): Promise<void> {
   }
 
   /** Canal global: DMs e presença. Abre depois de entrar na primeira sala. */
+  // ---------- Chamadas de áudio por convite (Fase 49) ----------
+  let calls: CallManager | null = null;
+  const incomingCalls = new IncomingCalls((id, accept) => calls?.answer(id, accept));
+  let callPanel: CallPanel | null = null;
+  const CALL_RESULTS: Record<string, (name: string) => [string, 'success' | 'info' | 'error']> = {
+    accepted: (n) => [`${n} entrou na chamada.`, 'success'],
+    declined: (n) => [`${n} recusou a chamada.`, 'info'],
+    expired: (n) => [`${n} não respondeu.`, 'info'],
+    busy: (n) => [`${n || 'A pessoa'} está em outra chamada.`, 'info'],
+    offline: (n) => [`${n || 'A pessoa'} não está no escritório agora.`, 'info'],
+    full: () => ['A chamada está cheia (até 6 pessoas).', 'error'],
+  };
+  function setupCalls(l: LobbyConnection): void {
+    if (!session) return;
+    const me = session.userId;
+    callPanel ??= new CallPanel(me, {
+      mute: (m) => calls?.setMuted(m),
+      leave: () => calls?.leave(),
+      isMuted: () => calls?.isMuted ?? false,
+    });
+    const panel = callPanel;
+    calls = new CallManager(l, me, {
+      state: (st) => {
+        panel.set(st);
+        if (!st) scene?.setSpeaking(new Set());
+      },
+      invited: (invite) => {
+        incomingCalls.add(invite);
+        if (!invite.quiet) sound.ring();
+        notifier.notify(
+          `${invite.fromName} está chamando você`,
+          invite.reason || 'Chamada de áudio',
+          { tag: `chamada-${invite.id}` },
+        );
+      },
+      inviteGone: (id) => incomingCalls.remove(id),
+      result: (r) => {
+        const make = CALL_RESULTS[r.outcome];
+        if (!make) return;
+        const [text, kind] = make(r.toName);
+        overlay.notify(text, { kind });
+      },
+      speaking: (ids) => {
+        panel.setSpeaking(ids);
+        const room = connection?.currentRoom;
+        if (!room) return;
+        const sessions = new Set<string>();
+        for (const [sid, p] of room.state.players.entries())
+          if (ids.has(p.userId)) sessions.add(sid);
+        scene?.setSpeaking(sessions);
+      },
+      error: (message) => overlay.notify(message, { kind: 'error', durationMs: 6000 }),
+    });
+  }
+
   async function connectLobby(token: string): Promise<void> {
     const l = new LobbyConnection(token, {
       dm: (m) => {
@@ -1300,6 +1371,7 @@ async function start(): Promise<void> {
       },
     });
     lobby = l;
+    setupCalls(l);
     try {
       await l.connect();
     } catch (err) {

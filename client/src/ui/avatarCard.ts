@@ -40,6 +40,9 @@ export interface AvatarCardHandlers {
   kick(userId: string, name: string, scope: 'room' | 'office'): void;
   message(userId: string, name: string): void;
   praise(userId: string, name: string): void;
+  /** Chamadas (Fase 49): como está a chamada em relação a essa pessoa. */
+  callMode(userId: string): 'call' | 'add' | 'with' | 'none';
+  call(userId: string, name: string): void;
 }
 
 /** Cartão que aparece ao clicar num avatar: nome, status, sala e ações rápidas. */
@@ -162,6 +165,19 @@ export class AvatarCard {
         this.button('Meu visual', () => this.on.editAvatar()),
       );
     } else {
+      // Chamar para conversa (ou adicionar à chamada em que você está).
+      const mode = this.on.callMode(info.userId);
+      if (mode === 'call' || mode === 'add') {
+        const b = this.button(mode === 'add' ? 'Adicionar à chamada' : 'Chamar para conversa', () =>
+          this.on.call(info.userId, info.name),
+        );
+        b.classList.add('card-call');
+        actions.append(b);
+      } else if (mode === 'with') {
+        const b = this.button('Na chamada com você', () => undefined);
+        b.disabled = true;
+        actions.append(b);
+      }
       actions.append(
         this.button('Ir até', () => this.on.goTo(info.sessionId)),
         this.button('Mensagem', () => this.on.message(info.userId, info.name)),

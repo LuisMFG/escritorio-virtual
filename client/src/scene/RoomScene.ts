@@ -309,6 +309,15 @@ export class RoomScene implements DecorHost {
     }
   }
 
+  avatarView(id: string): AvatarView | undefined {
+    return this.avatars.get(id);
+  }
+
+  /** Chamadas (Fase 49): quem está falando agora ganha um anel verde nos pés. */
+  setSpeaking(sessionIds: ReadonlySet<string>): void {
+    for (const [id, a] of this.avatars) a.setSpeaking(sessionIds.has(id));
+  }
+
   /** Câmera até a pessoa e um círculo pulsando nos pés (achar alguém pela lista). */
   focusAvatar(id: string): boolean {
     const view = this.avatars.get(id);

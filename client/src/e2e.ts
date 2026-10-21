@@ -35,6 +35,8 @@ export interface E2EHook {
   }[];
   /** Ponto da página no meio do desenho de um móvel. */
   furni(id: string): Point | null;
+  /** Ponto da página no meio do corpo de um avatar (sessão). */
+  avatar(sessionId: string): Point | null;
   furniList(): { id: string; defId: string; x: number; y: number }[];
   players(): {
     id: string;
@@ -99,6 +101,13 @@ export function exposeForTests(scene: RoomScene, room: OfficeRoomClient): void {
         x: Math.round(r.left + b.x + b.width / 2),
         y: Math.round(r.top + b.y + b.height / 2),
       };
+    },
+    avatar: (id) => {
+      const view = scene.avatarView(id);
+      if (!view) return null;
+      const c = view.bodyCenter();
+      const r = canvas();
+      return { x: Math.round(r.left + c.x), y: Math.round(r.top + c.y) };
     },
     furniAt: (x, y) => {
       const r = canvas();

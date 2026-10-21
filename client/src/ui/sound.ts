@@ -39,8 +39,16 @@ export class ChatSound {
     this.tones([660, 990, 1320], 0.09);
   }
 
-  private tones(freqs: number[], volume = 0.06): void {
-    if (!this.enabled) return;
+  /**
+   * Chamando (Fase 49): duas notas, como um telefone. Toca mesmo com o som de mensagem
+   * desligado (convite de chamada é importante); quem está em Foco/Ocupado não ouve.
+   */
+  ring(): void {
+    this.tones([523, 659, 523, 659], 0.08, true);
+  }
+
+  private tones(freqs: number[], volume = 0.06, force = false): void {
+    if (!this.enabled && !force) return;
     try {
       this.ctx ??= new AudioContext();
       const t = this.ctx.currentTime;
