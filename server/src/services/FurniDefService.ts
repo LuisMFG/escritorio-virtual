@@ -45,6 +45,12 @@ export class FurniDefService {
       const parsed = furniManifestEntrySchema.safeParse(JSON.parse(row.json));
       if (parsed.success && !this.defs.has(row.id)) this.defs.set(row.id, parsed.data);
     }
+    // Medidos antes do empilhar: o tampo vem do catálogo (os do escritório já dizem o seu).
+    for (const [id, def] of this.defs) {
+      if (this.curated.has(id) || def.hasTop !== undefined) continue;
+      const item = this.itemFor(def);
+      if (item && hasTop(item)) this.defs.set(id, { ...def, hasTop: true });
+    }
     for (const [id, def] of this.defs) this.defs.set(id, withVisual(def, this.itemFor(def)));
   }
 
@@ -163,7 +169,20 @@ export function curationFor(item: CatalogItem, id: string): FurniCuration {
     // Senta/deita na metade da altura (como as cadeiras curadas: altura 1, assento 0,5).
     sitHeight: item.sit || item.lay ? Math.min(1, Math.max(0.1, Math.round(item.h * 5) / 10)) : 0,
     interaction: item.x ?? (item.multi ? 'toggle' : undefined),
+    hasTop: hasTop(item),
   };
+}
+
+/** Categorias do Habbo que são tampo (mesas, estantes, divisórias). */
+const TOP_CATEGORIES = new Set(['table', 'shelf', 'divider']);
+/** …e os de outras categorias que têm tampo pelo nome (balcão, armário, cômoda…). */
+const TOP_NAME =
+  /\b(mesa|mesinha|balc[aã]o|bancada|estante|prateleira|arm[aá]rio|c[oô]moda|escrivaninha|rack|aparador|criado|cristaleira|gaveteiro|penteadeira|bar)\b/i;
+
+/** Dá para pôr objetos em cima deste item do catálogo? */
+export function hasTop(item: CatalogItem): boolean {
+  if (item.wall || item.sit || item.lay || item.walk) return false;
+  return TOP_CATEGORIES.has(item.c) || TOP_NAME.test(item.n);
 }
 
 /** Interações que desenham por cima da imagem do imager (quadro, tabuleiro): ficam estáticas. */

@@ -1,6 +1,7 @@
 import { randomInt } from 'node:crypto';
 import { CloseCode, Room, ServerError, validate, type Client, type Deferred } from '@colyseus/core';
 import {
+  stackedOn,
   TV_ERRORS,
   TvMessage,
   tvAddSchema,
@@ -1409,6 +1410,15 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     if (!f) return;
     if (this.someoneSeatedOn(f)) {
       return this.sendError(client, ErrorCode.InvalidPlacement, 'Tem alguém sentado aí.');
+    }
+    const placed = this.furniList();
+    const base = placed.find((p) => p.id === furniId);
+    if (base && stackedOn(base, placed, services().furniDefs).length) {
+      return this.sendError(
+        client,
+        ErrorCode.InvalidPlacement,
+        'Tire o que está em cima primeiro.',
+      );
     }
     if (this.isTv(furniId)) services().tv.drop(furniId);
     services().furni.remove(this.layout.roomId, furniId);

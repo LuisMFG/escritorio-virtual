@@ -33,6 +33,8 @@ export interface FurniCuration {
   surface?: Record<string, [[number, number], [number, number], [number, number]]>;
   /** Emite luz quando ligado. */
   light?: boolean;
+  /** Tem tampo (aceita objetos em cima). Os do escritório vêm de `HAS_TOP`. */
+  hasTop?: boolean;
 }
 
 const SIT = { canSit: true, sitHeight: 0.5 } as const;
@@ -544,6 +546,50 @@ export function estimateSize(byDir: ReadonlyMap<number, RenderAnalysis>): {
     : { width: r(any.rightTiles), depth: r(any.leftTiles) };
 }
 
+/**
+ * Altura do tampo (empilhar) dos móveis do escritório, da altura de empilhar do Habbo: onde a
+ * altura curada (`height`) é só aproximada. Os outros usam `height`.
+ */
+export const STACK_HEIGHTS: Readonly<Record<string, number>> = {
+  table_norja_med: 0.8,
+  table_silo_med: 0.7,
+  table_plasto_square: 0.9,
+  shelves_norja: 1,
+  shelves_silo: 1,
+  shelves_basic: 1,
+  exe_corner: 0.98,
+  exe_map: 3.25,
+  safe_silo: 1.35,
+  exe_glassdvdr: 1,
+  hc_bkshlf: 3,
+  hc_tv: 1.3,
+  lamp_armas: 1.56,
+  fireplace_armas: 1.56,
+  fridge: 1,
+};
+
+/** Móveis do escritório com tampo: dá para pôr computador, impressora, vaso… em cima. */
+export const HAS_TOP: ReadonlySet<string> = new Set([
+  'table_norja_med',
+  'table_silo_med',
+  'table_plasto_square',
+  'exe_table',
+  'uni_desk',
+  'hc_dsk',
+  'exe_corner',
+  'bardesk_polyfon',
+  'army_c15_cabinet',
+  'safe_silo',
+  'shelves_norja',
+  'shelves_silo',
+  'shelves_basic',
+  'hc_bkshlf',
+  'divider_nor1',
+  'divider_silo1',
+  'exe_glassdvdr',
+  'fridge',
+]);
+
 /** Entrada de um móvel local (não passa pelo imager). */
 export function buildLocalEntry(cur: FurniCuration): FurniManifestEntry {
   return {
@@ -553,6 +599,8 @@ export function buildLocalEntry(cur: FurniCuration): FurniManifestEntry {
     width: cur.width ?? 1,
     depth: cur.depth ?? 1,
     height: cur.height,
+    ...(STACK_HEIGHTS[cur.id] !== undefined ? { stackHeight: STACK_HEIGHTS[cur.id] } : {}),
+    ...((cur.hasTop ?? HAS_TOP.has(cur.id)) ? { hasTop: true } : {}),
     canSit: cur.canSit ?? false,
     canLay: cur.canLay ?? false,
     wall: cur.wall ?? false,
@@ -591,6 +639,9 @@ export function buildFurniEntry(
       width: cur.width ?? estimated.width,
       depth: cur.depth ?? estimated.depth,
       height: cur.height,
+      ...(STACK_HEIGHTS[cur.id] !== undefined ? { stackHeight: STACK_HEIGHTS[cur.id] } : {}),
+      ...((cur.hasTop ?? HAS_TOP.has(cur.id)) ? { hasTop: true } : {}),
+      ...((cur.hasTop ?? HAS_TOP.has(cur.id)) ? { hasTop: true } : {}),
       canSit: cur.canSit ?? false,
       canLay: cur.canLay ?? false,
       wall: cur.wall ?? false,
