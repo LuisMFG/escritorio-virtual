@@ -50,7 +50,7 @@ export async function measureFurni(
   const analyses = new Map<number, RenderAnalysis>();
   const stateAnalyses = new Map<string, RenderAnalysis>();
   // Os que mudam de estado: ligar/desligar, dado, teleporte (porta abrindo), jukebox.
-  const stateful = ['toggle', 'dice', 'teleport', 'jukebox'].includes(cur.interaction ?? '');
+  const stateful = ['toggle', 'dice', 'teleport', 'jukebox', 'tv'].includes(cur.interaction ?? '');
   for (const dir of info.directions) {
     analyses.set(dir, await render(dir));
     if (stateful) {

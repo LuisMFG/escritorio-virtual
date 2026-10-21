@@ -330,8 +330,45 @@ export const FURNI_CURATION: FurniCuration[] = [
     ...TOGGLE,
   },
   { id: 'computer_old', name: 'Computador Antigo', category: 'TI', width: 1, depth: 1, height: 1 },
-  { id: 'tv_luxus', name: 'TV Clássica', category: 'TI', height: 1, ...TOGGLE },
-  { id: 'hc_tv', name: 'TV Club', category: 'TI', height: 1, ...TOGGLE },
+  // TVs com YouTube (Fase 51): a capa do vídeo vai na tela, medida nos pixels da PNG ligada.
+  {
+    id: 'tv_luxus',
+    name: 'TV Clássica',
+    category: 'TI',
+    height: 1,
+    interaction: 'tv',
+    surface: {
+      '0': [
+        [35, 43],
+        [84, 18],
+        [35, 74],
+      ],
+      '2': [
+        [19, 18],
+        [69, 43],
+        [19, 49],
+      ],
+    },
+  },
+  {
+    id: 'hc_tv',
+    name: 'TV Club',
+    category: 'TI',
+    height: 1,
+    interaction: 'tv',
+    surface: {
+      '2': [
+        [39, 64],
+        [80, 46],
+        [39, 87],
+      ],
+      '4': [
+        [28, 46],
+        [69, 64],
+        [28, 67],
+      ],
+    },
+  },
   { id: 'rare_fan', name: 'Ventilador', category: 'TI', width: 1, depth: 1, height: 1, ...TOGGLE },
   // Luzes
   {

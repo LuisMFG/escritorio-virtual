@@ -1164,9 +1164,21 @@
         "0:1": [26, 115],
         "2:1": [78, 115]
       },
-      "interaction": "toggle",
+      "interaction": "tv",
       "animated": false,
-      "light": false
+      "light": false,
+      "surface": {
+        "0": [
+          [35, 43],
+          [84, 18],
+          [35, 74]
+        ],
+        "2": [
+          [19, 18],
+          [69, 43],
+          [19, 49]
+        ]
+      }
     },
     {
       "id": "hc_tv",
@@ -1192,9 +1204,21 @@
         "2:1": [41.5, 160],
         "4:1": [66.5, 160]
       },
-      "interaction": "toggle",
+      "interaction": "tv",
       "animated": false,
-      "light": false
+      "light": false,
+      "surface": {
+        "2": [
+          [39, 64],
+          [80, 46],
+          [39, 87]
+        ],
+        "4": [
+          [28, 46],
+          [69, 64],
+          [28, 67]
+        ]
+      }
     },
     {
       "id": "rare_fan",
