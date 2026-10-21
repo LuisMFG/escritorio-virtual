@@ -1398,7 +1398,7 @@ As fases 52 e 53 vêm primeiro porque corrigem o que já existe e é usado todo 
   2. Sente no chão e veja o menu.
   3. Fique ao lado de alguém e clique no avatar dela, em "Toca aqui", ou escreva `/tocaaqui nome`.
 
-### Fase 55 — Danças sincronizadas
+### Fase 55 — Danças sincronizadas ✅ implementada
 - **Danças:** Macarena, Thriller, Gangnam Style, YMCA, Floss, Robô e Moonwalk. São inspiradas nas músicas e montadas quadro a quadro com a arte do Habbo (base da Fase 54).
 - **Funcionamento:**
   - Começa com `/dancar nome` (ou `/macarena`…) ou pelo menu de danças.
@@ -1413,6 +1413,24 @@ As fases 52 e 53 vêm primeiro porque corrigem o que já existe e é usado todo 
   - unidade: quadro a partir do relógio, regra de "perto";
   - sala: começa e para;
   - ponta a ponta: dois navegadores no mesmo tempo.
+- **Feito:**
+  - **Coreografias como dados** (`shared/src/dances.ts`): cada dança é uma lista de quadros em batidas, no andamento da música, montada com a pose por parte do corpo da Fase 54. Os quadros novos movem o corpo inteiro: giro (`bodyDd`) e deslize (`bodyDx`).
+    - Macarena (103 bpm): braço por braço, mãos no ombro, na cabeça e no quadril, rebolado e pulo. Vira um quarto a cada volta.
+    - Thriller (118): braços de zumbi, cabeça tombando, passos de lado, garra e ombros.
+    - Gangnam Style (132): rédeas e galope, depois o laço no alto.
+    - YMCA (127): as quatro letras e o balanço.
+    - Floss (120): braços de um lado para o outro, quadril ao contrário.
+    - Robô (100): poses duras, virando aos trancos.
+    - Moonwalk (117): desliza para trás andando, gira, ponta dos pés e volta.
+    - Todas conferidas quadro a quadro numa tira de filme no navegador.
+  - **Estado no servidor:** `Player.dance` e `Player.danceStart`. Quem começa a mesma dança a até 5 tiles de alguém que já dança entra no compasso dele, pelo mais perto (`danceStartFor`, encadeia). A dança para quando a pessoa anda, senta ou deita, por qualquer caminho (conferido a cada tique). Andando, o pedido começa ao parar. Sentado ou deitado: "Levante para dançar."
+  - **Relógio:** o cliente pergunta a hora ao servidor (`ClientMessage.Time`) ao entrar e a cada minuto, como o NTP. Fica com a resposta mais rápida, e o quadro sai de `hora do servidor − começo`.
+  - **Cliente:** a dança roda em loop na cena, com uma nota 🎵 sobre quem dança; um emote passa na frente e a dança continua depois. O antigo `/dancar` (e o 💃 do menu) abre a escolha das danças, apagada quando a pessoa está sentada. Há também `/macarena`… e `/parar`.
+  - **Testes:** `dances.test.ts` (quadro pelo relógio, volta, regra de perto, comandos), quatro testes de sala em `OfficeRoom.test.ts` (começa e para, perto/longe/outra dança, sentado e andando, hora) e `e2e/tests/dancas.spec.ts` (dois navegadores no mesmo quadro, quem entra depois no tempo, `/dancar` abre a escolha, andar e `/parar` param).
+- **Como testar:**
+  1. Duas pessoas perto: as duas escolhem a mesma dança pelo `/dancar`, em momentos diferentes.
+  2. Uma terceira entra na sala depois e vê as duas no mesmo passo.
+  3. Ande, ou use `/parar`.
 
 ### Fase 56 — Empilhamento avançado
 - **Qualquer móvel empilhável sobre outro.**
