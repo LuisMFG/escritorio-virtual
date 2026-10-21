@@ -37,6 +37,7 @@ export * from './avatarAnim.js';
 export * from './posture.js';
 export * from './effects.js';
 export * from './clothingSearch.js';
+export * from './costumes.js';
 export * from './furniCatalog.js';
 export * from './furniVisual.js';
 export * from './habboPets.js';
