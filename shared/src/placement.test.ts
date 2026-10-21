@@ -10,8 +10,10 @@ import {
   WALL_HEIGHT,
   nearestSeatTile,
   stackedOn,
+  surfaceTileAt,
   type PlacementContext,
 } from './placement.js';
+import { tileToScreen } from './iso.js';
 import type { RoomDoor } from './rooms.js';
 import { ROOMS } from './rooms.js';
 
@@ -43,6 +45,8 @@ const defs = new Map<string, FurniDef>([
   ['cadeira', def({ id: 'cadeira', canSit: true, sitHeight: 0.5 })],
   ['quadro', def({ id: 'quadro', height: 2, interaction: 'whiteboard', hasTop: true })],
   ['torre', def({ id: 'torre', height: 4, hasTop: true })],
+  // Balcão alto (tampo a 1,2): o tampo fica mais alto que um tile de profundidade.
+  ['balcao', def({ id: 'balcao', width: 2, depth: 1, height: 1.2, hasTop: true })],
 ]);
 
 // Sala 6×5 com porta à esquerda em (0,2).
@@ -154,6 +158,30 @@ describe('canPlace', () => {
       });
     });
 
+    it('base com coisas em cima gira no lugar se os tiles não mudam (Fase 53)', () => {
+      const c = ctx([
+        f('cx', 'caixa', 3, 1),
+        { ...f('p', 'pc', 3, 1), z: 1 },
+        f('e', 'escrivaninha', 2, 3),
+        { ...f('p2', 'pc', 2, 3), z: 0.8 },
+      ]);
+      // Base quadrada: qualquer giro mantém os tiles; mudar de lugar, não.
+      expect(canPlace(c, { defId: 'caixa', x: 3, y: 1, rot: 2, ignoreId: 'cx' })).toEqual({
+        ok: true,
+        z: 0,
+      });
+      expect(canPlace(c, { defId: 'caixa', x: 4, y: 1, rot: 0, ignoreId: 'cx' })).toMatchObject({
+        reason: 'Tire o que está em cima primeiro.',
+      });
+      // Base 2×1: meia-volta mantém os tiles; um quarto de volta, não.
+      expect(canPlace(c, { defId: 'escrivaninha', x: 2, y: 3, rot: 4, ignoreId: 'e' }).ok).toBe(
+        true,
+      );
+      expect(
+        canPlace(c, { defId: 'escrivaninha', x: 2, y: 3, rot: 2, ignoreId: 'e' }),
+      ).toMatchObject({ reason: 'Tire o que está em cima primeiro.' });
+    });
+
     it('o que vai em cima não fica preso no próprio lugar (ao mover, não se apoia em si)', () => {
       const c = ctx([f('e', 'escrivaninha', 2, 0), { ...f('p', 'pc', 2, 0), z: 0.8 }]);
       expect(canPlace(c, { defId: 'pc', x: 2, y: 0, rot: 2, ignoreId: 'p' })).toEqual({
@@ -167,6 +195,20 @@ describe('canPlace', () => {
     const c = ctx([f('m', 'mesa', 2, 0)]);
     expect(canPlace(c, { defId: 'mesa', x: 3, y: 0, rot: 0 }).ok).toBe(false);
     expect(canPlace(c, { defId: 'mesa', x: 3, y: 0, rot: 0, ignoreId: 'm' }).ok).toBe(true);
+  });
+
+  it('não move nem gira um assento com alguém sentado (Fase 53)', () => {
+    const c = ctx([f('c', 'cadeira', 3, 1), f('t', 'tapete', 3, 3)], {
+      avatars: [
+        { x: 3, y: 1 },
+        { x: 3, y: 3 },
+      ],
+    });
+    expect(canPlace(c, { defId: 'cadeira', x: 3, y: 1, rot: 2, ignoreId: 'c' })).toMatchObject({
+      reason: 'Tem alguém sentado aí.',
+    });
+    // Tapete com gente em cima move (quem está ali só pisa nele).
+    expect(canPlace(c, { defId: 'tapete', x: 2, y: 3, rot: 0, ignoreId: 't' }).ok).toBe(true);
   });
 
   it('sólido não vai em cima de avatar; tapete vai', () => {
@@ -202,6 +244,48 @@ describe('canPlace', () => {
     expect(canPlace(ctx(many), { defId: 'tapete', x: 3, y: 0, rot: 0, ignoreId: 't0' }).ok).toBe(
       true,
     );
+  });
+});
+
+describe('surfaceTileAt (Fase 53)', () => {
+  const desk = [f('e', 'escrivaninha', 3, 2)];
+  // Ponto de tela no meio do tampo do tile (3,2), a 0,8 de altura.
+  const top = tileToScreen(3, 2, 0.8);
+
+  it('apontar para o tampo escolhe a mesa, não o piso atrás dela', () => {
+    expect(surfaceTileAt(ctx(desk), top.sx, top.sy)).toEqual({ x: 3, y: 2, z: 0.8 });
+    // Sem a mesa (ou arrastando a própria mesa), o mesmo ponto é o piso de trás.
+    expect(surfaceTileAt(ctx(), top.sx, top.sy)).toEqual({ x: 2, y: 1, z: 0 });
+    expect(surfaceTileAt(ctx(desk), top.sx, top.sy, 'e')).toEqual({ x: 2, y: 1, z: 0 });
+  });
+
+  it('na frente da mesa avisa que é a frente (o arrasto não sobe nela)', () => {
+    const floor = tileToScreen(3, 2, 0);
+    expect(surfaceTileAt(ctx(desk), floor.sx, floor.sy)).toEqual({
+      x: 3,
+      y: 2,
+      z: 0.8,
+      face: true,
+    });
+  });
+
+  it('a frente de uma mesa alta esconde o piso de trás (o computador não pula para trás)', () => {
+    // Logo abaixo do tampo do balcão (3,2): o losango do piso de trás (2,1) contém o ponto, mas ali
+    // aparece a frente do balcão.
+    const c = ctx([f('b', 'balcao', 3, 2)]);
+    const behind = tileToScreen(2, 1, 0);
+    const point = { sx: behind.sx, sy: behind.sy + 12 };
+    expect(surfaceTileAt(c, point.sx, point.sy)).toEqual({ x: 3, y: 2, z: 1.2, face: true });
+    // No tampo, sim: em cima do balcão.
+    const top = tileToScreen(3, 2, 1.2);
+    expect(surfaceTileAt(c, top.sx, top.sy)).toEqual({ x: 3, y: 2, z: 1.2 });
+    // Longe do balcão, o piso de sempre.
+    const floor = tileToScreen(1, 1, 0);
+    expect(surfaceTileAt(c, floor.sx, floor.sy)).toEqual({ x: 1, y: 1, z: 0 });
+  });
+
+  it('longe da sala não escolhe nada', () => {
+    expect(surfaceTileAt(ctx(), -2000, -2000)).toBeNull();
   });
 });
 

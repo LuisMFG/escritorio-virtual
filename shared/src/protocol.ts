@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { genderSchema } from './manifests.js';
 import type { RoomDoor } from './rooms.js';
 import type { TilePoint } from './iso.js';
+import type { PlacedFurni } from './furni.js';
 import type { ReactionSummary, ReplyPreview } from './reactions.js';
 import type { Ambient } from './ambience.js';
 import type { ChatKind } from './games.js';
@@ -263,6 +264,13 @@ export const furniRefSchema = z.object({ furniId });
 export type FurniPlaceMessage = z.infer<typeof furniPlaceSchema>;
 export type FurniMoveMessage = z.infer<typeof furniMoveSchema>;
 export type FurniRefMessage = z.infer<typeof furniRefSchema>;
+
+/**
+ * Resposta do servidor a colocar, mover, girar, trocar a cor ou remover um móvel (Fase 53). O
+ * cliente só grava no desfazer o que foi aceito, e desfaz na tela o que foi recusado. `furni` é
+ * como o móvel ficou; ao remover, vem sem ele. O motivo da recusa também chega como erro.
+ */
+export type FurniResult = { ok: true; furni?: PlacedFurni } | { ok: false; reason?: string };
 
 export const updateAvatarSchema = z.object({ figure: figureSchema, gender: genderSchema });
 export type UpdateAvatarMessage = z.infer<typeof updateAvatarSchema>;

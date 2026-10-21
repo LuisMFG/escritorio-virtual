@@ -1,7 +1,7 @@
-import { footprint, type FurniDef, type PlacedFurni } from './furni.js';
+import { footprint, type Footprint, type FurniDef, type PlacedFurni } from './furni.js';
 import { RoomGrid, tileHeight, type Heightmap } from './grid.js';
-import { DIRECTION_OFFSETS, type TilePoint } from './iso.js';
-import { Z_UNIT } from './constants.js';
+import { DIRECTION_OFFSETS, tileToScreen, type TilePoint } from './iso.js';
+import { TILE_H, TILE_W, Z_UNIT } from './constants.js';
 import { findPath } from './pathfinding.js';
 import type { RoomDoor } from './rooms.js';
 
@@ -157,20 +157,33 @@ export function canPlace(ctx: PlacementContext, req: PlacementRequest): Placemen
   }
   if (def.wall) return canPlaceWall(ctx, req);
 
-  // Movendo uma base com coisas em cima: elas ficariam flutuando.
+  const fp = footprint(def, req.x, req.y, req.rot);
   const moving = req.ignoreId ? ctx.furni.find((f) => f.id === req.ignoreId) : undefined;
-  if (moving && stackedOn(moving, ctx.furni, ctx.defs).length) {
-    return { ok: false, reason: 'Tire o que está em cima primeiro.' };
+  // O que está em cima de quem se move (só pode girar no lugar): fica acima, não embaixo.
+  const above = new Set<string>();
+  if (moving) {
+    const md = ctx.defs.get(moving.defId);
+    const mfp = md ? footprint(md, moving.x, moving.y, moving.rot) : null;
+    // Alguém sentado ou deitado nele (o servidor também recusava; o fantasma ficava verde).
+    if (md && mfp && !md.canWalk && ctx.avatars.some((a) => inFootprint(a, mfp))) {
+      return { ok: false, reason: 'Tem alguém sentado aí.' };
+    }
+    // Uma base com coisas em cima não sai do lugar (elas ficariam flutuando), mas gira se os
+    // tiles continuam os mesmos (base quadrada, ou meia-volta).
+    const top = stackedOn(moving, ctx.furni, ctx.defs);
+    if (top.length && !(mfp && sameFootprint(mfp, fp))) {
+      return { ok: false, reason: 'Tire o que está em cima primeiro.' };
+    }
+    for (const t of top) above.add(t.id);
   }
 
-  const fp = footprint(def, req.x, req.y, req.rot);
   const reserved = reservedTiles(ctx);
   const avatars = new Set(ctx.avatars.map((a) => key(a.x, a.y)));
   /** O que já ocupa cada tile: tapete, ou sólido (com o tampo, se aceita coisas em cima). */
   const occupied = new Map<string, { solid: boolean; top: number | null }[]>();
   for (const f of others) {
     const d = ctx.defs.get(f.defId);
-    if (!d || d.wall) continue;
+    if (!d || d.wall || above.has(f.id)) continue;
     const ofp = footprint(d, f.x, f.y, f.rot);
     const top = acceptsOnTop(d) ? f.z + topHeight(d) : null;
     for (let y = ofp.minY; y <= ofp.maxY; y++) {
@@ -234,6 +247,101 @@ export function canPlace(ctx: PlacementContext, req: PlacementRequest): Placemen
     }
   }
   return { ok: true, z: z ?? 0 };
+}
+
+function inFootprint(t: TilePoint, fp: Footprint): boolean {
+  return t.x >= fp.minX && t.x <= fp.maxX && t.y >= fp.minY && t.y <= fp.maxY;
+}
+
+function sameFootprint(a: Footprint, b: Footprint): boolean {
+  return a.minX === b.minX && a.minY === b.minY && a.maxX === b.maxX && a.maxY === b.maxY;
+}
+
+/**
+ * Altura da superfície de cada tile, onde um objeto colocado ali se apoiaria: o piso ou, se houver,
+ * o tampo mais alto de um móvel que aceita coisas em cima. `ignoreId`: o móvel sendo arrastado.
+ */
+export function surfaceHeights(
+  ctx: Pick<PlacementContext, 'map' | 'furni' | 'defs'>,
+  ignoreId?: string,
+): (x: number, y: number) => number | null {
+  const tops = new Map<string, number>();
+  for (const f of ctx.furni) {
+    const d = f.id === ignoreId ? undefined : ctx.defs.get(f.defId);
+    if (!d || !acceptsOnTop(d)) continue;
+    const fp = footprint(d, f.x, f.y, f.rot);
+    const top = f.z + topHeight(d);
+    for (let y = fp.minY; y <= fp.maxY; y++) {
+      for (let x = fp.minX; x <= fp.maxX; x++) {
+        tops.set(key(x, y), Math.max(tops.get(key(x, y)) ?? top, top));
+      }
+    }
+  }
+  return (x, y) => {
+    const floor = tileHeight(ctx.map, x, y);
+    return floor === null ? null : Math.max(floor, tops.get(key(x, y)) ?? floor);
+  };
+}
+
+/** Distância "de losango" entre o ponto e o centro do tile: até 1 = dentro dele. */
+function diamondDistance(sx: number, sy: number, x: number, y: number, z: number): number {
+  const c = tileToScreen(x, y, z);
+  return Math.abs(sx - c.sx) / (TILE_W / 2) + Math.abs(sy - c.sy) / (TILE_H / 2);
+}
+
+/**
+ * O ponto cai no "bloco" do tile: algum losango entre o piso (`floor`) e a superfície (`top`)
+ * o contém. Num tile plano é o próprio losango; numa mesa, o tampo e a frente dela.
+ */
+function inBlock(sx: number, sy: number, x: number, y: number, floor: number, top: number) {
+  const c = tileToScreen(x, y, 0);
+  const dx = Math.abs(sx - c.sx) / (TILE_W / 2);
+  if (dx >= 1) return false;
+  const r = (TILE_H / 2) * (1 - dx);
+  return sy >= c.sy - top * Z_UNIT - r && sy <= c.sy - floor * Z_UNIT + r;
+}
+
+/** Tile apontado no Decorar. `face`: o ponto está na frente/lateral de um tampo, não em cima. */
+export type SurfaceTile = TilePoint & { z: number; face?: true };
+
+/**
+ * Tile apontado no Decorar, olhando a altura de cada superfície (Fase 53). Só vale "em cima" de
+ * uma mesa quem aponta para o tampo dela. A frente e a lateral de um tampo escondem o piso de
+ * trás. Ali não vale nem o piso escondido nem subir na mesa: volta o tampo com `face`, e o
+ * arrasto fica onde estava. Sem nada sob o ponto (a borda da sala), vale o tile mais perto,
+ * para o fantasma não sumir.
+ */
+export function surfaceTileAt(
+  ctx: Pick<PlacementContext, 'map' | 'furni' | 'defs'>,
+  sx: number,
+  sy: number,
+  ignoreId?: string,
+): SurfaceTile | null {
+  const heightAt = surfaceHeights(ctx, ignoreId);
+  let hit: SurfaceTile | null = null;
+  let face: SurfaceTile | null = null;
+  let near: { x: number; y: number; z: number; d: number } | null = null;
+  const ahead = (t: SurfaceTile | null, x: number, y: number, z: number) =>
+    !t || x + y > t.x + t.y || (x + y === t.x + t.y && z > t.z);
+  for (let y = 0; y < ctx.map.height; y++) {
+    for (let x = 0; x < ctx.map.width; x++) {
+      const floor = tileHeight(ctx.map, x, y);
+      if (floor === null) continue;
+      const z = heightAt(x, y) ?? floor;
+      const d = diamondDistance(sx, sy, x, y, z);
+      if (d <= 1) {
+        if (ahead(hit, x, y, z)) hit = { x, y, z };
+      } else if (z > floor && inBlock(sx, sy, x, y, floor, z)) {
+        if (ahead(face, x, y, z)) face = { x, y, z, face: true };
+      } else if (!near || d < near.d) {
+        near = { x, y, z, d };
+      }
+    }
+  }
+  // A frente de um tampo mais à frente esconde o que estaria atrás dela.
+  if (face && (!hit || face.x + face.y > hit.x + hit.y)) return face;
+  if (hit) return hit;
+  return near && near.d <= 2 ? { x: near.x, y: near.y, z: near.z } : null;
 }
 
 /** Assento do móvel mais perto de um ponto (sofás têm mais de um lugar). */
