@@ -11,7 +11,8 @@
     "assets:figure": "tsx scripts/figure-sync.ts",
     "assets:figure-check": "tsx scripts/figure-check.ts",
     "assets:furni": "tsx scripts/furni-sync.ts",
-    "assets:pets": "tsx scripts/pet-sync.ts"
+    "assets:pets": "tsx scripts/pet-sync.ts",
+    "assets:costumes": "tsx scripts/costume-thumbs.ts"
   },
   "dependencies": {
     "@colyseus/core": "0.18.19",

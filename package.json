@@ -31,7 +31,8 @@
     "assets:figure": "npm run assets:figure -w server --",
     "assets:figure-check": "npm run assets:figure-check -w server --",
     "assets:furni": "npm run assets:furni -w server --",
-    "assets:pets": "npm run assets:pets -w server --"
+    "assets:pets": "npm run assets:pets -w server --",
+    "assets:costumes": "npm run assets:costumes -w server --"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.10.2",
