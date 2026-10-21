@@ -2,6 +2,7 @@ import {
   callInitiator,
   type CallInvite,
   type CallInviteResult,
+  type CallMedia,
   type CallSignalData,
   type CallState,
   type IceServer,
@@ -13,6 +14,21 @@ const FALLBACK_ICE: IceServer[] = [{ urls: ['stun:stun.cloudflare.com:3478'] }];
 /** Quanto de volume conta como "falando" (RMS de 0 a 1) e de quanto em quanto medir (ms). */
 const SPEAKING_LEVEL = 0.035;
 const SPEAKING_EVERY_MS = 150;
+/** Dispositivos escolhidos (lembrados no navegador). */
+const MIC_KEY = 'ev-call-mic';
+const CAM_KEY = 'ev-call-cam';
+/** Câmera: qualidade boa sem pesar (cada um manda para até 5 pessoas). */
+const CAM_CONSTRAINTS: MediaTrackConstraints = {
+  width: { ideal: 640 },
+  height: { ideal: 360 },
+  frameRate: { ideal: 24, max: 30 },
+};
+
+/** Vídeo de alguém na chamada (você também, como prévia). */
+export interface CallVideo {
+  stream: MediaStream;
+  kind: 'cam' | 'screen';
+}
 
 export interface CallEvents {
   /** Chamada atual (ou `null`): para o painel. */
@@ -22,6 +38,8 @@ export interface CallEvents {
   result(result: CallInviteResult): void;
   /** Quem está falando agora (ids das contas; inclui você). */
   speaking(userIds: ReadonlySet<string>): void;
+  /** Vídeos ativos (câmera ou tela) por pessoa; o seu entra como prévia. */
+  videos(videos: ReadonlyMap<string, CallVideo>): void;
   /** Erro para mostrar (microfone negado, etc.). */
   error(message: string): void;
 }
@@ -32,17 +50,37 @@ interface Peer {
   /** Candidatos que chegaram antes da descrição remota. */
   pendingIce: RTCIceCandidateInit[];
   level: (() => number) | null;
+  video: MediaStream | null;
+}
+
+function readKey(key: string): string | undefined {
+  try {
+    return localStorage.getItem(key) || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function writeKey(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // sem armazenamento: vale só para esta visita
+  }
 }
 
 /**
- * Chamadas de áudio (Fase 49): uma conexão WebRTC com cada participante (malha), sinalizada
- * pelo canal global. Quem tem o id menor faz a oferta. Cada conexão já reserva um transceptor
- * de vídeo (só recebe por enquanto): na Fase 50 câmera e tela entram com `replaceTrack`.
+ * Chamadas (Fases 49–50): uma conexão WebRTC com cada participante (malha), sinalizada pelo
+ * canal global. Quem tem o id menor faz a oferta. Cada conexão tem um transceptor de áudio e um
+ * de vídeo (os dois enviam e recebem desde o começo): ligar a câmera ou a tela é só trocar a
+ * trilha do vídeo (`replaceTrack`), sem renegociar. A tela tem prioridade sobre a câmera.
  */
 export class CallManager {
   private current: CallState | null = null;
   private readonly peers = new Map<string, Peer>();
   private mic: MediaStream | null = null;
+  private cam: MediaStream | null = null;
+  private screen: MediaStream | null = null;
   private ice: IceServer[] | null = null;
   private muted = false;
   private audioCtx: AudioContext | null = null;
@@ -72,6 +110,14 @@ export class CallManager {
     return this.muted;
   }
 
+  get cameraOn(): boolean {
+    return Boolean(this.cam);
+  }
+
+  get screenOn(): boolean {
+    return Boolean(this.screen);
+  }
+
   /** Está numa chamada com essa pessoa? */
   hasMember(userId: string): boolean {
     return Boolean(this.current?.members.some((m) => m.userId === userId));
@@ -93,7 +139,99 @@ export class CallManager {
   setMuted(muted: boolean): void {
     this.muted = muted;
     for (const t of this.mic?.getAudioTracks() ?? []) t.enabled = !muted;
-    this.lobby.callMedia({ mic: !muted, cam: false, screen: false });
+    this.sendMedia();
+  }
+
+  /** Liga/desliga a câmera. Devolve se ficou ligada. */
+  async setCamera(on: boolean): Promise<boolean> {
+    if (!on) {
+      for (const t of this.cam?.getTracks() ?? []) t.stop();
+      this.cam = null;
+    } else if (!this.cam) {
+      try {
+        const deviceId = readKey(CAM_KEY);
+        this.cam = await navigator.mediaDevices.getUserMedia({
+          video: { ...CAM_CONSTRAINTS, ...(deviceId ? { deviceId: { ideal: deviceId } } : {}) },
+        });
+      } catch {
+        this.on.error('Sem acesso à câmera. Libere a câmera para este site e tente de novo.');
+        return false;
+      }
+    }
+    this.applyVideo();
+    return Boolean(this.cam);
+  }
+
+  /** Compartilha (ou para de compartilhar) a tela. Devolve se ficou compartilhando. */
+  async setScreen(on: boolean): Promise<boolean> {
+    if (!on) {
+      for (const t of this.screen?.getTracks() ?? []) t.stop();
+      this.screen = null;
+    } else if (!this.screen) {
+      try {
+        this.screen = await navigator.mediaDevices.getDisplayMedia({
+          video: { frameRate: { ideal: 15, max: 30 } },
+          audio: false,
+        });
+        // Parou pelo botão do navegador ("Parar de compartilhar").
+        this.screen
+          .getVideoTracks()[0]
+          ?.addEventListener('ended', () => void this.setScreen(false));
+      } catch {
+        return false; // cancelou a escolha da tela
+      }
+    }
+    this.applyVideo();
+    return Boolean(this.screen);
+  }
+
+  /** Microfones e câmeras do aparelho (os nomes só aparecem depois da permissão). */
+  async devices(): Promise<{
+    mics: MediaDeviceInfo[];
+    cams: MediaDeviceInfo[];
+    mic?: string;
+    cam?: string;
+  }> {
+    const all = await navigator.mediaDevices.enumerateDevices().catch(() => []);
+    return {
+      mics: all.filter((d) => d.kind === 'audioinput'),
+      cams: all.filter((d) => d.kind === 'videoinput'),
+      mic: this.mic?.getAudioTracks()[0]?.getSettings().deviceId ?? readKey(MIC_KEY),
+      cam: this.cam?.getVideoTracks()[0]?.getSettings().deviceId ?? readKey(CAM_KEY),
+    };
+  }
+
+  /** Troca o microfone (na hora, sem cair a chamada). */
+  async useMic(deviceId: string): Promise<void> {
+    writeKey(MIC_KEY, deviceId);
+    if (!this.mic) return;
+    try {
+      const next = await navigator.mediaDevices.getUserMedia({
+        audio: this.audioConstraints(deviceId),
+      });
+      const track = next.getAudioTracks()[0]!;
+      track.enabled = !this.muted;
+      for (const p of this.peers.values()) {
+        const sender = p.pc
+          .getTransceivers()
+          .find((t) => t.receiver.track.kind === 'audio')?.sender;
+        await sender?.replaceTrack(track);
+      }
+      for (const t of this.mic.getTracks()) t.stop();
+      this.mic = next;
+      this.localLevel = this.meter(next);
+    } catch {
+      this.on.error('Não consegui usar esse microfone.');
+    }
+  }
+
+  /** Troca a câmera (se estiver ligada, na hora). */
+  async useCam(deviceId: string): Promise<void> {
+    writeKey(CAM_KEY, deviceId);
+    if (!this.cam) return;
+    for (const t of this.cam.getTracks()) t.stop();
+    this.cam = null;
+    await this.setCamera(true);
   }
 
   // ---------- Estado ----------
@@ -118,13 +256,23 @@ export class CallManager {
       if (callInitiator(this.myUserId, id) === this.myUserId) void this.offer(id, peer);
     }
     this.startSpeaking();
+    this.emitVideos();
+  }
+
+  private audioConstraints(deviceId?: string): MediaTrackConstraints {
+    return {
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+      ...(deviceId ? { deviceId: { ideal: deviceId } } : {}),
+    };
   }
 
   private async ensureMic(): Promise<boolean> {
     if (this.mic) return true;
     try {
       this.mic = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        audio: this.audioConstraints(readKey(MIC_KEY)),
       });
       for (const t of this.mic.getAudioTracks()) t.enabled = !this.muted;
       this.localLevel = this.meter(this.mic);
@@ -135,6 +283,32 @@ export class CallManager {
     }
   }
 
+  /** Trilha que vai no vídeo: a tela (se compartilhando) ou a câmera. */
+  private get videoTrack(): MediaStreamTrack | null {
+    return this.screen?.getVideoTracks()[0] ?? this.cam?.getVideoTracks()[0] ?? null;
+  }
+
+  /** Câmera/tela mudou: troca a trilha em todas as conexões e avisa os outros. */
+  private applyVideo(): void {
+    const track = this.videoTrack;
+    for (const p of this.peers.values()) {
+      const t = p.pc.getTransceivers().find((x) => x.receiver.track.kind === 'video');
+      void t?.sender.replaceTrack(track).catch(() => undefined);
+    }
+    this.sendMedia();
+    this.emitVideos();
+  }
+
+  private sendMedia(): void {
+    if (!this.current?.here) return;
+    const media: CallMedia = {
+      mic: !this.muted,
+      cam: Boolean(this.cam),
+      screen: Boolean(this.screen),
+    };
+    this.lobby.callMedia(media);
+  }
+
   private openPeer(userId: string): Peer {
     const pc = new RTCPeerConnection({ iceServers: this.ice ?? FALLBACK_ICE });
     const audio = document.createElement('audio');
@@ -142,7 +316,7 @@ export class CallManager {
     audio.dataset.callPeer = userId;
     audio.hidden = true;
     document.body.append(audio);
-    const peer: Peer = { pc, audio, pendingIce: [], level: null };
+    const peer: Peer = { pc, audio, pendingIce: [], level: null, video: null };
     pc.onicecandidate = (e) => {
       if (!e.candidate) return;
       this.lobby.callSignal(userId, {
@@ -153,7 +327,11 @@ export class CallManager {
       });
     };
     pc.ontrack = (e) => {
-      if (e.track.kind !== 'audio') return; // vídeo: Fase 50
+      if (e.track.kind === 'video') {
+        peer.video = new MediaStream([e.track]);
+        this.emitVideos();
+        return;
+      }
       const stream = e.streams[0] ?? new MediaStream([e.track]);
       audio.srcObject = stream;
       void audio.play().catch(() => undefined);
@@ -172,18 +350,22 @@ export class CallManager {
     return peer;
   }
 
-  /** Transceptores: áudio (envia e recebe) e vídeo (reservado para a Fase 50, só recebe). */
+  /** Transceptores: áudio e vídeo, os dois enviando e recebendo (o vídeo começa sem trilha). */
   private attachTracks(pc: RTCPeerConnection): void {
-    const track = this.mic?.getAudioTracks()[0];
+    const audioTrack = this.mic?.getAudioTracks()[0] ?? null;
     const audioT = pc.getTransceivers().find((t) => t.receiver.track.kind === 'audio');
     if (audioT) {
       audioT.direction = 'sendrecv';
-      if (track) void audioT.sender.replaceTrack(track);
-    } else if (track && this.mic) {
-      pc.addTransceiver(track, { direction: 'sendrecv', streams: [this.mic] });
+      void audioT.sender.replaceTrack(audioTrack);
+    } else if (audioTrack && this.mic) {
+      pc.addTransceiver(audioTrack, { direction: 'sendrecv', streams: [this.mic] });
     }
-    if (!pc.getTransceivers().some((t) => t.receiver.track.kind === 'video')) {
-      pc.addTransceiver('video', { direction: 'recvonly' });
+    const videoT = pc.getTransceivers().find((t) => t.receiver.track.kind === 'video');
+    if (videoT) {
+      videoT.direction = 'sendrecv';
+      void videoT.sender.replaceTrack(this.videoTrack);
+    } else {
+      pc.addTransceiver(this.videoTrack ?? 'video', { direction: 'sendrecv' });
     }
   }
 
@@ -226,6 +408,22 @@ export class CallManager {
     }
   }
 
+  /** Vídeos para o painel: dos outros (pelo que eles anunciaram) e a sua prévia. */
+  private emitVideos(): void {
+    const out = new Map<string, CallVideo>();
+    const st = this.current;
+    if (st?.here) {
+      const local = this.screen ?? this.cam;
+      if (local) out.set(this.myUserId, { stream: local, kind: this.screen ? 'screen' : 'cam' });
+      for (const m of st.members) {
+        const peer = this.peers.get(m.userId);
+        if (!peer?.video || !(m.cam || m.screen)) continue;
+        out.set(m.userId, { stream: peer.video, kind: m.screen ? 'screen' : 'cam' });
+      }
+    }
+    this.on.videos(out);
+  }
+
   private closePeer(userId: string): void {
     const peer = this.peers.get(userId);
     if (!peer) return;
@@ -237,8 +435,9 @@ export class CallManager {
 
   private teardown(): void {
     for (const id of [...this.peers.keys()]) this.closePeer(id);
-    for (const t of this.mic?.getTracks() ?? []) t.stop();
-    this.mic = null;
+    for (const s of [this.mic, this.cam, this.screen])
+      for (const t of s?.getTracks() ?? []) t.stop();
+    this.mic = this.cam = this.screen = null;
     this.localLevel = null;
     this.ice = null;
     this.muted = false;
@@ -248,6 +447,7 @@ export class CallManager {
       this.speakingNow = new Set();
       this.on.speaking(this.speakingNow);
     }
+    this.on.videos(new Map());
   }
 
   // ---------- Quem está falando ----------
