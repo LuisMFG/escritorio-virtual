@@ -2,6 +2,9 @@ import { randomInt } from 'node:crypto';
 import { CloseCode, Room, ServerError, validate, type Client, type Deferred } from '@colyseus/core';
 import {
   stackedOn,
+  acceptsOnTop,
+  topHeight,
+  type FurniResult,
   TV_ERRORS,
   TvMessage,
   tvAddSchema,
@@ -1523,25 +1526,21 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
 
   // ---------- Decorar ----------
 
-  private async handlePlace(client: OfficeClient, msg: FurniPlaceMessage): Promise<void> {
-    if (!client.auth || !this.canEdit(client)) return;
+  private async handlePlace(client: OfficeClient, msg: FurniPlaceMessage): Promise<FurniResult> {
+    const denied = this.editDenied(client);
+    if (denied || !client.auth) return denied ?? { ok: false };
     const catalog = services().furniCatalog;
     const blocked = catalog.blockedReason(msg.defId, services().settings.hiddenCategories());
-    if (blocked) return this.sendError(client, ErrorCode.InvalidPlacement, blocked);
+    if (blocked) return this.refuse(client, blocked);
     // Móvel do catálogo completo usado pela primeira vez: mede antes (Fase 36).
     if (!services().furniDefs.has(msg.defId)) {
       const def = await catalog.ensure(msg.defId).catch(() => null);
-      if (!def) {
-        return this.sendError(
-          client,
-          ErrorCode.InvalidPlacement,
-          'Não consegui preparar esse móvel agora. Tente de novo.',
-        );
-      }
-      if (!this.state.players.has(client.sessionId)) return;
+      if (!def)
+        return this.refuse(client, 'Não consegui preparar esse móvel agora. Tente de novo.');
+      if (!this.state.players.has(client.sessionId)) return { ok: false };
     }
     const res = canPlace(this.placementContext(), msg);
-    if (!res.ok) return this.sendError(client, ErrorCode.InvalidPlacement, res.reason);
+    if (!res.ok) return this.refuse(client, res.reason);
     const placed = services().furni.add(
       this.layout.roomId,
       { defId: msg.defId, x: msg.x, y: msg.y, z: res.z, rot: msg.rot },
@@ -1549,40 +1548,56 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     );
     this.state.furni.set(placed.id, toFurni(placed));
     services().achievements.bump(client.auth.id, 'furni');
+    return { ok: true, furni: toPlaced(this.state.furni.get(placed.id)!) };
   }
 
   /** Outra cor do mesmo móvel (variação `classname*N` do Habbo), no mesmo lugar. */
-  private async handleColor(client: OfficeClient, msg: FurniColorMessage): Promise<void> {
-    if (!this.canEdit(client)) return;
+  private async handleColor(client: OfficeClient, msg: FurniColorMessage): Promise<FurniResult> {
+    const denied = this.editDenied(client);
+    if (denied) return denied;
     const f = this.state.furni.get(msg.furniId);
-    if (!f || f.defId === msg.defId) return;
+    if (!f) return this.refuse(client, 'Esse móvel não existe mais.');
+    if (f.defId === msg.defId) return { ok: true, furni: toPlaced(f) };
     if (baseClassname(f.defId) !== baseClassname(msg.defId)) {
-      return this.sendError(client, ErrorCode.InvalidPlacement, 'Essa cor não é desse móvel.');
+      return this.refuse(client, 'Essa cor não é desse móvel.');
     }
     const def = await services()
       .furniCatalog.ensure(msg.defId)
       .catch(() => null);
     const old = services().furniDefs.get(f.defId);
     if (!def || !old || this.state.furni.get(msg.furniId) !== f) {
-      return this.sendError(client, ErrorCode.InvalidPlacement, 'Não consegui trocar a cor agora.');
+      return this.refuse(client, 'Não consegui trocar a cor agora.');
     }
     if (def.width !== old.width || def.depth !== old.depth || def.wall !== old.wall) {
-      return this.sendError(client, ErrorCode.InvalidPlacement, 'Essa cor tem outro tamanho.');
+      return this.refuse(client, 'Essa cor tem outro tamanho.');
+    }
+    // Base com coisas em cima: a cor nova precisa do mesmo tampo (senão elas ficariam flutuando
+    // ou afundadas; algumas cores do catálogo não têm o tampo da curada).
+    const placed = this.furniList();
+    const base = placed.find((p) => p.id === f.id);
+    if (
+      base &&
+      stackedOn(base, placed, services().furniDefs).length &&
+      (!acceptsOnTop(def) || Math.abs(topHeight(def) - topHeight(old)) > 0.01)
+    ) {
+      return this.refuse(
+        client,
+        'Essa cor não tem o mesmo tampo. Tire o que está em cima primeiro.',
+      );
     }
     const state = def.states.includes(f.state) ? f.state : 0;
     services().furni.setDef(this.layout.roomId, f.id, msg.defId, state);
     f.defId = msg.defId;
     f.state = state;
+    return { ok: true, furni: toPlaced(f) };
   }
 
-  private handleFurniMove(client: OfficeClient, msg: FurniMoveMessage): void {
-    if (!this.canEdit(client)) return;
+  private handleFurniMove(client: OfficeClient, msg: FurniMoveMessage): FurniResult {
+    const denied = this.editDenied(client);
+    if (denied) return denied;
     const f = this.state.furni.get(msg.furniId);
-    if (!f)
-      return this.sendError(client, ErrorCode.InvalidPlacement, 'Esse móvel não existe mais.');
-    if (this.someoneSeatedOn(f)) {
-      return this.sendError(client, ErrorCode.InvalidPlacement, 'Tem alguém sentado aí.');
-    }
+    if (!f) return this.refuse(client, 'Esse móvel não existe mais.');
+    if (this.someoneSeatedOn(f)) return this.refuse(client, 'Tem alguém sentado aí.');
     const req: PlacementRequest = {
       defId: f.defId,
       x: msg.x,
@@ -1592,7 +1607,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       ignoreId: f.id,
     };
     const res = canPlace(this.placementContext(), req);
-    if (!res.ok) return this.sendError(client, ErrorCode.InvalidPlacement, res.reason);
+    if (!res.ok) return this.refuse(client, res.reason);
     services().furni.update(this.layout.roomId, f.id, {
       x: msg.x,
       y: msg.y,
@@ -1600,29 +1615,32 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       rot: msg.rot,
     });
     Object.assign(f, { x: msg.x, y: msg.y, z: res.z, rot: msg.rot });
+    return { ok: true, furni: toPlaced(f) };
   }
 
-  private handleRemove(client: OfficeClient, furniId: string): void {
-    if (!this.canEdit(client)) return;
+  private handleRemove(client: OfficeClient, furniId: string): FurniResult {
+    const denied = this.editDenied(client);
+    if (denied) return denied;
     const f = this.state.furni.get(furniId);
-    if (!f) return;
-    if (this.someoneSeatedOn(f)) {
-      return this.sendError(client, ErrorCode.InvalidPlacement, 'Tem alguém sentado aí.');
-    }
+    if (!f) return { ok: true };
+    if (this.someoneSeatedOn(f)) return this.refuse(client, 'Tem alguém sentado aí.');
     const placed = this.furniList();
     const base = placed.find((p) => p.id === furniId);
     if (base && stackedOn(base, placed, services().furniDefs).length) {
-      return this.sendError(
-        client,
-        ErrorCode.InvalidPlacement,
-        'Tire o que está em cima primeiro.',
-      );
+      return this.refuse(client, 'Tire o que está em cima primeiro.');
     }
     if (this.isTv(furniId)) services().tv.drop(furniId);
     services().furni.remove(this.layout.roomId, furniId);
     this.state.furni.delete(furniId);
     this.state.games.delete(furniId);
     this.refreshDesks();
+    return { ok: true };
+  }
+
+  /** Recusa uma ação do Decorar: avisa quem pediu e responde o pedido (Fase 53). */
+  private refuse(client: OfficeClient, reason: string): FurniResult {
+    this.sendError(client, ErrorCode.InvalidPlacement, reason);
+    return { ok: false, reason };
   }
 
   // ---------- Minha mesa (Fase 42) ----------
@@ -1667,18 +1685,21 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     }
   }
 
-  /** Qualquer pessoa na sala decora, a não ser que um admin trave a sala (Fase 10). */
-  private canEdit(client: OfficeClient): boolean {
-    if (!this.state.players.has(client.sessionId)) return false;
-    if (this.state.decorLocked && client.auth?.role !== 'admin') {
-      this.sendError(client, ErrorCode.DecorLocked);
-      return false;
-    }
-    if (!this.editLimiter.tryTake(client.sessionId)) {
-      this.sendError(client, ErrorCode.RateLimit);
-      return false;
-    }
-    return true;
+  /**
+   * Qualquer pessoa na sala decora, a não ser que um admin trave a sala (Fase 10). Devolve a
+   * recusa (já avisada) ou `null` se pode.
+   */
+  private editDenied(client: OfficeClient): FurniResult | null {
+    if (!this.state.players.has(client.sessionId)) return { ok: false };
+    const code =
+      this.state.decorLocked && client.auth?.role !== 'admin'
+        ? ErrorCode.DecorLocked
+        : !this.editLimiter.tryTake(client.sessionId)
+          ? ErrorCode.RateLimit
+          : null;
+    if (code === null) return null;
+    this.sendError(client, code);
+    return { ok: false, reason: ERROR_MESSAGES[code] };
   }
 
   private someoneSeatedOn(f: Furni): boolean {

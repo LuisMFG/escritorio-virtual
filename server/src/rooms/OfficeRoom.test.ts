@@ -18,6 +18,7 @@ import {
   type ErrorMessage,
   type RoomLayoutMessage,
   type FurniManifestEntry,
+  type FurniResult,
   type PlacedFurni,
   hasWall,
   parseHeightmap,
@@ -1505,6 +1506,108 @@ describe('OfficeRoom', () => {
       room.send(ClientMessage.FurniMove, { furniId: ids[0]!, x: 7, y: 6, rot: 4 });
       await wait(STEP_MS * 9);
       expect(me().action).not.toBe('sit');
+    });
+  });
+  describe('Decorar com resposta (Fase 53)', () => {
+    function smallRoom(furni: Omit<PlacedFurni, 'id'>[]) {
+      const roomId = svc.rooms.create('Teste Fase 53', svc.furniDefs).id;
+      const owner = newUser('Dono').user.id;
+      const ids = furni.map((f) => svc.furni.add(roomId, f, owner).id);
+      return { roomId, ids };
+    }
+    const at = (defId: string, x: number, y: number, rot = 0, z = 0) => ({ defId, x, y, z, rot });
+    /** Mesinha com tampo (e as cores dela): a `*2` sem tampo, a `*3` com o mesmo tampo. */
+    function registerBase() {
+      const defs = svc.furniDefs as Map<string, FurniManifestEntry>;
+      const table = svc.furniDefs.get('table_plasto_square')!;
+      const base = { ...table, id: 'base_teste', hasTop: true, stackHeight: 0.8 };
+      defs.set('base_teste', base);
+      defs.set('base_teste*2', { ...base, id: 'base_teste*2', hasTop: false });
+      defs.set('base_teste*3', { ...base, id: 'base_teste*3' });
+    }
+
+    it('colocar, mover e remover respondem o resultado; a recusa vem com o motivo', async () => {
+      const { roomId } = smallRoom([]);
+      const room = await join(newUser('Ana').token, roomId);
+      const placed = (await room.request(ClientMessage.FurniPlace, {
+        defId: 'chair_norja',
+        x: 4,
+        y: 2,
+        rot: 0,
+      })) as FurniResult;
+      expect(placed).toMatchObject({ ok: true, furni: { defId: 'chair_norja', x: 4, y: 2 } });
+      const id = placed.ok ? placed.furni!.id : '';
+      // A resposta chega antes da atualização do estado.
+      await waitFor(() => room.state.furni.has(id));
+
+      const moved = await room.request(ClientMessage.FurniMove, {
+        furniId: id,
+        x: 5,
+        y: 2,
+        rot: 2,
+      });
+      expect(moved).toMatchObject({ ok: true, furni: { id, x: 5, y: 2, rot: 2 } });
+
+      // Na entrada não pode: a resposta traz o motivo (que também chega como erro).
+      const refused = await room.request(ClientMessage.FurniPlace, {
+        defId: 'chair_norja',
+        x: 1,
+        y: 4,
+        rot: 0,
+      });
+      expect(refused).toEqual({ ok: false, reason: 'Deixe a porta e a entrada livres.' });
+
+      expect(await room.request(ClientMessage.FurniRemove, { furniId: id })).toEqual({ ok: true });
+      await waitFor(() => !room.state.furni.has(id));
+    });
+
+    it('trocar a cor de uma base com coisas em cima só vale com o mesmo tampo', async () => {
+      registerBase();
+      const { roomId, ids } = smallRoom([
+        at('base_teste', 4, 2),
+        at('computer_flatscreen', 4, 2, 0, 0.8),
+      ]);
+      const room = await join(newUser('Ana').token, roomId);
+      const noTop = await room.request(ClientMessage.FurniColor, {
+        furniId: ids[0]!,
+        defId: 'base_teste*2',
+      });
+      expect(noTop).toMatchObject({ ok: false, reason: expect.stringContaining('tampo') });
+      expect(room.state.furni.get(ids[0]!)?.defId).toBe('base_teste');
+      const sameTop = await room.request(ClientMessage.FurniColor, {
+        furniId: ids[0]!,
+        defId: 'base_teste*3',
+      });
+      expect(sameTop).toMatchObject({ ok: true, furni: { defId: 'base_teste*3' } });
+    });
+
+    it('base quadrada com coisas em cima gira no lugar, mas não sai dele', async () => {
+      registerBase();
+      const { roomId, ids } = smallRoom([
+        at('base_teste', 4, 2),
+        at('computer_flatscreen', 4, 2, 0, 0.8),
+      ]);
+      const room = await join(newUser('Ana').token, roomId);
+      const turned = await room.request(ClientMessage.FurniMove, {
+        furniId: ids[0]!,
+        x: 4,
+        y: 2,
+        rot: 2,
+      });
+      expect(turned).toMatchObject({ ok: true, furni: { rot: 2 } });
+      const moved = await room.request(ClientMessage.FurniMove, {
+        furniId: ids[0]!,
+        x: 5,
+        y: 2,
+        rot: 2,
+      });
+      expect(moved).toEqual({ ok: false, reason: 'Tire o que está em cima primeiro.' });
+      // O computador continua em cima, na altura do tampo.
+      expect(room.state.furni.get(ids[1]!)).toMatchObject({
+        x: 4,
+        y: 2,
+        z: expect.closeTo(0.8, 3),
+      });
     });
   });
 });
