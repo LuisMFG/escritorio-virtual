@@ -88,6 +88,11 @@ export class AvatarTextureCache {
     }
     hit = this.renderer.poser?.(figure) ?? Promise.resolve(null);
     this.posers.set(figure, hit);
+    // Não montou (roupa que não baixou, servidor ocupado): não guarda, para tentar de novo.
+    const mine = hit;
+    void mine.then((p) => {
+      if (!p && this.posers.get(figure) === mine) this.posers.delete(figure);
+    });
     if (this.posers.size > this.maxEntries) {
       const oldest = this.posers.keys().next().value;
       if (oldest !== undefined) {

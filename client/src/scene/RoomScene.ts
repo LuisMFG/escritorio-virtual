@@ -50,6 +50,9 @@ const MAX_BUBBLES = 10;
 /** zIndex do fantasma do modo decorar: sempre por cima. */
 const GHOST_Z = 1_000_000;
 
+/** Novas tentativas de montar um avatar que falhou (ms). */
+const POSER_RETRY_MS = [4_000, 15_000, 45_000];
+
 export interface SceneDeps {
   loader: AssetLoader;
   placeholders: PlaceholderFactory;
@@ -555,10 +558,18 @@ export class RoomScene implements DecorHost {
     void this.deps.avatars.get(figure).then((frames) => {
       if (!view.destroyed && view.figure === figure) view.setFrames(frames);
     });
-    // Avatar montado: poses reais (sem ele, a animação simulada continua).
-    void this.deps.avatars.poser(figure).then((poser) => {
-      if (!view.destroyed && view.figure === figure) view.setPoser(poser);
-    });
+    // Avatar montado: poses reais (sem ele, a animação simulada continua). Se não montou
+    // (roupa nova que ainda não baixou, servidor ocupado), tenta de novo mais tarde.
+    const attempt = (n: number) => {
+      void this.deps.avatars.poser(figure).then((poser) => {
+        if (view.destroyed || view.figure !== figure) return;
+        if (poser) return view.setPoser(poser);
+        view.setPoser(null);
+        const wait = POSER_RETRY_MS[n];
+        if (wait !== undefined) setTimeout(() => attempt(n + 1), wait);
+      });
+    };
+    attempt(0);
   }
 
   /** Comemoração: efeito por alguns segundos sobre alguém. */
