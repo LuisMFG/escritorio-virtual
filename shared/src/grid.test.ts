@@ -95,6 +95,15 @@ describe('RoomGrid', () => {
     expect(grid.isWalkable(1, 1, false)).toBe(true);
   });
 
+  it('o móvel em que o avatar está (passable) é passagem, mas não destino', () => {
+    const mesa = [{ id: 'm', defId: 'mesa', x: 0, y: 0, z: 0, rot: 0 }];
+    const grid = new RoomGrid(map, mesa, defs, { passable: [{ x: 1, y: 0 }] });
+    expect(grid.isWalkable(1, 0, false)).toBe(true);
+    expect(grid.isWalkable(1, 0, true)).toBe(false);
+    // Só os tiles passados: o resto da mesa continua bloqueado.
+    expect(grid.isWalkable(0, 0, false)).toBe(false);
+  });
+
   it('móveis de definição desconhecida são ignorados', () => {
     const grid = new RoomGrid(
       map,

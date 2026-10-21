@@ -18,6 +18,7 @@ import {
   type ErrorMessage,
   type RoomLayoutMessage,
   type FurniManifestEntry,
+  type PlacedFurni,
   hasWall,
   parseHeightmap,
   TvMessage,
@@ -1319,6 +1320,191 @@ describe('OfficeRoom', () => {
       await a.leave();
       await wait(50);
       expect(svc.tv.viewerSessions(tv.id)).toEqual([]);
+    });
+  });
+
+  describe('interação sem bugs (Fase 52)', () => {
+    /** Sala pequena (8×6, entrada em 1,4) com móveis colocados antes de entrar. */
+    function smallRoom(furni: Omit<PlacedFurni, 'id'>[]) {
+      const roomId = svc.rooms.create('Teste Fase 52', svc.furniDefs).id;
+      const owner = newUser('Dono').user.id;
+      const ids = furni.map((f) => svc.furni.add(roomId, f, owner).id);
+      return { roomId, ids };
+    }
+    const at = (defId: string, x: number, y: number, rot = 0, z = 0) => ({ defId, x, y, z, rot });
+    async function enter(name: string, roomId: string) {
+      const room = await join(newUser(name).token, roomId);
+      const me = () => room.state.players.get(room.sessionId)!;
+      return { room, me };
+    }
+
+    it('cama encostada na parede: entra pelo pé da cama e deita no travesseiro', async () => {
+      // Cabeceira na parede de cima, lateral na parede da esquerda e um vaso do outro lado:
+      // os travesseiros só têm acesso pela própria cama (antes dava "Não dá para chegar").
+      const { roomId, ids } = smallRoom([at('bed_polyfon', 1, 1), at('plant_yukka', 3, 1)]);
+      const { room, me } = await enter('Ana', roomId);
+      room.send(ClientMessage.Interact, { furniId: ids[0]! });
+      await wait(STEP_MS * 6);
+      expect(me()).toMatchObject({ y: 1, action: 'lay', dir: 4 });
+      expect([1, 2]).toContain(me().x);
+      expect(me().z).toBeGreaterThan(0);
+    });
+
+    it('deitado na cama cercada, sai andando por cima dela (clique no chão e /levantar)', async () => {
+      // Mesma cama no canto: do travesseiro, só a própria cama dá acesso ao chão.
+      const { roomId, ids } = smallRoom([at('bed_polyfon', 1, 1), at('plant_yukka', 3, 1)]);
+      const { room, me } = await enter('Ana', roomId);
+      const bedTile = (p: { x: number; y: number }) => p.x >= 1 && p.x <= 2 && p.y >= 1 && p.y <= 3;
+      room.send(ClientMessage.Interact, { furniId: ids[0]! });
+      await wait(STEP_MS * 6);
+      expect(me()).toMatchObject({ y: 1, action: 'lay' });
+
+      // Clique num tile do chão: levanta e vai (antes: "Não dá para chegar nesse lugar").
+      room.send(ClientMessage.Move, { x: 5, y: 3 });
+      await wait(STEP_MS * 8);
+      expect(me()).toMatchObject({ x: 5, y: 3, action: 'idle' });
+
+      // Deita de novo e usa /levantar: sai da cama andando até o chão livre mais perto.
+      room.send(ClientMessage.Interact, { furniId: ids[0]! });
+      await wait(STEP_MS * 8);
+      expect(me().action).toBe('lay');
+      room.send(ClientMessage.Posture, { posture: 'stand' });
+      await wait(STEP_MS * 6);
+      expect(me().action).toBe('idle');
+      expect(bedTile(me())).toBe(false);
+      expect(me().z).toBe(0);
+    }, 20_000);
+
+    it('cama "com estados" do catálogo deita em vez de ligar/desligar', async () => {
+      const bed = svc.furniDefs.get('bed_polyfon')!;
+      (svc.furniDefs as Map<string, FurniManifestEntry>).set('cama_estados_teste', {
+        ...bed,
+        id: 'cama_estados_teste',
+        interaction: 'toggle',
+        states: [0, 1],
+      });
+      const { roomId, ids } = smallRoom([at('cama_estados_teste', 4, 2)]);
+      const { room, me } = await enter('Ana', roomId);
+      room.send(ClientMessage.Interact, { furniId: ids[0]! });
+      await wait(STEP_MS * 8);
+      expect(me().action).toBe('lay');
+      expect(room.state.furni.get(ids[0]!)?.state).toBe(0);
+    });
+
+    it('sentado, clicar na mesa à frente não deixa em pé dentro da cadeira', async () => {
+      const { roomId, ids } = smallRoom([
+        at('chair_norja', 3, 3, 2),
+        at('table_plasto_square', 4, 3),
+      ]);
+      const { room, me } = await enter('Ana', roomId);
+      room.send(ClientMessage.Interact, { furniId: ids[0]! });
+      await wait(STEP_MS * 5);
+      expect(me()).toMatchObject({ x: 3, y: 3, action: 'sit' });
+      room.send(ClientMessage.Move, { x: 4, y: 3 });
+      await wait(STEP_MS * 4);
+      // Ou continua sentado, ou levantou e saiu da cadeira — nunca "em pé" no tile da cadeira.
+      const p = me();
+      expect(p.x === 3 && p.y === 3 && p.action !== 'sit').toBe(false);
+    });
+
+    it('editar a sala não levanta quem está sentado', async () => {
+      const { roomId, ids } = smallRoom([at('chair_norja', 4, 2, 4)]);
+      const { room, me } = await enter('Ana', roomId);
+      room.send(ClientMessage.Interact, { furniId: ids[0]! });
+      await wait(STEP_MS * 5);
+      expect(me()).toMatchObject({ x: 4, y: 2, action: 'sit' });
+      svc.moderation.emit('layout', { roomId });
+      await wait(150);
+      expect(me()).toMatchObject({ x: 4, y: 2, action: 'sit' });
+    });
+
+    it('lugar inalcançável: recusa sem dar passo e os comandos continuam funcionando', async () => {
+      // Cadeira no canto cercada por vasos.
+      const { roomId, ids } = smallRoom([
+        at('chair_norja', 8, 6),
+        at('plant_yukka', 7, 6),
+        at('plant_yukka', 8, 5),
+        at('plant_yukka', 7, 5),
+      ]);
+      const { room, me } = await enter('Ana', roomId);
+      const err = room.waitForMessage(ServerMessage.Error) as Promise<ErrorMessage>;
+      room.send(ClientMessage.Interact, { furniId: ids[0]! });
+      expect((await err).message).toBe('Não dá para chegar nesse lugar.');
+      await wait(STEP_MS * 2);
+      expect(me()).toMatchObject({ x: 1, y: 4 });
+      expect([me().nextX, me().nextY]).toEqual([1, 4]);
+      room.send(ClientMessage.Posture, { posture: 'sit' });
+      await wait(150);
+      expect(me().action).toBe('sit');
+    });
+
+    it('o último comando vale: ir pegar café e depois clicar na cadeira senta (sem café)', async () => {
+      const { roomId, ids } = smallRoom([
+        at('sunsetcafe_c20_coffeemachine', 6, 1, 4),
+        at('chair_norja', 3, 4, 2),
+      ]);
+      const { room, me } = await enter('Ana', roomId);
+      room.send(ClientMessage.Interact, { furniId: ids[0]! });
+      await wait(60);
+      room.send(ClientMessage.Interact, { furniId: ids[1]! });
+      await wait(STEP_MS * 6);
+      expect(me()).toMatchObject({ x: 3, y: 4, action: 'sit' });
+      expect(me().handItem ?? 0).toBe(0);
+    });
+
+    it('computador em cima da mesa: usa do lado da mesa, sem andar', async () => {
+      const { roomId, ids } = smallRoom([
+        at('table_norja_med', 4, 2),
+        at('computer_flatscreen', 5, 3, 2, 0.8),
+      ]);
+      const { room, me } = await enter('Ana', roomId);
+      room.send(ClientMessage.Move, { x: 3, y: 2 });
+      await wait(STEP_MS * 5);
+      expect(me()).toMatchObject({ x: 3, y: 2 });
+      room.send(ClientMessage.Interact, { furniId: ids[1]! });
+      await wait(200);
+      expect(room.state.furni.get(ids[1]!)?.state).not.toBe(0);
+      expect(me()).toMatchObject({ x: 3, y: 2 });
+    });
+
+    it('sentado, usar um móvel na diagonal não gira o corpo; duplo clique usa uma vez', async () => {
+      const { roomId, ids } = smallRoom([at('chair_norja', 3, 3, 2), at('lamp_basic', 4, 4)]);
+      const { room, me } = await enter('Ana', roomId);
+      room.send(ClientMessage.Interact, { furniId: ids[0]! });
+      await wait(STEP_MS * 5);
+      expect(me()).toMatchObject({ action: 'sit', dir: 2 });
+      room.send(ClientMessage.Interact, { furniId: ids[1]! });
+      room.send(ClientMessage.Interact, { furniId: ids[1]! });
+      await wait(200);
+      expect(room.state.furni.get(ids[1]!)?.state).toBe(1);
+      expect(me()).toMatchObject({ action: 'sit', dir: 2 });
+    });
+
+    it('/levantar numa cadeira sai para o lado; dançar sentado é recusado', async () => {
+      const { roomId, ids } = smallRoom([at('chair_norja', 4, 2, 4)]);
+      const { room, me } = await enter('Ana', roomId);
+      room.send(ClientMessage.Interact, { furniId: ids[0]! });
+      await wait(STEP_MS * 5);
+      expect(me()).toMatchObject({ x: 4, y: 2, action: 'sit' });
+      const err = room.waitForMessage(ServerMessage.Error) as Promise<ErrorMessage>;
+      room.send(ClientMessage.Emote, { emote: 'dance' });
+      expect((await err).message).toBe('Levante para dançar.');
+      room.send(ClientMessage.Posture, { posture: 'stand' });
+      await wait(150);
+      expect(me().action).toBe('idle');
+      expect(me().x === 4 && me().y === 2).toBe(false);
+      expect(Math.max(Math.abs(me().x - 4), Math.abs(me().y - 2))).toBe(1);
+      expect(me().z).toBe(0);
+    });
+
+    it('cadeira movida no caminho: não senta no ar onde ela estava', async () => {
+      const { roomId, ids } = smallRoom([at('chair_norja', 7, 2, 4)]);
+      const { room, me } = await enter('Ana', roomId);
+      room.send(ClientMessage.Interact, { furniId: ids[0]! });
+      await wait(60);
+      room.send(ClientMessage.FurniMove, { furniId: ids[0]!, x: 7, y: 6, rot: 4 });
+      await wait(STEP_MS * 9);
+      expect(me().action).not.toBe('sit');
     });
   });
 });

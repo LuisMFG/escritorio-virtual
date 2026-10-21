@@ -160,4 +160,13 @@ describe('findNearestReachable', () => {
     const grid = gridFrom(['.x###']);
     expect(findNearestReachable(grid, { x: 0, y: 0 }, { x: 4, y: 0 }, 1)).toBeNull();
   });
+
+  it('partindo de uma cadeira, não escolhe ficar em pé dentro dela', () => {
+    // Sentado em (1,0) e clicando na própria cadeira: o mais perto é um vizinho, não o início.
+    const chair: PlacedFurni = { id: 'c', defId: 'cadeira', x: 1, y: 0, z: 0, rot: 0 };
+    const grid = new RoomGrid(parseHeightmap(['000']), [chair], defs, { seatsAsGoal: false });
+    const res = findNearestReachable(grid, { x: 1, y: 0 }, { x: 1, y: 0 })!;
+    expect(res.tile).not.toEqual({ x: 1, y: 0 });
+    expect(res.path).toEqual([res.tile]);
+  });
 });

@@ -26,6 +26,12 @@ interface Walk {
 
 export type MoveResult = { ok: true; dest: TilePoint } | { ok: false };
 
+/** Caminho calculado e ainda não seguido (`plan` → `go`). */
+export interface MovePlan {
+  dest: TilePoint;
+  path: TilePoint[];
+}
+
 /**
  * Movimento autoritativo. O cliente só pede um destino; o servidor calcula o caminho
  * (A* compartilhado), anda um tile a cada `STEP_MS` e publica `nextX/nextY` no início de
@@ -44,21 +50,42 @@ export class MovementSystem {
   ) {}
 
   request(id: string, m: Mover, goal: TilePoint): MoveResult {
-    const grid = this.gridFor(id);
+    const plan = this.plan(id, m, goal);
+    if (!plan) return { ok: false };
+    this.go(id, m, plan);
+    return { ok: true, dest: plan.dest };
+  }
+
+  /**
+   * Calcula o caminho até `goal` (ou até o tile alcançável mais perto) **sem** andar: quem
+   * chama decide se o destino serve antes de mexer no avatar. Antes o passo começava já, e uma
+   * recusa depois (cama sem acesso) deixava um passo pendurado que travava os comandos.
+   */
+  plan(id: string, m: Mover, goal: TilePoint, grid = this.gridFor(id)): MovePlan | null {
     const start = this.isStepping(m) ? { x: m.nextX, y: m.nextY } : { x: m.x, y: m.y };
-    let dest = goal;
-    let path = findPath(grid, start, goal);
-    if (!path) {
-      const near = findNearestReachable(grid, start, goal, 2);
-      if (!near) return { ok: false };
-      dest = near.tile;
-      path = near.path;
+    const path = findPath(grid, start, goal);
+    if (path) return { dest: goal, path };
+    const near = findNearestReachable(grid, start, goal, 2);
+    return near ? { dest: near.tile, path: near.path } : null;
+  }
+
+  /** Segue um caminho planejado. Caminho vazio (já está lá) não mexe em nada: sentado continua sentado. */
+  go(id: string, m: Mover, plan: MovePlan): void {
+    if (!plan.path.length) {
+      if (this.isStepping(m)) this.stop(id);
+      else this.walks.delete(id);
+      return;
     }
     const walk = this.walks.get(id) ?? { path: [], elapsed: 0 };
-    walk.path = path;
+    walk.path = [...plan.path];
     this.walks.set(id, walk);
     if (!this.isStepping(m)) this.startStep(id, m, walk);
-    return { ok: true, dest };
+  }
+
+  /** Para no fim do passo atual (sem deixar o avatar a meio caminho entre dois tiles). */
+  stop(id: string): void {
+    const walk = this.walks.get(id);
+    if (walk) walk.path = [];
   }
 
   /** Destino final de quem está andando (para outros não escolherem o mesmo tile). */
@@ -90,6 +117,7 @@ export class MovementSystem {
     }
   }
 
+  /** Esquece o caminho (quem chama põe o avatar num tile, como ao teleportar). */
   remove(id: string): void {
     this.walks.delete(id);
   }

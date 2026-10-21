@@ -41,6 +41,12 @@ export interface RoomGridOptions {
   occupied?: readonly TilePoint[];
   /** Permite usar assentos como destino (para sentar). Padrão: true. */
   seatsAsGoal?: boolean;
+  /**
+   * Tiles bloqueados que este avatar pode atravessar, sem parar neles: os do móvel em que ele
+   * está (cama, sofá), como no Habbo. Sem isso, deitado numa cama encostada em outros móveis, não
+   * havia como sair dela.
+   */
+  passable?: readonly TilePoint[];
 }
 
 /** Estado de cada tile, considerando o piso e os móveis posicionados. */
@@ -63,6 +69,7 @@ export class RoomGrid implements PathGrid {
   readonly height: number;
   private readonly tiles: TileInfo[];
   private readonly occupied = new Set<string>();
+  private readonly passable = new Set<string>();
   private readonly seatsAsGoal: boolean;
 
   constructor(
@@ -99,6 +106,7 @@ export class RoomGrid implements PathGrid {
       }
     }
     for (const p of options.occupied ?? []) this.occupied.add(key(p.x, p.y));
+    for (const p of options.passable ?? []) this.passable.add(key(p.x, p.y));
     this.seatsAsGoal = options.seatsAsGoal ?? true;
   }
 
@@ -115,6 +123,7 @@ export class RoomGrid implements PathGrid {
   isWalkable(x: number, y: number, isGoal: boolean): boolean {
     const t = this.tile(x, y);
     if (!t || t.floor === null) return false;
+    if (t.blocked && !isGoal && this.passable.has(key(x, y))) return true;
     if (t.blocked && !(isGoal && t.seat && this.seatsAsGoal)) return false;
     if (isGoal && this.occupied.has(key(x, y))) return false;
     return true;

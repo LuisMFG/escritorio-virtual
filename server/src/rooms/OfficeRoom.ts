@@ -62,6 +62,8 @@ import {
   furniMoveSchema,
   furniPlaceSchema,
   furniRefSchema,
+  DIRECTION_OFFSETS,
+  type Footprint,
   nearestFreeSeat,
   seatTiles,
   sitDirection,
@@ -109,6 +111,7 @@ import {
 import type { UserRow } from '../db/schema.js';
 import { services, type ModerationEvents } from '../services/index.js';
 import { KeyedRateLimiter } from '../util/rateLimiter.js';
+import { HeldItems } from './HeldItems.js';
 import { MovementSystem, type Mover } from './MovementSystem.js';
 import * as ttt from './ticTacToe.js';
 import { PetKeeper } from './PetKeeper.js';
@@ -117,7 +120,7 @@ const TICK_MS = 50;
 /** Segundos que um avatar desconectado espera por reconexão antes de sair da sala. */
 const RECONNECT_SECONDS = 30;
 /** Item na mão de cada pessoa (vale entre salas, até vencer). */
-const HELD = new Map<string, { item: number; until: number }>();
+const HELD = new HeldItems();
 /** Aniversários já comemorados hoje (`userId:AAAA-MM-DD`). */
 const BIRTHDAY_SHOWN = new Set<string>();
 
@@ -131,6 +134,19 @@ const DICE_ROLLING_STATE = 255;
 const DICE_ROLL_MS = 1200;
 /** Porta do teleporte abrindo antes de a pessoa sumir. */
 const TELEPORT_MS = 900;
+/** Dois usos do mesmo móvel em menos que isso (duplo clique): o segundo é ignorado. */
+const DOUBLE_USE_MS = 450;
+/** Móveis que se usam com um clique (os assentos e camas sentam/deitam). */
+const USE_INTERACTIONS = new Set(['toggle', 'coffee', 'fridge', 'dice', 'teleport', 'jukebox']);
+
+/** Ir sentar/deitar: `entry` é onde a pessoa chega; `seat`, onde fica (na cama, o travesseiro). */
+interface SitIntent {
+  kind: 'sit';
+  furniId: string;
+  seat: TilePoint;
+  entry: TilePoint;
+}
+type Intent = SitIntent | { kind: 'use'; furniId: string; at: TilePoint };
 
 export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient }> {
   override maxClients = 30;
@@ -166,10 +182,16 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
   private readonly tvLimiter = new KeyedRateLimiter(10, 3);
   /** Decorar: rajada de 10 ações, recarregando 4 por segundo. */
   private readonly editLimiter = new KeyedRateLimiter(10, 4);
-  /** Quem clicou numa cadeira e está andando até ela (sessionId → móvel e assento). */
-  private readonly pendingSit = new Map<string, { furniId: string; seat: TilePoint }>();
-  /** Quem clicou num móvel de usar (luz, café…) e está andando até ficar do lado dele. */
-  private readonly pendingUse = new Map<string, { furniId: string; at: TilePoint }>();
+  /**
+   * O que cada pessoa está indo fazer (Fase 52): sentar/deitar num móvel ou usar um. Uma só por
+   * pessoa, trocada por qualquer comando novo (antes eram duas, e um "usar" antigo sequestrava a
+   * ida até a cadeira). `entry` é o tile onde a pessoa chega; na cama, `seat` é o travesseiro.
+   */
+  private readonly intents = new Map<string, Intent>();
+  /** Último uso de cada móvel por pessoa (duplo clique não liga e desliga). */
+  private readonly lastUse = new Map<string, number>();
+  /** Quem está no meio de um teleporte (não dispara de novo). */
+  private readonly teleporting = new Set<string>();
   /** Reconexões pendentes por sessionId, para cancelar quando a pessoa volta numa aba nova. */
   private readonly pendingReconnects = new Map<string, Deferred<Client>>();
 
@@ -548,12 +570,21 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       this.state.games.delete(id);
     }
     this.refreshDesks();
-    // Quem ficou fora do piso (ou numa porta) volta para perto da entrada.
+    // Quem ficou fora do piso (ou numa porta) volta para perto da entrada. Quem está sentado ou
+    // deitado num móvel que continua lá fica (antes todo mundo era levantado e levado à entrada).
     for (const [sessionId, p] of this.state.players.entries()) {
       const onDoor = layout.doors.some((d) => d.x === p.x && d.y === p.y);
-      if (!onDoor && this.gridFor(sessionId).isWalkable(p.x, p.y, true)) continue;
+      const seated = p.action === 'sit' || p.action === 'lay';
+      if (seated && this.onSeat(sessionId, p)) continue;
+      const grid = this.gridFor(sessionId);
+      if (!onDoor && grid.isWalkable(p.x, p.y, true)) {
+        // O móvel em que estava sumiu na edição: levanta ali mesmo, no piso.
+        const floor = grid.heightAt(p.x, p.y);
+        if (seated && p.z > floor + 0.05) Object.assign(p, { action: 'idle', z: floor });
+        continue;
+      }
       this.movement.remove(sessionId);
-      this.pendingSit.delete(sessionId);
+      this.intents.delete(sessionId);
       const t = this.freeTileNear(layout.spawn);
       Object.assign(p, {
         x: t.x,
@@ -685,7 +716,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     this.state.players.set(client.sessionId, player);
     // O item na mão vai junto de sala em sala, até vencer.
     const held = HELD.get(user.id);
-    if (held && held.until > Date.now()) this.giveHandItem(client.sessionId, held.item, held.until);
+    if (held) this.giveHandItem(client.sessionId, held.item, held.until);
     // Aniversário: corações na primeira entrada do dia.
     const today = new Date().toISOString().slice(0, 10);
     if (player.birthday && !BIRTHDAY_SHOWN.has(`${user.id}:${today}`)) {
@@ -746,8 +777,10 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     this.gameLimiter.delete(client.sessionId);
     this.tvLimiter.delete(client.sessionId);
     services().tv.leave(client.sessionId);
-    this.pendingUse.delete(client.sessionId);
-    this.pendingSit.delete(client.sessionId);
+    this.intents.delete(client.sessionId);
+    this.teleporting.delete(client.sessionId);
+    for (const k of this.lastUse.keys())
+      if (k.startsWith(`${client.sessionId}:`)) this.lastUse.delete(k);
     this.handTimers.get(client.sessionId)?.clear();
     this.handTimers.delete(client.sessionId);
     for (const furniId of [...this.state.games.keys()]) this.leaveGame(furniId, client.sessionId);
@@ -763,15 +796,15 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
 
   /** Terminou um passo: chegou na cadeira (senta) ou numa porta (troca de sala). */
   private onStepEnd(sessionId: string, m: Mover): boolean {
-    const sit = this.pendingSit.get(sessionId);
-    if (sit && sit.seat.x === m.x && sit.seat.y === m.y) {
-      this.sitDown(sessionId, sit.furniId);
+    const intent = this.intents.get(sessionId);
+    if (intent?.kind === 'sit' && intent.entry.x === m.x && intent.entry.y === m.y) {
+      this.intents.delete(sessionId);
+      this.sitDown(sessionId, intent);
       return true;
     }
-    const use = this.pendingUse.get(sessionId);
-    if (use && use.at.x === m.x && use.at.y === m.y) {
-      this.pendingUse.delete(sessionId);
-      this.useFurni(sessionId, use.furniId);
+    if (intent?.kind === 'use' && intent.at.x === m.x && intent.at.y === m.y) {
+      this.intents.delete(sessionId);
+      this.arriveToUse(sessionId, intent.furniId);
       return true;
     }
     const door = this.layout.doors.find((d) => d.x === m.x && d.y === m.y);
@@ -796,8 +829,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     if (!player) return;
     if (!this.moveLimiter.tryTake(client.sessionId))
       return this.sendError(client, ErrorCode.RateLimit);
-    this.pendingSit.delete(client.sessionId);
-    this.pendingUse.delete(client.sessionId);
+    this.intents.delete(client.sessionId);
     // Sentado no chão, clicar num tile do lado só vira para lá (como no Habbo).
     if (
       player.action === 'sit' &&
@@ -813,55 +845,62 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
 
   // ---------- Sentar ----------
 
-  /** Clique num assento: anda até o lugar livre mais perto e senta virado como o móvel. */
+  /** Clique num móvel: assento (senta ou deita) ou móvel de usar (luz, café, teleporte…). */
   private handleInteract(client: OfficeClient, furniId: string): void {
     const player = this.state.players.get(client.sessionId);
     const f = this.state.furni.get(furniId);
     const def = f && services().furniDefs.get(f.defId);
     if (!player || !f || !def) return;
-    if (
-      def.interaction === 'toggle' ||
-      def.interaction === 'coffee' ||
-      def.interaction === 'fridge' ||
-      def.interaction === 'dice' ||
-      def.interaction === 'teleport' ||
-      def.interaction === 'jukebox'
-    ) {
-      return this.handleUse(client, player, f, def);
+    // Assento e cama vêm antes: as do catálogo com vários estados eram tratadas como interruptor
+    // e o clique ligava/desligava em vez de sentar ou deitar.
+    if (def.canSit || def.canLay) {
+      if (!this.moveLimiter.tryTake(client.sessionId))
+        return this.sendError(client, ErrorCode.RateLimit);
+      return this.goSit(client, player, f, def);
     }
-    if (!def.canSit && !def.canLay) return;
-    if (!this.moveLimiter.tryTake(client.sessionId))
-      return this.sendError(client, ErrorCode.RateLimit);
-    const from =
-      player.nextX !== player.x || player.nextY !== player.y
-        ? { x: player.nextX, y: player.nextY }
-        : player;
-    // O lugar livre mais perto (sofá de dois lugares, cama de casal…).
-    const seat = nearestFreeSeat(seatTiles(def, f), from, (t) =>
-      this.isTileTaken(t, client.sessionId),
-    );
-    if (!seat) {
+    if (USE_INTERACTIONS.has(def.interaction ?? '')) this.handleUse(client, player, f, def);
+  }
+
+  /**
+   * Anda até o lugar livre mais perto que dá para alcançar e senta (ou deita) ao chegar. Na cama
+   * entra por qualquer tile livre dela e "escorrega" até o travesseiro daquela fileira, como no
+   * Habbo (antes só a cabeceira servia, e cama encostada na parede não funcionava). Planeja antes
+   * de andar: uma recusa não deixa passo pendurado.
+   */
+  private goSit(client: OfficeClient, player: Player, f: Furni, def: FurniManifestEntry): void {
+    const id = client.sessionId;
+    this.intents.delete(id);
+    const walking = player.nextX !== player.x || player.nextY !== player.y;
+    const from = walking ? { x: player.nextX, y: player.nextY } : { x: player.x, y: player.y };
+    const taken = (t: TilePoint) => this.isTileTaken(t, id);
+    const entries = def.canLay ? footprintTiles(def, f) : seatTiles(def, f);
+    const options: SitIntent[] = [];
+    for (const entry of entries) {
+      const seat = def.canLay ? pillowFor(def, f, entry) : entry;
+      if (taken(entry) || taken(seat)) continue;
+      options.push({ kind: 'sit', furniId: f.id, seat, entry });
+    }
+    if (!options.length) {
       return this.sendError(
         client,
         ErrorCode.InvalidMove,
         def.canLay ? 'A cama está ocupada.' : 'Esse lugar está ocupado.',
       );
     }
-    this.pendingSit.set(client.sessionId, { furniId, seat });
-    if (
-      player.x === seat.x &&
-      player.y === seat.y &&
-      player.nextX === player.x &&
-      player.nextY === player.y
-    ) {
-      return this.sitDown(client.sessionId, furniId);
+    const dist = (t: TilePoint) => Math.max(Math.abs(t.x - from.x), Math.abs(t.y - from.y));
+    options.sort((a, b) => dist(a.entry) - dist(b.entry) || dist(a.seat) - dist(b.seat));
+    // Já está num dos lugares, parado: senta ali mesmo.
+    const here = options.find((o) => !walking && o.entry.x === player.x && o.entry.y === player.y);
+    if (here) return this.sitDown(id, here);
+    const grid = this.gridFor(id, { seatsAsGoal: true });
+    for (const option of options) {
+      const plan = this.movement.plan(id, player, option.entry, grid);
+      if (!plan || plan.dest.x !== option.entry.x || plan.dest.y !== option.entry.y) continue;
+      this.intents.set(id, option);
+      this.movement.go(id, player, plan);
+      return;
     }
-    const res = this.movement.request(client.sessionId, player, seat);
-    if (!res.ok || res.dest.x !== seat.x || res.dest.y !== seat.y) {
-      this.pendingSit.delete(client.sessionId);
-      this.movement.remove(client.sessionId);
-      this.sendError(client, ErrorCode.InvalidMove, 'Não dá para chegar nesse lugar.');
-    }
+    this.sendError(client, ErrorCode.InvalidMove, 'Não dá para chegar nesse lugar.');
   }
 
   /** O móvel é um quadro branco desta sala? */
@@ -883,17 +922,65 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     if (!this.useLimiter.tryTake(client.sessionId)) {
       return this.sendError(client, ErrorCode.RateLimit);
     }
-    this.pendingSit.delete(client.sessionId);
-    const fp = footprint(def, f.x, f.y, f.rot);
+    this.intents.delete(client.sessionId);
+    // Duplo clique (hábito do Habbo): o segundo uso logo em seguida é ignorado (a luz ligava e
+    // desligava, o teleporte disparava duas vezes).
+    const key = `${client.sessionId}:${f.id}`;
+    const now = Date.now();
+    if (now - (this.lastUse.get(key) ?? 0) < DOUBLE_USE_MS) return;
+    // Em cima de uma mesa, "do lado" vale o lado da mesa (o computador no meio do tampo era
+    // impossível de usar, até para quem estava sentado em frente).
+    const fp = this.reachFootprint(f, def);
     const walking = player.nextX !== player.x || player.nextY !== player.y;
-    if (!walking && touches(fp, player)) return this.useFurni(client.sessionId, f.id);
-
+    if (!walking && touches(fp, player)) {
+      this.lastUse.set(key, now);
+      return this.useFurni(client.sessionId, f.id);
+    }
     const at = this.walkNextTo(client.sessionId, player, fp);
-    if (at) this.pendingUse.set(client.sessionId, { furniId: f.id, at });
+    if (at) this.intents.set(client.sessionId, { kind: 'use', furniId: f.id, at });
     else this.sendError(client, ErrorCode.InvalidMove, 'Não dá para chegar perto desse móvel.');
   }
 
-  /** Anda até o tile livre encostado no footprint mais perto (devolve o destino ou `null`). */
+  /** Chegou do lado do móvel: usa, se ele ainda estiver ali (pode ter sido movido no caminho). */
+  private arriveToUse(sessionId: string, furniId: string): void {
+    const player = this.state.players.get(sessionId);
+    const f = this.state.furni.get(furniId);
+    const def = f && services().furniDefs.get(f.defId);
+    if (!player || !f || !def || !touches(this.reachFootprint(f, def), player)) return;
+    this.lastUse.set(`${sessionId}:${furniId}`, Date.now());
+    this.useFurni(sessionId, furniId);
+  }
+
+  /**
+   * Área de onde dá para usar um móvel: o dele e, se estiver em cima de outro (computador na
+   * mesa), também a da base embaixo.
+   */
+  private reachFootprint(f: Furni, def: FurniManifestEntry): Footprint {
+    let fp = footprint(def, f.x, f.y, f.rot);
+    const placed = this.furniList();
+    let item: PlacedFurni = toPlaced(f);
+    for (let level = 0; level < 4 && item.z > 0.01; level++) {
+      const base = placed.find((b) =>
+        stackedOn(b, placed, services().furniDefs).some((o) => o.id === item.id),
+      );
+      const bdef = base && services().furniDefs.get(base.defId);
+      if (!base || !bdef) break;
+      const bfp = footprint(bdef, base.x, base.y, base.rot);
+      fp = {
+        minX: Math.min(fp.minX, bfp.minX),
+        minY: Math.min(fp.minY, bfp.minY),
+        maxX: Math.max(fp.maxX, bfp.maxX),
+        maxY: Math.max(fp.maxY, bfp.maxY),
+      };
+      item = base;
+    }
+    return fp;
+  }
+
+  /**
+   * Anda até o tile livre encostado no footprint mais perto (devolve o destino ou `null`). Só
+   * planeja os candidatos; anda de verdade no primeiro que dá para alcançar.
+   */
   private walkNextTo(
     sessionId: string,
     player: Player,
@@ -916,10 +1003,12 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
         Math.max(Math.abs(b.x - from.x), Math.abs(b.y - from.y)),
     );
     for (const at of candidates) {
-      const res = this.movement.request(sessionId, player, at);
-      if (res.ok && res.dest.x === at.x && res.dest.y === at.y) return at;
+      const plan = this.movement.plan(sessionId, player, at, grid);
+      if (plan && plan.dest.x === at.x && plan.dest.y === at.y) {
+        this.movement.go(sessionId, player, plan);
+        return at;
+      }
     }
-    this.movement.remove(sessionId);
     return null;
   }
 
@@ -928,7 +1017,13 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     const f = this.state.furni.get(furniId);
     const def = f && services().furniDefs.get(f.defId);
     if (!player || !f || !def) return;
-    player.dir = faceTowards(player, footprint(def, f.x, f.y, f.rot));
+    // Vira para o móvel em pé; sentado no chão, só nas direções de sentar; num assento ou deitado,
+    // não vira (a pose sentada quebrava na diagonal e o corpo saía da cama).
+    const face = faceTowards(player, footprint(def, f.x, f.y, f.rot));
+    if (player.action === 'idle' || player.action === 'walk') player.dir = face;
+    else if (player.action === 'sit' && !this.onSeat(sessionId, player)) {
+      player.dir = sitDirection(face);
+    }
     if (def.interaction === 'toggle' && def.states.length > 1) {
       // Próximo estado da lista (0 → 1 → … → 0).
       const i = def.states.indexOf(f.state);
@@ -1014,16 +1109,31 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
         if (this.state.furni.get(furni.id) === furni) furni.state = 0;
       }, TELEPORT_MS * 2);
     };
+    if (this.teleporting.has(sessionId)) return;
+    this.teleporting.add(sessionId);
+    const before = this.state.players.get(sessionId);
+    const startedAt = before ? { x: before.x, y: before.y } : null;
     open(f, def);
     this.clock.setTimeout(() => {
+      this.teleporting.delete(sessionId);
       const player = this.state.players.get(sessionId);
       if (!player) return;
+      // Saiu andando enquanto a porta abria: não teleporta.
+      if (
+        !startedAt ||
+        player.x !== startedAt.x ||
+        player.y !== startedAt.y ||
+        player.nextX !== player.x ||
+        player.nextY !== player.y
+      ) {
+        return;
+      }
       if (target.roomId === this.layout.roomId) {
         const there = this.state.furni.get(target.id);
         open(there, there && services().furniDefs.get(there.defId));
         const spot = this.freeTileNear({ x: target.x, y: target.y });
         this.movement.remove(sessionId);
-        this.pendingSit.delete(sessionId);
+        this.intents.delete(sessionId);
         Object.assign(player, {
           x: spot.x,
           y: spot.y,
@@ -1048,15 +1158,38 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     }, TELEPORT_MS);
   }
 
-  private sitDown(sessionId: string, furniId: string): void {
-    this.pendingSit.delete(sessionId);
+  /**
+   * Senta ou deita no lugar escolhido. Confere antes se o móvel continua ali e o lugar continua
+   * livre (alguém pode ter movido a cadeira no caminho: a pessoa "sentava no ar"). Na cama, vai
+   * do tile de entrada até o travesseiro daquela fileira.
+   */
+  private sitDown(sessionId: string, intent: SitIntent): void {
+    this.intents.delete(sessionId);
     const player = this.state.players.get(sessionId);
-    const f = this.state.furni.get(furniId);
+    const f = this.state.furni.get(intent.furniId);
     const def = f && services().furniDefs.get(f.defId);
     if (!player || !f || !def) return;
+    const seats = def.canLay ? footprintTiles(def, f) : seatTiles(def, f);
+    const valid =
+      seats.some((t) => t.x === intent.entry.x && t.y === intent.entry.y) &&
+      (!def.canLay || samePoint(pillowFor(def, f, intent.entry), intent.seat)) &&
+      !this.isTileTaken(intent.seat, sessionId);
+    if (!valid) {
+      const client = this.clients.getById(sessionId) as OfficeClient | undefined;
+      if (client) this.sendError(client, ErrorCode.InvalidMove, 'Esse lugar mudou. Tente de novo.');
+      return;
+    }
+    if (def.canLay) {
+      Object.assign(player, {
+        x: intent.seat.x,
+        y: intent.seat.y,
+        nextX: intent.seat.x,
+        nextY: intent.seat.y,
+      });
+    }
     // Cama: deita no comprimento, cabeça na cabeceira; cadeira e sofá: senta virado como o móvel.
     player.action = def.canLay ? 'lay' : 'sit';
-    player.dir = def.canLay ? bedDirection(f.rot) : f.rot;
+    player.dir = def.canLay ? bedDirection(f.rot) : sitDirection(f.rot);
     player.z = f.z + def.sitHeight;
   }
 
@@ -1071,10 +1204,28 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     if (!player || !this.moveLimiter.tryTake(client.sessionId)) return;
     // Andando, primeiro chega (o comando vale parado).
     if (player.nextX !== player.x || player.nextY !== player.y) return;
-    this.pendingSit.delete(client.sessionId);
+    this.intents.delete(client.sessionId);
     const floor = this.gridFor(client.sessionId).heightAt(player.x, player.y);
     if (posture === 'stand') {
       if (player.action !== 'sit' && player.action !== 'lay') return;
+      // Num assento (cadeira, cama), levanta para o lado: antes ficava em pé dentro do móvel.
+      if (this.onSeat(client.sessionId, player)) {
+        const spot = this.standUpSpot(client.sessionId, player);
+        if (!spot) {
+          // Cama cercada (só a própria cama em volta do travesseiro): sai andando por cima dela.
+          if (this.walkOffSeat(client.sessionId, player)) return;
+          return this.sendError(client, ErrorCode.InvalidMove, 'Não tem espaço para levantar.');
+        }
+        Object.assign(player, {
+          x: spot.x,
+          y: spot.y,
+          nextX: spot.x,
+          nextY: spot.y,
+          action: 'idle',
+          z: this.gridFor(client.sessionId).heightAt(spot.x, spot.y),
+        });
+        return;
+      }
       player.action = 'idle';
       player.z = floor;
       return;
@@ -1086,6 +1237,49 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     player.z = floor;
   }
 
+  /** Anda por cima do assento até o tile livre mais perto em volta dele. */
+  private walkOffSeat(sessionId: string, player: Player): boolean {
+    const seat = this.seatUnder(sessionId);
+    if (!seat) return false;
+    const grid = this.gridFor(sessionId);
+    const fp = footprint(seat.def, seat.f.x, seat.f.y, seat.f.rot);
+    const around: TilePoint[] = [];
+    for (let y = fp.minY - 1; y <= fp.maxY + 1; y++) {
+      for (let x = fp.minX - 1; x <= fp.maxX + 1; x++) {
+        if (x < fp.minX || x > fp.maxX || y < fp.minY || y > fp.maxY) around.push({ x, y });
+      }
+    }
+    const dist = (t: TilePoint) => Math.max(Math.abs(t.x - player.x), Math.abs(t.y - player.y));
+    around.sort((a, b) => dist(a) - dist(b));
+    for (const t of around) {
+      if (this.layout.doors.some((d) => d.x === t.x && d.y === t.y)) continue;
+      if (!grid.isWalkable(t.x, t.y, true) || this.isTileTaken(t, sessionId)) continue;
+      const plan = this.movement.plan(sessionId, player, t, grid);
+      if (!plan || !samePoint(plan.dest, t)) continue;
+      this.movement.go(sessionId, player, plan);
+      return true;
+    }
+    return false;
+  }
+
+  /** Tile livre ao lado de um assento para levantar (de preferência na frente dele). */
+  private standUpSpot(sessionId: string, at: TilePoint & { dir: number }): TilePoint | null {
+    const grid = this.gridFor(sessionId);
+    const front = DIRECTION_OFFSETS[at.dir] ?? { x: 0, y: 0 };
+    const order = [...DIRECTION_OFFSETS].sort(
+      (a, b) =>
+        Math.abs(a.x - front.x) +
+        Math.abs(a.y - front.y) -
+        (Math.abs(b.x - front.x) + Math.abs(b.y - front.y)),
+    );
+    for (const o of order) {
+      const t = { x: at.x + o.x, y: at.y + o.y };
+      const isDoor = this.layout.doors.some((d) => d.x === t.x && d.y === t.y);
+      if (!isDoor && grid.isWalkable(t.x, t.y, true) && !this.isTileTaken(t, sessionId)) return t;
+    }
+    return null;
+  }
+
   // ---------- Item na mão e comemorações (Fase 34) ----------
 
   private readonly handTimers = new Map<string, { clear(): void }>();
@@ -1095,7 +1289,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     const player = this.state.players.get(sessionId);
     if (!player) return;
     player.handItem = item;
-    HELD.set(player.userId, { item, until });
+    HELD.set(player.userId, item, until);
     this.handTimers.get(sessionId)?.clear();
     this.handTimers.set(
       sessionId,
@@ -1106,10 +1300,14 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
   private dropHandItem(sessionId: string): void {
     const player = this.state.players.get(sessionId);
     if (!player) return;
-    player.handItem = 0;
     HELD.delete(player.userId);
-    this.handTimers.get(sessionId)?.clear();
-    this.handTimers.delete(sessionId);
+    // O item é da pessoa: some de todas as abas dela nesta sala (antes ficava nas outras).
+    for (const [id, p] of this.state.players.entries()) {
+      if (p.userId !== player.userId) continue;
+      p.handItem = 0;
+      this.handTimers.get(id)?.clear();
+      this.handTimers.delete(id);
+    }
   }
 
   /** Efeito por alguns segundos sobre a pessoa (se ela estiver nesta sala). */
@@ -1509,8 +1707,10 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
 
   private placementContext() {
     const avatars: TilePoint[] = [];
-    for (const [id, p] of this.state.players.entries()) {
-      avatars.push({ x: p.x, y: p.y }, this.movement.destinationOf(id, p));
+    // O tile e o passo em andamento (o que o cliente também vê). O destino final de quem anda não
+    // conta: o fantasma ficava verde e o servidor recusava; quem anda refaz o caminho se precisar.
+    for (const p of this.state.players.values()) {
+      avatars.push({ x: p.x, y: p.y }, { x: p.nextX, y: p.nextY });
     }
     return {
       map: this.map,
@@ -1614,9 +1814,13 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
 
   /** Emote: só quem está na sala vê (efêmero, não fica no estado). */
   private handleEmote(client: OfficeClient, msg: EmoteRequest): void {
-    if (!this.state.players.has(client.sessionId)) return;
+    const player = this.state.players.get(client.sessionId);
+    if (!player) return;
     if (!this.emoteLimiter.tryTake(client.sessionId))
       return this.sendError(client, ErrorCode.RateLimit);
+    if (msg.emote === 'dance' && (player.action === 'sit' || player.action === 'lay')) {
+      return this.sendError(client, ErrorCode.InvalidMove, 'Levante para dançar.');
+    }
     this.broadcast(ServerMessage.Emote, {
       sessionId: client.sessionId,
       emote: msg.emote,
@@ -1647,16 +1851,32 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
   }
 
   /** Grade vista por um jogador: os destinos dos outros avatares contam como ocupados. */
-  private gridFor(sessionId: string): RoomGrid {
+  private gridFor(sessionId: string, opts: { seatsAsGoal?: boolean } = {}): RoomGrid {
     const occupied: TilePoint[] = [];
     for (const [id, p] of this.state.players.entries()) {
       if (id !== sessionId) occupied.push(this.movement.destinationOf(id, p));
     }
+    const seat = this.seatUnder(sessionId);
     return new RoomGrid(this.map, this.furniList(), services().furniDefs, {
       occupied,
-      // Assento só vale como destino para quem clicou nele (`interact`).
-      seatsAsGoal: this.pendingSit.has(sessionId),
+      // Assento só vale como destino para quem está indo sentar (`interact`).
+      seatsAsGoal: opts.seatsAsGoal ?? this.intents.get(sessionId)?.kind === 'sit',
+      // Quem está numa cama (ou sofá) sai andando por cima dela, como no Habbo.
+      passable: seat ? footprintTiles(seat.def, seat.f) : undefined,
     });
+  }
+
+  /** Assento (cadeira, sofá, cama) em cujo tile a pessoa está agora, se houver. */
+  private seatUnder(sessionId: string): { f: Furni; def: FurniManifestEntry } | null {
+    const p = this.state.players.get(sessionId);
+    if (!p) return null;
+    for (const f of this.state.furni.values()) {
+      const def = services().furniDefs.get(f.defId);
+      if (!def || def.wall || def.canWalk || !(def.canSit || def.canLay)) continue;
+      const fp = footprint(def, f.x, f.y, f.rot);
+      if (p.x >= fp.minX && p.x <= fp.maxX && p.y >= fp.minY && p.y <= fp.maxY) return { f, def };
+    }
+    return null;
   }
 
   /** Grade dos pets: não param em portas, em gente parada nem em cima de outro pet. */
@@ -1668,7 +1888,11 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     for (const [id, p] of this.state.pets.entries()) {
       if (id !== petId) occupied.push({ x: p.nextX, y: p.nextY });
     }
-    return new RoomGrid(this.map, this.furniList(), services().furniDefs, { occupied });
+    // Pets não sentam em cadeiras nem deitam em camas (ocupavam o lugar das pessoas).
+    return new RoomGrid(this.map, this.furniList(), services().furniDefs, {
+      occupied,
+      seatsAsGoal: false,
+    });
   }
 
   /** O próprio tile de entrada ou o livre mais próximo dele (busca em anéis). */
@@ -1698,6 +1922,33 @@ function toFurni(f: PlacedFurni): Furni {
     rot: f.rot,
     state: f.state ?? 0,
   });
+}
+
+/** Todos os tiles do móvel (na cama, qualquer um serve de entrada). */
+function footprintTiles(
+  def: Pick<FurniManifestEntry, 'width' | 'depth'>,
+  f: Pick<Furni, 'x' | 'y' | 'rot'>,
+): TilePoint[] {
+  const fp = footprint(def, f.x, f.y, f.rot);
+  const out: TilePoint[] = [];
+  for (let y = fp.minY; y <= fp.maxY; y++)
+    for (let x = fp.minX; x <= fp.maxX; x++) out.push({ x, y });
+  return out;
+}
+
+/** Travesseiro da fileira (ou coluna) de um tile da cama: onde a pessoa deita. */
+function pillowFor(
+  def: Pick<FurniManifestEntry, 'width' | 'depth'>,
+  f: Pick<Furni, 'x' | 'y' | 'rot'>,
+  t: TilePoint,
+): TilePoint {
+  const fp = footprint(def, f.x, f.y, f.rot);
+  // Cama no eixo y (rot 0): cabeceira em minY; no eixo x (rot 2): em minX (como `seatTiles`).
+  return f.rot % 4 === 0 ? { x: t.x, y: fp.minY } : { x: fp.minX, y: t.y };
+}
+
+function samePoint(a: TilePoint, b: TilePoint): boolean {
+  return a.x === b.x && a.y === b.y;
 }
 
 function toPlaced(f: Furni): PlacedFurni {

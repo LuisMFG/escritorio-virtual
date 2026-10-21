@@ -138,4 +138,56 @@ describe('MovementSystem', () => {
     expect(m.nextY).toBe(m.y);
     expect(stops).toHaveLength(2);
   });
+
+  describe('plan / go / stop (Fase 52)', () => {
+    it('plan só calcula: não mexe no avatar nem reserva o destino', () => {
+      const { sys, movers } = setup();
+      movers.set('a', mover(0, 0));
+      const m = movers.get('a')!;
+      const plan = sys.plan('a', m, { x: 4, y: 0 })!;
+      expect(plan.dest).toEqual({ x: 4, y: 0 });
+      expect(plan.path.at(-1)).toEqual({ x: 4, y: 0 });
+      expect(m).toEqual(mover(0, 0));
+      expect(sys.destinationOf('a', m)).toEqual({ x: 0, y: 0 });
+      // Sem `go`, o tick não anda.
+      sys.tick(STEP_MS * 3, movers);
+      expect(m).toEqual(mover(0, 0));
+    });
+
+    it('go com caminho vazio (já está lá) mantém sentado', () => {
+      const { sys, movers } = setup();
+      movers.set('a', { ...mover(0, 0), action: 'sit', z: 0.5 });
+      const m = movers.get('a')!;
+      const plan = sys.plan('a', m, { x: 0, y: 0 })!;
+      expect(plan.path).toEqual([]);
+      sys.go('a', m, plan);
+      expect(m).toMatchObject({ x: 0, y: 0, nextX: 0, nextY: 0, action: 'sit', z: 0.5 });
+      sys.tick(STEP_MS, movers);
+      expect(m.action).toBe('sit');
+    });
+
+    it('go com caminho vazio no meio de um passo termina o passo e para', () => {
+      const { sys, movers } = setup();
+      movers.set('a', mover(0, 2));
+      const m = movers.get('a')!;
+      sys.request('a', m, { x: 4, y: 2 });
+      sys.tick(STEP_MS / 2, movers);
+      sys.go('a', m, { dest: { x: 1, y: 2 }, path: [] });
+      runUntilIdle(sys, movers);
+      expect(m).toMatchObject({ x: 1, y: 2, nextX: 1, nextY: 2, action: 'idle' });
+    });
+
+    it('stop termina o passo atual sem deixar o avatar entre dois tiles', () => {
+      const { sys, movers } = setup();
+      movers.set('a', mover(0, 2));
+      const m = movers.get('a')!;
+      sys.request('a', m, { x: 4, y: 2 });
+      sys.tick(STEP_MS / 2, movers);
+      sys.stop('a');
+      expect([m.nextX, m.nextY]).toEqual([1, 2]);
+      runUntilIdle(sys, movers);
+      expect(m).toMatchObject({ x: 1, y: 2, nextX: 1, nextY: 2, action: 'idle' });
+      expect(sys.destinationOf('a', m)).toEqual({ x: 1, y: 2 });
+    });
+  });
 });

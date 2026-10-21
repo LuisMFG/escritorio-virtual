@@ -102,6 +102,10 @@ export function findNearestReachable(
         if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
         const tile = { x: target.x + dx, y: target.y + dy };
         if (tile.x < 0 || tile.y < 0 || tile.x >= grid.width || tile.y >= grid.height) continue;
+        // Partindo de um tile que não é de pisar (sentado na cadeira), ele mesmo não serve de
+        // destino: o "mais perto" virava ficar em pé dentro da cadeira.
+        if (tile.x === start.x && tile.y === start.y && !grid.isWalkable(start.x, start.y, true))
+          continue;
         const path = findPath(grid, start, tile, options);
         if (!path) continue;
         // No mesmo anel, prefere o tile mais "reto" em relação ao alvo e depois o caminho mais curto.
