@@ -7197,3 +7197,46 @@ kbd {
 .call-panel.expanded .call-videos.has-screen .call-tile:not(.screen) {
   max-height: 150px;
 }
+
+/* ---------- Meu visual: fantasias ---------- */
+.costume-hint,
+.costume-group {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.costume-theme {
+  display: block;
+  margin: 4px 0 6px;
+}
+
+.costume-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 8px;
+}
+
+.set-item.costume-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  height: 150px;
+  padding: 4px 4px 6px;
+}
+
+.set-item.costume-item .set-thumb.worn {
+  height: 116px;
+  width: auto;
+  max-width: 100%;
+  object-fit: cover;
+  object-position: center 30%;
+}
+
+.costume-label {
+  font-size: calc(12px * var(--font-scale, 1));
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+}

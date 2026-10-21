@@ -1,5 +1,8 @@
 import {
+  applyCostume,
   avatarImageUrl,
+  costumeThemes,
+  wearsCostume,
   clothingPreviewUrl,
   clothingSearchText,
   clothingSetImageUrl,
@@ -56,6 +59,9 @@ const thumbQueue = new ThumbQueue();
 
 /** Categorias da cabeça: a miniatura "vestida" mostra a parte de cima do avatar. */
 const HEAD_TYPES = new Set(['hd', 'hr', 'ha', 'he', 'ea', 'fa']);
+
+/** Aba das fantasias (não é uma categoria do manifesto). */
+const COSTUMES_TAB = 'fantasias';
 
 /** Editor aberto agora (abrir de novo foca este em vez de empilhar outro). */
 let current: { promise: Promise<AvatarChoice | null>; dialog: HTMLElement } | null = null;
@@ -239,6 +245,12 @@ function openEditor(opts: AvatarEditorOptions): Promise<AvatarChoice | null> {
   const backdrop = el('div', { className: 'modal-backdrop' }, [dialog]);
   document.body.append(backdrop);
 
+  // Abas: as categorias do manifesto e, no fim, as fantasias.
+  const tabList = [
+    ...manifest.categories.map((c) => ({ type: c.type, label: c.label })),
+    { type: COSTUMES_TAB, label: 'Fantasias' },
+  ];
+
   // ---------- Renderização ----------
   function category(): AvatarCategory {
     return findCategory(manifest, activeType)!;
@@ -279,7 +291,7 @@ function openEditor(opts: AvatarEditorOptions): Promise<AvatarChoice | null> {
 
   function renderTabs(): void {
     tabs.replaceChildren(
-      ...manifest.categories.map((c) => {
+      ...tabList.map((c) => {
         const tab = el('button', { type: 'button', textContent: c.label });
         tab.setAttribute('role', 'tab');
         tab.setAttribute('aria-selected', String(c.type === activeType));
@@ -297,6 +309,9 @@ function openEditor(opts: AvatarEditorOptions): Promise<AvatarChoice | null> {
   function renderSets(): void {
     // Miniaturas da lista anterior que ainda não começaram não interessam mais.
     thumbQueue.clear();
+    const costumes = activeType === COSTUMES_TAB;
+    toolbar.style.display = costumes ? 'none' : '';
+    if (costumes) return renderCostumes();
     const cat = category();
     const selected = currentPart(cat.type)?.setId ?? null;
     const items: HTMLButtonElement[] = [];
@@ -365,11 +380,73 @@ function openEditor(opts: AvatarEditorOptions): Promise<AvatarChoice | null> {
       });
       items.push(btn);
     }
+    setsGrid.setAttribute('role', 'listbox');
     setsGrid.setAttribute('aria-label', cat.label);
     setsGrid.replaceChildren(...items);
   }
 
+  /**
+   * Fantasias: cada versão aparece vestida no seu próprio avatar. Escolher troca só a roupa e os
+   * acessórios (rosto, pele, cabelo, óculos e máscara ficam).
+   */
+  function renderCostumes(): void {
+    moreBtn.hidden = true;
+    const groups = costumeThemes().map(({ theme, costumes }) => {
+      const items = costumes.map((c) => {
+        const tryOn = applyCostume(figure, c, gender);
+        const img = el('img', { alt: '', loading: 'lazy', className: 'set-thumb worn body' });
+        const btn = el('button', { type: 'button', className: 'set-item costume-item' }, [
+          img,
+          el('span', { className: 'costume-label', textContent: c.label }),
+        ]);
+        btn.setAttribute('role', 'option');
+        btn.setAttribute('aria-label', `${theme}: ${c.label}`);
+        btn.setAttribute('aria-selected', String(wearsCostume(figure, c, gender)));
+        const thumbs = [
+          avatarImageUrl(tryOn, { direction: 2, headDirection: 2 }, '/hh'),
+          avatarImageUrl(tryOn, { direction: 2, headDirection: 2 }),
+        ];
+        // Sem o imager: o avatar montado aqui mesmo (como a prévia grande).
+        const local = () =>
+          void opts
+            .fallbackPreview(tryOn, 2)
+            .then((url) => (img.src = url))
+            .catch(() => img.remove());
+        if (opts.thumbnails === false) local();
+        else thumbQueue.load(img, thumbs, local);
+        btn.addEventListener('click', () => update(applyCostume(figure, c, gender)));
+        btn.addEventListener('pointerenter', (e) => {
+          if (e.pointerType === 'mouse') schedulePreview(tryOn);
+        });
+        btn.addEventListener('pointerleave', (e) => {
+          if (e.pointerType === 'mouse') schedulePreview();
+        });
+        return btn;
+      });
+      const list = el('div', { className: 'costume-list' }, items);
+      list.setAttribute('role', 'listbox');
+      list.setAttribute('aria-label', theme);
+      return el('div', { className: 'costume-group' }, [
+        el('strong', { className: 'costume-theme', textContent: theme }),
+        list,
+      ]);
+    });
+    setsGrid.removeAttribute('role');
+    setsGrid.setAttribute('aria-label', 'Fantasias');
+    setsGrid.replaceChildren(
+      el('p', {
+        className: 'muted costume-hint',
+        textContent: 'Veste só a roupa e os acessórios: seu rosto e cabelo ficam como estão.',
+      }),
+      ...groups,
+    );
+  }
+
   function renderColors(): void {
+    if (activeType === COSTUMES_TAB) {
+      colorsBox.replaceChildren();
+      return;
+    }
     const cat = category();
     const part = currentPart(cat.type);
     const set = part && findSet(cat, part.setId);
@@ -585,9 +662,9 @@ function openEditor(opts: AvatarEditorOptions): Promise<AvatarChoice | null> {
   }
   tabs.addEventListener('keydown', (e) => {
     if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
-    const i = manifest.categories.findIndex((c) => c.type === activeType);
-    const n = manifest.categories.length;
-    activeType = manifest.categories[(i + (e.key === 'ArrowRight' ? 1 : n - 1)) % n]!.type;
+    const i = tabList.findIndex((c) => c.type === activeType);
+    const n = tabList.length;
+    activeType = tabList[(i + (e.key === 'ArrowRight' ? 1 : n - 1)) % n]!.type;
     renderAll();
     tabs.querySelector<HTMLButtonElement>('[aria-selected=true]')?.focus();
   });

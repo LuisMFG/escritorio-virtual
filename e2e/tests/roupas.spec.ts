@@ -40,3 +40,28 @@ test('catálogo completo: buscar "terno", vestir, guardar look e o outro vê', a
   await expect(page.locator('.editor').getByRole('button', { name: 'Usar look 1' })).toBeEnabled();
   await expect(page.locator('.editor')).toHaveCount(1);
 });
+
+test('fantasia: veste a armadura de Pégaso sem mudar rosto e cabelo', async ({ browser }) => {
+  const ana = await newPerson(browser, 'Ana');
+  const page = ana.page;
+  const mine = () =>
+    page.evaluate(() => {
+      const h = window.__e2e!;
+      return h.players().find((p) => p.id === h.mySessionId())!.figure;
+    });
+  const before = await mine();
+  const keep = before.split('.').filter((p) => /^(hd|hr)-/.test(p));
+
+  await page.getByRole('button', { name: 'Perfil' }).click();
+  await page.getByRole('button', { name: 'Meu visual' }).click();
+  const editor = page.locator('.editor');
+  await editor.getByRole('tab', { name: 'Fantasias' }).click();
+  const classic = editor.getByRole('option', { name: 'Seiya de Pégaso: Armadura clássica' });
+  await classic.click();
+  await expect(classic).toHaveAttribute('aria-selected', 'true');
+  await editor.getByRole('button', { name: 'Salvar visual' }).click();
+
+  await expect.poll(mine).toContain('he-4022');
+  const after = (await mine()).split('.');
+  expect(after).toEqual(expect.arrayContaining([...keep, 'cc-3609-92-96', 'lg-3607-92-96']));
+});
