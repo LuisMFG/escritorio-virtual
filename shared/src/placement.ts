@@ -34,6 +34,53 @@ export type PlacementResult = { ok: true; z: number } | { ok: false; reason: str
 
 const key = (x: number, y: number) => `${x},${y}`;
 
+/** Altura máxima de uma pilha (base + móvel em cima), em unidades de altura. */
+export const MAX_STACK_HEIGHT = 6;
+
+/** Móveis com algo desenhado ou jogado por cima (quadros, tabuleiro): nada vai em cima deles. */
+const NO_TOP_INTERACTIONS = new Set(['whiteboard', 'board', 'kudos', 'jira', 'tictactoe']);
+
+/**
+ * Dá para colocar objetos em cima deste móvel? Só nos que têm tampo (`hasTop`): mesas,
+ * escrivaninhas, balcões, armários, estantes, divisórias — impressora em cima do computador,
+ * não. Nunca em assentos, camas, tapetes, itens de parede ou nos quadros/tabuleiros.
+ */
+export function acceptsOnTop(def: FurniDef): boolean {
+  return (
+    Boolean(def.hasTop) &&
+    !def.wall &&
+    !def.canWalk &&
+    !def.canSit &&
+    !def.canLay &&
+    topHeight(def) >= 0.3 &&
+    !NO_TOP_INTERACTIONS.has(def.interaction ?? '')
+  );
+}
+
+/** Altura do tampo (onde o que vai em cima se apoia). */
+export function topHeight(def: FurniDef): number {
+  return def.stackHeight ?? def.height;
+}
+
+/** Móveis apoiados em cima de `base` (para não mover nem tirar a base com coisas em cima). */
+export function stackedOn(
+  base: PlacedFurni,
+  furni: readonly PlacedFurni[],
+  defs: ReadonlyMap<string, FurniDef>,
+): PlacedFurni[] {
+  const bd = defs.get(base.defId);
+  if (!bd || !acceptsOnTop(bd)) return [];
+  const bfp = footprint(bd, base.x, base.y, base.rot);
+  const top = base.z + topHeight(bd);
+  return furni.filter((f) => {
+    if (f.id === base.id) return false;
+    const d = defs.get(f.defId);
+    if (!d || d.wall || d.canWalk || f.z < top - 0.01) return false;
+    const fp = footprint(d, f.x, f.y, f.rot);
+    return fp.minX <= bfp.maxX && fp.maxX >= bfp.minX && fp.minY <= bfp.maxY && fp.maxY >= bfp.minY;
+  });
+}
+
 /** Altura das paredes desenhadas (px) e em unidades de altura: limite dos itens de parede. */
 export const WALL_PX = 116;
 export const WALL_HEIGHT = WALL_PX / Z_UNIT;
@@ -92,8 +139,9 @@ export function reservedTiles(ctx: Pick<PlacementContext, 'map' | 'doors' | 'spa
  * - o móvel existe no catálogo e a rotação é 0/2/4/6;
  * - todo o footprint está dentro da sala, num piso plano;
  * - não cobre portas, a entrada nem o tile logo dentro de uma porta;
- * - não se sobrepõe a outro móvel do mesmo tipo (tapete com tapete, sólido com sólido —
- *   móveis sólidos podem ficar em cima de tapetes);
+ * - não se sobrepõe a outro tapete; sólido em cima de sólido só se o de baixo tem tampo
+ *   (`acceptsOnTop`) e o apoio é plano — aí fica na altura do tampo (empilhar, como no Habbo);
+ *   assentos e camas só no chão; uma base com coisas em cima não se move;
  * - móveis sólidos não ficam em cima de avatares;
  * - depois de colocado, todas as portas continuam alcançáveis a partir da entrada.
  */
@@ -109,38 +157,65 @@ export function canPlace(ctx: PlacementContext, req: PlacementRequest): Placemen
   }
   if (def.wall) return canPlaceWall(ctx, req);
 
+  // Movendo uma base com coisas em cima: elas ficariam flutuando.
+  const moving = req.ignoreId ? ctx.furni.find((f) => f.id === req.ignoreId) : undefined;
+  if (moving && stackedOn(moving, ctx.furni, ctx.defs).length) {
+    return { ok: false, reason: 'Tire o que está em cima primeiro.' };
+  }
+
   const fp = footprint(def, req.x, req.y, req.rot);
   const reserved = reservedTiles(ctx);
   const avatars = new Set(ctx.avatars.map((a) => key(a.x, a.y)));
-  const occupied = new Map<string, { solid: boolean }[]>();
+  /** O que já ocupa cada tile: tapete, ou sólido (com o tampo, se aceita coisas em cima). */
+  const occupied = new Map<string, { solid: boolean; top: number | null }[]>();
   for (const f of others) {
     const d = ctx.defs.get(f.defId);
     if (!d || d.wall) continue;
     const ofp = footprint(d, f.x, f.y, f.rot);
+    const top = acceptsOnTop(d) ? f.z + topHeight(d) : null;
     for (let y = ofp.minY; y <= ofp.maxY; y++) {
       for (let x = ofp.minX; x <= ofp.maxX; x++) {
         const list = occupied.get(key(x, y)) ?? [];
-        list.push({ solid: !d.canWalk });
+        list.push({ solid: !d.canWalk, top });
         occupied.set(key(x, y), list);
       }
     }
   }
+  /** Assentos e camas só no chão (o avatar senta na altura do piso). */
+  const stackable = !def.canSit && !def.canLay;
 
   let z: number | null = null;
+  let floorZ: number | null = null;
   for (let y = fp.minY; y <= fp.maxY; y++) {
     for (let x = fp.minX; x <= fp.maxX; x++) {
       const h = tileHeight(ctx.map, x, y);
       if (h === null) return { ok: false, reason: 'Fora da sala.' };
-      if (z === null) z = h;
-      else if (h !== z) return { ok: false, reason: 'O piso precisa ser plano.' };
+      if (floorZ === null) floorZ = h;
+      else if (h !== floorZ) return { ok: false, reason: 'O piso precisa ser plano.' };
       if (reserved.has(key(x, y)))
         return { ok: false, reason: 'Deixe a porta e a entrada livres.' };
       const here = occupied.get(key(x, y)) ?? [];
-      if (here.some((o) => o.solid === !def.canWalk))
-        return { ok: false, reason: 'Já tem um móvel aí.' };
-      if (!def.canWalk && avatars.has(key(x, y)))
-        return { ok: false, reason: 'Tem alguém nesse lugar.' };
+      let base = h;
+      if (def.canWalk) {
+        // Tapete: no chão, sem outro tapete embaixo.
+        if (here.some((o) => !o.solid)) return { ok: false, reason: 'Já tem um móvel aí.' };
+      } else {
+        const solids = here.filter((o) => o.solid);
+        if (solids.length) {
+          // Em cima de outro móvel: só se ele tem tampo (e o que vai em cima não é assento).
+          if (!stackable || solids.some((o) => o.top === null))
+            return { ok: false, reason: 'Já tem um móvel aí.' };
+          base = Math.max(...solids.map((o) => o.top!));
+        }
+        if (avatars.has(key(x, y))) return { ok: false, reason: 'Tem alguém nesse lugar.' };
+      }
+      if (z === null) z = base;
+      else if (Math.abs(base - z) > 0.01)
+        return { ok: false, reason: 'Precisa de um apoio plano embaixo (ficaria torto).' };
     }
+  }
+  if (z !== null && floorZ !== null && z - floorZ + def.height > MAX_STACK_HEIGHT) {
+    return { ok: false, reason: 'Alto demais para empilhar.' };
   }
 
   if (!def.canWalk) {

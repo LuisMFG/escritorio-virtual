@@ -10,6 +10,12 @@ export interface FurniDef {
   depth: number;
   /** Altura de empilhamento, em unidades de altura. */
   height: number;
+  /** Altura do tampo, quando diferente de `height` (onde se apoia o que vai em cima). */
+  stackHeight?: number;
+  /** Tem tampo: dá para pôr objetos em cima (mesas, balcões, armários, estantes…). */
+  hasTop?: boolean;
+  /** Comportamento especial (os quadros e o tabuleiro não aceitam nada em cima). */
+  interaction?: string;
   canSit: boolean;
   /** Camas e afins: deita (Fase 33). */
   canLay?: boolean;

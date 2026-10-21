@@ -12,6 +12,13 @@ export const furniManifestEntrySchema = z.object({
   width: z.number().int().min(1).max(10),
   depth: z.number().int().min(1).max(10),
   height: z.number().min(0).max(10),
+  /**
+   * Altura do tampo (onde ficam os objetos empilhados em cima), quando é diferente de `height`
+   * (a altura de empilhar do Habbo; mesas costumam ter 0,7–1,1).
+   */
+  stackHeight: z.number().min(0).max(10).optional(),
+  /** Tem tampo: aceita objetos em cima (mesas, balcões, armários, estantes, divisórias). */
+  hasTop: z.boolean().optional(),
   canSit: z.boolean().default(false),
   /** Camas, sacos de dormir: deita (a altura vem de `sitHeight`). */
   canLay: z.boolean().default(false),

@@ -9,6 +9,7 @@ import {
   MAX_FURNI_PER_ROOM,
   WALL_HEIGHT,
   nearestSeatTile,
+  stackedOn,
   type PlacementContext,
 } from './placement.js';
 import type { RoomDoor } from './rooms.js';
@@ -32,6 +33,16 @@ const defs = new Map<string, FurniDef>([
   ['mesa', def({ id: 'mesa', width: 2, depth: 1 })],
   ['tapete', def({ id: 'tapete', width: 2, depth: 2, height: 0, canWalk: true })],
   ['sofa', def({ id: 'sofa', width: 2, depth: 1, canSit: true, sitHeight: 0.5 })],
+  // Empilhar: escrivaninha 2×1 com tampo a 0,8; computador e impressora pequenos.
+  [
+    'escrivaninha',
+    def({ id: 'escrivaninha', width: 2, depth: 1, height: 1, stackHeight: 0.8, hasTop: true }),
+  ],
+  ['caixa', def({ id: 'caixa', hasTop: true })],
+  ['pc', def({ id: 'pc', height: 0.6 })],
+  ['cadeira', def({ id: 'cadeira', canSit: true, sitHeight: 0.5 })],
+  ['quadro', def({ id: 'quadro', height: 2, interaction: 'whiteboard', hasTop: true })],
+  ['torre', def({ id: 'torre', height: 4, hasTop: true })],
 ]);
 
 // Sala 6×5 com porta à esquerda em (0,2).
@@ -80,11 +91,76 @@ describe('canPlace', () => {
     expect(canPlace(ctx(), { defId: 'mesa', x: 5, y: 0, rot: 2 }).ok).toBe(true);
   });
 
-  it('não sobrepõe sólidos, mas sólido pode ficar em cima de tapete', () => {
+  it('tapete não sobrepõe tapete; sólido fica em cima de tapete na altura do piso', () => {
     const c = ctx([f('t', 'tapete', 3, 0), f('b', 'bloco', 2, 0)]);
-    expect(canPlace(c, { defId: 'bloco', x: 2, y: 0, rot: 0 }).ok).toBe(false);
-    expect(canPlace(c, { defId: 'bloco', x: 4, y: 1, rot: 0 }).ok).toBe(true);
+    expect(canPlace(c, { defId: 'bloco', x: 4, y: 1, rot: 0 })).toEqual({ ok: true, z: 0 });
     expect(canPlace(c, { defId: 'tapete', x: 4, y: 0, rot: 0 }).ok).toBe(false);
+  });
+
+  describe('empilhar', () => {
+    it('computador e impressora em cima da escrivaninha, na altura do tampo', () => {
+      const c = ctx([f('e', 'escrivaninha', 2, 0)]);
+      expect(canPlace(c, { defId: 'pc', x: 2, y: 0, rot: 0 })).toEqual({ ok: true, z: 0.8 });
+      const c2 = ctx([f('e', 'escrivaninha', 2, 0), { ...f('p', 'pc', 2, 0), z: 0.8 }]);
+      expect(canPlace(c2, { defId: 'pc', x: 3, y: 0, rot: 0 })).toEqual({ ok: true, z: 0.8 });
+      // Impressora em cima do computador, não: ele não tem tampo.
+      expect(canPlace(c2, { defId: 'pc', x: 2, y: 0, rot: 0 })).toMatchObject({
+        reason: 'Já tem um móvel aí.',
+      });
+    });
+
+    it('sem stackHeight o tampo fica na altura do móvel; sem tampo, nada em cima', () => {
+      const c = ctx([f('c', 'caixa', 2, 0), f('b', 'bloco', 4, 0)]);
+      expect(canPlace(c, { defId: 'pc', x: 2, y: 0, rot: 0 })).toEqual({ ok: true, z: 1 });
+      expect(canPlace(c, { defId: 'pc', x: 4, y: 0, rot: 0 }).ok).toBe(false);
+    });
+
+    it('precisa de apoio plano: metade em cima da mesa e metade no chão não dá', () => {
+      const c = ctx([f('c', 'caixa', 2, 0)]);
+      expect(canPlace(c, { defId: 'mesa', x: 2, y: 0, rot: 0 })).toMatchObject({
+        reason: 'Precisa de um apoio plano embaixo (ficaria torto).',
+      });
+    });
+
+    it('nada em cima de assento, cama, quadro; assento não vai em cima de mesa', () => {
+      const c = ctx([f('s', 'sofa', 2, 0), f('q', 'quadro', 4, 0), f('e', 'escrivaninha', 2, 3)]);
+      expect(canPlace(c, { defId: 'pc', x: 2, y: 0, rot: 0 })).toMatchObject({
+        reason: 'Já tem um móvel aí.',
+      });
+      expect(canPlace(c, { defId: 'pc', x: 4, y: 0, rot: 0 }).ok).toBe(false);
+      expect(canPlace(c, { defId: 'cadeira', x: 2, y: 3, rot: 0 }).ok).toBe(false);
+    });
+
+    it('pilha tem limite de altura', () => {
+      const c = ctx([f('t', 'torre', 2, 0)]);
+      expect(canPlace(c, { defId: 'torre', x: 2, y: 0, rot: 0 })).toMatchObject({
+        reason: 'Alto demais para empilhar.',
+      });
+    });
+
+    it('não move a base com coisas em cima; o de cima move à vontade', () => {
+      const c = ctx([f('e', 'escrivaninha', 2, 0), { ...f('p', 'pc', 2, 0), z: 0.8 }]);
+      expect(stackedOn(c.furni[0]!, c.furni, defs).map((x) => x.id)).toEqual(['p']);
+      expect(
+        canPlace(c, { defId: 'escrivaninha', x: 2, y: 3, rot: 0, ignoreId: 'e' }),
+      ).toMatchObject({ reason: 'Tire o que está em cima primeiro.' });
+      expect(canPlace(c, { defId: 'pc', x: 3, y: 0, rot: 0, ignoreId: 'p' })).toEqual({
+        ok: true,
+        z: 0.8,
+      });
+      expect(canPlace(c, { defId: 'pc', x: 4, y: 3, rot: 0, ignoreId: 'p' })).toEqual({
+        ok: true,
+        z: 0,
+      });
+    });
+
+    it('o que vai em cima não fica preso no próprio lugar (ao mover, não se apoia em si)', () => {
+      const c = ctx([f('e', 'escrivaninha', 2, 0), { ...f('p', 'pc', 2, 0), z: 0.8 }]);
+      expect(canPlace(c, { defId: 'pc', x: 2, y: 0, rot: 2, ignoreId: 'p' })).toEqual({
+        ok: true,
+        z: 0.8,
+      });
+    });
   });
 
   it('ao mover, o próprio móvel não atrapalha', () => {
