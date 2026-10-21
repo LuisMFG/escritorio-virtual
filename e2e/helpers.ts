@@ -51,7 +51,7 @@ interface Hook {
     tint: string;
     action: string;
   }[];
-  furniList(): { id: string; defId: string; x: number; y: number }[];
+  furniList(): { id: string; defId: string; x: number; y: number; z: number }[];
   players(): {
     id: string;
     name: string;

@@ -37,7 +37,7 @@ export interface E2EHook {
   furni(id: string): Point | null;
   /** Ponto da página no meio do corpo de um avatar (sessão). */
   avatar(sessionId: string): Point | null;
-  furniList(): { id: string; defId: string; x: number; y: number }[];
+  furniList(): { id: string; defId: string; x: number; y: number; z: number }[];
   players(): {
     id: string;
     name: string;
@@ -114,7 +114,13 @@ export function exposeForTests(scene: RoomScene, room: OfficeRoomClient): void {
       return scene.pickFurni(new PixiPoint(x - r.left, y - r.top))?.placed.id ?? null;
     },
     furniList: () =>
-      [...room.state.furni.values()].map((f) => ({ id: f.id, defId: f.defId, x: f.x, y: f.y })),
+      [...room.state.furni.values()].map((f) => ({
+        id: f.id,
+        defId: f.defId,
+        x: f.x,
+        y: f.y,
+        z: f.z,
+      })),
     leave: async () => {
       await room.leave(true);
     },

@@ -8,6 +8,8 @@ import {
   WALL_PX,
   Z_UNIT,
   pointInTile,
+  acceptsOnTop,
+  topHeight,
   RoomGrid,
   talkDurationMs,
   tileCorners,
@@ -717,6 +719,30 @@ export class RoomScene implements DecorHost {
   // ---------- Entrada ----------
 
   /** Tile sob um ponto da tela, considerando a altura (testa de frente para trás). */
+  /**
+   * Tile do tampo de um móvel sob o ponteiro (mesa, balcão…), calculado na altura do tampo: no
+   * modo decorar, apontar para cima da mesa coloca em cima dela, e não no piso atrás dela.
+   */
+  pickSurfaceTile(global: Point, excludeId?: string): TilePoint | null {
+    const p = this.world.toLocal(global);
+    const surfaces = [...this.furni.values()]
+      .filter((f) => f.placed.id !== excludeId && acceptsOnTop(f.def) && f.hitTest(global))
+      .sort((a, b) => b.zIndex - a.zIndex);
+    for (const f of surfaces) {
+      const top = f.placed.z + topHeight(f.def);
+      const fp = f.footprint;
+      let best: TilePoint | null = null;
+      for (let y = fp.minY; y <= fp.maxY; y++) {
+        for (let x = fp.minX; x <= fp.maxX; x++) {
+          if (pointInTile(p.x, p.y, x, y, top) && (!best || x + y > best.x + best.y))
+            best = { x, y };
+        }
+      }
+      if (best) return best;
+    }
+    return null;
+  }
+
   pickTile(global: Point): TilePoint | null {
     const p = this.world.toLocal(global);
     let best: TilePoint | null = null;

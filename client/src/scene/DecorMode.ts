@@ -32,6 +32,8 @@ export interface DecorHost {
   /** Camada para desenhar footprints (verde/vermelho/seleção). */
   readonly overlay: Graphics;
   pickTile(global: Point): TilePoint | null;
+  /** Tile do tampo de uma mesa/balcão sob o ponteiro (para colocar em cima). */
+  pickSurfaceTile(global: Point, excludeId?: string): TilePoint | null;
   pickFurni(global: Point): FurniView | null;
   /** Ponto de parede sob o ponteiro (itens de parede). */
   pickWall(global: Point): WallSpot | null;
@@ -193,7 +195,11 @@ export class DecorMode {
     if (!this.active || this.picking) return false;
     const f = this.host.pickFurni(global);
     if (!f) return false;
-    const tile = this.host.pickTile(global) ?? { x: f.placed.x, y: f.placed.y };
+    // Empilhado (em cima de uma mesa): o piso sob o ponteiro fica atrás da mesa; pega pelo
+    // próprio tile do móvel.
+    const floor = tileHeight(this.host.map, f.placed.x, f.placed.y) ?? 0;
+    const stacked = !f.def.wall && f.placed.z > floor + 0.01;
+    const tile = (!stacked && this.host.pickTile(global)) || { x: f.placed.x, y: f.placed.y };
     this.drag = {
       furniId: f.placed.id,
       start: { x: global.x, y: global.y },
@@ -227,7 +233,13 @@ export class DecorMode {
       this.select(d.furniId);
     }
     if (f.def.wall) return this.updateGhost(d.ghost, this.targetAt(f.def.id, global), d.furniId);
-    const origin = tile ? { tile: { x: tile.x - d.grab.x, y: tile.y - d.grab.y } } : null;
+    // Em cima de uma mesa: vai para o tile do tampo apontado.
+    const top = this.host.pickSurfaceTile(global, d.furniId);
+    const origin = top
+      ? { tile: top }
+      : tile
+        ? { tile: { x: tile.x - d.grab.x, y: tile.y - d.grab.y } }
+        : null;
     this.updateGhost(d.ghost, origin, d.furniId);
   }
 
@@ -289,7 +301,7 @@ export class DecorMode {
       const spot = this.host.pickWall(global);
       return spot ? { tile: { x: spot.x, y: spot.y }, rot: spot.rot, h: spot.h } : null;
     }
-    const tile = this.host.pickTile(global);
+    const tile = this.host.pickSurfaceTile(global) ?? this.host.pickTile(global);
     return tile ? { tile } : null;
   }
 
