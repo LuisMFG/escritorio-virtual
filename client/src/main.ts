@@ -74,6 +74,9 @@ import { openRoomEditor } from './ui/roomEditor.js';
 import { AmbientSound } from './ui/ambient.js';
 import { openBoard } from './ui/board.js';
 import { openWhiteboard, type WhiteboardHandle } from './ui/whiteboard.js';
+import { TvPanel } from './ui/tv.js';
+import { drawTvCover } from './tv/cover.js';
+import { fakePlayer, youTubePlayer, youTubePlaylist } from './tv/player.js';
 import type { PetSnapshot } from './entities/PetView.js';
 import { openTicTacToe, type TicTacToeHandle, type TttView } from './ui/ticTacToe.js';
 import { renderThumbnail } from './ui/wbDraw.js';
@@ -355,6 +358,10 @@ async function start(): Promise<void> {
   let whiteboard: WhiteboardHandle | null = null;
   /** Jogo da velha aberto (mesa de jogos). */
   let ttt: TicTacToeHandle | null = null;
+  /** TV aberta (Fase 51) e o que passa em cada TV da sala (capa na tela do móvel). */
+  let tvPanel: TvPanel | null = null;
+  const tvScreens = new Map<string, string>();
+  const tvCovers = new Map<string, HTMLCanvasElement>();
   let agenda: AgendaHandle | null = null;
   /** Avisos da diretoria: faixa com os não lidos e o painel com o histórico. */
   let annPanel: ReturnType<typeof openAnnouncements> | null = null;
@@ -524,6 +531,26 @@ async function start(): Promise<void> {
     for (const id of jiraFurni) scene?.setWhiteboardThumb(id, jiraCanvas);
   };
   setInterval(() => void refreshJiraThumbs(), 60_000);
+  /** Mostra (ou apaga) a capa do vídeo na tela de uma TV da sala. */
+  const applyTvScreen = (furniId: string, videoId: string | null) => {
+    if (!videoId) {
+      tvScreens.delete(furniId);
+      scene?.clearSurface(furniId);
+      return;
+    }
+    tvScreens.set(furniId, videoId);
+    const canvas = tvCovers.get(furniId) ?? document.createElement('canvas');
+    tvCovers.set(furniId, canvas);
+    void drawTvCover(canvas, videoId).then(() => {
+      if (tvScreens.get(furniId) === videoId) scene?.setWhiteboardThumb(furniId, canvas);
+    });
+  };
+  const closeTv = () => {
+    if (!tvPanel) return;
+    connection?.tvClose(tvPanel.furniId);
+    tvPanel.close();
+    tvPanel = null;
+  };
   /** Carrega os traços de um quadro da sala (uma vez por montagem). */
   const loadWhiteboard = async (furniId: string) => {
     if (!connection) return;
@@ -773,6 +800,7 @@ async function start(): Promise<void> {
     if (session) await api.logout(session.token, all).catch(() => undefined);
     await connection?.leave();
     calls?.leave();
+    closeTv();
     await lobby?.leave();
     forgetToken();
     location.reload();
@@ -879,6 +907,33 @@ async function start(): Promise<void> {
             undo: () => connection.wbUndo(furniId),
             clear: () => connection.wbClear(furniId),
           });
+        },
+        openTv: (furniId) => {
+          const f = room.state.furni.get(furniId);
+          const def = f && deps.furniDefs.get(f.defId);
+          if (!def || !session) return;
+          if (tvPanel?.furniId === furniId) return;
+          closeTv();
+          const id = furniId;
+          tvPanel = new TvPanel({
+            furniId: id,
+            title: def.name,
+            myUserId: session.userId,
+            isAdmin: session.role === 'admin',
+            player: E2E_MODE ? fakePlayer : youTubePlayer,
+            on: {
+              add: (ids) => connection.tvAdd(id, ids),
+              remove: (itemId) => connection.tvRemove(id, itemId),
+              control: (action, at) => connection.tvControl(id, action, at),
+              skip: () => connection.tvSkip(id),
+              duration: (itemId, d) => connection.tvDuration(id, itemId, d),
+              ended: (itemId) => connection.tvEnded(id, itemId),
+              playlist: (listId, from) =>
+                E2E_MODE ? Promise.resolve([]) : youTubePlaylist(listId, from),
+              close: closeTv,
+            },
+          });
+          connection.tvOpen(id);
         },
         openGame: (furniId) => {
           ttt?.close();
@@ -1120,6 +1175,13 @@ async function start(): Promise<void> {
     decorHistory.clear();
     jiraFurni.clear();
     whiteboard?.close();
+    // TVs: a janela é da sala anterior; as telas desta sala vêm do servidor.
+    closeTv();
+    tvScreens.clear();
+    void connection.tvScreens().then((screens) => {
+      if (scene !== s) return;
+      for (const [id, v] of Object.entries(screens)) applyTvScreen(id, v);
+    });
     keep(
       cb.onAdd('furni', (f, id) => {
         resolvePlaced(f.defId, f.x, f.y, id);
@@ -1127,6 +1189,7 @@ async function start(): Promise<void> {
         refreshJukebox();
         const interaction = deps.furniDefs.get(f.defId)?.interaction;
         if (interaction === 'whiteboard') void loadWhiteboard(id);
+        if (interaction === 'tv' && tvScreens.has(id)) applyTvScreen(id, tvScreens.get(id)!);
         if (interaction === 'jira') {
           jiraFurni.add(id);
           if (jiraCanvas) s.setWhiteboardThumb(id, jiraCanvas);
@@ -1143,6 +1206,8 @@ async function start(): Promise<void> {
     keep(
       cb.onRemove('furni', (_f, id) => {
         s.removeFurni(id);
+        if (tvPanel?.furniId === id) closeTv();
+        tvScreens.delete(id);
         refreshJukebox();
         jiraFurni.delete(id);
       }),
@@ -1439,6 +1504,16 @@ async function start(): Promise<void> {
         );
         updateThumb(msg.furniId);
         if (whiteboard?.furniId === msg.furniId) whiteboard.redraw();
+      },
+      tvState: (st) => {
+        if (tvPanel?.furniId === st.furniId) tvPanel.set(st);
+      },
+      tvScreens: (screens) => {
+        for (const [id, v] of Object.entries(screens)) applyTvScreen(id, v);
+      },
+      tvError: (message) => {
+        if (tvPanel) tvPanel.error(message);
+        else overlay.notify(message, { kind: 'error' });
       },
       wbCleared: (furniId) => {
         wbStrokes.set(furniId, []);

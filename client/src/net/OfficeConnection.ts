@@ -4,6 +4,9 @@ import {
   OFFICE_ROOM,
   OfficeState,
   ServerMessage,
+  TvMessage,
+  type TvScreens,
+  type TvState,
   type ChatMessage,
   type ChatDeletedMessage,
   type KickedMessage,
@@ -71,6 +74,10 @@ interface Handlers {
   wbDraft: (msg: WbDraft) => void;
   wbRemoved: (msg: WbRemovedMessage) => void;
   wbCleared: (furniId: string) => void;
+  /** TV (Fase 51): estado da TV aberta, o que passa nas telas da sala e erros. */
+  tvState: (st: TvState) => void;
+  tvScreens: (screens: TvScreens) => void;
+  tvError: (message: string) => void;
   /** A sala foi editada: pedir o layout de novo e remontar a cena. */
   layoutChanged: (room: OfficeRoomClient, layout: RoomLayoutMessage) => void;
   /** Um admin tirou você (da sala: vem um transfer em seguida; do escritório: fim). */
@@ -206,6 +213,46 @@ export class OfficeConnection {
     this.room?.send(ClientMessage.WbClear, { furniId });
   }
 
+  // ---------- TV com YouTube (Fase 51) ----------
+
+  tvOpen(furniId: string): void {
+    this.room?.send(TvMessage.Open, { furniId });
+  }
+
+  tvClose(furniId: string): void {
+    this.room?.send(TvMessage.Close, { furniId });
+  }
+
+  tvAdd(furniId: string, videoIds: string[]): void {
+    this.room?.send(TvMessage.Add, { furniId, videoIds });
+  }
+
+  tvRemove(furniId: string, id: string): void {
+    this.room?.send(TvMessage.Remove, { furniId, id });
+  }
+
+  tvControl(furniId: string, action: 'play' | 'pause' | 'seek', position: number): void {
+    this.room?.send(TvMessage.Control, { furniId, action, position });
+  }
+
+  tvSkip(furniId: string): void {
+    this.room?.send(TvMessage.Skip, { furniId });
+  }
+
+  tvDuration(furniId: string, itemId: string, duration: number): void {
+    this.room?.send(TvMessage.Duration, { furniId, itemId, duration });
+  }
+
+  tvEnded(furniId: string, itemId: string): void {
+    this.room?.send(TvMessage.Ended, { furniId, itemId });
+  }
+
+  /** O que passa em cada TV da sala agora. */
+  async tvScreens(): Promise<TvScreens> {
+    if (!this.room) return {};
+    return (await this.room.request(TvMessage.Screens)) as TvScreens;
+  }
+
   tttJoin(furniId: string): void {
     this.room?.send(ClientMessage.TttJoin, { furniId });
   }
@@ -330,6 +377,9 @@ export class OfficeConnection {
     room.onMessage(ServerMessage.WbCleared, (m: { furniId: string }) =>
       this.on.wbCleared(m.furniId),
     );
+    room.onMessage(TvMessage.State, (st: TvState) => this.on.tvState(st));
+    room.onMessage(TvMessage.Screens, (s: TvScreens) => this.on.tvScreens(s));
+    room.onMessage(TvMessage.Error, (e: { message: string }) => this.on.tvError(e.message));
     room.onMessage(ServerMessage.LayoutChanged, async () => {
       const layout = (await room.request(ClientMessage.GetLayout)) as RoomLayoutMessage;
       if (this.room === room) this.on.layoutChanged(room, layout);

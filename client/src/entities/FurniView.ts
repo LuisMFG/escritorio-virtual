@@ -314,6 +314,13 @@ export class FurniView extends Container {
     this.placeSurface();
   }
 
+  /** Some com o desenho da superfície (TV desligada). */
+  clearSurface(): void {
+    this.surface?.sprite.destroy();
+    this.surface?.texture.destroy();
+    this.surface = null;
+  }
+
   /**
    * Encaixa a miniatura no paralelogramo do papel (cantos medidos na PNG daquela direção):
    * transformação afim do retângulo da textura para os cantos, com uma margem de 6%.
@@ -331,7 +338,8 @@ export class FurniView extends Container {
     const oy = -this.sprite.anchor.y * tex.height;
     const u = [tr[0] - tl[0], tr[1] - tl[1]];
     const v = [bl[0] - tl[0], bl[1] - tl[1]];
-    const m = 0.06;
+    // Margem do papel do quadro; a imagem da TV ocupa a tela quase toda.
+    const m = this.def.interaction === 'tv' ? 0.02 : 0.06;
     const { width: w, height: h } = this.surface.canvas;
     const sx = (1 - 2 * m) / w;
     const sy = (1 - 2 * m) / h;

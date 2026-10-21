@@ -82,6 +82,8 @@ export interface SceneActions extends DecorActions {
   openKudos(): void;
   /** Clique no Quadro de Demandas (Jira). */
   openJira(): void;
+  /** Clique numa TV (Fase 51). */
+  openTv(furniId: string): void;
   /** Clique num avatar (abre o cartão). `at` = posição na tela. */
   avatarClick(sessionId: string, at: { x: number; y: number }): void;
 }
@@ -399,6 +401,11 @@ export class RoomScene implements DecorHost {
   /** Miniatura do quadro branco no móvel. */
   setWhiteboardThumb(furniId: string, canvas: HTMLCanvasElement): void {
     this.furni.get(furniId)?.setSurfaceCanvas(canvas);
+  }
+
+  /** Tira o desenho da superfície (TV desligada). */
+  clearSurface(furniId: string): void {
+    this.furni.get(furniId)?.clearSurface();
   }
 
   /** Luz do ambiente (dia/noite). */
@@ -784,6 +791,7 @@ export class RoomScene implements DecorHost {
       if (usable.def.interaction === 'tictactoe') return this.actions.openGame(usable.placed.id);
       if (usable.def.interaction === 'kudos') return this.actions.openKudos();
       if (usable.def.interaction === 'jira') return this.actions.openJira();
+      if (usable.def.interaction === 'tv') return this.actions.openTv(usable.placed.id);
       this.flashTarget({ x: usable.placed.x, y: usable.placed.y }, 0xffd27a);
       return this.actions.interact(usable.placed.id);
     }
