@@ -39,6 +39,8 @@ export interface E2EHook {
   avatar(sessionId: string): Point | null;
   /** Direção em que o avatar está desenhado (a que se vê, não a do servidor). */
   avatarDir(sessionId: string): number | null;
+  /** Emote que o avatar está fazendo agora (Fase 54). */
+  avatarEmote(sessionId: string): string | null;
   furniList(): { id: string; defId: string; x: number; y: number; z: number }[];
   players(): {
     id: string;
@@ -119,6 +121,7 @@ export function exposeForTests(scene: RoomScene, room: OfficeRoomClient): void {
       return { x: Math.round(r.left + c.x), y: Math.round(r.top + c.y) };
     },
     avatarDir: (id) => scene.avatarView(id)?.dir ?? null,
+    avatarEmote: (id) => scene.avatarView(id)?.currentEmote ?? null,
     furniShown: (id) => {
       const p = scene.furniView(id)?.placed;
       return p ? { x: p.x, y: p.y, z: p.z, rot: p.rot } : null;
