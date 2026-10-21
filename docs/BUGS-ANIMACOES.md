@@ -23,11 +23,13 @@ Alguns achados das revisões foram confirmados rodando o próprio código de mon
 
 Cada bug tem um código (AN = animação, IN = interação, DE = Decorar/empilhar), usado no roadmap (seção 19 do `PLAN.md`).
 
+**Situação:** a Fase 52 corrigiu AN1–AN8, AN10, AN11, AN13, AN14, IN1–IN11, IN13, IN15 e o IN16 (achado na conferência). Os DE ficam para a Fase 53.
+
 ---
 
 ## Animação do avatar (AN)
 
-### AN1 · Com bebida ou café o avatar fica com um braço só — **alta** (confirmado no navegador)
+### AN1 · Com bebida ou café o avatar fica com um braço só — **alta** (confirmado no navegador) · ✅ corrigido na Fase 52
 - **Reproduzir:** pegue uma bebida na geladeira (ou digite `/cafe`) e vire para baixo-esquerda com as setas, ou ande para a esquerda.
   - Nas direções 4, 5 e 6 o braço do lado da câmera some, e sobra uma mão embaixo do copo.
   - Com `/acenar`, `/mao` e `/joinha` nessas direções, ficam dois braços do mesmo lado.
@@ -36,7 +38,7 @@ Cada bug tem um código (AN = animação, IN = interação, DE = Decorar/empilha
   - Por isso os dois braços desenhados acabam sendo os de trás.
   - Código: `shared/src/figureRender.ts` (espelho em `composeFigure`; braços em `GESTURE_ARM`). O teste atual fixa o comportamento errado.
 
-### AN2 · Deitado, a cabeceira e o cobertor da cama cobrem o avatar — **alta**
+### AN2 · Deitado, a cabeceira e o cobertor da cama cobrem o avatar — **alta** · ✅ corrigido na Fase 52
 - **Reproduzir:** Decorar → Cama de Casal → clicar na cama (depois de corrigir IN1/IN2). Só um pedaço do rosto aparece.
 - **Causa:**
   - Desde o desenho por camadas das camas (20/10), as camadas altas da cama (cabeceira, laterais, cobertor) vão para as "fatias da frente", que sempre ficam na frente de quem deita.
@@ -44,7 +46,7 @@ Cada bug tem um código (AN = animação, IN = interação, DE = Decorar/empilha
   - Medido: 63% da cabeça e 93% do corpo ficam cobertos.
   - Código: `client/src/entities/FurniView.ts` (fatias de `canLay`), `AvatarView.ts`.
 
-### AN3 · Ao chegar andando no assento ou na cama, o avatar fica virado para onde andava — **alta**, intermitente
+### AN3 · Ao chegar andando no assento ou na cama, o avatar fica virado para onde andava — **alta**, intermitente · ✅ corrigido na Fase 52
 - **Reproduzir:** clique numa cadeira chegando de lado ou pela diagonal, ou numa cama pela lateral. Acontece até em localhost e mais ainda pelo túnel. O avatar:
   - senta de lado ou de costas;
   - na diagonal, aparece **em pé** dentro da cadeira;
@@ -55,7 +57,7 @@ Cada bug tem um código (AN = animação, IN = interação, DE = Decorar/empilha
   - O cliente descarta a direção se ainda está animando esse passo e nunca a reaplica.
   - Código: `client/src/entities/AvatarView.ts` (`applySnapshot`).
 
-### AN4 · Sentado numa direção diagonal o avatar é desenhado em pé — **média** (confirmado na grade de poses)
+### AN4 · Sentado numa direção diagonal o avatar é desenhado em pé — **média** (confirmado na grade de poses) · ✅ corrigido na Fase 52
 - **Reproduzir:**
   - Sentado, use um móvel que fica na diagonal (IN8).
   - Ou chegue na cadeira pela diagonal (AN3).
@@ -63,15 +65,15 @@ Cada bug tem um código (AN = animação, IN = interação, DE = Decorar/empilha
   - A pose "sentado" do Habbo só existe nas direções 0/2/4/6; nas ímpares, a montagem cai na pose em pé.
   - Falta normalizar a direção para uma par sempre que a pessoa está sentada.
 
-### AN5 · Deslocamento de quem deita não usa a mesma direção do desenho — **média**
+### AN5 · Deslocamento de quem deita não usa a mesma direção do desenho — **média** · ✅ corrigido na Fase 52
 - **Reproduzir:** deitar com a direção 5 ou 6 chegando ao cliente (via AN3 ou dança): o corpo fica 72 px fora da cama.
 - **Causa:** cada lugar normaliza a direção de deitar de um jeito: o servidor (`layDirection`), a montagem (`composeFigure`) e o `LAY_OFFSET`.
 
-### AN6 · Gestos deitado desenham um braço em pé flutuando — **média**
+### AN6 · Gestos deitado desenham um braço em pé flutuando — **média** · ✅ corrigido na Fase 52
 - **Reproduzir:** deite e use `/acenar`, `/joinha`, `/coracao` ou `/cafe`. Aparece um braço em pé no ar, acima do corpo deitado.
 - **Causa:** o gesto é aplicado sem olhar a postura, e não existem desenhos de gesto deitado.
 
-### AN7 · Dança sentado ou deitado — **média**
+### AN7 · Dança sentado ou deitado — **média** · ✅ corrigido na Fase 52
 - **Reproduzir:**
   - Sentado + `/dancar`: o avatar "anda no lugar" dentro da cadeira.
   - Deitado + `/dancar`: fica em pé, deslocado.
@@ -79,7 +81,7 @@ Cada bug tem um código (AN = animação, IN = interação, DE = Decorar/empilha
   - A dança troca a postura por "andar" e gira o corpo, mantendo os deslocamentos de sentado/deitado.
   - No fim, a direção volta à de antes da dança, desfazendo viradas feitas nesse meio tempo.
 
-### AN8 · Textura de avatar destruída enquanto aparece: o avatar some e a cena pode congelar — **média** (impacto alto)
+### AN8 · Textura de avatar destruída enquanto aparece: o avatar some e a cena pode congelar — **média** (impacto alto) · ✅ corrigido na Fase 52
 - **Reproduzir (provável):**
   - Duas pessoas com o mesmo visual: uma parada (ausente) e a outra gerando umas 160 poses novas (andar, falar, beber).
   - A textura de quem está parado é descartada e destruída 2 s depois, ainda na tela.
@@ -95,23 +97,23 @@ Cada bug tem um código (AN = animação, IN = interação, DE = Decorar/empilha
   - O quadro da roupa animada cresce sem parar e entra na chave do cache, que por isso nunca acerta.
   - Isso também acelera o AN8.
 
-### AN10 · Na primeira vez, o copo demora a aparecer na mão — **baixa**
+### AN10 · Na primeira vez, o copo demora a aparecer na mão — **baixa** · ✅ corrigido na Fase 52
 - **Reproduzir:** recarregue a página e use `/cafe`. Muitas vezes o café inteiro (2,5 s) sai sem xícara.
 - **Causa:**
   - A biblioteca de itens da mão é baixada na hora.
   - A cena só pede a pose de novo quando ela muda (piscar, gole), não quando a biblioteca chega.
 
-### AN11 · O item da mão some durante acenar, joinha ou coração — **baixa**
+### AN11 · O item da mão some durante acenar, joinha ou coração — **baixa** · ✅ corrigido na Fase 52
 - **Causa:** "carregar" (braço direito + item) e o gesto do braço esquerdo não podem acontecer juntos.
 
 ### AN12 · Ponto preto solto no pescoço ao segurar bebida (direções 6 e 7) — **baixa**
 - **Causa:** recortes de 1×1 px sem transparência na conversão das folhas de roupa (353 no `hh_human_item`).
 - Código: `server/src/assets/swfFigure.ts`.
 
-### AN13 · Falando, cabelo e chapéu pulam 1 px — **baixa**
+### AN13 · Falando, cabelo e chapéu pulam 1 px — **baixa** · ✅ corrigido na Fase 52
 - **Causa:** quando falta o quadro da fala, a montagem cai no quadro 0 da fala, que é deslocado. O certo é cair na pose parada.
 
-### AN14 · Andar "engasga" entre passos — **baixa**
+### AN14 · Andar "engasga" entre passos — **baixa** · ✅ corrigido na Fase 52
 - **Causa:** se o passo acaba antes do próximo pacote, a pose parada aparece por alguns quadros. Falta uma tolerância.
 
 ### AN15 · Mangas e acessórios não acompanham alguns gestos — **baixa**
@@ -135,7 +137,7 @@ Cada bug tem um código (AN = animação, IN = interação, DE = Decorar/empilha
 
 ## Interação com móveis (IN)
 
-### IN1 · Camas e cadeiras do catálogo "com estados" viram interruptor: clicar liga/desliga em vez de deitar/sentar — **alta**
+### IN1 · Camas e cadeiras do catálogo "com estados" viram interruptor: clicar liga/desliga em vez de deitar/sentar — **alta** · ✅ corrigido na Fase 52
 - **Reproduzir:** coloque a "Cama Arco-íris" ou a "Cama bagunçada" e clique nela. O avatar anda até o lado e a cama muda de estado, mas ele não deita. Afeta:
   - 47 de 135 camas do catálogo;
   - 375 de 987 assentos.
@@ -144,60 +146,66 @@ Cada bug tem um código (AN = animação, IN = interação, DE = Decorar/empilha
   - O servidor trata "usar" antes de "sentar/deitar".
   - Código: `server/src/services/FurniDefService.ts`, `OfficeRoom.handleInteract`.
 
-### IN2 · A cama só aceita a cabeceira como destino, sem testar se dá para chegar — **alta** (confirmado no navegador)
+### IN2 · A cama só aceita a cabeceira como destino, sem testar se dá para chegar — **alta** (confirmado no navegador) · ✅ corrigido na Fase 52
 - **Reproduzir:** cama encostada na parede (ou com criado-mudo dos lados) → clicar → "Não dá para chegar nesse lugar.", com o outro travesseiro livre. No teste, o avatar parou ao lado da cama e ficou em pé.
 - **Causa:**
   - A escolha do lugar usa só a distância, sem calcular o caminho.
   - Os tiles da cama não servem de entrada; no Habbo dá para entrar por qualquer tile e "escorregar" até o travesseiro.
   - Código: `shared/src/posture.ts`, `OfficeRoom.handleInteract`.
 
-### IN3 · Sentado, clicar no tile da mesa (ou "Ir até" um colega ao lado) deixa o avatar em pé dentro da cadeira — **alta**
+### IN3 · Sentado, clicar no tile da mesa (ou "Ir até" um colega ao lado) deixa o avatar em pé dentro da cadeira — **alta** · ✅ corrigido na Fase 52
 - **Reproduzir:** sente numa estação e clique na mesa à frente. Ele fica em pé no tile da cadeira, na altura do assento, e `/sentar` deixa de funcionar.
 - **Causa:**
   - Com destino inalcançável, o "lugar alcançável mais perto" vira o próprio tile do assento.
   - Com um caminho vazio, o servidor muda a ação para parado.
   - Código: `shared/src/pathfinding.ts`, `server/src/rooms/MovementSystem.ts`.
 
-### IN4 · Criar, editar ou excluir uma sala tira todo mundo dos assentos e manda para a entrada — **média-alta**
+### IN4 · Criar, editar ou excluir uma sala tira todo mundo dos assentos e manda para a entrada — **média-alta** · ✅ corrigido na Fase 52
 - **Reproduzir:** com gente sentada na Recepção, um admin cria uma sala ou renomeia uma sala ligada à Recepção.
 - **Causa:**
   - Ao reaplicar o layout, assentos contam como "não andáveis" para quem já está sentado, e a pessoa é realocada.
   - Quem estava num móvel apagado pela edição continua "sentado" no ar.
 
-### IN5 · Falhar ao ir sentar ou usar deixa um passo pendurado; depois `/sentar`, `/deitar`, `/levantar` e as setas não funcionam — **média**
+### IN5 · Falhar ao ir sentar ou usar deixa um passo pendurado; depois `/sentar`, `/deitar`, `/levantar` e as setas não funcionam — **média** · ✅ corrigido na Fase 52
 - **Reproduzir:** clique numa cama inalcançável a 3 tiles ou mais (IN2). O avatar dá um passo e para; `/deitar` não faz nada.
 - **Causa:** o movimento é iniciado antes de saber se o destino serve e não é desfeito na recusa.
 
-### IN6 · Um "usar" antigo sequestra a ida à cadeira — **média**
+### IN6 · Um "usar" antigo sequestra a ida à cadeira — **média** · ✅ corrigido na Fase 52
 - **Reproduzir:** clique na máquina de café longe e, antes de chegar, clique numa cadeira cujo caminho passe por ela. O avatar pega café e não senta. Se no lugar da máquina houver um teleporte, a pessoa é teleportada.
 - **Causa:** sentar e usar guardam intenções separadas, e a antiga não é apagada.
 
-### IN7 · Objeto em cima de mesa (computador, luminária) fica impossível de usar — **média**
+### IN7 · Objeto em cima de mesa (computador, luminária) fica impossível de usar — **média** · ✅ corrigido na Fase 52
 - **Reproduzir:** coloque um computador no meio da mesa de 3×2 encostada na parede e clique nele: "Não dá para chegar perto desse móvel.". Quem está sentado em frente também não alcança.
 - **Causa:** "chegar perto" usa só o tile do próprio objeto, não a mesa embaixo dele.
 
-### IN8 · Usar um móvel sentado ou deitado gira o corpo para qualquer direção — **média**
+### IN8 · Usar um móvel sentado ou deitado gira o corpo para qualquer direção — **média** · ✅ corrigido na Fase 52
 - **Efeito:** quebra a pose sentada (AN4) e tira o corpo da cama.
 
-### IN9 · Duplo clique usa o móvel duas vezes (luz liga e desliga; teleporte dispara 2×) — **média**
+### IN9 · Duplo clique usa o móvel duas vezes (luz liga e desliga; teleporte dispara 2×) — **média** · ✅ corrigido na Fase 52
 - **Causa:** cada clique vira um "usar" e o limite deixa passar rajadas; o teleporte não trava enquanto já está acontecendo.
 
-### IN10 · Assento movido enquanto alguém anda até ele: a pessoa "senta no ar" onde ele estava — **baixa-média**
+### IN10 · Assento movido enquanto alguém anda até ele: a pessoa "senta no ar" onde ele estava — **baixa-média** · ✅ corrigido na Fase 52
 
-### IN11 · `/levantar` num assento deixa a pessoa em pé dentro da cadeira ou da cama — **baixa-média**
+### IN11 · `/levantar` num assento deixa a pessoa em pé dentro da cadeira ou da cama — **baixa-média** · ✅ corrigido na Fase 52
 
 ### IN12 · Pets ocupam cadeiras, sofás e camas, e jogadores sentam "em cima" do pet — **baixa**
 
-### IN13 · O servidor recusa móvel no destino final de quem está andando ("Tem alguém nesse lugar." com o fantasma verde) — **baixa-média**
+### IN13 · O servidor recusa móvel no destino final de quem está andando ("Tem alguém nesse lugar." com o fantasma verde) — **baixa-média** · ✅ corrigido na Fase 52
 
 ### IN14 · Blocos altos "de pisar" (`bc_block`) não servem de base: o que vai em cima fica afundado — **baixa**
 
-### IN15 · Menores — **baixa**
+### IN15 · Menores — **baixa** · ✅ corrigido na Fase 52
 - O item na mão de uma aba some nas outras abas com `/largar`.
 - O registro de itens na mão nunca apaga entradas vencidas.
 - O teleporte acontece mesmo se a pessoa sair andando no meio.
 - Sem o avatar montado (reserva do imager), deitar é desenhado como sentado.
-- Camas do catálogo ganham altura de deitar até 1,0 (contra 0,5 calibrado). Precisa conferir se flutuam.
+- Camas do catálogo ganham altura de deitar até 1,0 (contra 0,5 calibrado). Conferido: flutuavam.
+
+### IN16 · Deitado numa cama encostada em outros móveis, não dá para sair — **média** · ✅ corrigido na Fase 52
+- **Achado na conferência da Fase 52.** Cama de Casal com a cabeceira encostada numa mesa, uma cadeira de um lado e a impressora do outro.
+- **Reproduzir:** deite no travesseiro e clique no chão: "Não dá para chegar nesse lugar." `/levantar` responde "Não tem espaço para levantar." A pessoa fica presa na cama.
+- **Causa:** em volta do travesseiro só há a própria cama, e cama não serve de passagem (só de destino).
+- **Correção:** quem está numa cama ou sofá atravessa esse móvel para sair, como no Habbo, sem poder parar em cima dele. Sem vizinho livre, `/levantar` sai andando por cima da cama até o chão livre mais perto.
 
 ---
 

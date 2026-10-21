@@ -1250,7 +1250,7 @@ O levantamento completo dos bugs está em [`docs/BUGS-ANIMACOES.md`](docs/BUGS-A
 
 As fases 52 e 53 vêm primeiro porque corrigem o que já existe e é usado todo dia. A base de poses por parte do corpo da Fase 54 é usada pelas danças (55). O Salão (57) prepara as mesas e os espectadores para os dois jogos (58 e 59).
 
-### Fase 52 — Animação e interação sem bugs
+### Fase 52 — Animação e interação sem bugs ✅ implementada
 - **Corrige:**
   - animação: AN1–AN8, AN10, AN11, AN13 e AN14;
   - interação: IN1–IN11, IN13 e IN15.
@@ -1273,6 +1273,18 @@ As fases 52 e 53 vêm primeiro porque corrigem o que já existe e é usado todo 
   - unidade: montagem por direção, posturas, caminho, movimento;
   - sala: deitar, sentar, levantar, editar sala, usar em cima da mesa;
   - ponta a ponta: deitar, sentar chegando de lado, bebida.
+- **Feito:**
+  - **Montagem do avatar** (`shared/src/figureRender.ts`): nas direções espelhadas (4–6) as partes de um lado trocam de papel, como no Habbo, e os dois braços aparecem com copo, aceno, joinha e placa. Segurar com o outro braço ocupado usa o desenho de carregar (`handGesture`). Mangas seguem o gesto. Deitado não há gesto. Sentado numa diagonal usa a direção par anterior (`sitFacing`), e deitado só tem as direções 2 e 4 (`layFacing`), a mesma regra no servidor e no cliente. A fala não faz o cabelo pular, e roupa animada só recria a textura quando o quadro muda.
+  - **Cena** (`client/src/entities/AvatarView.ts`, `client/src/assets/textureHold.ts`): a textura na tela é "segurada" e o cache só destrói as que ninguém mostra (o avatar não some mais nem trava a cena). A direção do servidor vale ao terminar o último passo, e uma folga de 160 ms evita o "engasgo" entre passos. O copo aparece no primeiro uso, porque a pose é pedida de novo quando a biblioteca de itens chega. A cama não é mais fatiada, então o avatar deitado aparece inteiro. Sem o avatar montado, deitar inclina o boneco ao longo da cama.
+  - **Servidor** (`OfficeRoom`, `MovementSystem`, `HeldItems`): vale sempre a última intenção (sentar ou usar). O caminho é planejado antes de andar (`plan` e `go`), então uma recusa não deixa passo pendurado. Na cama, entra por qualquer tile livre e escorrega até o travesseiro. Ao chegar, confere se o assento continua lá. `/levantar` sai para um tile livre ao lado. Editar a sala não tira ninguém do lugar. Móvel em cima de mesa se usa de qualquer lado. O duplo clique e o teleporte disparam uma vez só. O item na mão é da pessoa (some em todas as abas), e o registro apaga os vencidos.
+  - **Cama cercada (IN16, achado na conferência):** quem está numa cama ou sofá atravessa esse móvel para sair (`passable` na grade), sem parar em cima dele.
+  - **Camas do catálogo:** deitam e não ligam/desligam. A altura de deitar segue a da Cama de Casal (`layHeight`), em vez de metade do "h" do Habbo, que inclui a cabeceira e deixava o avatar flutuando. Vale também para as camas já gravadas.
+  - **Testes:** `figureRender.test.ts` (braços, gestos, itens e posturas por direção), `pathfinding.test.ts`, `grid.test.ts`, `MovementSystem.test.ts` (`plan`, `go`, `stop`), `textureHold.test.ts`, `HeldItems.test.ts`, `FurniDefService.test.ts` (altura de deitar) e 11 testes de sala em `OfficeRoom.test.ts`, que falham no código antigo. Ponta a ponta: `cama.spec.ts` (deitar no travesseiro, levantar para o café, tirar a cama) e `sentar.spec.ts` (sentar chegando de lado, virado como a cadeira na tela e no servidor).
+- **Como testar:**
+  1. Decorar → coloque uma Cama de Casal encostada em outros móveis → Concluir → clique na cama e depois no chão.
+  2. Pegue um café e gire o avatar.
+  3. Acene com o copo na mão.
+  4. Sente chegando pelo lado de uma cadeira.
 
 ### Fase 53 — Decorar sem frustração
 - **Corrige:** DE1–DE10, DE13–DE17 e DE20.

@@ -8,3 +8,5 @@ e2e-results
 client/public/assets/figure/figuredata.json
 client/public/assets/avatar/manifest.json
 client/public/assets/furni/catalog.json
+# Gerados pelo drizzle-kit.
+server/drizzle/meta
