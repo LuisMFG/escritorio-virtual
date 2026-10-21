@@ -8,6 +8,7 @@ import {
   clothingSetImageUrl,
   LOOK_SLOTS,
   matchesSearch,
+  nameKey,
   type AvatarSet,
   type SavedLook,
   findCategory,
@@ -309,8 +310,12 @@ function openEditor(opts: AvatarEditorOptions): Promise<AvatarChoice | null> {
   function renderSets(): void {
     // Miniaturas da lista anterior que ainda não começaram não interessam mais.
     thumbQueue.clear();
+    // Nas fantasias a busca filtra pelo nome (sem o filtro do clube).
     const costumes = activeType === COSTUMES_TAB;
-    toolbar.style.display = costumes ? 'none' : '';
+    clubSelect.hidden = costumes;
+    search.placeholder = costumes
+      ? 'Buscar fantasia (ex.: goku, pokémon)'
+      : 'Buscar (ex.: terno, boné, asas)';
     if (costumes) return renderCostumes();
     const cat = category();
     const selected = currentPart(cat.type)?.setId ?? null;
@@ -391,7 +396,17 @@ function openEditor(opts: AvatarEditorOptions): Promise<AvatarChoice | null> {
    */
   function renderCostumes(): void {
     moreBtn.hidden = true;
-    const groups = costumeThemes().map(({ theme, costumes }) => {
+    const themes = costumeThemes()
+      .map(({ theme, costumes }) => ({
+        theme,
+        costumes: costumes.filter(
+          (c) => !query || matchesSearch(nameKey(`${theme} ${c.label}`), query),
+        ),
+      }))
+      .filter((g) => g.costumes.length);
+    const total = themes.reduce((n, g) => n + g.costumes.length, 0);
+    countInfo.textContent = `${total} ${total === 1 ? 'fantasia' : 'fantasias'}`;
+    const groups = themes.map(({ theme, costumes }) => {
       const items = costumes.map((c) => {
         const tryOn = applyCostume(figure, c, gender);
         const img = el('img', { alt: '', loading: 'lazy', className: 'set-thumb worn body' });

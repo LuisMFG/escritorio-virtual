@@ -56,7 +56,12 @@ test('fantasia: veste a armadura de Pégaso sem mudar rosto e cabelo', async ({ 
   await page.getByRole('button', { name: 'Meu visual' }).click();
   const editor = page.locator('.editor');
   await editor.getByRole('tab', { name: 'Fantasias' }).click();
-  const classic = editor.getByRole('option', { name: 'Seiya de Pégaso: Armadura clássica' });
+  // A busca filtra as fantasias pelo nome ou pela franquia.
+  await editor.getByLabel('Buscar peças').fill('pokemon');
+  await expect(editor.locator('.editor-count')).toHaveText('4 fantasias');
+  await expect(editor.getByRole('option', { name: 'Pokémon: Gengar' })).toBeVisible();
+  await editor.getByLabel('Buscar peças').fill('');
+  const classic = editor.getByRole('option', { name: 'Cavaleiros do Zodíaco: Seiya', exact: true });
   await classic.click();
   await expect(classic).toHaveAttribute('aria-selected', 'true');
   await editor.getByRole('button', { name: 'Salvar visual' }).click();
