@@ -87,6 +87,10 @@ export class CallManager {
   private localLevel: (() => number) | null = null;
   private speakingTimer = 0;
   private speakingNow = new Set<string>();
+  /** Microfone + servidores ICE (uma vez por chamada); a sinalização espera por isso. */
+  private ready: Promise<boolean> | null = null;
+  /** Sinais em fila: cada um só começa depois do anterior (SDP antes dos candidatos). */
+  private signals: Promise<void> = Promise.resolve();
 
   constructor(
     private readonly lobby: LobbyConnection,
@@ -98,7 +102,9 @@ export class CallManager {
       inviteGone: (id) => on.inviteGone(id),
       result: (r) => on.result(r),
       state: (st) => void this.applyState(st),
-      signal: (from, data) => void this.onSignal(from, data),
+      signal: (from, data) => {
+        this.signals = this.signals.then(() => this.onSignal(from, data));
+      },
     });
   }
 
@@ -240,14 +246,12 @@ export class CallManager {
     this.current = st;
     this.on.state(st);
     if (!st || !st.here) return this.teardown();
-    if (!(await this.ensureMic())) {
+    if (!(await this.prepare())) {
       this.lobby.callLeave();
       return;
     }
-    this.ice ??= await this.lobby.iceServers().then(
-      (list) => (Array.isArray(list) && list.length ? list : FALLBACK_ICE),
-      () => FALLBACK_ICE,
-    );
+    // A chamada pode ter mudado (ou acabado) enquanto o microfone abria.
+    if (this.current !== st) return;
     const others = new Set(st.members.map((m) => m.userId).filter((id) => id !== this.myUserId));
     for (const id of [...this.peers.keys()]) if (!others.has(id)) this.closePeer(id);
     for (const id of others) {
@@ -259,6 +263,41 @@ export class CallManager {
     this.emitVideos();
   }
 
+  /**
+   * Abre o microfone e busca os servidores ICE uma vez só, mesmo com vários estados chegando
+   * juntos. Sem isso, uma oferta que chega enquanto a pessoa ainda libera o microfone era
+   * respondida sem áudio (e sem TURN): o outro lado não ouvia nada.
+   */
+  private prepare(): Promise<boolean> {
+    if (this.ready) return this.ready;
+    let ready: Promise<boolean> | null = null;
+    ready = (async () => {
+      const [mic, ice] = await Promise.all([
+        this.openMic(),
+        this.lobby.iceServers().then(
+          (list) => (Array.isArray(list) && list.length ? list : FALLBACK_ICE),
+          () => FALLBACK_ICE,
+        ),
+      ]);
+      // Saiu da chamada enquanto o microfone abria: devolve o microfone.
+      if (this.ready !== ready) {
+        for (const t of mic?.getTracks() ?? []) t.stop();
+        return false;
+      }
+      if (!mic) {
+        this.ready = null;
+        return false;
+      }
+      for (const t of mic.getAudioTracks()) t.enabled = !this.muted;
+      this.mic = mic;
+      this.localLevel = this.meter(mic);
+      this.ice = ice;
+      return true;
+    })();
+    this.ready = ready;
+    return ready;
+  }
+
   private audioConstraints(deviceId?: string): MediaTrackConstraints {
     return {
       echoCancellation: true,
@@ -268,18 +307,14 @@ export class CallManager {
     };
   }
 
-  private async ensureMic(): Promise<boolean> {
-    if (this.mic) return true;
+  private async openMic(): Promise<MediaStream | null> {
     try {
-      this.mic = await navigator.mediaDevices.getUserMedia({
+      return await navigator.mediaDevices.getUserMedia({
         audio: this.audioConstraints(readKey(MIC_KEY)),
       });
-      for (const t of this.mic.getAudioTracks()) t.enabled = !this.muted;
-      this.localLevel = this.meter(this.mic);
-      return true;
     } catch {
       this.on.error('Sem acesso ao microfone. Libere o microfone para este site e tente de novo.');
-      return false;
+      return null;
     }
   }
 
@@ -351,19 +386,19 @@ export class CallManager {
   }
 
   /** Transceptores: áudio e vídeo, os dois enviando e recebendo (o vídeo começa sem trilha). */
-  private attachTracks(pc: RTCPeerConnection): void {
+  private async attachTracks(pc: RTCPeerConnection): Promise<void> {
     const audioTrack = this.mic?.getAudioTracks()[0] ?? null;
     const audioT = pc.getTransceivers().find((t) => t.receiver.track.kind === 'audio');
     if (audioT) {
       audioT.direction = 'sendrecv';
-      void audioT.sender.replaceTrack(audioTrack);
+      await audioT.sender.replaceTrack(audioTrack);
     } else if (audioTrack && this.mic) {
       pc.addTransceiver(audioTrack, { direction: 'sendrecv', streams: [this.mic] });
     }
     const videoT = pc.getTransceivers().find((t) => t.receiver.track.kind === 'video');
     if (videoT) {
       videoT.direction = 'sendrecv';
-      void videoT.sender.replaceTrack(this.videoTrack);
+      await videoT.sender.replaceTrack(this.videoTrack);
     } else {
       pc.addTransceiver(this.videoTrack ?? 'video', { direction: 'sendrecv' });
     }
@@ -371,7 +406,7 @@ export class CallManager {
 
   private async offer(userId: string, peer: Peer, iceRestart = false): Promise<void> {
     try {
-      this.attachTracks(peer.pc);
+      await this.attachTracks(peer.pc);
       const offer = await peer.pc.createOffer({ iceRestart });
       await peer.pc.setLocalDescription(offer);
       this.lobby.callSignal(userId, { kind: 'sdp', type: 'offer', sdp: offer.sdp ?? '' });
@@ -382,13 +417,15 @@ export class CallManager {
 
   private async onSignal(from: string, data: CallSignalData): Promise<void> {
     if (!this.current?.here || !this.hasMember(from)) return;
+    if (!(await this.prepare())) return;
+    if (!this.current?.here || !this.hasMember(from)) return;
     const peer = this.peers.get(from) ?? this.openPeer(from);
     const pc = peer.pc;
     try {
       if (data.kind === 'sdp') {
         await pc.setRemoteDescription({ type: data.type, sdp: data.sdp });
         if (data.type === 'offer') {
-          this.attachTracks(pc);
+          await this.attachTracks(pc);
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
           this.lobby.callSignal(from, { kind: 'sdp', type: 'answer', sdp: answer.sdp ?? '' });
@@ -440,6 +477,7 @@ export class CallManager {
     this.mic = this.cam = this.screen = null;
     this.localLevel = null;
     this.ice = null;
+    this.ready = null;
     this.muted = false;
     clearInterval(this.speakingTimer);
     this.speakingTimer = 0;
