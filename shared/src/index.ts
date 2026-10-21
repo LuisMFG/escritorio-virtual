@@ -38,6 +38,7 @@ export * from './posture.js';
 export * from './effects.js';
 export * from './clothingSearch.js';
 export * from './costumes.js';
+export * from './tv.js';
 export * from './furniCatalog.js';
 export * from './furniVisual.js';
 export * from './habboPets.js';

@@ -50,6 +50,7 @@ export const furniManifestEntrySchema = z.object({
       'dice',
       'teleport',
       'jukebox',
+      'tv',
     ])
     .optional(),
   /** Desenho do Habbo usado (quando o móvel reaproveita a arte de outro; padrão = `id`). */
