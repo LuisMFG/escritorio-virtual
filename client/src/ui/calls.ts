@@ -1,4 +1,5 @@
 import { CALL_REASON_MAX, CALL_REASONS, type CallInvite, type CallState } from '@office/shared';
+import { makeDraggable, type Draggable } from './draggable.js';
 import { icon, iconHtml } from './icons.js';
 
 /** Caixa "Chamar para conversa": motivo (com sugestões) e Enviar. */
@@ -190,6 +191,8 @@ export class CallPanel {
   private state: CallState | null = null;
   private speaking: ReadonlySet<string> = new Set();
   private expanded = false;
+  /** Arrastar pela barra de cima (posição salva para pequena e ampliada). */
+  private readonly drag: Draggable;
 
   constructor(
     private readonly myUserId: string,
@@ -202,6 +205,11 @@ export class CallPanel {
     this.videosBox.hidden = true;
     this.el.append(this.videosBox, this.main);
     document.body.append(this.el);
+    this.drag = makeDraggable(this.el, {
+      handle: '.call-panel-head',
+      key: 'chamada',
+      mode: () => (this.expanded ? 'ampliada' : 'pequena'),
+    });
   }
 
   set(state: CallState | null): void {
@@ -279,6 +287,7 @@ export class CallPanel {
   private setExpanded(on: boolean): void {
     this.expanded = on;
     this.el.classList.toggle('expanded', on);
+    this.drag?.refresh();
     const b = this.el.querySelector<HTMLButtonElement>('.call-expand');
     if (b) {
       b.replaceChildren(icon(on ? 'minimize' : 'maximize', 16));
@@ -291,7 +300,11 @@ export class CallPanel {
     const st = this.state!;
     const head = document.createElement('div');
     head.className = 'call-panel-head';
+    head.title = 'Arraste para mover (duplo clique volta ao lugar)';
+    const grip = icon('grip', 14);
+    grip.classList.add('drag-grip');
     head.append(
+      grip,
       icon('phone', 16),
       Object.assign(document.createElement('strong'), { textContent: 'Em chamada' }),
       Object.assign(document.createElement('span'), { className: 'call-time muted' }),

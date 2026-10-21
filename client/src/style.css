@@ -7542,3 +7542,38 @@ kbd {
     max-height: calc(100dvh - 140px);
   }
 }
+
+/* ---------- Janelas arrastáveis (chamada e TV) ---------- */
+.call-panel-head,
+.tv-head {
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.call-panel.dragging,
+.tv-panel.dragging,
+.call-panel.dragging .call-panel-head,
+.tv-panel.dragging .tv-head {
+  cursor: grabbing;
+}
+
+.drag-grip {
+  display: inline-flex;
+  flex: none;
+  color: var(--muted);
+}
+
+/* Arrastada: a posição vem do JS (left/top), sem o centralizado do CSS. */
+.call-panel.dragged,
+.tv-panel.dragged {
+  transform: none;
+  right: auto;
+  bottom: auto;
+}
+
+@media (max-width: 640px) {
+  .tv-panel.dragged {
+    width: calc(100vw - 16px);
+  }
+}

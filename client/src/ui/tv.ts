@@ -8,6 +8,7 @@ import {
   type TvState,
 } from '@office/shared';
 import type { TvPlayer, TvPlayerFactory } from '../tv/player.js';
+import { makeDraggable, type Draggable } from './draggable.js';
 import { iconHtml } from './icons.js';
 
 export interface TvPanelHandlers {
@@ -90,6 +91,7 @@ export class TvPanel {
   private readonly queueBox = el('ol', { className: 'tv-queue' });
   private readonly expandBtn = el('button', { type: 'button', className: 'icon-btn' });
   private readonly player: TvPlayer;
+  private readonly drag: Draggable;
   private state: TvState | null = null;
   /** Diferença entre o relógio do servidor e o daqui (ms). */
   private clockOffset = 0;
@@ -170,11 +172,16 @@ export class TvPanel {
     this.status.setAttribute('role', 'status');
 
     this.root.append(
-      el('header', { className: 'tv-head' }, [
-        el('span', { className: 'tv-title', innerHTML: `${iconHtml('tv', 16)} ` }, [opts.title]),
-        this.viewersLabel,
-        el('span', { className: 'tv-head-actions' }, [fullBtn, this.expandBtn, closeBtn]),
-      ]),
+      el(
+        'header',
+        { className: 'tv-head', title: 'Arraste para mover (duplo clique volta ao lugar)' },
+        [
+          el('span', { className: 'drag-grip', innerHTML: iconHtml('grip', 14) }),
+          el('span', { className: 'tv-title', innerHTML: `${iconHtml('tv', 16)} ` }, [opts.title]),
+          this.viewersLabel,
+          el('span', { className: 'tv-head-actions' }, [fullBtn, this.expandBtn, closeBtn]),
+        ],
+      ),
       stage,
       this.nowBox,
       el('div', { className: 'tv-controls' }, [
@@ -190,6 +197,11 @@ export class TvPanel {
       this.queueBox,
     );
     document.body.append(this.root);
+    this.drag = makeDraggable(this.root, {
+      handle: '.tv-head',
+      key: 'tv',
+      mode: () => (this.expanded ? 'ampliada' : 'pequena'),
+    });
     this.setExpanded(false);
 
     this.player = opts.player(this.screen, {
@@ -222,6 +234,7 @@ export class TvPanel {
   close(): void {
     clearInterval(this.syncTimer);
     clearTimeout(this.statusTimer);
+    this.drag.destroy();
     this.player.destroy();
     if (document.fullscreenElement === this.root)
       void document.exitFullscreen().catch(() => undefined);
@@ -293,6 +306,7 @@ export class TvPanel {
   private setExpanded(on: boolean): void {
     this.expanded = on;
     this.root.classList.toggle('expanded', on);
+    this.drag?.refresh();
     this.expandBtn.innerHTML = iconHtml(on ? 'minimize' : 'maximize', 16);
     this.expandBtn.setAttribute('aria-label', on ? 'Diminuir' : 'Ampliar');
     this.expandBtn.title = on ? 'Diminuir' : 'Ampliar';

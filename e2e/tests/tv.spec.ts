@@ -70,4 +70,15 @@ test('TV: fila igual para todos, pausar vale para quem assiste e pular por vota√
   await beto.page.getByRole('button', { name: 'Fechar a TV' }).click();
   await expect(beto.page.locator('.tv-panel')).toHaveCount(0);
   await expect(ana.page.locator('.tv-viewers')).toHaveText(/1 assistindo/);
+
+  // A janela da TV tamb√©m arrasta pela barra de cima.
+  const panel = ana.page.locator('.tv-panel');
+  const start = (await panel.boundingBox())!;
+  const title = (await ana.page.locator('.tv-title').boundingBox())!;
+  await ana.page.mouse.move(title.x + 10, title.y + 5);
+  await ana.page.mouse.down();
+  await ana.page.mouse.move(title.x + 210, title.y + 85, { steps: 5 });
+  await ana.page.mouse.up();
+  const moved = (await panel.boundingBox())!;
+  expect([Math.round(moved.x - start.x), Math.round(moved.y - start.y)]).toEqual([200, 80]);
 });
