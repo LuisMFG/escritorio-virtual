@@ -1343,7 +1343,7 @@ As fases 52 e 53 vêm primeiro porque corrigem o que já existe e é usado todo 
   4. Tente tirar uma mesa com coisas em cima e depois aperte Ctrl+Z.
   5. No celular, toque no piso com um móvel escolhido.
 
-### Fase 54 — Emotes novos e "toca aqui"
+### Fase 54 — Emotes novos e "toca aqui" ✅ implementada
 - **Base:**
   - poses por parte do corpo (ação, quadro, deslocamento e direção por grupo: cabeça, tronco, braço esquerdo, braço direito, pernas);
   - animações descritas como dados (quadros e tempo).
@@ -1373,6 +1373,30 @@ As fases 52 e 53 vêm primeiro porque corrigem o que já existe e é usado todo 
   - unidade: pose e duração de cada emote, comandos;
   - sala: toca aqui valida a distância e vira os dois;
   - ponta a ponta: menu, comando e toca aqui em dois navegadores.
+- **Feito:**
+  - **Pose por parte do corpo** (`shared/src/figureRender.ts`): `FigurePose.parts` dá a cada grupo (cabeça, tronco, braço esquerdo, braço direito, pernas) a sua ação, quadro, deslocamento e giro. No espelho, o deslocamento inverte junto; com giro, a parte usa a direção e o espelho dela. Deitado, a pose por grupo não vale (só o rosto muda).
+  - **Animações como dados** (`EMOTE_ANIMS` em `shared/src/avatarAnim.ts`): quadros com o tempo de cada um, a pose dos grupos, o rosto, a fala e o corpo subindo (pulos). Repetem ou param no último quadro. Sentado, tronco e pernas ficam de fora.
+  - **Emotes** (desenhos conferidos numa grade de poses nas 8 direções, sem braço trocado):
+    - palmas: antebraços para a frente, as mãos se juntando;
+    - facepalm: a mão no rosto, cabeça baixa e olhos fechados;
+    - apontar: antebraço erguido para a frente;
+    - reverência: cabeça e tronco descem e vão para a frente;
+    - pular: agacha, sobe com um braço para cima e cai;
+    - chorar: rosto triste, soluçando e secando os olhos;
+    - dormir: olhos fechados e cabeça caindo;
+    - pensar: mão no queixo e cabeça virada;
+    - comemorar: soco no ar, pulinhos e sorriso.
+  - **Posturas** (`emoteRefusal`): servidor e cliente usam a mesma regra. Sentado valem os de braço e de rosto; deitado, só os de rosto. O menu apaga os que não valem.
+  - **Toca aqui:**
+    - `/tocaaqui nome` acha a pessoa pelo nome inteiro ou pelo começo; também pelo botão no cartão, ou pelo menu (com quem estiver mais perto);
+    - a até 1 tile, os dois se viram e batem as mãos (mão espalmada e a batida), com brilho, e todos na sala veem;
+    - até 6 tiles, anda até o lado da pessoa e bate ao chegar;
+    - longe, ocupada (status Ocupado, modo foco, sentada, deitada ou andando) ou você mesmo: avisa.
+  - **Testes:** `figureRender.test.ts` (ação, deslocamento, giro, deitado e chave de cache por grupo), `avatarAnim.test.ts` (pose e duração de cada emote, posturas, comandos, nome), cinco testes de sala em `OfficeRoom.test.ts` (lado a lado, andando até a pessoa, longe/ocupada/sentado, posturas) e `e2e/tests/emotes.spec.ts` (menu, comando, toca aqui pelo cartão e pelo nome, menu apagado sentado).
+- **Como testar:**
+  1. No botão 😊, escolha Palmas, Pular, Comemorar…
+  2. Sente no chão e veja o menu.
+  3. Fique ao lado de alguém e clique no avatar dela, em "Toca aqui", ou escreva `/tocaaqui nome`.
 
 ### Fase 55 — Danças sincronizadas
 - **Danças:** Macarena, Thriller, Gangnam Style, YMCA, Floss, Robô e Moonwalk. São inspiradas nas músicas e montadas quadro a quadro com a arte do Habbo (base da Fase 54).
