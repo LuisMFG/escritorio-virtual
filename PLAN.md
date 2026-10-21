@@ -1191,3 +1191,16 @@ canal). Vídeo e compartilhar tela ficam para a fase seguinte, com a estrutura j
 - Para criar outra: acrescentar em `shared/src/costumes.ts` (o teste confere que toda fantasia monta um visual válido nos dois gêneros).
 - De quebra: a fila de miniaturas do editor travava ao trocar de aba depressa (imagens `loading=lazy` fora da tela nunca terminam); trocar de lista agora libera a fila.
 
+## 17. TV com YouTube (aprovado em 21/10/2026)
+
+Pedido: uma TV onde todo mundo que interage assiste vídeos do YouTube juntos, com fila e votação para pular, no estilo do Watch2Gether. Decisões: qualquer um que assiste controla (pausar, arrastar a barra); entra por link colado (sem chave de API); clicar na TV abre o player numa janela e a tela do móvel mostra a capa; pular com a maioria de quem assiste (quem adicionou pula na hora).
+
+### Fase 51 — TV com YouTube ✅ implementada
+- **Assistir junto:** clicar numa **TV Club** ou **TV Clássica** abre a janela da TV (só quem abre ouve). O vídeo toca no mesmo ponto para todos: o servidor guarda a hora em que o vídeo começou e cada player confere a cada segundo, pulando para o ponto certo se passar de 2 s de diferença.
+- **Fila:** colar um link do YouTube (watch, youtu.be, shorts, embed, live, music; com ou sem `https://`) ou uma **playlist** (até 25 vídeos, lida por um player escondido). Título e canal pelo oEmbed do YouTube (vídeo que não pode ser incorporado ou privado não entra, com o aviso). Até 50 na fila e 15 por pessoa. Cada um tira os seus da fila (admin tira qualquer um).
+- **Controles para todos:** tocar/pausar (botão ou clique no vídeo), barra para ir a um ponto; volume, mudo, ampliar e tela cheia são de cada um. Quando o vídeo acaba passa sozinho para o próximo (a duração vem do primeiro player que carregar).
+- **Pular:** quem adicionou o vídeo (ou um admin) pula na hora; os outros votam e pula com a maioria de quem está com a TV aberta (duas abas contam uma vez; quem sai deixa de votar).
+- **Na sala:** a TV liga (estado aceso) e a tela mostra a capa do vídeo, encaixada na perspectiva da tela de cada modelo (cantos medidos nas PNGs).
+- **Feito:** `shared/src/tv.ts` (protocolo, leitura de links, posição pelo relógio do servidor, votos), `server/src/services/TvService.ts` (fila, vídeo atual, quem assiste, votos, fim do vídeo por timer; oEmbed com cache), mensagens na `OfficeRoom` (só quem está com a TV aberta controla e vota; TV apagada no Decorar desliga a fila), `server/src/http/tvThumbs.ts` (capa pela própria origem, guardada em disco), CSP liberando o player do YouTube (`script-src` e `frame-src` do youtube/youtube-nocookie), `client/src/tv/player.ts` (API do iframe sem os controles do YouTube; player de mentira nos testes), `client/src/ui/tv.ts` (janela) e `client/src/tv/cover.ts` (capa na tela). Testes: `tv.test.ts`, `TvService.test.ts`, `tvThumbs.test.ts`, `OfficeRoom.test.ts` (TV) e `e2e/tests/tv.spec.ts` (dois navegadores: fila, pausar para os dois, votar e pular, fechar).
+- **Como testar:** Decorar → buscar "TV" → colocar a TV Club → clicar nela → colar um link do YouTube; outra pessoa abre a mesma TV e assiste junto.
+
