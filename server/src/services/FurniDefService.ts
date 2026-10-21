@@ -45,6 +45,18 @@ export class FurniDefService {
       const parsed = furniManifestEntrySchema.safeParse(JSON.parse(row.json));
       if (parsed.success && !this.defs.has(row.id)) this.defs.set(row.id, parsed.data);
     }
+    // Assentos e camas medidos antes da Fase 52 gravaram "toggle": sentam/deitam.
+    for (const [id, def] of this.defs) {
+      if (!this.curated.has(id) && def.interaction === 'toggle' && (def.canSit || def.canLay)) {
+        this.defs.set(id, { ...def, interaction: undefined });
+      }
+    }
+    // …e as camas gravaram a altura de deitar pela metade do "h" (o avatar flutuava): refaz.
+    for (const [id, def] of this.defs) {
+      if (this.curated.has(id) || !def.canLay) continue;
+      const item = this.itemFor(def);
+      if (item?.lay) this.defs.set(id, { ...def, sitHeight: layHeight(item.h) });
+    }
     // Medidos antes do empilhar: o tampo vem do catálogo (os do escritório já dizem o seu).
     for (const [id, def] of this.defs) {
       if (this.curated.has(id) || def.hasTop !== undefined) continue;
@@ -166,11 +178,31 @@ export function curationFor(item: CatalogItem, id: string): FurniCuration {
     // Teleporte no Habbo "dá para pisar" (a pessoa entra nele); aqui é sólido e se usa clicando.
     canWalk: Boolean(item.walk) && item.x !== 'teleport',
     wall: Boolean(item.wall),
-    // Senta/deita na metade da altura (como as cadeiras curadas: altura 1, assento 0,5).
-    sitHeight: item.sit || item.lay ? Math.min(1, Math.max(0.1, Math.round(item.h * 5) / 10)) : 0,
-    interaction: item.x ?? (item.multi ? 'toggle' : undefined),
+    // Senta na metade da altura (como as cadeiras curadas: altura 1, assento 0,5); cama, à parte.
+    sitHeight: item.lay
+      ? layHeight(item.h)
+      : item.sit
+        ? Math.min(1, Math.max(0.1, Math.round(item.h * 5) / 10))
+        : 0,
+    // Assentos e camas com vários estados sentam/deitam (antes viravam interruptor, e o clique
+    // ligava/desligava em vez de sentar ou deitar).
+    interaction: item.x ?? (item.multi && !item.sit && !item.lay ? 'toggle' : undefined),
     hasTop: hasTop(item),
   };
+}
+
+/** "h" do Habbo da Cama de Casal, cujo colchão fica na altura calibrada (`LAY_HEIGHT`). */
+const BED_REFERENCE_H = 1.73;
+const LAY_HEIGHT = 0.5;
+
+/**
+ * Altura de deitar de uma cama do catálogo. O "h" do Habbo inclui cabeceira e dossel, então
+ * metade dele deixava o avatar até meio tile acima do colchão. Segue a proporção da Cama de Casal
+ * (h 1,73 → 0,5), sem passar dela: colchonetes e sacos de dormir ficam mais baixos.
+ */
+export function layHeight(h: number): number {
+  const z = Math.round(((h * LAY_HEIGHT) / BED_REFERENCE_H) * 10) / 10;
+  return Math.min(LAY_HEIGHT, Math.max(0.1, z));
 }
 
 /** Categorias do Habbo que são tampo (mesas, estantes, divisórias). */
