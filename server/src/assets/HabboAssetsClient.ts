@@ -84,10 +84,14 @@ export class HabboAssetsClient {
     return Buffer.from(await res.arrayBuffer());
   }
 
-  /** Baixa o SWF de uma biblioteca de roupa da CDN da HabboAssets. */
+  /**
+   * Baixa o SWF de uma biblioteca de roupa da CDN da HabboAssets. Arquivo estático: usa a cota
+   * da CDN, não a dos renders do imager (antes usava, e prévias demais deixavam o avatar novo
+   * sem as roupas: "salvar não funciona").
+   */
   async fetchSwf(url: string): Promise<Buffer> {
     if (!url.startsWith(`${HABBOASSETS_CDN}/`)) throw new UpstreamError(400, 'URL fora da CDN');
-    const res = await this.request(url, this.imager, { 'User-Agent': USER_AGENT });
+    const res = await this.request(url, this.cdn, { 'User-Agent': USER_AGENT });
     const body = Buffer.from(await res.arrayBuffer());
     const sig = body.subarray(0, 3).toString('latin1');
     if (sig !== 'CWS' && sig !== 'FWS') throw new UpstreamError(502, 'Resposta não é um SWF');
