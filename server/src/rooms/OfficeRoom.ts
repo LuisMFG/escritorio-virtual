@@ -132,6 +132,11 @@ import { HeldItems } from './HeldItems.js';
 import { MovementSystem, type Mover } from './MovementSystem.js';
 import * as ttt from './ticTacToe.js';
 import { PetKeeper } from './PetKeeper.js';
+import { ChatHandler } from './handlers/ChatHandler.js';
+import { PollHandler } from './handlers/PollHandler.js';
+import { WhiteboardHandler } from './handlers/WhiteboardHandler.js';
+import { BoardHandler } from './handlers/BoardHandler.js';
+import { TvHandler } from './handlers/TvHandler.js';
 
 const TICK_MS = 50;
 /** Segundos que um avatar desconectado espera por reconexão antes de sair da sala. */
@@ -141,7 +146,7 @@ const HELD = new HeldItems();
 /** Aniversários já comemorados hoje (`userId:AAAA-MM-DD`). */
 const BIRTHDAY_SHOWN = new Set<string>();
 
-type OfficeClient = Client<{ auth: UserRow }>;
+export type OfficeClient = Client<{ auth: UserRow }>;
 
 /**
  * Uma sala física do escritório (Recepção, Copa…). Autoridade sobre posições e movimento.
@@ -181,6 +186,11 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
   private map!: Heightmap;
   private movement!: MovementSystem;
   private pets!: PetKeeper;
+  private chatHandler!: ChatHandler;
+  private pollHandler!: PollHandler;
+  private whiteboardHandler!: WhiteboardHandler;
+  private boardHandler!: BoardHandler;
+  private tvHandler!: TvHandler;
   private readonly moveLimiter = new KeyedRateLimiter(5, 5);
   private readonly avatarLimiter = new KeyedRateLimiter(3, 0.5);
   /** Chat: até 3 mensagens seguidas, recarregando 3 a cada 5 s. */
@@ -226,12 +236,12 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     // de o cliente registrar o handler.
     [ClientMessage.GetLayout]: () => this.layout,
     [ClientMessage.GetChatHistory]: (client: Client) =>
-      this.withPolls(
+      this.pollHandler.withPolls(
         services().chat.recent(this.layout.roomId),
         (client as OfficeClient).auth?.id ?? '',
       ),
     [ClientMessage.Chat]: validate(chatSchema, (client, msg) =>
-      this.handleChat(client as OfficeClient, msg),
+      this.chatHandler.handleChat(client as OfficeClient, msg),
     ),
     [ClientMessage.UpdateAvatar]: validate(updateAvatarSchema, (client, msg) =>
       this.handleUpdateAvatar(client as OfficeClient, msg),
@@ -249,46 +259,32 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       this.handleFurniHeight(client as OfficeClient, msg.furniId, msg.z),
     ),
     // ---------- TV com YouTube (Fase 51) ----------
-    [TvMessage.Open]: validate(tvRefSchema, (client, msg) => {
-      const c = client as OfficeClient;
-      if (!c.auth || !this.isTv(msg.furniId)) return;
-      services().tv.open(msg.furniId, c.sessionId, { userId: c.auth.id, name: c.auth.name });
-    }),
-    [TvMessage.Close]: validate(tvRefSchema, (client, msg) =>
-      services().tv.close(msg.furniId, client.sessionId),
+    [TvMessage.Open]: validate(tvRefSchema, (client, msg) =>
+      this.tvHandler.handleOpen(client as OfficeClient, msg.furniId),
     ),
-    [TvMessage.Add]: validate(tvAddSchema, (client, msg) => {
-      const c = client as OfficeClient;
-      if (!c.auth || !this.isTv(msg.furniId) || !this.tvLimiter.tryTake(c.sessionId)) return;
-      void services()
-        .tv.add(msg.furniId, { userId: c.auth.id, name: c.auth.name }, msg.videoIds)
-        .then((err) => {
-          if (err) c.send(TvMessage.Error, { message: TV_ERRORS[err] });
-        });
-    }),
-    [TvMessage.Remove]: validate(tvRemoveSchema, (client, msg) => {
-      const c = client as OfficeClient;
-      if (!c.auth || !this.tvLimiter.tryTake(c.sessionId)) return;
-      services().tv.remove(msg.furniId, c.auth.id, msg.id, c.auth.role === 'admin');
-    }),
-    [TvMessage.Control]: validate(tvControlSchema, (client, msg) => {
-      if (!this.tvViewer(client, msg.furniId)) return;
-      services().tv.control(msg.furniId, msg.action, msg.position);
-    }),
-    [TvMessage.Skip]: validate(tvRefSchema, (client, msg) => {
-      const c = client as OfficeClient;
-      if (!c.auth || !this.tvViewer(client, msg.furniId)) return;
-      services().tv.skip(msg.furniId, c.auth.id, c.auth.role === 'admin');
-    }),
-    [TvMessage.Duration]: validate(tvDurationSchema, (client, msg) => {
-      if (this.tvViewer(client, msg.furniId))
-        services().tv.duration(msg.furniId, msg.itemId, msg.duration);
-    }),
-    [TvMessage.Ended]: validate(tvEndedSchema, (client, msg) => {
-      if (this.tvViewer(client, msg.furniId)) services().tv.ended(msg.furniId, msg.itemId);
-    }),
+    [TvMessage.Close]: validate(tvRefSchema, (client, msg) =>
+      this.tvHandler.handleClose(client, msg.furniId),
+    ),
+    [TvMessage.Add]: validate(tvAddSchema, (client, msg) =>
+      this.tvHandler.handleAdd(client as OfficeClient, msg.furniId, msg.videoIds),
+    ),
+    [TvMessage.Remove]: validate(tvRemoveSchema, (client, msg) =>
+      this.tvHandler.handleRemove(client as OfficeClient, msg.furniId, msg.id),
+    ),
+    [TvMessage.Control]: validate(tvControlSchema, (client, msg) =>
+      this.tvHandler.handleControl(client, msg.furniId, msg.action, msg.position),
+    ),
+    [TvMessage.Skip]: validate(tvRefSchema, (client, msg) =>
+      this.tvHandler.handleSkip(client as OfficeClient, msg.furniId),
+    ),
+    [TvMessage.Duration]: validate(tvDurationSchema, (client, msg) =>
+      this.tvHandler.handleDuration(client, msg.furniId, msg.itemId, msg.duration),
+    ),
+    [TvMessage.Ended]: validate(tvEndedSchema, (client, msg) =>
+      this.tvHandler.handleEnded(client, msg.furniId, msg.itemId),
+    ),
     /** Pedido de quem acabou de entrar: o que passa em cada TV da sala. */
-    [TvMessage.Screens]: () => this.tvScreens(),
+    [TvMessage.Screens]: () => this.tvHandler.getScreens(),
     [ClientMessage.FurniRemove]: validate(furniRefSchema, (client, msg) =>
       this.handleRemove(client as OfficeClient, msg.furniId),
     ),
@@ -323,88 +319,30 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     [ClientMessage.ItemDrop]: (client: Client) => this.dropHandItem(client.sessionId),
     [ClientMessage.BoardNotes]: (client: Client, input: unknown) => {
       const p = boardRefSchema.safeParse(input);
-      return p.success && this.boardFurni(p.data.furniId)
-        ? services().boards.notes(p.data.furniId)
-        : [];
+      return p.success ? this.boardHandler.handleLoad(p.data.furniId) : [];
     },
-    [ClientMessage.BoardAdd]: validate(boardAddSchema, (client, msg) => {
-      const c = client as OfficeClient;
-      if (!c.auth || !this.boardFurni(msg.furniId)) return;
-      if (!this.boardLimiter.tryTake(c.sessionId)) return this.sendError(c, ErrorCode.RateLimit);
-      if (services().boards.count(msg.furniId) >= NOTES_PER_BOARD) {
-        return this.sendError(c, ErrorCode.Forbidden, 'O mural está cheio. Tire um recado antes.');
-      }
-      services().boards.add(msg.furniId, c.auth.id, msg.text, msg.color);
-      services().achievements.unlock(c.auth.id, 'board_note');
-      this.broadcast(ServerMessage.BoardChanged, { furniId: msg.furniId });
-    }),
-    [ClientMessage.BoardRemove]: validate(boardRemoveSchema, (client, msg) => {
-      const c = client as OfficeClient;
-      const note = services().boards.find(msg.noteId);
-      if (!c.auth || !note || !this.boardFurni(note.furniId)) return;
-      if (note.userId !== c.auth.id && c.auth.role !== 'admin') {
-        return this.sendError(
-          c,
-          ErrorCode.Forbidden,
-          'Só quem escreveu (ou um admin) tira o recado.',
-        );
-      }
-      services().boards.remove(note.id);
-      this.broadcast(ServerMessage.BoardChanged, { furniId: note.furniId });
-    }),
+    [ClientMessage.BoardAdd]: validate(boardAddSchema, (client, msg) =>
+      this.boardHandler.handleAdd(client as OfficeClient, msg),
+    ),
+    [ClientMessage.BoardRemove]: validate(boardRemoveSchema, (client, msg) =>
+      this.boardHandler.handleRemove(client as OfficeClient, msg.noteId),
+    ),
     [ClientMessage.WbLoad]: (client: Client, input: unknown) => {
       const p = wbRefSchema.safeParse(input);
-      return p.success && this.isWhiteboard(p.data.furniId)
-        ? services().whiteboards.list(p.data.furniId)
-        : [];
+      return p.success ? this.whiteboardHandler.handleLoad(p.data.furniId) : [];
     },
-    [ClientMessage.WbStroke]: validate(wbStrokeSchema, (client, msg) => {
-      const c = client as OfficeClient;
-      if (!c.auth || !this.isWhiteboard(msg.furniId)) return;
-      if (!this.wbLimiter.tryTake(c.sessionId)) return this.sendError(c, ErrorCode.RateLimit);
-      if (services().whiteboards.count(msg.furniId) >= WB_MAX_STROKES) {
-        return this.sendError(
-          c,
-          ErrorCode.Forbidden,
-          'O quadro está cheio. Limpe antes de continuar.',
-        );
-      }
-      const stroke = services().whiteboards.add(msg.furniId, c.auth.id, msg.stroke);
-      services().achievements.unlock(c.auth.id, 'artist');
-      this.broadcast(ServerMessage.WbStroke, {
-        furniId: msg.furniId,
-        stroke,
-        draftId: msg.draftId,
-        sessionId: c.sessionId,
-      } satisfies WbStrokeMessage);
-    }),
-    [ClientMessage.WbDraft]: validate(wbDraftSchema, (client, msg) => {
-      // Prévia efêmera: excesso é descartado em silêncio.
-      if (!this.isWhiteboard(msg.furniId) || !this.draftLimiter.tryTake(client.sessionId)) return;
-      this.broadcast(
-        ServerMessage.WbDraft,
-        { ...msg, sessionId: client.sessionId } satisfies WbDraft,
-        { except: client },
-      );
-    }),
-    [ClientMessage.WbUndo]: validate(wbRefSchema, (client, msg) => {
-      const c = client as OfficeClient;
-      if (!c.auth || !this.isWhiteboard(msg.furniId)) return;
-      if (!this.wbLimiter.tryTake(c.sessionId)) return;
-      const id = services().whiteboards.undo(msg.furniId, c.auth.id);
-      if (id !== null) {
-        this.broadcast(ServerMessage.WbRemoved, {
-          furniId: msg.furniId,
-          ids: [id],
-        } satisfies WbRemovedMessage);
-      }
-    }),
-    [ClientMessage.WbClear]: validate(wbRefSchema, (client, msg) => {
-      const c = client as OfficeClient;
-      if (!c.auth || !this.isWhiteboard(msg.furniId)) return;
-      services().whiteboards.clear(msg.furniId);
-      this.broadcast(ServerMessage.WbCleared, { furniId: msg.furniId });
-    }),
+    [ClientMessage.WbStroke]: validate(wbStrokeSchema, (client, msg) =>
+      this.whiteboardHandler.handleStroke(client as OfficeClient, msg),
+    ),
+    [ClientMessage.WbDraft]: validate(wbDraftSchema, (client, msg) =>
+      this.whiteboardHandler.handleDraft(client as OfficeClient, msg),
+    ),
+    [ClientMessage.WbUndo]: validate(wbRefSchema, (client, msg) =>
+      this.whiteboardHandler.handleUndo(client as OfficeClient, msg.furniId),
+    ),
+    [ClientMessage.WbClear]: validate(wbRefSchema, (client, msg) =>
+      this.whiteboardHandler.handleClear(client as OfficeClient, msg.furniId),
+    ),
     [ClientMessage.FocusStart]: validate(focusStartSchema, (client, msg) => {
       const c = client as OfficeClient;
       if (!c.auth || !this.statusLimiter.tryTake(c.sessionId)) return;
@@ -415,27 +353,14 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       if (c.auth) services().focus.stop(c.auth.id);
     },
     [ClientMessage.PollCreate]: validate(pollCreateSchema, (client, msg) =>
-      this.createPoll(client as OfficeClient, msg),
+      this.pollHandler.createPoll(client as OfficeClient, msg),
     ),
-    [ClientMessage.PollVote]: validate(pollVoteSchema, (client, msg) => {
-      const c = client as OfficeClient;
-      const poll = services().polls.find(msg.pollId);
-      if (!c.auth || !poll || poll.roomId !== this.layout.roomId) return;
-      if (!this.reactLimiter.tryTake(c.sessionId)) return this.sendError(c, ErrorCode.RateLimit);
-      const problem = services().polls.vote(msg.pollId, c.auth.id, msg.option);
-      if (problem) return this.sendError(c, ErrorCode.Forbidden, problem);
-      this.broadcastPoll(msg.pollId);
-    }),
-    [ClientMessage.PollClose]: validate(pollRefSchema, (client, msg) => {
-      const c = client as OfficeClient;
-      const poll = services().polls.find(msg.pollId);
-      if (!c.auth || !poll || poll.roomId !== this.layout.roomId) return;
-      if (poll.createdBy !== c.auth.id && c.auth.role !== 'admin') {
-        return this.sendError(c, ErrorCode.Forbidden, 'Só quem criou (ou um admin) encerra.');
-      }
-      services().polls.close(msg.pollId);
-      this.broadcastPoll(msg.pollId);
-    }),
+    [ClientMessage.PollVote]: validate(pollVoteSchema, (client, msg) =>
+      this.pollHandler.handleVote(client as OfficeClient, msg.pollId, msg.option),
+    ),
+    [ClientMessage.PollClose]: validate(pollRefSchema, (client, msg) =>
+      this.pollHandler.handleClose(client as OfficeClient, msg.pollId),
+    ),
     [ClientMessage.TttJoin]: validate(tttRefSchema, (client, msg) =>
       this.handleTttJoin(client as OfficeClient, msg.furniId),
     ),
@@ -468,10 +393,10 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       };
     },
     [ClientMessage.ChatReact]: validate(reactSchema, (client, msg) =>
-      this.handleReact(client as OfficeClient, msg.id, msg.emoji),
+      this.chatHandler.handleReact(client as OfficeClient, msg.id, msg.emoji),
     ),
     [ClientMessage.ChatDelete]: validate(chatDeleteSchema, (client, msg) =>
-      this.handleChatDelete(client as OfficeClient, msg.id),
+      this.chatHandler.handleChatDelete(client as OfficeClient, msg.id),
     ),
     [ClientMessage.Interact]: validate(furniRefSchema, (client, msg) =>
       this.handleInteract(client as OfficeClient, msg.furniId),
@@ -666,6 +591,44 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       },
       now: () => Date.now(),
       random: Math.random,
+    });
+    this.pollHandler = new PollHandler({
+      roomId: layout.roomId,
+      clients: this.clients as unknown as Iterable<OfficeClient>,
+      hasPlayer: (sessionId) => this.state.players.has(sessionId),
+      sendError: (client, code, message) => this.sendError(client, code, message),
+      chatLimiter: this.chatLimiter,
+      reactLimiter: this.reactLimiter,
+    });
+    this.chatHandler = new ChatHandler({
+      roomId: layout.roomId,
+      getPlayer: (sessionId) => this.state.players.get(sessionId),
+      getPet: (userId) => this.state.pets.get(userId),
+      commandPet: (userId, cmd) => this.pets.command(userId, cmd),
+      sendError: (client, code, message) => this.sendError(client, code, message),
+      broadcast: (type, message) => this.broadcast(type, message),
+      chatLimiter: this.chatLimiter,
+      reactLimiter: this.reactLimiter,
+      pollHandler: this.pollHandler,
+    });
+    this.whiteboardHandler = new WhiteboardHandler({
+      isWhiteboard: (furniId) => this.isWhiteboard(furniId),
+      sendError: (client, code, message) => this.sendError(client, code, message),
+      broadcast: (type, message, opts) => this.broadcast(type, message, opts),
+      wbLimiter: this.wbLimiter,
+      draftLimiter: this.draftLimiter,
+    });
+    this.boardHandler = new BoardHandler({
+      boardFurni: (furniId) => this.boardFurni(furniId),
+      sendError: (client, code, message) => this.sendError(client, code, message),
+      broadcast: (type, message) => this.broadcast(type, message),
+      boardLimiter: this.boardLimiter,
+    });
+    this.tvHandler = new TvHandler({
+      isTv: (furniId) => this.isTv(furniId),
+      tvViewer: (client, furniId) => this.tvViewer(client, furniId),
+      tvLimiter: this.tvLimiter,
+      getFurni: () => this.state.furni,
     });
     this.setSimulationInterval((dt) => {
       this.movement.tick(dt, this.state.players.entries());
@@ -1419,16 +1382,6 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     this.broadcast(TvMessage.Screens, { [furniId]: videoId } satisfies TvScreens);
   };
 
-  /** O que passa nas TVs da sala (para quem acabou de entrar). */
-  private tvScreens(): TvScreens {
-    const out: TvScreens = {};
-    for (const id of this.state.furni.keys()) {
-      const v = this.isTv(id) ? services().tv.screen(id) : null;
-      if (v) out[id] = v;
-    }
-    return out;
-  }
-
   /** Virar sem sair do lugar: parado (8 direções) ou sentado no chão (4). */
   private handleTurn(client: OfficeClient, dir: number): void {
     const player = this.state.players.get(client.sessionId);
@@ -1438,46 +1391,6 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     else if (player.action === 'sit' && !this.onSeat(client.sessionId, player)) {
       player.dir = sitDirection(dir);
     }
-  }
-
-  // ---------- Enquetes ----------
-
-  /** Cria a enquete como mensagem do chat (cada pessoa recebe com o próprio voto). */
-  private createPoll(client: OfficeClient, data: Required<PollCreate>, limit = true): void {
-    if (!client.auth || !this.state.players.has(client.sessionId)) return;
-    if (limit && !this.chatLimiter.tryTake(client.sessionId)) {
-      return this.sendError(client, ErrorCode.RateLimit);
-    }
-    const message = services().chat.add(
-      this.layout.roomId,
-      client.auth,
-      `📊 Enquete: ${data.question}`,
-      client.sessionId,
-      undefined,
-      'poll',
-    );
-    const poll = services().polls.create(message.id, this.layout.roomId, client.auth.id, data);
-    for (const c of this.clients) {
-      c.send(ServerMessage.Chat, {
-        ...message,
-        poll: services().polls.view(poll.id, c.auth?.id ?? '') ?? undefined,
-      } satisfies ChatMessage);
-    }
-    services().achievements.bump(client.auth.id, 'chat');
-  }
-
-  private broadcastPoll(pollId: number): void {
-    for (const c of this.clients) {
-      const poll = services().polls.view(pollId, c.auth?.id ?? '');
-      if (poll) c.send(ServerMessage.PollUpdated, { poll } satisfies PollUpdated);
-    }
-  }
-
-  /** Junta as enquetes às mensagens do histórico (com o voto de quem pediu). */
-  private withPolls(messages: ChatMessage[], viewerId: string): ChatMessage[] {
-    const ids = messages.filter((m) => m.kind === 'poll').map((m) => m.id);
-    const views = services().polls.forMessages(ids, viewerId);
-    return messages.map((m) => (views.has(m.id) ? { ...m, poll: views.get(m.id) } : m));
   }
 
   // ---------- Jogo da velha ----------
@@ -1815,96 +1728,6 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       spawn: this.layout.spawn,
       avatars,
     };
-  }
-
-  private handleChat(
-    client: OfficeClient,
-    msg: { text: string; replyToId?: number; attachmentId?: string },
-  ): void {
-    if (!client.auth || !this.state.players.has(client.sessionId)) return;
-    if (!this.chatLimiter.tryTake(client.sessionId))
-      return this.sendError(client, ErrorCode.RateLimit);
-    // Anexo: só um arquivo que a própria pessoa enviou.
-    if (msg.attachmentId && !services().uploads.owns(msg.attachmentId, client.auth.id)) {
-      return this.sendError(client, ErrorCode.InvalidChat, 'Anexo não encontrado.');
-    }
-    // `/enquete Pergunta? | opção 1 | opção 2`: vira enquete (o limite de mensagens já foi gasto).
-    const poll = parsePollCommand(msg.text);
-    if (poll) {
-      if ('error' in poll) return this.sendError(client, ErrorCode.InvalidChat, poll.error);
-      const parsed = pollCreateSchema.safeParse(poll);
-      if (!parsed.success) {
-        return this.sendError(client, ErrorCode.InvalidChat, parsed.error.issues[0]?.message);
-      }
-      return this.createPoll(client, parsed.data, false);
-    }
-    // `/senta`, `/deita`, `/vem`: comando para o próprio pet (aparece no chat como fala do dono).
-    const petCmd = parsePetCommand(msg.text);
-    let text = msg.text;
-    if (petCmd) {
-      const pet = this.state.pets.get(client.auth.id);
-      if (!pet) {
-        return this.sendError(
-          client,
-          ErrorCode.Forbidden,
-          'Você não tem um pet. Adote um no seu Perfil (👤).',
-        );
-      }
-      text = petCommandText(petCmd, pet.name);
-      this.pets.command(client.auth.id, petCmd);
-    }
-    // `/dado` e `/moeda`: o servidor sorteia, para ninguém escolher o resultado.
-    const cmd = parseQuickCommand(msg.text);
-    let kind: ChatKind = 'text';
-    if (cmd) {
-      const roll = cmd === 'dice' ? randomInt(1, 7) : randomInt(0, 2);
-      text = quickCommandText(cmd, roll);
-      kind = cmd;
-      if (cmd === 'dice' && roll === 6) services().achievements.unlock(client.auth.id, 'lucky');
-    } else {
-      services().achievements.bump(client.auth.id, 'chat');
-    }
-    // Só quem está nesta sala recebe (cada sala física é uma instância separada).
-    const message = services().chat.add(
-      this.layout.roomId,
-      client.auth,
-      text,
-      client.sessionId,
-      cmd ? undefined : msg.replyToId,
-      kind,
-      cmd || petCmd ? null : (msg.attachmentId ?? null),
-    );
-    this.broadcast(ServerMessage.Chat, message);
-    const player = this.state.players.get(client.sessionId);
-    if (player) player.typing = false;
-  }
-
-  /** Apagar mensagem: quem escreveu ou um admin. Some do histórico de todos na sala. */
-  /** Põe/tira reação numa mensagem desta sala; todos na sala veem a contagem nova. */
-  private handleReact(client: OfficeClient, id: number, emoji: ReactRequest['emoji']): void {
-    const user = client.auth;
-    const msg = services().chat.find(id);
-    if (!user || !msg || msg.roomId !== this.layout.roomId) return;
-    if (!this.reactLimiter.tryTake(client.sessionId)) {
-      return this.sendError(client, ErrorCode.RateLimit);
-    }
-    const reactions = services().chat.react(id, user.id, emoji);
-    services().achievements.bump(user.id, 'reactions');
-    this.broadcast(ServerMessage.ChatReactions, { id, reactions } satisfies ReactionsUpdate);
-  }
-
-  private handleChatDelete(client: OfficeClient, id: number): void {
-    const user = client.auth;
-    const msg = services().chat.find(id);
-    if (!user || !msg || msg.roomId !== this.layout.roomId) return;
-    const own = msg.userId === user.id;
-    if (!own && user.role !== 'admin') return this.sendError(client, ErrorCode.Forbidden);
-    services().chat.remove(id);
-    this.broadcast(ServerMessage.ChatDeleted, { id } satisfies ChatDeletedMessage);
-    if (!own) {
-      const preview = msg.text.length > 60 ? `${msg.text.slice(0, 60)}…` : msg.text;
-      services().audit.log(user.id, 'chat.delete', msg.userId, `“${preview}”`);
-    }
   }
 
   /** Emote: só quem está na sala vê (efêmero, não fica no estado). */

@@ -8,7 +8,7 @@ COPY package.json package-lock.json ./
 COPY shared/package.json shared/
 COPY client/package.json client/
 COPY server/package.json server/
-COPY vscode-extension/package.json vscode-extension/
+COPY extensions/vscode/package.json extensions/vscode/
 # Scripts de instalação não são necessários: better-sqlite3 traz binários prontos e o
 # esbuild usa o pacote opcional da plataforma.
 RUN npm ci --ignore-scripts
@@ -28,7 +28,7 @@ COPY package.json package-lock.json ./
 COPY shared/package.json shared/
 COPY client/package.json client/
 COPY server/package.json server/
-COPY vscode-extension/package.json vscode-extension/
+COPY extensions/vscode/package.json extensions/vscode/
 RUN npm ci --omit=dev --ignore-scripts --workspace server --workspace shared \
   && npm cache clean --force
 COPY tsconfig.base.json ./
@@ -37,7 +37,7 @@ COPY server server
 # O servidor lê os manifestos (catálogo de móveis e de roupas) para validar.
 COPY client/public/assets client/public/assets
 COPY --from=build /app/client/dist client/dist
-COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+COPY deploy/docker/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh && mkdir -p /app/data && chown node:node /app/data
 
 VOLUME /app/data

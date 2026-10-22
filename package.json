@@ -7,7 +7,7 @@
     "shared",
     "client",
     "server",
-    "vscode-extension"
+    "extensions/vscode"
   ],
   "engines": {
     "node": ">=22"
@@ -17,7 +17,7 @@
     "build": "npm run build -w client",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc -p shared --noEmit && tsc -p shared/tsconfig.test.json --noEmit && tsc -p client --noEmit && tsc -p server --noEmit && tsc -p vscode-extension --noEmit && tsc -p e2e --noEmit",
+    "typecheck": "tsc -p shared --noEmit && tsc -p shared/tsconfig.test.json --noEmit && tsc -p client --noEmit && tsc -p server --noEmit && tsc -p extensions/vscode --noEmit && tsc -p e2e --noEmit",
     "lint": "eslint .",
     "format": "prettier --write .",
     "dev:server": "npm run dev -w server",
@@ -26,7 +26,7 @@
     "bot": "npm run bot -w server --",
     "assets:sync": "npm run assets:sync -w server --",
     "start": "npm run start -w server",
-    "vscode:package": "npm run package -w vscode-extension",
+    "vscode:package": "npm run package -w extensions/vscode",
     "e2e": "npm run build && playwright test -c e2e/playwright.config.ts",
     "assets:figure": "npm run assets:figure -w server --",
     "assets:figure-check": "npm run assets:figure-check -w server --",
