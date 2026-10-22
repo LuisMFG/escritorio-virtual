@@ -35,7 +35,8 @@ test('Salão de Jogos: porta na Recepção, vagas na mesa e quem assiste vê o p
   // Carla não joga: abre a mesa e assiste, com o placar no painel e sobre a mesa na sala.
   await clickFurni(carla.page, table);
   const panelC = carla.page.locator('.arcade-panel');
-  await expect(panelC.getByText('👀 Você está assistindo.')).toBeVisible();
+  // O ping-pong começa de verdade (Fase 58): quem assiste vê de quem é o saque.
+  await expect(panelC.getByText(`Saque de ${ana.name}.`)).toBeVisible();
   await expect(panelC.locator('.arcade-points')).toHaveText('0 × 0');
   await expect(panelC.locator('.arcade-names.a')).toHaveText(ana.name);
   await expect(panelC.locator('.arcade-names.b')).toHaveText(beto.name);

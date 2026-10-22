@@ -72,6 +72,18 @@ interface Hook {
   decorGhost(): { x: number; y: number; z: number; rot: number; ok: boolean } | null;
   /** Texto do placar sobre uma mesa do Salão de Jogos (Fase 57). */
   arcadeBoard(id: string): string | null;
+  /** Ping-pong (Fase 58): o momento, a vez, o placar e a bola agora. */
+  pong(id: string): {
+    phase: string;
+    turn: string;
+    scoreA: number;
+    scoreB: number;
+    setsA: number;
+    setsB: number;
+    ball: { x: number; y: number; h: number; by: string; na: number; nb: number } | null;
+  } | null;
+  /** Ponto da mesa de ping-pong (metros) na tela, no painel aberto. */
+  pongPoint(x: number, y: number): { x: number; y: number } | null;
   look(x: number, y: number, zoom: number): void;
   leave(): Promise<void>;
 }
