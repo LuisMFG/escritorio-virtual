@@ -2,6 +2,12 @@ import { randomInt } from 'node:crypto';
 import { CloseCode, Room, ServerError, validate, type Client, type Deferred } from '@colyseus/core';
 import {
   ARCADE_INFO,
+  arcadeView,
+  pongHitSchema,
+  pongPaddleSchema,
+  pongServeSchema,
+  sideNames,
+  type PongSide,
   arcadeJoinSchema,
   arcadeKindOf,
   arcadeModeSchema,
@@ -143,6 +149,7 @@ import { HeldItems } from './HeldItems.js';
 import { MovementSystem, type Mover } from './MovementSystem.js';
 import * as ttt from './ticTacToe.js';
 import * as arcade from './arcade.js';
+import { PongMatch } from './pong.js';
 import { PetKeeper } from './PetKeeper.js';
 
 const TICK_MS = 50;
@@ -225,6 +232,9 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
    * ida até a cadeira). `entry` é o tile onde a pessoa chega; na cama, `seat` é o travesseiro.
    */
   private readonly intents = new Map<string, Intent>();
+  /** Partidas de ping-pong em andamento (Fase 58) e o laço de 60 Hz delas. */
+  private readonly pongMatches = new Map<string, PongMatch>();
+  private pongLoop: { clear(): void } | null = null;
   /** Último uso de cada móvel por pessoa (duplo clique não liga e desliga). */
   private readonly lastUse = new Map<string, number>();
   /** Quem está no meio de um teleporte (não dispara de novo). */
@@ -485,9 +495,11 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       }),
     ),
     [ClientMessage.ArcadeStart]: validate(arcadeRefSchema, (client, msg) =>
-      this.handleArcade(client as OfficeClient, msg.furniId, (game, session) =>
-        arcade.start(game, session),
-      ),
+      this.handleArcade(client as OfficeClient, msg.furniId, (game, session) => {
+        const res = arcade.start(game, session);
+        if (res.ok && game.kind === 'pingpong') this.startPong(msg.furniId, game);
+        return res;
+      }),
     ),
     [ClientMessage.ArcadeForfeit]: validate(arcadeRefSchema, (client, msg) =>
       this.handleArcade(client as OfficeClient, msg.furniId, (game, session) => {
@@ -498,6 +510,18 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     ),
     [ClientMessage.ArcadeMode]: validate(arcadeModeSchema, (client, msg) =>
       this.handleArcadeMode(client as OfficeClient, msg.furniId, msg.mode),
+    ),
+    // ---------- Ping-pong (Fase 58) ----------
+    [ClientMessage.PongPaddle]: validate(pongPaddleSchema, (client, msg) => {
+      const game = this.state.arcade.get(msg.furniId);
+      const slot = game && arcade.slotOf(game, client.sessionId);
+      if (slot) this.pongMatches.get(msg.furniId)?.paddle(slot, msg);
+    }),
+    [ClientMessage.PongServe]: validate(pongServeSchema, (client, msg) =>
+      this.pongAction(client.sessionId, msg.furniId, (m, slot) => m.serve(slot, msg, Date.now())),
+    ),
+    [ClientMessage.PongHit]: validate(pongHitSchema, (client, msg) =>
+      this.pongAction(client.sessionId, msg.furniId, (m, slot) => m.hit(slot, msg, Date.now())),
     ),
     [ClientMessage.TttScores]: (client: Client, input: unknown): TttScores => {
       const p = tttRefSchema.safeParse(input);
@@ -837,8 +861,10 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       player.typing = false;
     }
     // No meio de uma partida do Salão de Jogos, começa a contar o prazo para voltar.
-    for (const game of this.state.arcade.values()) {
-      arcade.dropped(game, client.sessionId, Date.now());
+    for (const [furniId, game] of this.state.arcade.entries()) {
+      if (arcade.dropped(game, client.sessionId, Date.now())) {
+        this.pongMatches.get(furniId)?.suspend();
+      }
     }
     // Sem `await`: se o prazo vencer ou a reconexão for cancelada, o Colyseus chama onLeave.
     const reconnection = this.allowReconnection(client, RECONNECT_SECONDS);
@@ -885,9 +911,9 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     for (const furniId of [...this.state.games.keys()]) this.leaveGame(furniId, client.sessionId);
     // Mesas do Salão de Jogos: antes da partida a vaga fica livre; no meio, conta o prazo.
     for (const [furniId, game] of [...this.state.arcade.entries()]) {
-      if (arcade.gone(game, client.sessionId, Date.now()) && arcade.isEmpty(game)) {
-        this.state.arcade.delete(furniId);
-      }
+      if (!arcade.gone(game, client.sessionId, Date.now())) continue;
+      if (game.status === 'playing') this.pongMatches.get(furniId)?.suspend();
+      if (arcade.isEmpty(game)) this.state.arcade.delete(furniId);
     }
     this.pets.ownerLeft(client.sessionId, (userId) => this.sessionOf(userId));
     services().presence.remove(client.sessionId);
@@ -1701,7 +1727,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
   }
 
   /** Fim de partida: placar de cada um e aviso no chat da sala. */
-  private arcadeFinished(kind: string, outcome: arcade.ArcadeOutcome): void {
+  private arcadeFinished(kind: string, outcome: arcade.ArcadeOutcome, score = ''): void {
     const info = ARCADE_INFO[(arcadeKindOf(kind) ?? 'pingpong') as ArcadeKind];
     services().games.recordTeams(
       kind,
@@ -1711,12 +1737,56 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     const [first, ...partners] = outcome.winners;
     if (!first) return;
     const how =
-      outcome.end === 'wo' ? ' (W.O.)' : outcome.end === 'forfeit' ? ' (desistência)' : '';
+      outcome.end === 'wo' ? ' (W.O.)' : outcome.end === 'forfeit' ? ' (desistência)' : score;
     const losers = outcome.losers.map((p) => p.name).join(' e ') || 'o adversário';
     const text = partners.length
       ? `🏆 venceu com ${partners.map((p) => p.name).join(' e ')} contra ${losers} ${info.game}${how}`
       : `🏆 venceu ${losers} ${info.game}${how}`;
     this.gameChat(first, text);
+  }
+
+  /** Começa o jogo de ping-pong da mesa e o laço de 60 Hz (enquanto houver partida). */
+  private startPong(furniId: string, game: ArcadeGame): void {
+    const names = (side: PongSide) =>
+      sideNames(arcadeView(game), side) || (side === 'a' ? 'lado A' : 'lado B');
+    this.pongMatches.set(furniId, new PongMatch(game, names));
+    this.pongLoop ??= this.clock.setInterval(() => this.tickPong(), 1000 / 60);
+  }
+
+  /** Passo das partidas de ping-pong; a que acabou nos pontos vai para o placar e o chat. */
+  private tickPong(): void {
+    const now = Date.now();
+    for (const [furniId, match] of [...this.pongMatches]) {
+      const game = this.state.arcade.get(furniId);
+      // Desistência, W.O. ou mesa removida: o jogo para.
+      if (!game || game.status !== 'playing') {
+        this.pongMatches.delete(furniId);
+        continue;
+      }
+      const end = match.tick(now);
+      if (!end) continue;
+      this.pongMatches.delete(furniId);
+      const loser = end.winner === 'a' ? 'b' : 'a';
+      const outcome = arcade.finishPoints(game, end.winner);
+      this.arcadeFinished(game.kind, outcome, ` (${end.sets[end.winner]} × ${end.sets[loser]})`);
+    }
+    if (!this.pongMatches.size) {
+      this.pongLoop?.clear();
+      this.pongLoop = null;
+    }
+  }
+
+  /** Saque ou rebatida de quem joga na mesa. A recusa não vira aviso (é parte do jogo). */
+  private pongAction(
+    sessionId: string,
+    furniId: string,
+    run: (match: PongMatch, slot: ArcadeSlot) => ArcadeReply,
+  ): ArcadeReply {
+    const match = this.pongMatches.get(furniId);
+    const game = this.state.arcade.get(furniId);
+    const slot = game && arcade.slotOf(game, sessionId);
+    if (!match || !slot) return { ok: false, reason: 'Você não está jogando nesta mesa.' };
+    return run(match, slot);
   }
 
   /** Quem saiu no meio da partida e não voltou a tempo: W.O. */

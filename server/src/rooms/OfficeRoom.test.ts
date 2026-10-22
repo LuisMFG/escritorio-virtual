@@ -26,6 +26,11 @@ import {
   TvMessage,
   type TvScreens,
   type TvState,
+  ballAt,
+  decodeBall,
+  nextEvent,
+  PONG,
+  simulate,
 } from '@office/shared';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import type { Config } from '../config.js';
@@ -34,6 +39,7 @@ import { configureApp } from '../http/app.js';
 import { createServices, setServices, type Services } from '../services/index.js';
 import { OfficeRoom } from './OfficeRoom.js';
 import { arcadeTiming } from './arcade.js';
+import type { PongMatch } from './pong.js';
 import { OfflineTvMeta } from '../services/TvService.js';
 
 let colyseus: ColyseusTestServer;
@@ -1859,6 +1865,102 @@ describe('OfficeRoom', () => {
       await waitFor(() => beto.room.state.arcade.get(table)?.a1Session === again.sessionId);
       expect(beto.room.state.arcade.get(table)).toMatchObject({ status: 'playing', a1Away: 0 });
     }, 20_000);
+  });
+  describe('ping-pong: partida simulada (Fase 58)', () => {
+    async function match() {
+      const roomId = svc.rooms.create('Teste Fase 58', svc.furniDefs).id;
+      const owner = newUser('Dono').user.id;
+      const table = svc.furni.add(
+        roomId,
+        { defId: 'pingpong_table', x: 3, y: 2, z: 0, rot: 0 },
+        owner,
+      ).id;
+      const enter = async (name: string) => {
+        const u = newUser(name);
+        return { room: await join(u.token, roomId), user: u.user };
+      };
+      const ana = await enter('Ana');
+      const beto = await enter('Beto');
+      const ask = (room: Awaited<ReturnType<typeof join>>, type: string, msg: object) =>
+        room.request(type, { furniId: table, ...msg }) as Promise<{ ok: boolean; reason?: string }>;
+      await ask(ana.room, ClientMessage.ArcadeJoin, { slot: 'a1' });
+      await ask(beto.room, ClientMessage.ArcadeJoin, { slot: 'b1' });
+      expect(await ask(ana.room, ClientMessage.ArcadeStart, {})).toEqual({ ok: true });
+      const game = () => beto.room.state.arcade.get(table)!;
+      await waitFor(() => game()?.phase === 'serve');
+      return { table, ana, beto, ask, game };
+    }
+
+    it('saque, ponto sem rebatida e o saque trocando a cada 2 pontos', async () => {
+      const { ana, beto, ask, game } = await match();
+      expect(game()).toMatchObject({ turn: 'a1', scoreA: 0, scoreB: 0, setsA: 0, setsB: 0 });
+      // Não é a vez do Beto.
+      expect(
+        await ask(beto.room, ClientMessage.PongServe, { t: Date.now(), x: 3, y: 0.7 }),
+      ).toEqual({ ok: false, reason: 'Não é o seu saque.' });
+      for (const expected of [1, 2]) {
+        await waitFor(() => game().phase === 'serve', 4000);
+        expect(game().turn).toBe('a1');
+        const t = Date.now();
+        expect(await ask(ana.room, ClientMessage.PongServe, { t, x: -0.2, y: 0.7 })).toEqual({
+          ok: true,
+        });
+        await waitFor(() => game().phase === 'rally');
+        expect(decodeBall(game().ball)).toMatchObject({ by: 'a', na: 0, nb: 0 });
+        // Ninguém rebate: a bola quica do lado do Beto e sai. Ponto da Ana.
+        await waitFor(() => game().scoreA === expected, 6000);
+        expect(game()).toMatchObject({ phase: 'point', detail: `Ponto de ${ana.user.name}` });
+      }
+      // Depois de 2 pontos, o saque é do Beto.
+      await waitFor(() => game().phase === 'serve', 4000);
+      expect(game().turn).toBe('b1');
+    }, 30_000);
+
+    it('rebatida que chega 150 ms atrasada vale; atrasada demais, não', async () => {
+      const { table, ana, beto, ask, game } = await match();
+      await ask(ana.room, ClientMessage.PongServe, { t: Date.now(), x: -0.2, y: 0.7 });
+      await waitFor(() => game().phase === 'rally');
+      const serve = decodeBall(game().ball)!;
+      // O toque: 200 ms depois do quique do lado do Beto, com a raquete na bola.
+      const contact = nextEvent(serve).t + 200;
+      const at = ballAt(simulate(serve, contact).ball!, contact);
+      beto.room.send(ClientMessage.PongPaddle, { furniId: table, x: at.x, y: at.y });
+      // O pedido chega 150 ms depois do toque (como num ping de 150 ms).
+      while (Date.now() < contact + 150) await wait(10);
+      const hit = { t: contact, x: at.x, y: at.y, vx: -1.5, vy: 0 };
+      // Atrasado demais (mais que o limite de volta no tempo): recusado.
+      expect(
+        await ask(beto.room, ClientMessage.PongHit, { ...hit, t: contact - PONG.maxRewindMs - 50 }),
+      ).toMatchObject({ ok: false });
+      expect(await ask(beto.room, ClientMessage.PongHit, hit)).toEqual({ ok: true });
+      await waitFor(() => decodeBall(game().ball)?.by === 'b');
+      expect(decodeBall(game().ball)).toMatchObject({ t0: contact, hits: 1 });
+      // A Ana não rebate: ponto do Beto.
+      await waitFor(() => game().scoreB === 1, 6000);
+      expect(game().scoreA).toBe(0);
+    }, 30_000);
+
+    it('fechando os sets, a partida acaba: placar gravado e aviso no chat', async () => {
+      const { table, ana, beto, ask, game } = await match();
+      // Acelera: 10 × 2 no segundo set, com o primeiro já ganho pela Ana (o saque é dela).
+      const server = colyseus.getRoomById(beto.room.roomId) as unknown as {
+        pongMatches: Map<string, PongMatch>;
+      };
+      Object.assign(server.pongMatches.get(table)!, {
+        score: { points: { a: 10, b: 2 }, sets: { a: 1, b: 0 }, first: 'a' },
+      });
+      const chat = beto.room.waitForMessage(ServerMessage.Chat, 12_000) as Promise<ChatMessage>;
+      expect(
+        await ask(ana.room, ClientMessage.PongServe, { t: Date.now(), x: -0.2, y: 0.7 }),
+      ).toEqual({ ok: true });
+      await waitFor(() => game().status === 'ended', 8000);
+      expect(game()).toMatchObject({ winner: 'a', end: 'points', setsA: 2, setsB: 0, scoreA: 11 });
+      expect(await chat).toMatchObject({
+        text: `🏆 venceu ${beto.user.name} no ping-pong (2 × 0)`,
+        kind: 'game',
+      });
+      expect(svc.games.of('pingpong', [ana.user.id])).toMatchObject([{ wins: 1, losses: 0 }]);
+    }, 30_000);
   });
   describe('emotes e toca aqui (Fase 54)', () => {
     /** Sala vazia 8×6 (entrada em 1,4); cada um entra e anda até o seu tile. */

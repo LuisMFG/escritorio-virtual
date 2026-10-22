@@ -57,7 +57,19 @@ function setSeat(g: ArcadeGame, slot: ArcadeSlot, seat: ArcadeSeat): void {
 }
 
 function resetMatch(g: ArcadeGame): void {
-  Object.assign(g, { status: 'waiting', scoreA: 0, scoreB: 0, detail: '', winner: '', end: '' });
+  Object.assign(g, {
+    status: 'waiting',
+    scoreA: 0,
+    scoreB: 0,
+    setsA: 0,
+    setsB: 0,
+    turn: '',
+    phase: '',
+    ball: '',
+    detail: '',
+    winner: '',
+    end: '',
+  });
 }
 
 /** A vaga desta sessão (em qualquer modo). */
@@ -132,8 +144,14 @@ function finish(g: ArcadeGame, winner: ArcadeSide, end: ArcadeOutcome['end']): A
     winners: playersOf(g, winner),
     losers: playersOf(g, otherSide(winner)),
   };
-  Object.assign(g, { status: 'ended', winner, end });
+  // A bola sai da mesa; o placar final fica à mostra.
+  Object.assign(g, { status: 'ended', winner, end, phase: '', ball: '' });
   return outcome;
+}
+
+/** A partida acabou no jogo (Fase 58): o lado que fechou os pontos vence. */
+export function finishPoints(g: ArcadeGame, winner: ArcadeSide): ArcadeOutcome {
+  return finish(g, winner, 'points');
 }
 
 /** Desiste: o outro lado vence. Todos continuam na mesa (dá para começar de novo). */
