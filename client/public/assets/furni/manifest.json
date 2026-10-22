@@ -1164,7 +1164,8 @@
       "states": [0],
       "stateAnchors": {},
       "animated": false,
-      "light": false
+      "light": false,
+      "stackHeight": 0
     },
     {
       "id": "tv_luxus",

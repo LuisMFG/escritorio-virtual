@@ -75,6 +75,8 @@ export class Camera {
   private pinching = false;
   /** Se devolver true no pointerdown, a câmera ignora o gesto (ex.: arrastar um móvel). */
   private pointerGuard: ((e: FederatedPointerEvent) => boolean) | null = null;
+  /** Se devolver true, a roda não dá zoom (ex.: Shift + roda ajusta a altura no Decorar). */
+  private wheelGuard: ((e: WheelEvent) => boolean) | null = null;
 
   constructor(
     private readonly app: Application,
@@ -131,6 +133,10 @@ export class Camera {
 
   setPointerGuard(guard: ((e: FederatedPointerEvent) => boolean) | null): void {
     this.pointerGuard = guard;
+  }
+
+  setWheelGuard(guard: ((e: WheelEvent) => boolean) | null): void {
+    this.wheelGuard = guard;
   }
 
   onTap(listener: (global: Point, info: TapInfo) => void): void {
@@ -301,6 +307,7 @@ export class Camera {
 
   private onWheel(e: WheelEvent): void {
     e.preventDefault();
+    if (this.wheelGuard?.(e)) return;
     this.wheelAccum += e.deltaY;
     if (Math.abs(this.wheelAccum) < 60) return;
     const rect = this.app.canvas.getBoundingClientRect();

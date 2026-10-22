@@ -1,5 +1,6 @@
 import type {
   FurniColorMessage,
+  FurniHeightMessage,
   FurniMoveMessage,
   FurniPlaceMessage,
   FurniResult,
@@ -11,16 +12,24 @@ export interface DecorHistoryApi {
   move(msg: FurniMoveMessage): Promise<FurniResult>;
   remove(furniId: string): Promise<FurniResult>;
   color(msg: FurniColorMessage): Promise<FurniResult>;
+  height(msg: FurniHeightMessage): Promise<FurniResult>;
 }
 
 type Spot = Omit<FurniMoveMessage, 'furniId'>;
+
+/** Altura do móvel no piso antes e depois de mover (a ajustada volta junto ao desfazer). */
+export interface Lift {
+  before: number;
+  after: number;
+}
 
 /** Uma ação do Decorar já aceita pelo servidor (o "Desfazer" do aviso guarda a sua). */
 export type DecorOp =
   | { kind: 'place'; id: string; msg: FurniPlaceMessage }
   | { kind: 'remove'; id: string; msg: FurniPlaceMessage }
-  | { kind: 'move'; id: string; before: Spot; after: Spot }
-  | { kind: 'color'; id: string; before: string; after: string };
+  | { kind: 'move'; id: string; before: Spot; after: Spot; lift?: Lift }
+  | { kind: 'color'; id: string; before: string; after: string }
+  | { kind: 'height'; id: string; before: number; after: number };
 
 /** Quantas ações o histórico guarda. */
 const LIMIT = 50;
@@ -33,6 +42,10 @@ const LIMIT = 50;
  * Fase 53: só entra no histórico o que o servidor aceitou, e desfazer/refazer só mudam de pilha
  * quando o servidor confirma. Antes gravava antes da resposta: uma recusa ficava no histórico e,
  * refeita, punha uma segunda mesa em cima da primeira.
+ *
+ * Fase 56: o ajuste de altura também (passos seguidos no mesmo móvel viram uma ação só). Mover a
+ * base leva a pilha junto no servidor, então desfazer o mover devolve tudo; se a base estava
+ * erguida, a altura dela volta depois.
  */
 export class DecorHistory {
   private done: DecorOp[] = [];
@@ -68,7 +81,7 @@ export class DecorHistory {
     return this.push({ kind: 'remove', id, msg });
   }
 
-  recordMove(id: string, before: Spot, after: Spot): DecorOp | null {
+  recordMove(id: string, before: Spot, after: Spot, lift?: Lift): DecorOp | null {
     if (
       before.x === after.x &&
       before.y === after.y &&
@@ -77,7 +90,27 @@ export class DecorHistory {
     ) {
       return null;
     }
-    return this.push({ kind: 'move', id, before, after });
+    return this.push({ kind: 'move', id, before, after, ...(lift ? { lift } : {}) });
+  }
+
+  /** Ajuste de altura aceito. Seguido de outro no mesmo móvel, vira uma ação só. */
+  recordHeight(id: string, before: number, after: number): DecorOp | null {
+    const last = this.done.at(-1);
+    if (
+      last?.kind === 'height' &&
+      this.resolve(last.id) === this.resolve(id) &&
+      !this.undone.length
+    ) {
+      last.after = after;
+      if (Math.abs(last.before - last.after) < 0.001) {
+        this.done.pop();
+        this.emit();
+        return null;
+      }
+      return last;
+    }
+    if (Math.abs(before - after) < 0.001) return null;
+    return this.push({ kind: 'height', id, before, after });
   }
 
   recordColor(id: string, before: string, after: string): DecorOp | null {
@@ -140,10 +173,19 @@ export class DecorHistory {
           return undo ? (await this.api.remove(id)).ok : await this.placeAgain(op.id, op.msg);
         case 'remove':
           return undo ? await this.placeAgain(op.id, op.msg) : (await this.api.remove(id)).ok;
-        case 'move':
-          return (await this.api.move({ furniId: id, ...(undo ? op.before : op.after) })).ok;
+        case 'move': {
+          const res = await this.api.move({ furniId: id, ...(undo ? op.before : op.after) });
+          // Base erguida pelo ajuste de altura: mover recoloca no apoio, então a altura volta.
+          const z = op.lift && (undo ? op.lift.before : op.lift.after);
+          if (res.ok && z !== undefined && res.furni && Math.abs(res.furni.z - z) > 0.001) {
+            await this.api.height({ furniId: id, z });
+          }
+          return res.ok;
+        }
         case 'color':
           return (await this.api.color({ furniId: id, defId: undo ? op.before : op.after })).ok;
+        case 'height':
+          return (await this.api.height({ furniId: id, z: undo ? op.before : op.after })).ok;
       }
     } finally {
       this.busy = false;

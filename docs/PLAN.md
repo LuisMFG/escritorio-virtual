@@ -1432,7 +1432,7 @@ As fases 52 e 53 vêm primeiro porque corrigem o que já existe e é usado todo 
   2. Uma terceira entra na sala depois e vê as duas no mesmo passo.
   3. Ande, ou use `/parar`.
 
-### Fase 56 — Empilhamento avançado
+### Fase 56 — Empilhamento avançado ✅ implementada
 - **Qualquer móvel empilhável sobre outro.**
   - A regra de tampo nova vale para todo móvel sólido com altura, menos assentos, camas e uma lista de exceções.
   - Blocos e plataformas servem de base.
@@ -1450,6 +1450,33 @@ As fases 52 e 53 vêm primeiro porque corrigem o que já existe e é usado todo 
   - unidade: regras de tampo, ajuste, grupo;
   - sala: mover em grupo, sentar empilhado;
   - ponta a ponta: empilhar, ajustar a altura, mover em grupo.
+- **Feito:**
+  - **Regra de tampo** (`shared/src/placement.ts`, `acceptsOnTop`): todo móvel sólido com altura (a partir de 0,3) serve de base, como no Habbo, inclusive os blocos e plataformas de pisar (IN14). Ficam de fora:
+    - assentos, camas, tapetes e itens de parede;
+    - luzes, plantas, quadros, tabuleiros, TVs e teleportes;
+    - o que a curadoria marca com `hasTop: false`.
+  - **Catálogo** (`FurniDefService`, `catalogTop`, DE19): as exceções vêm pelo nome e pela categoria (luminárias, abajures, velas, cortinas, plantas, flores, vasos…). A lista antiga de "tem tampo" (só mesas, estantes e alguns nomes) acabou. Os móveis já gravados seguem a regra nova ao carregar.
+  - **Altura:** os móveis do escritório usam a altura de empilhar do Habbo, conferida por um teste com o catálogo. O Computador Antigo passou a não ter tampo (altura 0 no Habbo).
+  - **Profundidade:** cada móvel ocupa uma faixa de altura (`top` no `DepthBox`). O que está acima da faixa do outro, mesmo erguido, é desenhado na frente dele. Testado nas 4 rotações, com um item normal e um a 3,5, e com alguém passando atrás e na frente.
+  - **Mover em grupo:** mover ou girar a base leva junto a pilha inteira (`stackGroup`, `groupMoves`). Cada coisa mantém o lugar em cima da base e gira junto, se tiver a direção.
+    - Recusa se alguém estiver em cima ou se algo comprido não couber girado.
+    - O servidor responde com tudo o que mudou (`moved`).
+    - O cliente mostra a pilha na hora: no arrasto, fantasmas que acompanham; ao soltar ou girar, a prévia. Depois acerta pela resposta.
+  - **Ajuste fino de altura:** com o móvel selecionado, ▲▼ no painel ou Shift + roda do mouse, em passos de 0,1 (`ClientMessage.FurniHeight`, `canSetHeight`).
+    - Leva junto o que está em cima. Vai do apoio (não afunda no móvel de baixo) até 6 acima do piso, contando a pilha.
+    - Os pedidos saem um por vez, no ritmo que o servidor aceita (um a cada 250 ms), sempre com o último alvo: girar a roda rápido não dá "Calma!".
+    - Fica salvo e todos veem. Mover recoloca a base no apoio do lugar novo.
+  - **Desfazer:** passos seguidos de altura no mesmo móvel viram uma ação só. Desfazer o mover da base devolve a pilha e, se a base estava erguida, a altura dela.
+  - **Sentar empilhado:** cadeira em cima de bloco ou plataforma. O avatar senta na altura do assento e `/levantar` sai para um tile livre ao lado, em cima da plataforma ou no chão. Ninguém mexe na base com alguém em cima.
+  - **Testes:**
+    - unidade: `placement.test.ts` (exceções, blocos, pilha que vai junto com giro e volta, comprida que não gira, ajuste de altura e limites, tampo do catálogo), `depth.test.ts` (4 rotações), `FurniDefService.test.ts` (regra do catálogo e gravados antigos) e `DecorHistory.test.ts` (altura e base erguida);
+    - sala: três testes em `OfficeRoom.test.ts` (mover e girar em grupo e voltar, ajuste de altura com limites, sentar numa cadeira em cima de plataforma);
+    - ponta a ponta: `empilhar.spec.ts` (arrastar a mesa leva o computador, ▲ e Shift + roda, desfazer).
+- **Como testar:**
+  1. Decorar → coloque uma Mesa Norja e um computador em cima → arraste a mesa: o computador vai junto.
+  2. Com a mesa selecionada, use ▲▼ no painel ou Shift + roda do mouse: a mesa sobe com o computador. Ctrl+Z volta.
+  3. Coloque blocos (ex.: "Bloco de Mármore") e empilhe um em cima do outro.
+  4. Ponha uma cadeira em cima de um bloco → Concluir → sente nela e use `/levantar`.
 
 ### Fase 57 — Salão de Jogos: sala, mesas, assistir e placar
 - **Sala nova "Salão de Jogos"** com porta na Recepção (e de volta). Ela aparece sozinha nos servidores já instalados ao atualizar, como foi feito com a Recepção.

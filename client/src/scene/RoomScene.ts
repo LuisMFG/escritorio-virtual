@@ -9,6 +9,7 @@ import {
   Z_UNIT,
   pointInTile,
   acceptsOnTop,
+  isRug,
   stackedOn,
   RoomGrid,
   talkDurationMs,
@@ -225,6 +226,7 @@ export class RoomScene implements DecorHost {
     this.decor = new DecorMode(this, actions, decorListener);
     this.camera = new Camera(app, this.world, () => this.roomArt.getLocalBounds());
     this.camera.setPointerGuard((e) => this.decor.pointerDown(decorPointer(e)));
+    this.camera.setWheelGuard((e) => this.decor.wheel(e));
     this.camera.onTap((p, info) => this.handleTap(p, info));
     // Segundo dedo (pinça) durante um arrasto: cancela, em vez de embaralhar o fantasma (DE9).
     this.camera.onPinchStart(() => this.decor.cancelDrag());
@@ -493,10 +495,10 @@ export class RoomScene implements DecorHost {
     return this.world.toLocal(global);
   }
 
-  previewFurni(id: string, spot: Pick<PlacedFurni, 'x' | 'y' | 'z' | 'rot'>): void {
+  previewFurni(id: string, spot: Pick<PlacedFurni, 'x' | 'y' | 'z' | 'rot'>, track = true): void {
     const view = this.furni.get(id);
     if (!view) return;
-    this.pendingFurni.start(id);
+    if (track) this.pendingFurni.start(id);
     view.update({ ...view.placed, ...spot });
     this.onFurniChanged();
   }
@@ -553,7 +555,8 @@ export class RoomScene implements DecorHost {
   pickFurni(global: Point): FurniView | null {
     const views = [...this.furni.values()].filter((f) => f.visible);
     const front = (list: FurniView[]) => list.sort((a, b) => b.zIndex - a.zIndex)[0] ?? null;
-    const solid = views.filter((f) => !f.def.canWalk && !f.def.wall);
+    // Blocos e plataformas de pisar são bases como as mesas (Fase 56); só o tapete fica por baixo.
+    const solid = views.filter((f) => !isRug(f.def) && !f.def.wall);
     const drawn = front(solid.filter((f) => f.hitTest(global)));
     if (drawn && acceptsOnTop(drawn.def)) {
       const placed = views.map((v) => v.placed);
@@ -580,7 +583,7 @@ export class RoomScene implements DecorHost {
     });
     onTile.sort(
       (a, b) =>
-        Number(a.def.canWalk) - Number(b.def.canWalk) ||
+        Number(isRug(a.def)) - Number(isRug(b.def)) ||
         b.placed.z - a.placed.z ||
         b.zIndex - a.zIndex,
     );

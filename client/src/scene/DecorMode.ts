@@ -2,13 +2,18 @@ import {
   nextRotation,
   rotations,
   canPlace,
+  canSetHeight,
   footprint,
+  groupMoves,
+  HEIGHT_STEP,
+  isRug,
   surfaceTileAt,
   tileCorners,
   tileHeight,
   tileToScreen,
   WALL_PX,
   type FurniColorMessage,
+  type FurniHeightMessage,
   type FurniManifestEntry,
   type FurniMoveMessage,
   type FurniPlaceMessage,
@@ -28,6 +33,8 @@ export interface DecorActions {
   moveFurni(msg: FurniMoveMessage): Promise<FurniResult>;
   removeFurni(furniId: string): Promise<FurniResult>;
   colorFurni(msg: FurniColorMessage): Promise<FurniResult>;
+  /** Ajuste fino de altura (Fase 56). */
+  heightFurni(msg: FurniHeightMessage): Promise<FurniResult>;
 }
 
 /** Ponteiro como a cena repassa: qual dedo ou botão, se é toque e os botões apertados. */
@@ -60,8 +67,11 @@ export interface DecorHost {
   placementContext(): PlacementContext;
   /** Cria um móvel "fantasma" semitransparente por cima de tudo. */
   createGhost(defId: string, x: number, y: number, rot: number): FurniView;
-  /** Mostra já o resultado esperado de mover ou girar; o servidor confirma depois. */
-  previewFurni(id: string, spot: Pick<PlacedFurni, 'x' | 'y' | 'z' | 'rot'>): void;
+  /**
+   * Mostra já o resultado esperado de mover ou girar; o servidor confirma depois. `track = false`:
+   * só mostra (um pedido já em andamento responde por ele).
+   */
+  previewFurni(id: string, spot: Pick<PlacedFurni, 'x' | 'y' | 'z' | 'rot'>, track?: boolean): void;
   /** O servidor respondeu: a tela fica com o aceito, ou volta ao que era. */
   settleFurni(id: string, result: FurniResult): void;
   /** Esconde (remoção esperando o servidor) ou mostra de novo (recusada). */
@@ -82,6 +92,8 @@ export interface DecorListener {
   onError(message: string): void;
   /** No toque, o fantasma está num lugar e dá para confirmar ("Colocar aqui"). */
   onPlaceReady(ready: boolean): void;
+  /** Altura do móvel selecionado (`null` = nenhum ou item de parede), para o painel (Fase 56). */
+  onHeightChange(z: number | null): void;
 }
 
 const OK = 0x3fbf6f;
@@ -93,6 +105,12 @@ const BAD_TINT = 0xff8080;
 const DRAG_THRESHOLD = 5;
 /** Dois cliques no mesmo lugar dentro disto colocam um móvel só (duplo clique). */
 const DOUBLE_TAP_MS = 600;
+/** Roda do mouse (px) para um passo de altura com Shift. */
+const WHEEL_STEP = 50;
+/** Intervalo mínimo entre pedidos de altura (o servidor aceita uns 4 por segundo). */
+const HEIGHT_GAP_MS = 250;
+/** O mesmo aviso de altura (limite) não se repete dentro disto, girando a roda. */
+const HEIGHT_ERROR_MS = 1500;
 
 interface Ghost {
   view: FurniView;
@@ -123,6 +141,8 @@ interface Drag {
   /** Último ponto do ponteiro (para girar o fantasma com R sem mexer o mouse). */
   last: Point;
   ghost: Ghost | null;
+  /** A pilha em cima do que é arrastado, que vai junto (Fase 56): fantasmas que acompanham. */
+  carried: { id: string; view: FurniView }[];
 }
 
 /**
@@ -135,6 +155,9 @@ interface Drag {
  * de cima, em cima de mesas e nos móveis altos do fundo) e só sobe numa mesa quando esse ponto
  * está sobre o tampo; mover, girar e remover aparecem na hora e voltam atrás se o servidor
  * recusar; R gira o fantasma durante o arrasto e Esc cancela.
+ *
+ * Fase 56: a pilha em cima do que se move vai junto (fantasmas no arrasto, prévia ao soltar ou
+ * girar) e o selecionado sobe e desce de 0,1 em 0,1 (▲▼ no painel ou Shift + roda).
  */
 export class DecorMode {
   active = false;
@@ -144,6 +167,17 @@ export class DecorMode {
   /** Colocações esperando o servidor (o mesmo lugar não recebe outra cópia nesse meio tempo). */
   private readonly placing = new Set<string>();
   private lastPlaced: { key: string; at: number } | null = null;
+  /** Ajuste de altura: um pedido por vez; o último alvo pedido no meio espera a vez (Fase 56). */
+  private heightBusy = false;
+  private heightNext: { id: string; z: number } | null = null;
+  /** Móveis seguros na tela (com o alvo que espera a vez) até o próximo pedido sair. */
+  private heightHeld: string[] = [];
+  private heightSentAt = -Infinity;
+  private heightTimer = 0;
+  private heightError: { reason: string; at: number } | null = null;
+  private wheelAccum = 0;
+  /** Última altura avisada ao painel. */
+  private shownHeight: number | null | undefined;
 
   constructor(
     private readonly host: DecorHost,
@@ -281,7 +315,7 @@ export class DecorMode {
     const f = this.host.pickFurni(p.global);
     if (!f) return false;
     // Tapete só arrasta se já estiver selecionado: arrastar por cima dele move a câmera.
-    if (f.def.canWalk && this.selectedId !== f.placed.id) return false;
+    if (isRug(f.def) && this.selectedId !== f.placed.id) return false;
     const w = this.host.toWorld(p.global);
     const ref = refTile(f, w);
     const c = tileToScreen(f.placed.x + ref.x, f.placed.y + ref.y, f.placed.z);
@@ -293,6 +327,7 @@ export class DecorMode {
       offset: { x: w.x - c.sx, y: w.y - c.sy },
       last: p.global.clone(),
       ghost: null,
+      carried: [],
     };
     return true;
   }
@@ -327,6 +362,16 @@ export class DecorMode {
         ok: false,
       };
       f.alpha = 0.3;
+      // O que está em cima vai junto: fantasmas que acompanham o arrastado.
+      if (!f.def.wall) {
+        const ctx = this.host.placementContext();
+        for (const c of groupMoves(ctx, f.placed, f.placed) ?? []) {
+          const view = this.host.furniView(c.id);
+          if (!view) continue;
+          view.alpha = 0.3;
+          d.carried.push({ id: c.id, view: this.host.createGhost(c.defId, c.x, c.y, c.rot) });
+        }
+      }
       this.select(d.furniId);
     }
     if (f.def.wall) {
@@ -341,6 +386,7 @@ export class DecorMode {
     this.drag = null;
     const f = this.host.furniView(d.furniId);
     if (f) f.alpha = 1;
+    this.dropCarried(d);
     if (!d.ghost) {
       // Foi um clique: seleciona.
       this.select(d.furniId);
@@ -378,7 +424,57 @@ export class DecorMode {
     this.drag = null;
     const f = this.host.furniView(d.furniId);
     if (f) f.alpha = 1;
+    this.dropCarried(d);
     d.ghost?.view.destroy({ children: true });
+    this.redraw();
+  }
+
+  /** Roda do mouse com Shift: ajuste fino de altura do selecionado. `true` = usou a roda. */
+  wheel(e: { shiftKey: boolean; deltaX: number; deltaY: number; deltaMode: number }): boolean {
+    if (!this.active || !e.shiftKey || !this.selectedId || this.drag || this.picking) return false;
+    // Com Shift, o macOS manda a roda como horizontal; em linhas (Firefox), cada linha vale ~40 px.
+    this.wheelAccum += (e.deltaY || e.deltaX) * (e.deltaMode === 1 ? 40 : 1);
+    if (Math.abs(this.wheelAccum) >= WHEEL_STEP) {
+      this.nudgeHeight(this.wheelAccum < 0 ? 1 : -1);
+      this.wheelAccum = 0;
+    }
+    return true;
+  }
+
+  /**
+   * Ajuste fino de altura do selecionado (Fase 56), em `steps` passos de 0,1 (▲▼ no painel ou
+   * Shift + roda). Aparece já. Os pedidos saem um por vez, no ritmo que o servidor aceita, sempre
+   * com o último alvo (girar a roda rápido mandava um por passo e o servidor dizia "Calma!").
+   */
+  nudgeHeight(steps: number): void {
+    const f = this.selectedId ? this.host.furniView(this.selectedId) : undefined;
+    if (!this.active || !f || this.drag) return;
+    if (f.def.wall) {
+      return this.listener.onError('Itens de parede sobem e descem arrastando na parede.');
+    }
+    const z = Math.round((f.placed.z + steps * HEIGHT_STEP) * 10) / 10;
+    const res = canSetHeight(this.host.placementContext(), f.placed.id, z);
+    if (!res.ok) {
+      // Girando a roda no limite: um aviso só, não um por passo.
+      const now = performance.now();
+      const last = this.heightError;
+      if (last?.reason === res.reason && now - last.at < HEIGHT_ERROR_MS) return;
+      this.heightError = { reason: res.reason, at: now };
+      return this.listener.onError(res.reason);
+    }
+    const wait = this.heightSentAt + HEIGHT_GAP_MS - performance.now();
+    // Com um alvo já esperando a vez (o relógio pode atrasar), o novo alvo entra no lugar dele.
+    if (!this.heightBusy && !this.heightTimer && wait <= 0) {
+      return this.sendHeight(f.placed.id, z, res.moves);
+    }
+    // Espera a vez: aparece já, e a tela fica segura (o estado que chegar não volta atrás).
+    for (const m of res.moves) {
+      const hold = !this.heightHeld.includes(m.id);
+      this.host.previewFurni(m.id, m, hold);
+      if (hold) this.heightHeld.push(m.id);
+    }
+    this.heightNext = { id: f.placed.id, z };
+    if (!this.heightBusy) this.scheduleHeight();
     this.redraw();
   }
 
@@ -405,18 +501,87 @@ export class DecorMode {
       .finally(() => this.placing.delete(key));
   }
 
-  /** Move ou gira: aparece já e o servidor confirma (ou a tela volta). */
+  /** Move ou gira: aparece já (com a pilha em cima, Fase 56) e o servidor confirma. */
   private commitMove(
     f: FurniView,
     spot: { x: number; y: number; rot: number; h?: number },
     z: number,
   ): void {
     const id = f.placed.id;
-    this.host.previewFurni(id, { x: spot.x, y: spot.y, rot: spot.rot, z });
+    const to = { x: spot.x, y: spot.y, rot: spot.rot, z };
+    const carried = f.def.wall
+      ? []
+      : (groupMoves(this.host.placementContext(), f.placed, to) ?? []);
+    this.host.previewFurni(id, to);
+    for (const c of carried) this.host.previewFurni(c.id, c);
     void this.actions
       .moveFurni({ furniId: id, x: spot.x, y: spot.y, rot: spot.rot as 0 | 2 | 4 | 6, z: spot.h })
-      .then((res) => this.host.settleFurni(id, res));
+      .then((res) => {
+        this.host.settleFurni(id, res);
+        for (const c of carried) this.host.settleFurni(c.id, resultFor(res, c.id));
+      });
     this.redraw();
+  }
+
+  /** Pede a altura nova (o móvel e a pilha já aparecem lá). */
+  private sendHeight(id: string, z: number, moves: readonly PlacedFurni[]): void {
+    this.heightBusy = true;
+    this.heightSentAt = performance.now();
+    for (const m of moves) this.host.previewFurni(m.id, m);
+    this.redraw();
+    void this.actions.heightFurni({ furniId: id, z }).then((res) => {
+      this.heightBusy = false;
+      // Com um alvo esperando, os móveis seguem seguros: a tela não volta ao meio do caminho.
+      for (const m of moves) this.host.settleFurni(m.id, resultFor(res, m.id));
+      if (this.heightNext) this.scheduleHeight();
+      this.redraw();
+    });
+  }
+
+  /** O alvo que espera sai quando der (um pedido a cada `HEIGHT_GAP_MS`). */
+  private scheduleHeight(): void {
+    if (this.heightTimer) return;
+    const wait = Math.max(0, this.heightSentAt + HEIGHT_GAP_MS - performance.now());
+    this.heightTimer = window.setTimeout(() => {
+      this.heightTimer = 0;
+      const next = this.heightNext;
+      const held = this.heightHeld;
+      this.heightNext = null;
+      this.heightHeld = [];
+      // O pedido novo começa antes de soltar os móveis seguros: assim nada pisca.
+      const again = next && canSetHeight(this.host.placementContext(), next.id, next.z);
+      if (next && again?.ok) this.sendHeight(next.id, next.z, again.moves);
+      for (const id of held) this.host.settleFurni(id, { ok: false });
+      this.redraw();
+    }, wait);
+  }
+
+  /** Fantasmas da pilha que acompanha o arrasto: no lugar de cada um em cima do fantasma. */
+  private moveCarried(d: Drag): void {
+    const g = d.ghost;
+    const base = this.host.furniView(d.furniId);
+    if (!d.carried.length || !g || !base) return;
+    const moves =
+      g.tile && g.view.visible
+        ? groupMoves(this.host.placementContext(), base.placed, { ...g.tile, z: g.z, rot: g.rot })
+        : null;
+    for (const c of d.carried) {
+      const m = moves?.find((mv) => mv.id === c.id);
+      c.view.visible = Boolean(m);
+      if (!m) continue;
+      c.view.tint = g.ok ? 0xffffff : BAD_TINT;
+      c.view.update({ ...m, id: c.view.placed.id });
+    }
+  }
+
+  /** Fim do arrasto: tira os fantasmas da pilha e mostra os móveis de novo. */
+  private dropCarried(d: Drag): void {
+    for (const c of d.carried) {
+      c.view.destroy({ children: true });
+      const view = this.host.furniView(c.id);
+      if (view) view.alpha = 1;
+    }
+    d.carried = [];
   }
 
   /** Alvo sob o ponteiro: ponto de parede para itens de parede, tile (com altura) para o resto. */
@@ -442,8 +607,11 @@ export class DecorMode {
     const def = g && this.host.defs.get(g.defId);
     if (!g || !def) return null;
     const w = this.host.toWorld(global);
+    // A pilha que vai junto não é superfície: a coluna dela segurava o fantasma no lugar.
+    const ctx = this.host.placementContext();
+    const carried = new Set(d.carried.map((c) => c.id));
     const t = surfaceTileAt(
-      this.host.placementContext(),
+      carried.size ? { ...ctx, furni: ctx.furni.filter((f) => !carried.has(f.id)) } : ctx,
       w.x - d.offset.x,
       w.y - d.offset.y,
       d.furniId,
@@ -473,6 +641,7 @@ export class DecorMode {
     if (!tile) {
       g.view.visible = false;
       g.ok = false;
+      if (this.drag?.ghost === g) this.moveCarried(this.drag);
       this.redraw();
       return;
     }
@@ -499,6 +668,7 @@ export class DecorMode {
       z: g.z,
       rot: g.rot,
     });
+    if (this.drag?.ghost === g) this.moveCarried(this.drag);
     this.redraw();
   }
 
@@ -549,6 +719,15 @@ export class DecorMode {
     if (sel?.visible && !this.drag?.ghost) {
       this.drawFootprint(top, sel.def, sel.placed, sel.placed.rot, sel.placed.z, SELECT, false);
     }
+    this.showHeight(sel && !sel.def.wall ? sel.placed.z : null);
+  }
+
+  /** Avisa o painel quando a altura do selecionado muda. */
+  private showHeight(z: number | null): void {
+    const rounded = z === null ? null : Math.round(z * 10) / 10;
+    if (rounded === this.shownHeight) return;
+    this.shownHeight = rounded;
+    this.listener.onHeightChange(rounded);
   }
 
   /** Contorno fraquinho de todos os tiles do piso. */
@@ -609,6 +788,15 @@ export class DecorMode {
       else if (this.picking) this.pick(null);
       else this.select(null);
     }
+  };
+}
+
+/** A parte da resposta de um pedido em grupo que fala de um móvel (a base ou um da pilha). */
+function resultFor(res: FurniResult, id: string): FurniResult {
+  if (!res.ok) return res;
+  return {
+    ok: true,
+    furni: res.moved?.find((m) => m.id === id) ?? (res.furni?.id === id ? res.furni : undefined),
   };
 }
 

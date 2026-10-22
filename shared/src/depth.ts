@@ -9,6 +9,8 @@ export interface DepthBox extends Footprint {
   id: string;
   /** Altura da base (piso, pilha, assento). */
   z: number;
+  /** Altura do topo (base + altura do móvel): a faixa de altura que o objeto ocupa (Fase 56). */
+  top?: number;
   /** Objetos rasteiros (tapetes) usam -1 para ficar sempre por baixo de quem pisa neles. */
   layer?: number;
 }
@@ -36,11 +38,14 @@ export function compareDepth(a: DepthBox, b: DepthBox): -1 | 0 | 1 {
   if (xSepAB && ySepAB) return -1;
   if (xSepBA && ySepBA) return 1;
 
-  // Ocupam tiles em comum (tapete + avatar, avatar sentado na cadeira).
+  // Ocupam tiles em comum (tapete + avatar, avatar sentado na cadeira, a pilha).
   if (xOverlap && yOverlap) {
     const la = a.layer ?? 0;
     const lb = b.layer ?? 0;
     if (la !== lb) return la < lb ? -1 : 1;
+    // Um acima da faixa do outro (a pilha, mesmo com a altura ajustada): o de cima na frente.
+    if (a.top !== undefined && b.z >= a.top - 0.01) return -1;
+    if (b.top !== undefined && a.z >= b.top - 0.01) return 1;
     if (a.z !== b.z) return a.z < b.z ? -1 : 1;
     return 0;
   }

@@ -2,6 +2,10 @@ import { randomInt } from 'node:crypto';
 import { CloseCode, Room, ServerError, validate, type Client, type Deferred } from '@colyseus/core';
 import {
   stackedOn,
+  groupMoves,
+  canSetHeight,
+  isRug,
+  furniHeightSchema,
   acceptsOnTop,
   topHeight,
   type FurniResult,
@@ -250,6 +254,9 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     ),
     [ClientMessage.FurniColor]: validate(furniColorSchema, (client, msg) =>
       this.handleColor(client as OfficeClient, msg),
+    ),
+    [ClientMessage.FurniHeight]: validate(furniHeightSchema, (client, msg) =>
+      this.handleFurniHeight(client as OfficeClient, msg.furniId, msg.z),
     ),
     // ---------- TV com YouTube (Fase 51) ----------
     [TvMessage.Open]: validate(tvRefSchema, (client, msg) =>
@@ -1566,16 +1573,35 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       z: msg.z,
       ignoreId: f.id,
     };
-    const res = canPlace(this.placementContext(), req);
+    const ctx = this.placementContext();
+    const res = canPlace(ctx, req);
     if (!res.ok) return this.refuse(client, res.reason);
-    services().furni.update(this.layout.roomId, f.id, {
-      x: msg.x,
-      y: msg.y,
-      z: res.z,
-      rot: msg.rot,
-    });
-    Object.assign(f, { x: msg.x, y: msg.y, z: res.z, rot: msg.rot });
-    return { ok: true, furni: toPlaced(f) };
+    // O que está em cima vai junto, girando com a base (Fase 56).
+    const base = toPlaced(f);
+    const to = { x: msg.x, y: msg.y, z: res.z, rot: msg.rot };
+    const moved = [{ ...base, ...to }, ...(groupMoves(ctx, base, to) ?? [])];
+    this.applyMoves(moved);
+    return { ok: true, furni: moved[0], moved };
+  }
+
+  /** Ajuste fino de altura (Fase 56): sobe ou desce o móvel com a pilha em cima dele. */
+  private handleFurniHeight(client: OfficeClient, furniId: string, z: number): FurniResult {
+    const denied = this.editDenied(client);
+    if (denied) return denied;
+    const res = canSetHeight(this.placementContext(), furniId, z);
+    if (!res.ok) return this.refuse(client, res.reason);
+    this.applyMoves(res.moves);
+    return { ok: true, furni: res.moves[0], moved: res.moves };
+  }
+
+  /** Grava e publica móveis que mudaram de lugar juntos (a base e a pilha). */
+  private applyMoves(moves: readonly PlacedFurni[]): void {
+    for (const m of moves) {
+      const f = this.state.furni.get(m.id);
+      if (!f) continue;
+      services().furni.update(this.layout.roomId, m.id, { x: m.x, y: m.y, z: m.z, rot: m.rot });
+      Object.assign(f, { x: m.x, y: m.y, z: m.z, rot: m.rot });
+    }
   }
 
   private handleRemove(client: OfficeClient, furniId: string): FurniResult {
@@ -1664,8 +1690,9 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
 
   private someoneSeatedOn(f: Furni): boolean {
     const def = services().furniDefs.get(f.defId);
-    // Tapete e itens de parede não têm ninguém "sentado": quem está ali pode continuar.
-    if (!def || def.canWalk || def.wall) return false;
+    // Tapete e itens de parede não têm ninguém "sentado": quem está ali pode continuar. Em cima de
+    // um bloco ou plataforma (Fase 56) conta.
+    if (!def || isRug(def) || def.wall) return false;
     const fp = footprint(def, f.x, f.y, f.rot);
     return [...this.state.players.values()].some(
       (p) => p.x >= fp.minX && p.x <= fp.maxX && p.y >= fp.minY && p.y <= fp.maxY,

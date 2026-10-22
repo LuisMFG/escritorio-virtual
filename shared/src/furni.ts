@@ -12,8 +12,13 @@ export interface FurniDef {
   height: number;
   /** Altura do tampo, quando diferente de `height` (onde se apoia o que vai em cima). */
   stackHeight?: number;
-  /** Tem tampo: dá para pôr objetos em cima (mesas, balcões, armários, estantes…). */
+  /**
+   * Tampo explícito da curadoria. Sem ele vale a regra geral (Fase 56): todo móvel sólido com
+   * altura aceita coisas em cima; `false` tira (luminárias, cortinas…).
+   */
   hasTop?: boolean;
+  /** Luminária (acesa, brilha): não serve de base. */
+  light?: boolean;
   /** Comportamento especial (os quadros e o tabuleiro não aceitam nada em cima). */
   interaction?: string;
   canSit: boolean;
