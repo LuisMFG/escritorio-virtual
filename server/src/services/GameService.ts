@@ -13,6 +13,12 @@ export class GameService {
     this.bump(game, loserId, 'losses');
   }
 
+  /** Partida de duplas (Salão de Jogos, Fase 57): vitória para cada um de um lado, derrota do outro. */
+  recordTeams(game: string, winners: readonly string[], losers: readonly string[]): void {
+    for (const id of winners) this.bump(game, id, 'wins');
+    for (const id of losers) this.bump(game, id, 'losses');
+  }
+
   recordDraw(game: string, a: string, b: string): void {
     this.bump(game, a, 'draws');
     this.bump(game, b, 'draws');

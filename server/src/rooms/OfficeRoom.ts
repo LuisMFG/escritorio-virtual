@@ -1,6 +1,17 @@
 import { randomInt } from 'node:crypto';
 import { CloseCode, Room, ServerError, validate, type Client, type Deferred } from '@colyseus/core';
 import {
+  ARCADE_INFO,
+  arcadeJoinSchema,
+  arcadeKindOf,
+  arcadeModeSchema,
+  arcadeRefSchema,
+  slotSpot,
+  type ArcadeGame,
+  type ArcadeKind,
+  type ArcadeMode,
+  type ArcadeReply,
+  type ArcadeSlot,
   stackedOn,
   groupMoves,
   canSetHeight,
@@ -131,6 +142,7 @@ import { KeyedRateLimiter } from '../util/rateLimiter.js';
 import { HeldItems } from './HeldItems.js';
 import { MovementSystem, type Mover } from './MovementSystem.js';
 import * as ttt from './ticTacToe.js';
+import * as arcade from './arcade.js';
 import { PetKeeper } from './PetKeeper.js';
 
 const TICK_MS = 50;
@@ -169,7 +181,9 @@ type Intent =
   /** Andando até alguém para o toca aqui (Fase 54): bate ao chegar. */
   | { kind: 'highfive'; target: string; at: TilePoint }
   /** Pediu para dançar andando (Fase 55): começa quando terminar o passo. */
-  | { kind: 'dance'; dance: DanceId };
+  | { kind: 'dance'; dance: DanceId }
+  /** Indo para a vaga numa mesa do Salão de Jogos (Fase 57): vira para a mesa ao chegar. */
+  | { kind: 'arcade'; furniId: string; at: TilePoint };
 
 export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient }> {
   override maxClients = 30;
@@ -458,6 +472,33 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       const res = ttt.rematch(game, c.sessionId);
       if (!res.ok) this.sendError(c, ErrorCode.Forbidden, res.reason);
     }),
+    // ---------- Salão de Jogos (Fase 57) ----------
+    [ClientMessage.ArcadeJoin]: validate(arcadeJoinSchema, (client, msg) =>
+      this.handleArcadeJoin(client as OfficeClient, msg.furniId, msg.slot),
+    ),
+    [ClientMessage.ArcadeLeave]: validate(arcadeRefSchema, (client, msg) =>
+      this.handleArcade(client as OfficeClient, msg.furniId, (game, session) => {
+        const res = arcade.leave(game, session);
+        if (!res) return { ok: false, reason: 'Você não está nesta mesa.' };
+        if (res.outcome) this.arcadeFinished(game.kind, res.outcome);
+        return { ok: true };
+      }),
+    ),
+    [ClientMessage.ArcadeStart]: validate(arcadeRefSchema, (client, msg) =>
+      this.handleArcade(client as OfficeClient, msg.furniId, (game, session) =>
+        arcade.start(game, session),
+      ),
+    ),
+    [ClientMessage.ArcadeForfeit]: validate(arcadeRefSchema, (client, msg) =>
+      this.handleArcade(client as OfficeClient, msg.furniId, (game, session) => {
+        const res = arcade.forfeit(game, session);
+        if (res.ok) this.arcadeFinished(game.kind, res.outcome);
+        return res.ok ? { ok: true } : res;
+      }),
+    ),
+    [ClientMessage.ArcadeMode]: validate(arcadeModeSchema, (client, msg) =>
+      this.handleArcadeMode(client as OfficeClient, msg.furniId, msg.mode),
+    ),
     [ClientMessage.TttScores]: (client: Client, input: unknown): TttScores => {
       const p = tttRefSchema.safeParse(input);
       const game = p.success ? this.state.games.get(p.data.furniId) : undefined;
@@ -602,6 +643,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       if (this.isTv(id)) services().tv.drop(id);
       this.state.furni.delete(id);
       this.state.games.delete(id);
+      this.state.arcade.delete(id);
     }
     this.refreshDesks();
     // Quem ficou fora do piso (ou numa porta) volta para perto da entrada. Quem está sentado ou
@@ -676,6 +718,8 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       }
       this.pets.tick(dt);
     }, TICK_MS);
+    // Salão de Jogos: quem saiu no meio da partida e não voltou a tempo perde por W.O.
+    this.clock.setInterval(() => this.expireArcade(), 500);
     services().users.events.on('updated', this.onUserUpdated);
     services().moderation.on('kick', this.onKick);
     services().moderation.on('room', this.onRoomSettings);
@@ -753,6 +797,13 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       focusKind: services().focus.get(user.id)?.kind ?? '',
     });
     this.state.players.set(client.sessionId, player);
+    // Voltou a tempo para a mesa do Salão de Jogos (recarregou ou voltou pela porta).
+    for (const game of this.state.arcade.values()) {
+      arcade.back(game, user.id, client.sessionId, (old) => {
+        const p = this.state.players.get(old);
+        return !p || p.away;
+      });
+    }
     // O item na mão vai junto de sala em sala, até vencer.
     const held = HELD.get(user.id);
     if (held) this.giveHandItem(client.sessionId, held.item, held.until);
@@ -785,6 +836,10 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       player.away = true;
       player.typing = false;
     }
+    // No meio de uma partida do Salão de Jogos, começa a contar o prazo para voltar.
+    for (const game of this.state.arcade.values()) {
+      arcade.dropped(game, client.sessionId, Date.now());
+    }
     // Sem `await`: se o prazo vencer ou a reconexão for cancelada, o Colyseus chama onLeave.
     const reconnection = this.allowReconnection(client, RECONNECT_SECONDS);
     this.pendingReconnects.set(client.sessionId, reconnection);
@@ -795,6 +850,11 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     this.pendingReconnects.delete(client.sessionId);
     const player = this.state.players.get(client.sessionId);
     if (player) player.away = false;
+    if (client.auth) {
+      for (const game of this.state.arcade.values()) {
+        arcade.back(game, client.auth.id, client.sessionId, () => false);
+      }
+    }
   }
 
   override onLeave(client: OfficeClient): void {
@@ -823,6 +883,12 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     this.handTimers.get(client.sessionId)?.clear();
     this.handTimers.delete(client.sessionId);
     for (const furniId of [...this.state.games.keys()]) this.leaveGame(furniId, client.sessionId);
+    // Mesas do Salão de Jogos: antes da partida a vaga fica livre; no meio, conta o prazo.
+    for (const [furniId, game] of [...this.state.arcade.entries()]) {
+      if (arcade.gone(game, client.sessionId, Date.now()) && arcade.isEmpty(game)) {
+        this.state.arcade.delete(furniId);
+      }
+    }
     this.pets.ownerLeft(client.sessionId, (userId) => this.sessionOf(userId));
     services().presence.remove(client.sessionId);
     if (client.auth) {
@@ -844,6 +910,15 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     if (intent?.kind === 'use' && intent.at.x === m.x && intent.at.y === m.y) {
       this.intents.delete(sessionId);
       this.arriveToUse(sessionId, intent.furniId);
+      return true;
+    }
+    if (intent?.kind === 'arcade' && intent.at.x === m.x && intent.at.y === m.y) {
+      this.intents.delete(sessionId);
+      // Chegou na vaga: para e vira para a mesa.
+      const table = this.state.furni.get(intent.furniId);
+      const def = table && services().furniDefs.get(table.defId);
+      m.action = 'idle';
+      if (table && def) m.dir = faceTowards(m, footprint(def, table.x, table.y, table.rot));
       return true;
     }
     if (intent?.kind === 'dance') {
@@ -1494,10 +1569,8 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     if (!this.gameLimiter.tryTake(client.sessionId)) {
       return this.sendError(client, ErrorCode.RateLimit);
     }
-    for (const [id, g] of this.state.games.entries()) {
-      if (id !== furniId && ttt.markOf(g, client.sessionId)) {
-        return this.sendError(client, ErrorCode.Forbidden, 'Você já está em outra mesa.');
-      }
+    if (this.atOtherTable(client.sessionId, furniId)) {
+      return this.sendError(client, ErrorCode.Forbidden, 'Você já está em outra mesa.');
     }
     const game = this.state.games.get(furniId) ?? ttt.newGame();
     const res = ttt.join(game, {
@@ -1514,6 +1587,147 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     const def = services().furniDefs.get(table.defId)!;
     const fp = footprint(def, table.x, table.y, table.rot);
     if (!touches(fp, player)) this.walkNextTo(client.sessionId, player, fp);
+  }
+
+  /** Já joga noutra mesa (jogo da velha ou Salão de Jogos) que não `furniId`. */
+  private atOtherTable(sessionId: string, furniId: string): boolean {
+    for (const [id, g] of this.state.games.entries()) {
+      if (id !== furniId && ttt.markOf(g, sessionId)) return true;
+    }
+    for (const [id, g] of this.state.arcade.entries()) {
+      if (id !== furniId && arcade.slotOf(g, sessionId)) return true;
+    }
+    return false;
+  }
+
+  /** Mesa do Salão de Jogos (Fase 57): o móvel, a definição e o jogo dela. */
+  private arcadeTable(furniId: string) {
+    const table = this.state.furni.get(furniId);
+    const def = table && services().furniDefs.get(table.defId);
+    const kind = arcadeKindOf(def?.interaction);
+    return table && def && kind ? { table, def, kind } : null;
+  }
+
+  /** Recusa um pedido das mesas: avisa quem pediu e responde o motivo. */
+  private arcadeRefuse(client: OfficeClient, reason: string): ArcadeReply {
+    this.sendError(client, ErrorCode.Forbidden, reason);
+    return { ok: false, reason };
+  }
+
+  /** Entra numa vaga e anda até a ponta da mesa daquele lado. */
+  private handleArcadeJoin(client: OfficeClient, furniId: string, slot: ArcadeSlot): ArcadeReply {
+    const player = this.state.players.get(client.sessionId);
+    const found = this.arcadeTable(furniId);
+    if (!client.auth || !player) return { ok: false, reason: 'Você não está na sala.' };
+    if (!found) return this.arcadeRefuse(client, 'Essa mesa não existe mais.');
+    if (!this.gameLimiter.tryTake(client.sessionId)) {
+      return this.arcadeRefuse(client, ERROR_MESSAGES[ErrorCode.RateLimit]);
+    }
+    if (this.atOtherTable(client.sessionId, furniId)) {
+      return this.arcadeRefuse(client, 'Você já está em outra mesa.');
+    }
+    const game = this.state.arcade.get(furniId) ?? arcade.newArcade(found.kind);
+    const res = arcade.join(game, slot, {
+      session: client.sessionId,
+      user: client.auth.id,
+      name: player.name,
+    });
+    if (!res.ok) return this.arcadeRefuse(client, res.reason);
+    if (!this.state.arcade.has(furniId)) this.state.arcade.set(furniId, game);
+    this.walkToSlot(client.sessionId, player, found.table, found.def, slot);
+    return { ok: true };
+  }
+
+  /** 1×1 ou 2×2 (numa mesa vazia, cria a partida já no modo escolhido). */
+  private handleArcadeMode(client: OfficeClient, furniId: string, mode: ArcadeMode): ArcadeReply {
+    const found = this.arcadeTable(furniId);
+    if (!found) return this.arcadeRefuse(client, 'Essa mesa não existe mais.');
+    if (!this.gameLimiter.tryTake(client.sessionId)) {
+      return this.arcadeRefuse(client, ERROR_MESSAGES[ErrorCode.RateLimit]);
+    }
+    const game = this.state.arcade.get(furniId) ?? arcade.newArcade(found.kind);
+    const res = arcade.setMode(game, mode, client.sessionId);
+    if (!res.ok) return this.arcadeRefuse(client, res.reason);
+    // Numa mesa vazia, o modo escolhido fica guardado para quem entrar.
+    if (!this.state.arcade.has(furniId)) this.state.arcade.set(furniId, game);
+    return { ok: true };
+  }
+
+  /** Pedido numa mesa com partida (sair, começar, desistir). */
+  private handleArcade(
+    client: OfficeClient,
+    furniId: string,
+    run: (game: ArcadeGame, session: string) => ArcadeReply,
+  ): ArcadeReply {
+    const game = this.state.arcade.get(furniId);
+    if (!game || !this.arcadeTable(furniId)) {
+      return this.arcadeRefuse(client, 'Você não está nesta mesa.');
+    }
+    if (!this.gameLimiter.tryTake(client.sessionId)) {
+      return this.arcadeRefuse(client, ERROR_MESSAGES[ErrorCode.RateLimit]);
+    }
+    const res = run(game, client.sessionId);
+    if (!res.ok) return this.arcadeRefuse(client, res.reason);
+    if (arcade.isEmpty(game)) this.state.arcade.delete(furniId);
+    return res;
+  }
+
+  /** Anda até a vaga (ou o tile livre mais perto encostado na mesa) e vira para ela ao chegar. */
+  private walkToSlot(
+    sessionId: string,
+    player: Player,
+    table: Furni,
+    def: FurniManifestEntry,
+    slot: ArcadeSlot,
+  ): void {
+    const fp = footprint(def, table.x, table.y, table.rot);
+    const spot = slotSpot(def, table, slot);
+    const still = player.nextX === player.x && player.nextY === player.y;
+    if (still && player.x === spot.x && player.y === spot.y && player.action === 'idle') {
+      player.dir = faceTowards(player, fp);
+      return;
+    }
+    const grid = this.gridFor(sessionId);
+    let at: TilePoint | null = null;
+    if (grid.isWalkable(spot.x, spot.y, true) && !this.isTileTaken(spot, sessionId)) {
+      const plan = this.movement.plan(sessionId, player, spot, grid);
+      if (plan && plan.dest.x === spot.x && plan.dest.y === spot.y) {
+        this.movement.go(sessionId, player, plan);
+        at = spot;
+      }
+    }
+    at ??= this.walkNextTo(sessionId, player, fp);
+    if (at) this.intents.set(sessionId, { kind: 'arcade', furniId: table.id, at });
+  }
+
+  /** Fim de partida: placar de cada um e aviso no chat da sala. */
+  private arcadeFinished(kind: string, outcome: arcade.ArcadeOutcome): void {
+    const info = ARCADE_INFO[(arcadeKindOf(kind) ?? 'pingpong') as ArcadeKind];
+    services().games.recordTeams(
+      kind,
+      outcome.winners.map((p) => p.user),
+      outcome.losers.map((p) => p.user),
+    );
+    const [first, ...partners] = outcome.winners;
+    if (!first) return;
+    const how =
+      outcome.end === 'wo' ? ' (W.O.)' : outcome.end === 'forfeit' ? ' (desistência)' : '';
+    const losers = outcome.losers.map((p) => p.name).join(' e ') || 'o adversário';
+    const text = partners.length
+      ? `🏆 venceu com ${partners.map((p) => p.name).join(' e ')} contra ${losers} ${info.game}${how}`
+      : `🏆 venceu ${losers} ${info.game}${how}`;
+    this.gameChat(first, text);
+  }
+
+  /** Quem saiu no meio da partida e não voltou a tempo: W.O. */
+  private expireArcade(): void {
+    const now = Date.now();
+    for (const [furniId, game] of [...this.state.arcade.entries()]) {
+      const outcome = arcade.expire(game, now);
+      if (!outcome) continue;
+      this.arcadeFinished(game.kind, outcome);
+      if (arcade.isEmpty(game)) this.state.arcade.delete(furniId);
+    }
   }
 
   /** Cadeira encostada na mesa, com lugar livre, mais perto de quem vai sentar. */
@@ -1706,6 +1920,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     services().furni.remove(this.layout.roomId, furniId);
     this.state.furni.delete(furniId);
     this.state.games.delete(furniId);
+    this.state.arcade.delete(furniId);
     this.refreshDesks();
     return { ok: true };
   }

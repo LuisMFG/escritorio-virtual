@@ -33,6 +33,7 @@ import { openDatabase } from '../db/client.js';
 import { configureApp } from '../http/app.js';
 import { createServices, setServices, type Services } from '../services/index.js';
 import { OfficeRoom } from './OfficeRoom.js';
+import { arcadeTiming } from './arcade.js';
 import { OfflineTvMeta } from '../services/TvService.js';
 
 let colyseus: ColyseusTestServer;
@@ -274,7 +275,7 @@ describe('OfficeRoom', () => {
     const byRoom = Object.fromEntries(
       body.rooms.map((r) => [r.roomId, r.people.map((p) => p.name)]),
     );
-    expect(byRoom).toEqual({ reception: ['Ana'], meeting: ['Beto'], pantry: [] });
+    expect(byRoom).toEqual({ reception: ['Ana'], meeting: ['Beto'], pantry: [], games: [] });
   });
 
   describe('decorar', () => {
@@ -1706,6 +1707,158 @@ describe('OfficeRoom', () => {
       const onPlatform = me().x >= 4 && me().x <= 5 && me().y >= 1 && me().y <= 2;
       expect(me().z).toBeCloseTo(onPlatform ? 1 : 0, 3);
     }, 15_000);
+  });
+  describe('Salão de Jogos: vagas, assistir e W.O. (Fase 57)', () => {
+    /** Sala 8×6 (entrada em 1,4) com uma mesa de ping-pong em (3,2)–(4,2) e outra em (3,5). */
+    function hall() {
+      const roomId = svc.rooms.create('Teste Fase 57', svc.furniDefs).id;
+      const owner = newUser('Dono').user.id;
+      const add = (x: number, y: number) =>
+        svc.furni.add(roomId, { defId: 'pingpong_table', x, y, z: 0, rot: 0 }, owner).id;
+      return { roomId, table: add(3, 2), other: add(5, 5) };
+    }
+    async function enter(name: string, roomId: string) {
+      const u = newUser(name);
+      const room = await join(u.token, roomId);
+      const me = () => room.state.players.get(room.sessionId)!;
+      return { room, me, user: u.user, token: u.token };
+    }
+    type Reply = { ok: boolean; reason?: string };
+    const ask = (room: Awaited<ReturnType<typeof join>>, type: string, msg: object) =>
+      room.request(type, msg) as Promise<Reply>;
+
+    it('entra na vaga e vai para a ponta da mesa; quem não joga assiste ao vivo', async () => {
+      const { roomId, table, other } = hall();
+      const ana = await enter('Ana', roomId);
+      const beto = await enter('Beto', roomId);
+      const carla = await enter('Carla', roomId);
+      const game = () => carla.room.state.arcade.get(table);
+
+      expect(await ask(ana.room, ClientMessage.ArcadeJoin, { furniId: table, slot: 'a1' })).toEqual(
+        {
+          ok: true,
+        },
+      );
+      // Anda até a ponta do lado A (2,2) e vira para a mesa (direção 2, para +x).
+      await waitFor(() => ana.me().x === 2 && ana.me().y === 2 && ana.me().action === 'idle', 6000);
+      await waitFor(() => ana.me().dir === 2);
+      expect(
+        await ask(beto.room, ClientMessage.ArcadeJoin, { furniId: table, slot: 'a1' }),
+      ).toEqual({
+        ok: false,
+        reason: 'Essa vaga já tem alguém.',
+      });
+      expect(
+        await ask(beto.room, ClientMessage.ArcadeJoin, { furniId: table, slot: 'b1' }),
+      ).toEqual({
+        ok: true,
+      });
+      await waitFor(() => game()?.b1Name === 'Beto');
+      expect(game()).toMatchObject({ kind: 'pingpong', mode: 1, status: 'waiting', a1Name: 'Ana' });
+
+      // Quem assiste não começa; quem joga, sim. A Carla vê a partida começar.
+      expect(await ask(carla.room, ClientMessage.ArcadeStart, { furniId: table })).toMatchObject({
+        ok: false,
+      });
+      expect(await ask(beto.room, ClientMessage.ArcadeStart, { furniId: table })).toEqual({
+        ok: true,
+      });
+      await waitFor(() => game()?.status === 'playing');
+      expect(
+        await ask(carla.room, ClientMessage.ArcadeJoin, { furniId: table, slot: 'b1' }),
+      ).toMatchObject({
+        ok: false,
+      });
+      // Uma mesa por vez.
+      expect(await ask(ana.room, ClientMessage.ArcadeJoin, { furniId: other, slot: 'a1' })).toEqual(
+        {
+          ok: false,
+          reason: 'Você já está em outra mesa.',
+        },
+      );
+    }, 20_000);
+
+    it('2×2 escolhido na mesa vazia fica guardado para quem entrar', async () => {
+      const { roomId, table } = hall();
+      const ana = await enter('Ana', roomId);
+      expect(await ask(ana.room, ClientMessage.ArcadeMode, { furniId: table, mode: 2 })).toEqual({
+        ok: true,
+      });
+      await waitFor(() => ana.room.state.arcade.get(table)?.mode === 2);
+      // Continua guardado depois (o relógio do W.O. não descarta mesa só com o modo).
+      await wait(1200);
+      expect(ana.room.state.arcade.get(table)?.mode).toBe(2);
+      const joined = await ask(ana.room, ClientMessage.ArcadeJoin, { furniId: table, slot: 'a2' });
+      expect(joined).toEqual({ ok: true });
+      await waitFor(() => ana.room.state.arcade.get(table)?.a2Name === ana.user.name);
+    }, 20_000);
+
+    it('desistir: o outro lado vence, o placar fica gravado e o chat avisa', async () => {
+      const { roomId, table } = hall();
+      const ana = await enter('Ana', roomId);
+      const beto = await enter('Beto', roomId);
+      await ask(ana.room, ClientMessage.ArcadeJoin, { furniId: table, slot: 'a1' });
+      await ask(beto.room, ClientMessage.ArcadeJoin, { furniId: table, slot: 'b1' });
+      await ask(ana.room, ClientMessage.ArcadeStart, { furniId: table });
+      const chat = ana.room.waitForMessage(ServerMessage.Chat) as Promise<ChatMessage>;
+      expect(await ask(beto.room, ClientMessage.ArcadeForfeit, { furniId: table })).toEqual({
+        ok: true,
+      });
+      expect(await chat).toMatchObject({
+        text: `🏆 venceu ${beto.user.name} no ping-pong (desistência)`,
+        kind: 'game',
+      });
+      await waitFor(() => ana.room.state.arcade.get(table)?.status === 'ended');
+      expect(ana.room.state.arcade.get(table)).toMatchObject({ winner: 'a', end: 'forfeit' });
+      expect(svc.games.of('pingpong', [ana.user.id, beto.user.id])).toMatchObject([
+        { wins: 1, losses: 0 },
+        { wins: 0, losses: 1 },
+      ]);
+    }, 20_000);
+
+    it('sair da sala antes da partida libera a vaga; no meio dela, W.O. depois do prazo', async () => {
+      const { roomId, table } = hall();
+      const ana = await enter('Ana', roomId);
+      const beto = await enter('Beto', roomId);
+      await ask(ana.room, ClientMessage.ArcadeJoin, { furniId: table, slot: 'a1' });
+      await waitFor(() => beto.room.state.arcade.get(table)?.a1Name === 'Ana');
+      await ana.room.leave();
+      await waitFor(() => !beto.room.state.arcade.has(table));
+
+      const ana2 = await enter('Ana Dois', roomId);
+      await ask(ana2.room, ClientMessage.ArcadeJoin, { furniId: table, slot: 'a1' });
+      await ask(beto.room, ClientMessage.ArcadeJoin, { furniId: table, slot: 'b1' });
+      await ask(beto.room, ClientMessage.ArcadeStart, { furniId: table });
+      arcadeTiming.woMs = 400;
+      try {
+        await ana2.room.leave();
+        await waitFor(() => (beto.room.state.arcade.get(table)?.a1Away ?? 0) > 0);
+        await waitFor(() => beto.room.state.arcade.get(table)?.status === 'ended', 3000);
+        expect(beto.room.state.arcade.get(table)).toMatchObject({
+          winner: 'b',
+          end: 'wo',
+          a1Session: '',
+          b1Name: 'Beto',
+        });
+      } finally {
+        arcadeTiming.woMs = 15_000;
+      }
+    }, 20_000);
+
+    it('quem sai no meio da partida e volta a tempo continua na mesma vaga', async () => {
+      const { roomId, table } = hall();
+      const ana = await enter('Ana', roomId);
+      const beto = await enter('Beto', roomId);
+      await ask(ana.room, ClientMessage.ArcadeJoin, { furniId: table, slot: 'a1' });
+      await ask(beto.room, ClientMessage.ArcadeJoin, { furniId: table, slot: 'b1' });
+      await ask(ana.room, ClientMessage.ArcadeStart, { furniId: table });
+      await ana.room.leave();
+      await waitFor(() => (beto.room.state.arcade.get(table)?.a1Away ?? 0) > 0);
+      // Voltou (outra conexão da mesma conta): a vaga é dela de novo, sem W.O.
+      const again = await join(ana.token, roomId);
+      await waitFor(() => beto.room.state.arcade.get(table)?.a1Session === again.sessionId);
+      expect(beto.room.state.arcade.get(table)).toMatchObject({ status: 'playing', a1Away: 0 });
+    }, 20_000);
   });
   describe('emotes e toca aqui (Fase 54)', () => {
     /** Sala vazia 8×6 (entrada em 1,4); cada um entra e anda até o seu tile. */

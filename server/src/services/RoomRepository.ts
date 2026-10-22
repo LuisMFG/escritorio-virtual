@@ -7,6 +7,7 @@ import {
   defaultRoomHeightmap,
   doorInside,
   findDoorSpot,
+  GAMES,
   parseAvatarManifest,
   parseFurniManifest,
   parseHeightmap,
@@ -22,7 +23,10 @@ import {
 import { and, asc, desc, eq, inArray, or } from 'drizzle-orm';
 import { ROOT_DIR } from '../config.js';
 import type { Db } from '../db/client.js';
-import { chatMessages, roomDoors, roomFurni, rooms } from '../db/schema.js';
+import { chatMessages, roomDoors, roomFurni, rooms, settings } from '../db/schema.js';
+
+/** O Salão de Jogos já chegou a este banco (Fase 57): excluído depois, não volta. */
+const GAMES_ROOM_KEY = 'games_room';
 
 /** Catálogo de móveis do manifesto do cliente (até a Fase 6 levar isso para o banco). */
 export function loadFurniDefs(): Map<string, FurniManifestEntry> {
@@ -232,6 +236,89 @@ export class RoomRepository {
     return [
       ...new Set([roomId, ...before, ...after, ...linked, ...this.ensureBackDoors(roomId, defs)]),
     ];
+  }
+
+  /**
+   * Salão de Jogos (Fase 57): bancos de antes recebem a sala uma vez, com os móveis e a porta
+   * para a Recepção. A Recepção ganha a porta de volta no lugar pensado (parede do fundo, perto
+   * do café) ou, se ele estiver ocupado, no lugar livre mais perto da entrada. Se a sala for
+   * excluída depois, não volta. Devolve as salas cujo layout mudou.
+   */
+  ensureGamesRoom(defs: ReadonlyMap<string, FurniDef>): string[] {
+    const done = this.db.select().from(settings).where(eq(settings.key, GAMES_ROOM_KEY)).get();
+    if (done) return [];
+    const changed: string[] = [];
+    const reception = this.db.select().from(rooms).where(eq(rooms.id, RECEPTION.id)).get();
+    if (!this.exists(GAMES.id)) {
+      const last = this.db.select({ sort: rooms.sort }).from(rooms).orderBy(desc(rooms.sort)).get();
+      this.db.transaction((tx) => {
+        tx.insert(rooms)
+          .values({
+            id: GAMES.id,
+            name: GAMES.name,
+            heightmap: GAMES.heightmap,
+            spawnX: GAMES.spawn.x,
+            spawnY: GAMES.spawn.y,
+            spawnDir: GAMES.spawn.dir,
+            floorColor: GAMES.floorColor,
+            wallColor: GAMES.wallColor,
+            furniSeeded: true,
+            sort: (last?.sort ?? 0) + 1,
+          })
+          .run();
+        for (const f of GAMES.furni) {
+          tx.insert(roomFurni)
+            .values({ ...f, roomId: GAMES.id, updatedAt: new Date() })
+            .run();
+        }
+        if (reception) {
+          for (const d of GAMES.doors) {
+            tx.insert(roomDoors)
+              .values(doorRow(GAMES.id, d, d.targetRoomId))
+              .run();
+          }
+        }
+      });
+      changed.push(GAMES.id);
+    }
+    const doors = reception ? this.doorsOf(reception.id) : [];
+    if (
+      reception &&
+      !doors.some((d) => d.targetRoomId === GAMES.id) &&
+      doors.length < ROOM_MAX_DOORS
+    ) {
+      const furni = this.db
+        .select()
+        .from(roomFurni)
+        .where(eq(roomFurni.roomId, reception.id))
+        .all()
+        .map(({ id, defId, x, y, z, rot }) => ({ id, defId, x, y, z, rot }));
+      const spot = findDoorSpot(
+        reception.heightmap,
+        { x: reception.spawnX, y: reception.spawnY },
+        doors,
+        furni,
+        defs,
+        RECEPTION.doors.find((d) => d.targetRoomId === GAMES.id),
+      );
+      if (spot) {
+        const heightmap = reception.heightmap.map((row, y) =>
+          y === spot.y ? row.slice(0, spot.x) + '0' + row.slice(spot.x + 1) : row,
+        );
+        this.db.update(rooms).set({ heightmap }).where(eq(rooms.id, reception.id)).run();
+        this.db
+          .insert(roomDoors)
+          .values(doorRow(reception.id, spot, GAMES.id))
+          .run();
+        changed.push(reception.id);
+      }
+    }
+    this.db
+      .insert(settings)
+      .values({ key: GAMES_ROOM_KEY, value: '1' })
+      .onConflictDoNothing()
+      .run();
+    return changed;
   }
 
   /** Exclui a sala (e o que é dela). Portas que levavam até ela somem. Devolve as salas afetadas. */

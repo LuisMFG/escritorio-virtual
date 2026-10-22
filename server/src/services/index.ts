@@ -155,11 +155,14 @@ export function createServices(
     opts.measureFurni ?? (() => Promise.reject(new Error('Medição de móveis não configurada.'))),
     opts.catalogFile,
   );
+  const rooms = new RoomRepository(db);
+  // Bancos de antes da Fase 57 recebem o Salão de Jogos (e a porta na Recepção) uma vez.
+  rooms.ensureGamesRoom(furniCatalog.defs);
   return {
     db,
     users,
     presence,
-    rooms: new RoomRepository(db),
+    rooms,
     chat: new ChatService(db),
     dms: new DmService(db),
     boards: new BoardService(db),
