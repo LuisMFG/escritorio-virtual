@@ -6,6 +6,8 @@ import {
   pongHitSchema,
   pongPaddleSchema,
   pongServeSchema,
+  poolAimSchema,
+  poolShotSchema,
   sideNames,
   type PongSide,
   arcadeJoinSchema,
@@ -150,6 +152,7 @@ import { MovementSystem, type Mover } from './MovementSystem.js';
 import * as ttt from './ticTacToe.js';
 import * as arcade from './arcade.js';
 import { PongMatch } from './pong.js';
+import { PoolMatch } from './pool.js';
 import { PetKeeper } from './PetKeeper.js';
 
 const TICK_MS = 50;
@@ -235,6 +238,9 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
   /** Partidas de ping-pong em andamento (Fase 58) e o laço de 60 Hz delas. */
   private readonly pongMatches = new Map<string, PongMatch>();
   private pongLoop: { clear(): void } | null = null;
+  /** Partidas de sinuca em andamento (Fase 59) e o relógio delas (10 Hz). */
+  private readonly poolMatches = new Map<string, PoolMatch>();
+  private poolLoop: { clear(): void } | null = null;
   /** Último uso de cada móvel por pessoa (duplo clique não liga e desliga). */
   private readonly lastUse = new Map<string, number>();
   /** Quem está no meio de um teleporte (não dispara de novo). */
@@ -498,6 +504,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       this.handleArcade(client as OfficeClient, msg.furniId, (game, session) => {
         const res = arcade.start(game, session);
         if (res.ok && game.kind === 'pingpong') this.startPong(msg.furniId, game);
+        if (res.ok && game.kind === 'pool') this.startPool(msg.furniId, game);
         return res;
       }),
     ),
@@ -523,6 +530,22 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     [ClientMessage.PongHit]: validate(pongHitSchema, (client, msg) =>
       this.pongAction(client.sessionId, msg.furniId, (m, slot) => m.hit(slot, msg, Date.now())),
     ),
+    // ---------- Sinuca (Fase 59) ----------
+    [ClientMessage.PoolShoot]: validate(poolShotSchema, (client, msg) => {
+      const match = this.poolMatches.get(msg.furniId);
+      const game = this.state.arcade.get(msg.furniId);
+      const slot = game && arcade.slotOf(game, client.sessionId);
+      if (!match || !slot) {
+        return this.arcadeRefuse(client as OfficeClient, 'Você não está jogando nesta mesa.');
+      }
+      const res = match.shoot(slot, msg, Date.now());
+      return res.ok ? res : this.arcadeRefuse(client as OfficeClient, res.reason);
+    }),
+    [ClientMessage.PoolAim]: validate(poolAimSchema, (client, msg) => {
+      const game = this.state.arcade.get(msg.furniId);
+      const slot = game && arcade.slotOf(game, client.sessionId);
+      if (slot) this.poolMatches.get(msg.furniId)?.aim(slot, msg);
+    }),
     [ClientMessage.TttScores]: (client: Client, input: unknown): TttScores => {
       const p = tttRefSchema.safeParse(input);
       const game = p.success ? this.state.games.get(p.data.furniId) : undefined;
@@ -1773,6 +1796,36 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     if (!this.pongMatches.size) {
       this.pongLoop?.clear();
       this.pongLoop = null;
+    }
+  }
+
+  /** Começa a partida de sinuca da mesa e o relógio (enquanto houver partida). */
+  private startPool(furniId: string, game: ArcadeGame): void {
+    const names = (side: PongSide) =>
+      sideNames(arcadeView(game), side) || (side === 'a' ? 'lado A' : 'lado B');
+    this.poolMatches.set(furniId, new PoolMatch(game, names, Date.now()));
+    this.poolLoop ??= this.clock.setInterval(() => this.tickPool(), 100);
+  }
+
+  /** Relógio das partidas de sinuca; a que acabou (depois de as bolas pararem) vai para o placar. */
+  private tickPool(): void {
+    const now = Date.now();
+    for (const [furniId, match] of [...this.poolMatches]) {
+      const game = this.state.arcade.get(furniId);
+      if (!game || game.status !== 'playing') {
+        this.poolMatches.delete(furniId);
+        continue;
+      }
+      const end = match.tick(now);
+      if (!end) continue;
+      this.poolMatches.delete(furniId);
+      const outcome = arcade.finishPoints(game, end.winner);
+      game.detail = end.reason;
+      this.arcadeFinished(game.kind, outcome, ` (${end.reason})`);
+    }
+    if (!this.poolMatches.size) {
+      this.poolLoop?.clear();
+      this.poolLoop = null;
     }
   }
 

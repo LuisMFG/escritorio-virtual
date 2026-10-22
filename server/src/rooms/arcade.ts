@@ -66,6 +66,13 @@ function resetMatch(g: ArcadeGame): void {
     turn: '',
     phase: '',
     ball: '',
+    balls: '',
+    shot: '',
+    groupA: '',
+    inHand: false,
+    breakShot: false,
+    deadline: 0,
+    aim: '',
     detail: '',
     winner: '',
     end: '',
@@ -144,8 +151,8 @@ function finish(g: ArcadeGame, winner: ArcadeSide, end: ArcadeOutcome['end']): A
     winners: playersOf(g, winner),
     losers: playersOf(g, otherSide(winner)),
   };
-  // A bola sai da mesa; o placar final fica à mostra.
-  Object.assign(g, { status: 'ended', winner, end, phase: '', ball: '' });
+  // A bola sai da mesa e a mira some; o placar final (e as bolas da sinuca) fica à mostra.
+  Object.assign(g, { status: 'ended', winner, end, phase: '', ball: '', aim: '', deadline: 0 });
   return outcome;
 }
 

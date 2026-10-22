@@ -31,6 +31,9 @@ import {
   nextEvent,
   PONG,
   simulate,
+  decodeJson,
+  simulateShot,
+  type PoolShotRecord,
 } from '@office/shared';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import type { Config } from '../config.js';
@@ -40,6 +43,7 @@ import { createServices, setServices, type Services } from '../services/index.js
 import { OfficeRoom } from './OfficeRoom.js';
 import { arcadeTiming } from './arcade.js';
 import type { PongMatch } from './pong.js';
+import type { PoolMatch } from './pool.js';
 import { OfflineTvMeta } from '../services/TvService.js';
 
 let colyseus: ColyseusTestServer;
@@ -1961,6 +1965,130 @@ describe('OfficeRoom', () => {
       });
       expect(svc.games.of('pingpong', [ana.user.id])).toMatchObject([{ wins: 1, losses: 0 }]);
     }, 30_000);
+  });
+  describe('sinuca: partida simulada (Fase 59)', () => {
+    type Room = Awaited<ReturnType<typeof join>>;
+    /** Mesa de sinuca com Ana e Beto (1×1) ou mais Caio e Duda (2×2), já começada. */
+    async function match(mode: 1 | 2 = 1) {
+      const roomId = svc.rooms.create('Teste Fase 59', svc.furniDefs).id;
+      const owner = newUser('Dono').user.id;
+      const table = svc.furni.add(
+        roomId,
+        { defId: 'bling15_pooltable', x: 3, y: 2, z: 0, rot: 0 },
+        owner,
+      ).id;
+      const ask = (room: Room, type: string, msg: object) =>
+        room.request(type, { furniId: table, ...msg }) as Promise<{ ok: boolean; reason?: string }>;
+      const people: { room: Room; user: { name: string; id: string } }[] = [];
+      for (const name of ['Ana', 'Beto', 'Caio', 'Duda'].slice(0, mode * 2)) {
+        const u = newUser(name);
+        people.push({ room: await join(u.token, roomId), user: u.user });
+      }
+      if (mode === 2) await ask(people[0]!.room, ClientMessage.ArcadeMode, { mode: 2 });
+      for (const [k, slot] of (['a1', 'b1', 'a2', 'b2'] as const).slice(0, mode * 2).entries()) {
+        expect(await ask(people[k]!.room, ClientMessage.ArcadeJoin, { slot })).toEqual({
+          ok: true,
+        });
+      }
+      expect(await ask(people[0]!.room, ClientMessage.ArcadeStart, {})).toEqual({ ok: true });
+      const game = () => people[1]!.room.state.arcade.get(table)!;
+      await waitFor(() => game()?.phase === 'aim');
+      const server = colyseus.getRoomById(people[0]!.room.roomId) as unknown as {
+        poolMatches: Map<string, PoolMatch>;
+      };
+      /** Tacada de quem está numa vaga; espera ela chegar ao estado e as bolas pararem. */
+      const shoot = async (who: Room, msg: object) => {
+        const before = game().shot;
+        const res = await ask(who, ClientMessage.PoolShoot, msg);
+        if (res.ok) {
+          await waitFor(() => game().shot !== before);
+          await waitFor(() => game().phase === 'aim', 15_000);
+        }
+        return res;
+      };
+      return { table, people, ask, game, shoot, pool: () => server.poolMatches.get(table)! };
+    }
+    const miss = { dx: -1, dy: 0, power: 0, sx: 0, sy: 0 };
+
+    it('abertura igual para todos e tempo esgotado dando bola na mão ao adversário', async () => {
+      const { table, people, game, shoot, pool } = await match();
+      const [ana, beto] = people as [(typeof people)[0], (typeof people)[0]];
+      expect(game()).toMatchObject({ turn: 'a1', inHand: true, breakShot: true, groupA: '' });
+      expect(await shoot(beto.room, miss)).toEqual({ ok: false, reason: 'Não é a sua vez.' });
+      const brk = { dx: 1, dy: 0.02, power: 1, sx: 0, sy: 0, cx: 0.5, cy: 0.56 };
+      expect(await shoot(ana.room, brk)).toEqual({ ok: true });
+      // As posições finais são as da simulação da tacada gravada, para quem joga e quem assiste.
+      const rec = decodeJson<PoolShotRecord>(game().shot)!;
+      const final = simulateShot(rec.start, rec).final;
+      expect(JSON.parse(game().balls)).toEqual(final);
+      expect(ana.room.state.arcade.get(table)!.balls).toBe(game().balls);
+      expect(game().breakShot).toBe(false);
+      // O tempo de quem tem a vez acaba: bola na mão para o outro lado.
+      const turn = game().turn;
+      Object.assign(pool(), { deadline: Date.now() + 200 });
+      await waitFor(() => game().turn !== turn, 3000);
+      const [from, to] = turn === 'a1' ? [ana, beto] : [beto, ana];
+      expect(game()).toMatchObject({ inHand: true });
+      expect(game().detail).toBe(
+        `Tempo esgotado para ${from.user.name}. Bola na mão para ${to.user.name}.`,
+      );
+    }, 30_000);
+
+    it('vitória cantando a 8: placar gravado e aviso no chat', async () => {
+      const { people, ask, game, shoot, pool } = await match();
+      const [ana, beto] = people as [(typeof people)[0], (typeof people)[0]];
+      // Acelera: as lisas da Ana já foram; só a branca e a 8, perto da caçapa do canto (0).
+      const balls = new Array(16).fill(null);
+      balls[0] = [0.45, 0.45];
+      balls[8] = [0.15, 0.15];
+      Object.assign(pool(), {
+        balls,
+        rules: {
+          groupA: 'solids',
+          turn: 'a',
+          next: { a: 0, b: 0 },
+          inHand: false,
+          breakShot: false,
+        },
+      });
+      const toTheCorner = { dx: -Math.SQRT1_2, dy: -Math.SQRT1_2, power: 0.3, sx: 0, sy: 0 };
+      expect(await shoot(ana.room, toTheCorner)).toEqual({
+        ok: false,
+        reason: 'Cante a caçapa da 8: clique numa caçapa.',
+      });
+      const chat = beto.room.waitForMessage(ServerMessage.Chat, 12_000) as Promise<ChatMessage>;
+      expect(await ask(ana.room, ClientMessage.PoolShoot, { ...toTheCorner, call: 0 })).toEqual({
+        ok: true,
+      });
+      await waitFor(() => game().status === 'ended', 8000);
+      expect(game()).toMatchObject({ winner: 'a', end: 'points', detail: 'a 8 na caçapa cantada' });
+      expect(await chat).toMatchObject({
+        text: `🏆 venceu ${beto.user.name} na sinuca (a 8 na caçapa cantada)`,
+        kind: 'game',
+      });
+      expect(svc.games.of('pool', [ana.user.id])).toMatchObject([{ wins: 1, losses: 0 }]);
+    }, 30_000);
+
+    it('2×2: as duplas alternam as tacadas e a falta dá bola na mão', async () => {
+      const { people, game, shoot } = await match(2);
+      const bySlot = { a1: people[0]!, b1: people[1]!, a2: people[2]!, b2: people[3]! };
+      const order: string[] = [];
+      for (let k = 0; k < 4; k++) {
+        const slot = game().turn as keyof typeof bySlot;
+        order.push(slot);
+        // Tacada fraca para trás: não acerta nenhuma bola.
+        expect(await shoot(bySlot[slot].room, miss)).toEqual({ ok: true });
+        if (k === 0) {
+          expect(game()).toMatchObject({ turn: 'b1', inHand: true });
+          expect(game().detail).toBe(
+            `Falta de ${bySlot.a1.user.name}: a branca não acertou nenhuma bola. ` +
+              `Bola na mão para ${bySlot.b1.user.name}.`,
+          );
+        }
+      }
+      order.push(game().turn);
+      expect(order).toEqual(['a1', 'b1', 'a2', 'b2', 'a1']);
+    }, 40_000);
   });
   describe('emotes e toca aqui (Fase 54)', () => {
     /** Sala vazia 8×6 (entrada em 1,4); cada um entra e anda até o seu tile. */
