@@ -1568,7 +1568,7 @@ As fases 52 e 53 vêm primeiro porque corrigem o que já existe e é usado todo 
   3. Uma terceira pessoa abre a mesa e assiste.
   4. Para testar com ping alto, abra com `?atraso=150` no endereço.
 
-### Fase 59 — Sinuca 8 Ball
+### Fase 59 — Sinuca 8 Ball ✅ implementada
 - **Física no servidor.**
   - Bolas com atrito, tabelas e caçapas, e efeito na branca (alto, baixo e de lado).
   - É determinística e compartilhada, para o cliente animar igual. O servidor manda as posições finais.
@@ -1595,6 +1595,45 @@ As fases 52 e 53 vêm primeiro porque corrigem o que já existe e é usado todo 
   - unidade: colisões, tabelas, caçapas e efeito; cada falta, atribuição de grupo e a 8;
   - sala: partidas 1×1 e 2×2 simuladas;
   - ponta a ponta: tacada e placar em dois navegadores.
+- **Feito:**
+  - **Física e regras compartilhadas** (`shared/src/pool.ts`): a tacada é simulada até as bolas pararem, em passos fixos de 1/360 s, só com somas, multiplicações, divisões e raiz quadrada. O mesmo começo e a mesma tacada dão exatamente o mesmo fim no servidor e em qualquer navegador.
+    - Atrito do pano, tabelas com perda (fora das bocas das caçapas) e seis caçapas: os quatro cantos e o meio das tabelas compridas.
+    - O choque entre bolas é resolvido no instante exato do contato, na linha dos centros. Assim, o caminho da bola acertada é o que a linha-guia mostra.
+    - Efeito: alto faz a branca seguir depois do primeiro choque e baixo faz ela voltar; o de lado muda o rebote na tabela.
+    - Juiz da tacada:
+      - abertura: a 8 encaçapada volta para a mesa;
+      - mesa aberta até a primeira bola encaçapada fora da abertura definir lisas ou listradas;
+      - as quatro faltas (branca na caçapa, não acertar nada, acertar primeiro a bola errada, nenhuma bola na tabela depois do contato), com bola na mão para o outro lado;
+      - a 8: vence quem a encaçapa na caçapa cantada depois do grupo; perde quem a encaçapa cedo, na caçapa errada ou com falta.
+    - 2×2: as duplas alternam as tacadas (A1, B1, A2, B2). Quem encaçapa continua, e a vez seguinte do lado passa para o parceiro.
+  - **Servidor** (`server/src/rooms/pool.ts`): quem tem a vez manda a tacada (direção, força, efeito, onde pôs a branca e a caçapa da 8). O servidor confere, simula, julga e manda a tacada gravada e as posições finais.
+    - A vez, o placar e o aviso da falta ou do grupo só aparecem quando as bolas param na tela de todos.
+    - 30 s por tacada, contados depois que as bolas param. Se o tempo acaba, é falta, com bola na mão para o outro lado. Com alguém fora da sala, o relógio para.
+    - Placar: as bolas do próprio grupo já encaçapadas. No fim, placar de vitórias e aviso no chat com o motivo ("a 8 na caçapa cantada").
+    - A mira de quem taca vai para os outros até 10 vezes por segundo, para todo mundo ver o taco.
+  - **Navegador** (`client/src/ui/pool.ts`): o painel cresce e vira a mesa ao vivo, vista de cima e em arte própria (bolas numeradas, lisas e listradas, taco e tabelas).
+    - Mira arrastando na mesa, com a linha-guia: até a bola-fantasma, o caminho da bola acertada e o desvio da branca (ou o rebote na tabela). As setas do teclado afinam a mira.
+    - Força: puxe a barra ao lado da mesa e solte para tacar; o taco recua junto.
+    - Efeito: clique no círculo da branca onde o taco bate (em cima segue, embaixo volta, dos lados muda o rebote).
+    - Bola na mão: arraste a branca (na abertura, só atrás da linha). Se ela caiu, aparece atrás da linha num lugar livre. Num lugar que não dá, ganha um anel vermelho.
+    - Na vez da 8, as caçapas piscam: toque numa para cantar.
+    - Relógio da tacada, bolas que faltam de cada lado e o aviso da última tacada.
+    - Quem assiste vê o taco de quem joga, a animação e o placar, também na placa sobre a mesa (com os grupos). Depois do fim, a mesa final continua à mostra.
+    - A tacada é animada a partir do instante do servidor, igual para todos, e termina nas posições que o servidor mandou.
+    - Painel das mesas: os botões, as vagas e os textos só são refeitos quando mudam. A mira e as raquetes chegam várias vezes por segundo, e um clique no meio se perdia. A placa sobre a mesa também só é redesenhada quando o texto dela muda.
+  - **Testes:**
+    - unidade:
+      - `shared/src/pool.test.ts`: choque de frente, linha dos centros igual à guia, tabela e efeito de lado, caçapas do canto e do meio, efeito alto, baixo e sem efeito, mesmo resultado depois do JSON, abertura sem bolas encostadas, guia na tabela, bola na mão, a branca que caiu, faltas, grupos, a 8, a 8 na abertura, ordem das duplas e tempo esgotado;
+      - `server/src/rooms/pool.test.ts`: começo, recusas, tacada igual à simulação com o resultado só no fim, falta, tempo esgotado e relógio parado, a 8 cantada e na caçapa errada, 2×2;
+      - `arcade.test.ts` (placar com os grupos, mesa aberta e motivo do fim) e `client/src/ui/pool.test.ts` (conversão da mesa e bolas que faltam);
+    - sala: três testes em `OfficeRoom.test.ts` (abertura igual para todos e tempo esgotado; vitória cantando a 8, com placar e chat; 2×2 com as duplas alternando e falta com bola na mão);
+    - ponta a ponta: `sinuca.spec.ts` (abertura e mais uma tacada em dois navegadores; as mesmas bolas para quem joga e quem assiste, iguais à simulação de cada página; placar e grupos; desistência).
+- **Como testar:**
+  1. No Salão de Jogos, duas pessoas entram numa mesa de sinuca e uma clica em Começar. O lado A abre.
+  2. Arraste a branca (atrás da linha), arraste na mesa para mirar e puxe a barra à direita para tacar.
+  3. Clique na parte de baixo do círculo da branca e taque reto numa bola: a branca volta.
+  4. Uma terceira pessoa abre a mesa e assiste: vê o taco, as bolas rolando e o placar.
+  5. Para ver a 8: encaçape o seu grupo; na vez da 8, toque na caçapa e taque.
 
 ### Extras sugeridos (fora do pedido; dá para encaixar depois)
 
