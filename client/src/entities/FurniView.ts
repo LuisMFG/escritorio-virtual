@@ -434,6 +434,8 @@ export class FurniView extends Container {
       id: this.placed.id,
       ...this.footprint,
       z: this.placed.z,
+      // A faixa de altura (Fase 56): o que está acima dela vai na frente, mesmo erguido.
+      top: this.placed.z + this.def.height,
       layer: this.def.canWalk ? -1 : 0,
     };
   }

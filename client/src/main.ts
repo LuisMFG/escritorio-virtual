@@ -685,6 +685,7 @@ async function start(): Promise<void> {
       confirmPlace: () => scene?.decor.confirmPlace(),
       rotate: () => scene?.decor.rotate(),
       remove: () => scene?.decor.removeSelected(),
+      height: (steps) => scene?.decor.nudgeHeight(steps),
       color: (defId) => {
         // A definição da cor nova precisa existir antes do estado chegar com ela.
         void furniStore.ensure(defId).then((d) => {
@@ -717,6 +718,7 @@ async function start(): Promise<void> {
       move: (m) => connection?.moveFurni(m) ?? refused,
       remove: (id) => connection?.removeFurni(id) ?? refused,
       color: (m) => connection?.colorFurni(m) ?? refused,
+      height: (m) => connection?.heightFurni(m) ?? refused,
     },
     (canUndo, canRedo) => decorPanel.setHistory(canUndo, canRedo),
   );
@@ -1061,14 +1063,25 @@ async function start(): Promise<void> {
             rot: f.rot as FurniPlaceMessage['rot'],
             ...(msg.z !== undefined ? { z: f.z } : {}),
           };
+          // No piso, a altura antes e depois (uma base erguida volta erguida ao desfazer).
+          const floorZ = f && msg.z === undefined ? f.z : undefined;
           const res = await connection.moveFurni(msg);
           if (res.ok && before) {
-            decorHistory.recordMove(msg.furniId, before, {
-              x: msg.x,
-              y: msg.y,
-              rot: msg.rot,
-              ...(msg.z !== undefined ? { z: msg.z } : {}),
-            });
+            const after = res.furni?.z;
+            decorHistory.recordMove(
+              msg.furniId,
+              before,
+              { x: msg.x, y: msg.y, rot: msg.rot, ...(msg.z !== undefined ? { z: msg.z } : {}) },
+              floorZ !== undefined && after !== undefined ? { before: floorZ, after } : undefined,
+            );
+          }
+          return res;
+        },
+        heightFurni: async (msg) => {
+          const before = room.state.furni.get(msg.furniId)?.z;
+          const res = await connection.heightFurni(msg);
+          if (res.ok && res.furni && before !== undefined) {
+            decorHistory.recordHeight(msg.furniId, before, res.furni.z);
           }
           return res;
         },
@@ -1140,6 +1153,7 @@ async function start(): Promise<void> {
         onSelectionChange: (sel) => decorPanel.setSelected(sel),
         onError: (message) => overlay.notify(message),
         onPlaceReady: (ready) => decorPanel.setPlaceReady(ready),
+        onHeightChange: (z) => decorPanel.setHeight(z),
       },
     );
     scene = s;

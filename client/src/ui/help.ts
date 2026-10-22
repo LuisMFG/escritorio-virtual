@@ -30,6 +30,7 @@ const SHORTCUTS: Row[] = [
   ['← →', 'Vira o avatar sem sair do lugar.'],
   ['Roda do mouse · pinça', 'Aproxima e afasta a câmera; arraste para mover.'],
   ['R · Delete', 'No Decorar: gira e remove o móvel escolhido.'],
+  ['Shift + roda', 'No Decorar: sobe e desce o móvel escolhido.'],
 ];
 
 const BUTTONS: Row[] = [

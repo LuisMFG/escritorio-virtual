@@ -1026,6 +1026,30 @@ body {
   font-size: calc(12px * var(--font-scale, 1));
 }
 
+/* Ajuste fino de altura do selecionado (Fase 56): ▼ 0,8 ▲. */
+.decor-height {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+}
+
+.decor-height[hidden] {
+  display: none;
+}
+
+.decor-status .decor-height-step {
+  min-width: 34px;
+  padding: 4px 8px;
+}
+
+.decor-height output {
+  min-width: 2.6em;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
 .decor-help {
   font-size: calc(12px * var(--font-scale, 1));
 }

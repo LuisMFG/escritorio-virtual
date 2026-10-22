@@ -33,6 +33,7 @@ import {
   type ErrorMessage,
   type FurniMoveMessage,
   type FurniColorMessage,
+  type FurniHeightMessage,
   type FurniResult,
   type FurniPlaceMessage,
   type JoinOptions,
@@ -168,6 +169,11 @@ export class OfficeConnection {
 
   colorFurni(msg: FurniColorMessage): Promise<FurniResult> {
     return this.furniRequest(ClientMessage.FurniColor, msg);
+  }
+
+  /** Ajuste fino de altura (Fase 56): o móvel e o que está em cima dele. */
+  heightFurni(msg: FurniHeightMessage): Promise<FurniResult> {
+    return this.furniRequest(ClientMessage.FurniHeight, msg);
   }
 
   removeFurni(furniId: string): Promise<FurniResult> {

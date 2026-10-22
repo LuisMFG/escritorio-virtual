@@ -20,6 +20,8 @@ export interface DecorPanelHandlers {
   confirmPlace(): void;
   rotate(): void;
   remove(): void;
+  /** Ajuste fino de altura do selecionado: passos de 0,1 (Fase 56). */
+  height(steps: number): void;
   /** Outra cor do móvel selecionado. */
   color(defId: string): void;
   close(): void;
@@ -98,6 +100,9 @@ export class DecorPanel {
   private shown = DECOR_PAGE;
   private picked: string | null = null;
   private selected: DecorSelection | null = null;
+  /** Altura do selecionado (▲▼), quando ele está no piso (Fase 56). */
+  private readonly heightBox = document.createElement('div');
+  private readonly heightValue = document.createElement('output');
   /** Escolhas feitas: um "Preparando…" antigo não substitui uma escolha mais nova (DE17). */
   private pickSeq = 0;
   /** No toque, o fantasma já está num lugar (mostra "Colocar aqui"). */
@@ -182,6 +187,7 @@ export class DecorPanel {
     help.className = 'muted decor-help';
     for (const [k, v] of [
       ['R', 'gira'],
+      ['Shift+roda', 'altura'],
       ['Delete', 'remove'],
       ['Ctrl+Z', 'desfaz'],
       ['Ctrl+Shift+Z', 'refaz'],
@@ -189,6 +195,23 @@ export class DecorPanel {
     ] as const) {
       help.append(Object.assign(document.createElement('kbd'), { textContent: k }), ` ${v} `);
     }
+    // Ajuste fino de altura do selecionado (Fase 56): ▼ 0,8 ▲.
+    this.heightBox.className = 'decor-height';
+    this.heightBox.hidden = true;
+    this.heightValue.setAttribute('aria-live', 'polite');
+    const step = (label: string, text: string, steps: number) => {
+      const b = this.button(text, () => this.on.height(steps));
+      b.className = 'btn-secondary decor-height-step';
+      b.setAttribute('aria-label', label);
+      return b;
+    };
+    this.heightBox.append(
+      Object.assign(document.createElement('span'), { textContent: 'Altura' }),
+      step('Abaixar', '▼', -1),
+      this.heightValue,
+      step('Subir', '▲', 1),
+    );
+    this.heightBox.title = 'Shift + roda do mouse também ajusta';
     this.root.append(
       head,
       this.search,
@@ -286,6 +309,13 @@ export class DecorPanel {
     );
   }
 
+  /** Altura do móvel selecionado (`null` esconde o ajuste: nenhum ou item de parede). */
+  setHeight(z: number | null): void {
+    this.heightBox.hidden = z === null;
+    if (z !== null)
+      this.heightValue.value = z.toLocaleString('pt-BR', { minimumFractionDigits: 1 });
+  }
+
   setSelected(selected: DecorSelection | null): void {
     this.selected = selected;
     if (!this.picked) this.renderSelected();
@@ -319,6 +349,7 @@ export class DecorPanel {
       Object.assign(document.createElement('span'), {
         textContent: `Selecionado: ${this.nameOf(sel.defId, sel.name)}`,
       }),
+      this.heightBox,
       this.swatches(sel.defId, (id) => this.on.color(id)),
     );
     if (sel.interaction === 'teleport') this.status.append(this.teleportBox(sel.id));
