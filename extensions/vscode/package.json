@@ -45,7 +45,7 @@
   },
   "scripts": {
     "build": "esbuild src/extension.ts --bundle --platform=node --format=cjs --target=node20 --external:vscode --outfile=dist/extension.js",
-    "package": "npm run build && vsce package --no-dependencies --allow-missing-repository --skip-license -o ../client/public/downloads/escritorio-atividade.vsix"
+    "package": "npm run build && vsce package --no-dependencies --allow-missing-repository --skip-license -o ../../client/public/downloads/escritorio-atividade.vsix"
   },
   "devDependencies": {
     "@types/vscode": "1.90.0",

@@ -1,0 +1,40 @@
+name: Reporte de Bug
+description: Crie um relatório para nos ajudar a identificar e corrigir uma falha.
+title: "[BUG]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Obrigado por relatar o problema! Forneça o máximo de detalhes possível.
+  - type: textarea
+    id: description
+    attributes:
+      label: Descrição do Bug
+      description: Uma explicação clara e concisa do comportamento inesperado.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Passos para Reproduzir
+      description: Passos sequenciais para reproduzir o comportamento.
+      placeholder: |
+        1. Entrar na sala 'Recepção'
+        2. Clicar no móvel X
+        3. Observar erro no console
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Comportamento Esperado
+      description: O que deveria ter acontecido.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Ambiente
+      description: Navegador, Sistema Operacional e versão do Node.js.
+      placeholder: Chrome 130, Ubuntu 24.04, Node 24.x

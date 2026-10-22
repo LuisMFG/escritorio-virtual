@@ -2,7 +2,7 @@
 
 Escritório virtual isométrico para amigos e colegas (até ~10 pessoas online): avatares no estilo Habbo andando por salas, conversando por balões de chat, sentando nas cadeiras e decorando o espaço juntos. Projeto pessoal, sem fins comerciais.
 
-- **Requisitos:** [SPEC.md](SPEC.md) · **Plano e decisões:** [PLAN.md](PLAN.md) · **Origem dos assets:** [ASSETS.md](ASSETS.md)
+- **Requisitos:** [SPEC.md](docs/SPEC.md) · **Plano e decisões:** [PLAN.md](docs/PLAN.md) · **Origem dos assets:** [ASSETS.md](docs/ASSETS.md)
 
 ## O que dá para fazer
 
@@ -136,8 +136,9 @@ shared/   código comum: coordenadas isométricas, A*, ordenação de profundida
 server/   Express + Colyseus no mesmo processo; SQLite (better-sqlite3 + Drizzle);
           proxy de imagens com cache; scripts (assets:sync, bot)
 client/   Vite + PixiJS (cena isométrica) e HTML/CSS (entrada, editor, chat, catálogo)
-vscode-extension/        extensão do VS Code (TypeScript, empacotada em .vsix)
-visualstudio-extension/  extensão do Visual Studio 2022/2026 (C#, VisualStudio.Extensibility)
+extensions/
+  vscode/             extensão do VS Code (TypeScript, empacotada em .vsix)
+  visual-studio/      extensão do Visual Studio 2022/2026 (C#, VisualStudio.Extensibility)
 data/     banco e cache de imagens (fora do git)
 ```
 
@@ -152,7 +153,7 @@ As duas extensões mandam ao escritório, a cada minuto enquanto você mexe no c
 4. O item “Escritório” na barra de status mostra se está conectado; clique para pausar/retomar.
 
 **Visual Studio 2022 (17.14+) / 2026**
-1. Gere o `.vsix` **no Windows** (o empacotador da Microsoft só roda lá): abra `visualstudio-extension/EscritorioAtividade/EscritorioAtividade.csproj` no Visual Studio, ou rode `dotnet build -c Release` nessa pasta. O arquivo sai em `bin/Release/net8.0-windows8.0/`.
+1. Gere o `.vsix` **no Windows** (o empacotador da Microsoft só roda lá): abra `extensions/visual-studio/EscritorioAtividade/EscritorioAtividade.csproj` no Visual Studio, ou rode `dotnet build -c Release` nessa pasta. O arquivo sai em `bin/Release/net8.0-windows8.0/`.
 2. Dê dois cliques no `.vsix` para instalar e reabra o Visual Studio.
 3. Menu **Extensões → Escritório: conectar** → endereço e token. O token fica criptografado para o seu usuário do Windows (DPAPI), em `%APPDATA%\EscritorioVirtual\atividade.json`.
 4. **Extensões → Escritório: pausar ou retomar** e **Escritório: desconectar** fazem o resto.

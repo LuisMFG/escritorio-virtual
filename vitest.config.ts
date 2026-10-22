@@ -6,7 +6,7 @@ export default defineConfig({
       'shared/src/**/*.test.ts',
       'client/src/**/*.test.ts',
       'server/src/**/*.test.ts',
-      'vscode-extension/src/**/*.test.ts',
+      'extensions/vscode/src/**/*.test.ts',
     ],
   },
 });

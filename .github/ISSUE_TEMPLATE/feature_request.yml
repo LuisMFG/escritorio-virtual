@@ -1,0 +1,24 @@
+name: Sugestão de Funcionalidade
+description: Sugira uma nova ideia ou melhoria para o Escritório Virtual.
+title: "[FEATURE]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: A sua sugestão resolve algum problema atual?
+      description: Uma descrição clara do problema ou limitação existente.
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Qual solução você gostaria de ver implementada?
+      description: Uma descrição clara e objetiva da funcionalidade sugerida.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Contexto ou alternativas consideradas
+      description: Outras ferramentas ou abordagens que você avaliou.
