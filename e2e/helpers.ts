@@ -70,6 +70,8 @@ interface Hook {
   furniAt(x: number, y: number): string | null;
   furniShown(id: string): { x: number; y: number; z: number; rot: number } | null;
   decorGhost(): { x: number; y: number; z: number; rot: number; ok: boolean } | null;
+  /** Texto do placar sobre uma mesa do Salão de Jogos (Fase 57). */
+  arcadeBoard(id: string): string | null;
   look(x: number, y: number, zoom: number): void;
   leave(): Promise<void>;
 }
