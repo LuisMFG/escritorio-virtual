@@ -3603,6 +3603,23 @@ button.reply-quote:hover {
   border-radius: var(--radius-md);
 }
 
+/* Ping-pong ao vivo (Fase 58): o painel cresce e a mesa ocupa a largura dele. */
+.arcade-panel.live {
+  width: min(560px, calc(100vw - 32px));
+}
+
+.arcade-panel.live .arcade-court {
+  width: 100%;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.arcade-sets {
+  margin: 2px 0 0;
+  font-size: calc(12px * var(--font-scale, 1));
+  text-align: center;
+}
+
 .arcade-note {
   margin: 6px 0 0;
   font-size: calc(12px * var(--font-scale, 1));

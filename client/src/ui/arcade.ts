@@ -12,6 +12,7 @@ import {
   type ArcadeView,
 } from '@office/shared';
 import { makeDraggable } from './draggable.js';
+import { PongView, type PongViewOptions } from './pong.js';
 
 export interface ArcadeOptions {
   furniId: string;
@@ -24,6 +25,10 @@ export interface ArcadeOptions {
   start(): Promise<ArcadeReply>;
   forfeit(): Promise<ArcadeReply>;
   mode(mode: ArcadeMode): Promise<ArcadeReply>;
+  /** Ping-pong (Fase 58): raquete, saque e rebatida. */
+  pong?: Pick<PongViewOptions, 'paddle' | 'serve' | 'hit'>;
+  /** Atraso simulado (ms, ida e volta), para testar com ping alto. */
+  lag?: number;
 }
 
 export interface ArcadeHandle {
@@ -56,6 +61,7 @@ export function openArcade(opts: ArcadeOptions): ArcadeHandle {
       <strong class="arcade-points"></strong>
       <span class="arcade-names b"></span>
     </div>
+    <p class="arcade-sets muted" hidden></p>
     <p class="arcade-status"></p>
     <canvas class="arcade-court" aria-hidden="true"></canvas>
     <p class="arcade-note muted" hidden>Vagas e placar já funcionam; as jogadas chegam na próxima atualização.</p>
@@ -68,6 +74,7 @@ export function openArcade(opts: ArcadeOptions): ArcadeHandle {
   const namesA = $<HTMLElement>('.arcade-names.a');
   const namesB = $<HTMLElement>('.arcade-names.b');
   const points = $<HTMLElement>('.arcade-points');
+  const setsEl = $<HTMLElement>('.arcade-sets');
   const status = $<HTMLElement>('.arcade-status');
   const court = $<HTMLCanvasElement>('.arcade-court');
   const note = $<HTMLElement>('.arcade-note');
@@ -76,6 +83,10 @@ export function openArcade(opts: ArcadeOptions): ArcadeHandle {
   const actions = $<HTMLElement>('.arcade-actions');
 
   let view: ArcadeView | null = null;
+  /** A mesa ao vivo (ping-pong em andamento). */
+  let pong: PongView | null = null;
+  const mySlot = () =>
+    (view && ARCADE_SLOTS.find((s) => view!.seats[s].session === opts.mySessionId())) || null;
   /** Pedido em andamento: os botões esperam a resposta (evita clique duplo). */
   let busy = false;
   const act = (run: () => Promise<ArcadeReply>) => () => {
@@ -111,6 +122,8 @@ export function openArcade(opts: ArcadeOptions): ArcadeHandle {
     namesA.textContent = (v && sideNames(v, 'a')) || '—';
     namesB.textContent = (v && sideNames(v, 'b')) || '—';
     points.textContent = v && v.status !== 'waiting' ? `${v.scoreA} × ${v.scoreB}` : '×';
+    setsEl.hidden = !(opts.kind === 'pingpong' && v && v.status !== 'waiting');
+    if (v) setsEl.textContent = `Sets ${v.setsA} × ${v.setsB}`;
 
     // Situação da mesa.
     const away =
@@ -128,9 +141,11 @@ export function openArcade(opts: ArcadeOptions): ArcadeHandle {
     } else if (v.status === 'playing') {
       text = away
         ? `⏳ ${v.seats[away].name} saiu: W.O. em ${Math.ceil((v.seats[away].awayUntil - now) / 1000)} s`
-        : mine
-          ? 'Partida em andamento.'
-          : '👀 Você está assistindo.';
+        : opts.kind === 'pingpong'
+          ? pongStatus(v, mine)
+          : mine
+            ? 'Partida em andamento.'
+            : '👀 Você está assistindo.';
     } else {
       const how = v.end === 'wo' ? ' (W.O.)' : v.end === 'forfeit' ? ' (desistência)' : '';
       const winners = v.winner ? sideNames(v, v.winner) : '';
@@ -140,8 +155,18 @@ export function openArcade(opts: ArcadeOptions): ArcadeHandle {
       if (mine && full) text += ' Começar de novo?';
     }
     status.textContent = text;
-    note.hidden = v?.status !== 'playing';
-    drawCourt(court, opts.kind, v ? sideNames(v, 'a') : '', v ? sideNames(v, 'b') : '');
+    // Ping-pong em andamento: a mesa vira o jogo (painel maior); a sinuca ainda não tem jogo.
+    const live = opts.kind === 'pingpong' && v?.status === 'playing' && Boolean(opts.pong);
+    panel.classList.toggle('live', live);
+    note.hidden = v?.status !== 'playing' || opts.kind === 'pingpong';
+    if (live && !pong) {
+      pong = new PongView({ canvas: court, now: opts.now, mySlot, lag: opts.lag, ...opts.pong! });
+    } else if (!live && pong) {
+      pong.destroy();
+      pong = null;
+    }
+    if (pong && v) pong.update(v);
+    else drawCourt(court, opts.kind, v ? sideNames(v, 'a') : '', v ? sideNames(v, 'b') : '');
 
     // Modo: antes de começar.
     const canMode = !v || v.status !== 'playing';
@@ -220,6 +245,7 @@ export function openArcade(opts: ArcadeOptions): ArcadeHandle {
     mode: () => 'painel',
   });
   const close = () => {
+    pong?.destroy();
     window.clearInterval(timer);
     drag.destroy();
     panel.remove();
@@ -240,6 +266,18 @@ export function openArcade(opts: ArcadeOptions): ArcadeHandle {
     },
     close,
   };
+}
+
+/** O que acontece no ping-pong agora: de quem é o saque, o ponto, o deuce. */
+function pongStatus(v: ArcadeView, mine: ArcadeSlot | undefined): string {
+  const deuce = v.scoreA >= 10 && v.scoreB >= 10 ? ' Deuce!' : '';
+  if (v.phase === 'point') return v.detail;
+  if (v.phase === 'serve' && v.turn) {
+    return v.turn === mine
+      ? `Seu saque: clique na mesa.${deuce}`
+      : `Saque de ${v.seats[v.turn].name}.${deuce}`;
+  }
+  return mine ? `Valendo!${deuce}` : `👀 Você está assistindo.${deuce}`;
 }
 
 /** Largura e altura da vista de cima (px de CSS). */

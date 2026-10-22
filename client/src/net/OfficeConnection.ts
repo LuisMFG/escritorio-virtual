@@ -369,6 +369,22 @@ export class OfficeConnection {
     return this.arcadeRequest(ClientMessage.ArcadeMode, { furniId, mode });
   }
 
+  /** Ping-pong (Fase 58): onde está a minha raquete. */
+  pongPaddle(furniId: string, p: { x: number; y: number }): void {
+    this.room?.send(ClientMessage.PongPaddle, { furniId, x: p.x, y: p.y });
+  }
+
+  pongServe(furniId: string, msg: { t: number; x: number; y: number }): Promise<ArcadeReply> {
+    return this.arcadeRequest(ClientMessage.PongServe, { furniId, ...msg });
+  }
+
+  pongHit(
+    furniId: string,
+    msg: { t: number; x: number; y: number; vx: number; vy: number },
+  ): Promise<ArcadeReply> {
+    return this.arcadeRequest(ClientMessage.PongHit, { furniId, ...msg });
+  }
+
   async tttScores(furniId: string): Promise<TttScores> {
     if (!this.room) return { top: [], players: [] };
     return (await this.room.request(ClientMessage.TttScores, { furniId })) as TttScores;

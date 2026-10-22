@@ -1,4 +1,14 @@
-import { DANCES, TILE_H, TILE_W, tileHeight, tileToScreen } from '@office/shared';
+import {
+  ballAt,
+  DANCES,
+  decodeBall,
+  simulate,
+  TILE_H,
+  TILE_W,
+  tileHeight,
+  tileToScreen,
+} from '@office/shared';
+import { courtTransform } from './ui/pong.js';
 import { Point as PixiPoint } from 'pixi.js';
 import type { OfficeRoomClient } from './net/OfficeConnection.js';
 import type { RoomScene } from './scene/RoomScene.js';
@@ -63,6 +73,18 @@ export interface E2EHook {
   decorGhost(): { x: number; y: number; z: number; rot: number; ok: boolean } | null;
   /** Texto do placar que flutua sobre uma mesa do Salão de Jogos (Fase 57). */
   arcadeBoard(id: string): string | null;
+  /** Ping-pong (Fase 58): o momento, a vez e a bola agora (na hora do servidor). */
+  pong(id: string): {
+    phase: string;
+    turn: string;
+    scoreA: number;
+    scoreB: number;
+    setsA: number;
+    setsB: number;
+    ball: { x: number; y: number; h: number; by: string; na: number; nb: number } | null;
+  } | null;
+  /** Ponto da mesa de ping-pong (metros) na tela, no painel aberto. */
+  pongPoint(x: number, y: number): Point | null;
   /** Aproxima a câmera (nível de zoom) e centraliza num tile. */
   look(x: number, y: number, zoom: number): void;
   /** Sai da sala de verdade (fechar a aba deixaria o avatar parado 30 s esperando reconexão). */
@@ -73,7 +95,11 @@ export interface E2EHook {
  * Gancho para os testes: a cena é um canvas (sem elementos para clicar), então os testes
  * perguntam aqui onde fica cada tile ou móvel na tela e clicam com o mouse ali.
  */
-export function exposeForTests(scene: RoomScene, room: OfficeRoomClient): void {
+export function exposeForTests(
+  scene: RoomScene,
+  room: OfficeRoomClient,
+  now: () => number = Date.now,
+): void {
   if (!enabled) return;
   const canvas = () => document.querySelector('canvas')!.getBoundingClientRect();
   const toPage = (p: Point): Point => {
@@ -135,6 +161,29 @@ export function exposeForTests(scene: RoomScene, room: OfficeRoomClient): void {
       return p ? { x: p.x, y: p.y, z: p.z, rot: p.rot } : null;
     },
     arcadeBoard: (id) => scene.arcadeBoardText(id),
+    pong: (id) => {
+      const g = room.state.arcade.get(id);
+      if (!g) return null;
+      const seg = decodeBall(g.ball);
+      const sim = seg && g.phase !== 'serve' ? simulate(seg, now(), true).ball : null;
+      const at = sim ? ballAt(sim, now()) : null;
+      return {
+        phase: g.phase,
+        turn: g.turn,
+        scoreA: g.scoreA,
+        scoreB: g.scoreB,
+        setsA: g.setsA,
+        setsB: g.setsB,
+        ball: at && sim ? { x: at.x, y: at.y, h: at.h, by: sim.by, na: sim.na, nb: sim.nb } : null,
+      };
+    },
+    pongPoint: (x, y) => {
+      const c = document.querySelector<HTMLCanvasElement>('.arcade-panel.live .arcade-court');
+      if (!c) return null;
+      const r = c.getBoundingClientRect();
+      const p = courtTransform(r.width).toPx({ x, y });
+      return { x: Math.round(r.left + p.x), y: Math.round(r.top + p.y) };
+    },
     decorGhost: () => {
       const g = scene.decor.ghostState();
       return g ? { ...g } : null;

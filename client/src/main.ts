@@ -120,6 +120,11 @@ import { CallPanel, IncomingCalls, openCallInvite } from './ui/calls.js';
 
 const E2E_MODE = new URLSearchParams(location.search).has('e2e');
 const TOUR_IN_E2E = new URLSearchParams(location.search).has('tour');
+/** Atraso simulado no ping-pong (`?atraso=150`, ms de ida e volta), para testar com ping alto. */
+const PONG_LAG = Math.min(
+  1000,
+  Math.max(0, Number(new URLSearchParams(location.search).get('atraso')) || 0),
+);
 
 /** Sala pedida na URL (`#/meeting`), para recarregar no mesmo lugar. */
 function roomFromHash(): string {
@@ -964,6 +969,32 @@ async function start(): Promise<void> {
     for (const off of detachRoom) off();
     detachRoom = [];
     scene?.destroy();
+    /** Painel de uma mesa do Salão de Jogos (Fase 57; o ping-pong ao vivo, Fase 58). */
+    const openArcadePanel = (furniId: string) => {
+      const f = room.state.furni.get(furniId);
+      const kind = arcadeKindOf(f ? deps.furniDefs.get(f.defId)?.interaction : undefined);
+      if (!kind) return;
+      arcadePanel?.close();
+      arcadePanel = openArcade({
+        furniId,
+        kind,
+        mySessionId: () => connection.sessionId,
+        now: () => connection.serverNow(),
+        join: (slot) => connection.arcadeJoin(furniId, slot),
+        leave: () => connection.arcadeLeave(furniId),
+        start: () => connection.arcadeStart(furniId),
+        forfeit: () => connection.arcadeForfeit(furniId),
+        mode: (m) => connection.arcadeMode(furniId, m),
+        pong: {
+          paddle: (p) => connection.pongPaddle(furniId, p),
+          serve: (m) => connection.pongServe(furniId, m),
+          hit: (m) => connection.pongHit(furniId, m),
+        },
+        lag: PONG_LAG,
+      });
+      const g = room.state.arcade.get(furniId);
+      arcadePanel.update(g ? arcadeView(g.toJSON() as ArcadeFields) : null);
+    };
     const s = new RoomScene(
       app,
       layout,
@@ -1027,25 +1058,7 @@ async function start(): Promise<void> {
           });
           ttt.update((room.state.games.get(furniId)?.toJSON() as TttView | undefined) ?? null);
         },
-        openArcade: (furniId) => {
-          const f = room.state.furni.get(furniId);
-          const kind = arcadeKindOf(f ? deps.furniDefs.get(f.defId)?.interaction : undefined);
-          if (!kind) return;
-          arcadePanel?.close();
-          arcadePanel = openArcade({
-            furniId,
-            kind,
-            mySessionId: () => connection.sessionId,
-            now: () => connection.serverNow(),
-            join: (slot) => connection.arcadeJoin(furniId, slot),
-            leave: () => connection.arcadeLeave(furniId),
-            start: () => connection.arcadeStart(furniId),
-            forfeit: () => connection.arcadeForfeit(furniId),
-            mode: (m) => connection.arcadeMode(furniId, m),
-          });
-          const g = room.state.arcade.get(furniId);
-          arcadePanel.update(g ? arcadeView(g.toJSON() as ArcadeFields) : null);
-        },
+        openArcade: (furniId) => openArcadePanel(furniId),
         openKudos: () => showKudosWall(),
         openJira: () => {
           if (!session) return;
@@ -1182,7 +1195,7 @@ async function start(): Promise<void> {
       },
     );
     scene = s;
-    exposeForTests(s, room);
+    exposeForTests(s, room, () => connection.serverNow());
     s.decor.setActive(decorating);
     decorPanel.setPicked(null);
     hud.setRoomName(layout.name);
@@ -1352,6 +1365,11 @@ async function start(): Promise<void> {
     const syncArcade = (id: string, g: ArcadeFields | null) => {
       const view = g ? arcadeView(g) : null;
       s.setArcade(id, view);
+      // A partida começou e eu jogo nela: o painel abre sozinho (é nele que se joga).
+      const seated = view && Object.values(view.seats).some((p) => p.session === room.sessionId);
+      if (view?.status === 'playing' && seated && arcadePanel?.furniId !== id) {
+        openArcadePanel(id);
+      }
       if (arcadePanel?.furniId === id) arcadePanel.update(view);
     };
     keep(
