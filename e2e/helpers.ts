@@ -84,6 +84,25 @@ interface Hook {
   } | null;
   /** Ponto da mesa de ping-pong (metros) na tela, no painel aberto. */
   pongPoint(x: number, y: number): { x: number; y: number } | null;
+  /** Sinuca (Fase 59): a vez, as regras, as bolas paradas, a última tacada e a simulação dela. */
+  pool(id: string): {
+    status: string;
+    phase: string;
+    turn: string;
+    inHand: boolean;
+    breakShot: boolean;
+    groupA: string;
+    scoreA: number;
+    scoreB: number;
+    detail: string;
+    balls: ([number, number] | null)[] | null;
+    shot: { t0: number; ms: number } | null;
+    final: ([number, number] | null)[] | null;
+    aim: { dx: number; dy: number; power: number; cx: number; cy: number } | null;
+  } | null;
+  /** Ponto da mesa de sinuca (metros) e da barra de força (0–1) na tela, no painel aberto. */
+  poolPoint(x: number, y: number): { x: number; y: number } | null;
+  poolPower(f: number): { x: number; y: number } | null;
   look(x: number, y: number, zoom: number): void;
   leave(): Promise<void>;
 }
