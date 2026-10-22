@@ -3,6 +3,9 @@ import './style.css';
 import 'pixi.js/unsafe-eval';
 import { Callbacks } from '@colyseus/sdk';
 import {
+  arcadeKindOf,
+  arcadeView,
+  type ArcadeFields,
   parseAvatarManifest,
   parseFurniManifest,
   findRoom,
@@ -87,6 +90,7 @@ import { drawTvCover } from './tv/cover.js';
 import { fakePlayer, youTubePlayer, youTubePlaylist } from './tv/player.js';
 import type { PetSnapshot } from './entities/PetView.js';
 import { openTicTacToe, type TicTacToeHandle, type TttView } from './ui/ticTacToe.js';
+import { openArcade, type ArcadeHandle } from './ui/arcade.js';
 import { renderThumbnail } from './ui/wbDraw.js';
 import { openAgenda, type AgendaHandle } from './ui/agenda.js';
 import { showReminder } from './ui/reminder.js';
@@ -442,6 +446,8 @@ async function start(): Promise<void> {
   let whiteboard: WhiteboardHandle | null = null;
   /** Jogo da velha aberto (mesa de jogos). */
   let ttt: TicTacToeHandle | null = null;
+  /** Painel aberto de uma mesa do Salão de Jogos (Fase 57). */
+  let arcadePanel: ArcadeHandle | null = null;
   /** TV aberta (Fase 51) e o que passa em cada TV da sala (capa na tela do móvel). */
   let tvPanel: TvPanel | null = null;
   const tvScreens = new Map<string, string>();
@@ -1021,6 +1027,25 @@ async function start(): Promise<void> {
           });
           ttt.update((room.state.games.get(furniId)?.toJSON() as TttView | undefined) ?? null);
         },
+        openArcade: (furniId) => {
+          const f = room.state.furni.get(furniId);
+          const kind = arcadeKindOf(f ? deps.furniDefs.get(f.defId)?.interaction : undefined);
+          if (!kind) return;
+          arcadePanel?.close();
+          arcadePanel = openArcade({
+            furniId,
+            kind,
+            mySessionId: () => connection.sessionId,
+            now: () => connection.serverNow(),
+            join: (slot) => connection.arcadeJoin(furniId, slot),
+            leave: () => connection.arcadeLeave(furniId),
+            start: () => connection.arcadeStart(furniId),
+            forfeit: () => connection.arcadeForfeit(furniId),
+            mode: (m) => connection.arcadeMode(furniId, m),
+          });
+          const g = room.state.arcade.get(furniId);
+          arcadePanel.update(g ? arcadeView(g.toJSON() as ArcadeFields) : null);
+        },
         openKudos: () => showKudosWall(),
         openJira: () => {
           if (!session) return;
@@ -1321,6 +1346,21 @@ async function start(): Promise<void> {
       }),
     );
     keep(cb.onRemove('games', (_g, id) => syncGame(id, null)));
+    // Mesas do Salão de Jogos (Fase 57): placar sobre a mesa e painel aberto, ao vivo.
+    arcadePanel?.close();
+    arcadePanel = null;
+    const syncArcade = (id: string, g: ArcadeFields | null) => {
+      const view = g ? arcadeView(g) : null;
+      s.setArcade(id, view);
+      if (arcadePanel?.furniId === id) arcadePanel.update(view);
+    };
+    keep(
+      cb.onAdd('arcade', (g, id) => {
+        syncArcade(id, g.toJSON() as ArcadeFields);
+        keep(cb.onChange(g, () => syncArcade(id, g.toJSON() as ArcadeFields)));
+      }),
+    );
+    keep(cb.onRemove('arcade', (_g, id) => syncArcade(id, null)));
     // Pets de quem está na sala.
     keep(
       cb.onAdd('pets', (pet, id) => {

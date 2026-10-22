@@ -61,6 +61,8 @@ export interface E2EHook {
   furniShown(id: string): { x: number; y: number; z: number; rot: number } | null;
   /** Fantasma do Decorar (colocando ou arrastando): tile, altura e se dá para soltar ali. */
   decorGhost(): { x: number; y: number; z: number; rot: number; ok: boolean } | null;
+  /** Texto do placar que flutua sobre uma mesa do Salão de Jogos (Fase 57). */
+  arcadeBoard(id: string): string | null;
   /** Aproxima a câmera (nível de zoom) e centraliza num tile. */
   look(x: number, y: number, zoom: number): void;
   /** Sai da sala de verdade (fechar a aba deixaria o avatar parado 30 s esperando reconexão). */
@@ -132,6 +134,7 @@ export function exposeForTests(scene: RoomScene, room: OfficeRoomClient): void {
       const p = scene.furniView(id)?.placed;
       return p ? { x: p.x, y: p.y, z: p.z, rot: p.rot } : null;
     },
+    arcadeBoard: (id) => scene.arcadeBoardText(id),
     decorGhost: () => {
       const g = scene.decor.ghostState();
       return g ? { ...g } : null;

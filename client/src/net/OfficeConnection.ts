@@ -34,6 +34,9 @@ import {
   type FurniMoveMessage,
   type FurniColorMessage,
   type FurniHeightMessage,
+  type ArcadeMode,
+  type ArcadeReply,
+  type ArcadeSlot,
   type FurniResult,
   type FurniPlaceMessage,
   type JoinOptions,
@@ -333,6 +336,37 @@ export class OfficeConnection {
 
   tttRematch(furniId: string): void {
     this.room?.send(ClientMessage.TttRematch, { furniId });
+  }
+
+  /** Pedidos das mesas do Salão de Jogos (Fase 57); sem conexão ou resposta, conta como recusa. */
+  private async arcadeRequest(type: string, msg: object): Promise<ArcadeReply> {
+    const refused: ArcadeReply = { ok: false, reason: 'Sem conexão com o escritório.' };
+    if (!this.room) return refused;
+    try {
+      return ((await this.room.request(type, msg)) as ArcadeReply | undefined) ?? refused;
+    } catch {
+      return refused;
+    }
+  }
+
+  arcadeJoin(furniId: string, slot: ArcadeSlot): Promise<ArcadeReply> {
+    return this.arcadeRequest(ClientMessage.ArcadeJoin, { furniId, slot });
+  }
+
+  arcadeLeave(furniId: string): Promise<ArcadeReply> {
+    return this.arcadeRequest(ClientMessage.ArcadeLeave, { furniId });
+  }
+
+  arcadeStart(furniId: string): Promise<ArcadeReply> {
+    return this.arcadeRequest(ClientMessage.ArcadeStart, { furniId });
+  }
+
+  arcadeForfeit(furniId: string): Promise<ArcadeReply> {
+    return this.arcadeRequest(ClientMessage.ArcadeForfeit, { furniId });
+  }
+
+  arcadeMode(furniId: string, mode: ArcadeMode): Promise<ArcadeReply> {
+    return this.arcadeRequest(ClientMessage.ArcadeMode, { furniId, mode });
   }
 
   async tttScores(furniId: string): Promise<TttScores> {

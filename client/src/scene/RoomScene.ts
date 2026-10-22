@@ -1,4 +1,7 @@
 import {
+  arcadeKindOf,
+  scoreboardText,
+  type ArcadeView,
   deskOfSeat,
   tileToScreen,
   depthOrder,
@@ -105,6 +108,8 @@ export interface SceneActions extends DecorActions {
   openWhiteboard(furniId: string): void;
   /** Clique numa mesa de jogos. */
   openGame(furniId: string): void;
+  /** Clique numa mesa do Salão de Jogos (Fase 57). */
+  openArcade(furniId: string): void;
   /** Clique no Quadro de Elogios. */
   openKudos(): void;
   /** Clique no Quadro de Demandas (Jira). */
@@ -146,6 +151,12 @@ export class RoomScene implements DecorHost {
   private readonly bubbles = new Container({ label: 'bubbles' });
   /** Plaquinhas com o nome do dono de cada mesa (Fase 42). */
   private readonly plaques = new Container({ label: 'plaques' });
+  /** Placar que flutua sobre as mesas do Salão de Jogos (Fase 57). */
+  private readonly arcadeBoards = new Container({ label: 'arcadeBoards' });
+  private readonly arcade = new Map<string, ArcadeView>();
+  private arcadeDirty = false;
+  /** Contagem do W.O.: o placar se redesenha a cada segundo enquanto alguém está fora. */
+  private arcadeTick = 0;
   private deskOwners: ReadonlyMap<string, string> = new Map();
   /** Alt segurado: todos os nomes aparecem, afastados para não encavalar. */
   private allNames = false;
@@ -208,6 +219,7 @@ export class RoomScene implements DecorHost {
       this.overlayTop,
       this.debugLayer,
       this.plaques,
+      this.arcadeBoards,
       this.spotlight,
       this.bubbles,
       this.doorLabel,
@@ -257,6 +269,7 @@ export class RoomScene implements DecorHost {
   /** Cria ou atualiza um móvel a partir do estado do servidor. */
   setFurni(id: string, placed: PlacedFurni): void {
     if (this.deskOwners.size) this.plaquesDirty = true;
+    if (this.arcade.has(id)) this.arcadeDirty = true;
     let existing = this.furni.get(id);
     // Trocou de cor (outra definição): recria o desenho (e continua selecionado).
     const reselect = Boolean(
@@ -350,6 +363,64 @@ export class RoomScene implements DecorHost {
       tag.position.set(Math.round(p.sx), Math.round(p.sy));
       tag.eventMode = 'none';
       this.plaques.addChild(tag);
+    }
+  }
+
+  // ---------- Salão de Jogos (Fase 57) ----------
+
+  /** A partida de uma mesa mudou (`null` = mesa vazia): o placar sobre ela acompanha. */
+  setArcade(furniId: string, view: ArcadeView | null): void {
+    if (view) this.arcade.set(furniId, view);
+    else this.arcade.delete(furniId);
+    this.arcadeDirty = true;
+  }
+
+  /** Texto do placar sobre a mesa agora (`null` = sem placar). Também para os testes. */
+  arcadeBoardText(furniId: string): string | null {
+    const view = this.arcade.get(furniId);
+    return view ? scoreboardText(view, this.deps.serverNow?.() ?? Date.now()) : null;
+  }
+
+  private drawArcadeBoards(): void {
+    for (const c of this.arcadeBoards.removeChildren()) c.destroy({ children: true });
+    for (const id of this.arcade.keys()) {
+      const text = this.arcadeBoardText(id);
+      const f = this.furni.get(id);
+      if (!text || !f) continue;
+      const fp = f.footprint;
+      const p = tileToScreen(
+        (fp.minX + fp.maxX) / 2,
+        (fp.minY + fp.maxY) / 2,
+        f.placed.z + f.def.height + 1.4,
+      );
+      const label = new Text({
+        text,
+        resolution: 2,
+        style: {
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: 10,
+          fontWeight: '700',
+          fill: 0xf4f6f8,
+          align: 'center',
+          lineHeight: 13,
+        },
+      });
+      label.anchor.set(0.5);
+      const plate = new Graphics()
+        .roundRect(
+          -label.width / 2 - 7,
+          -label.height / 2 - 4,
+          label.width + 14,
+          label.height + 8,
+          6,
+        )
+        .fill({ color: 0x1b1d24, alpha: 0.88 })
+        .stroke({ width: 1, color: 0xf2c14e, alpha: 0.9 });
+      const board = new Container({ label: `arcade:${id}` });
+      board.addChild(plate, label);
+      board.position.set(Math.round(p.sx), Math.round(p.sy - label.height / 2));
+      board.eventMode = 'none';
+      this.arcadeBoards.addChild(board);
     }
   }
 
@@ -477,6 +548,7 @@ export class RoomScene implements DecorHost {
 
   removeFurni(id: string): void {
     if (this.deskOwners.size) this.plaquesDirty = true;
+    if (this.arcade.delete(id)) this.arcadeDirty = true;
     this.waitingDef.delete(id);
     this.pendingFurni.forget(id);
     const view = this.furni.get(id);
@@ -780,6 +852,23 @@ export class RoomScene implements DecorHost {
       this.plaquesDirty = false;
       this.drawPlaques();
     }
+    this.arcadeTick -= dtMs;
+    if (this.arcadeTick <= 0) {
+      this.arcadeTick = 1000;
+      const now = this.deps.serverNow?.() ?? Date.now();
+      for (const v of this.arcade.values()) {
+        if (
+          v.status === 'playing' &&
+          Object.values(v.seats).some((s) => s.awayUntil > now - 1000)
+        ) {
+          this.arcadeDirty = true;
+        }
+      }
+    }
+    if (this.arcadeDirty) {
+      this.arcadeDirty = false;
+      this.drawArcadeBoards();
+    }
     if (this.allNames) {
       this.spreadTimer -= dtMs;
       if (this.spreadTimer <= 0) {
@@ -935,6 +1024,7 @@ export class RoomScene implements DecorHost {
         return this.actions.openWhiteboard(usable.placed.id);
       }
       if (usable.def.interaction === 'tictactoe') return this.actions.openGame(usable.placed.id);
+      if (arcadeKindOf(usable.def.interaction)) return this.actions.openArcade(usable.placed.id);
       if (usable.def.interaction === 'kudos') return this.actions.openKudos();
       if (usable.def.interaction === 'jira') return this.actions.openJira();
       if (usable.def.interaction === 'tv') return this.actions.openTv(usable.placed.id);
