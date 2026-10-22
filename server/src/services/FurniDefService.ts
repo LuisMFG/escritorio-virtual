@@ -57,11 +57,16 @@ export class FurniDefService {
       const item = this.itemFor(def);
       if (item?.lay) this.defs.set(id, { ...def, sitHeight: layHeight(item.h) });
     }
-    // Medidos antes do empilhar: o tampo vem do catálogo (os do escritório já dizem o seu).
+    // O tampo dos medidos segue a regra da Fase 56: a geral, menos as exceções do catálogo. Os
+    // gravados antes diziam "sem tampo" para tudo o que não era mesa (blocos, plataformas…).
     for (const [id, def] of this.defs) {
-      if (this.curated.has(id) || def.hasTop !== undefined) continue;
-      const item = this.itemFor(def);
-      if (item && hasTop(item)) this.defs.set(id, { ...def, hasTop: true });
+      const item = this.curated.has(id) ? undefined : this.itemFor(def);
+      if (!item) continue;
+      const next: FurniManifestEntry = { ...def };
+      const top = catalogTop(item);
+      if (top === undefined) delete next.hasTop;
+      else next.hasTop = top;
+      this.defs.set(id, next);
     }
     for (const [id, def] of this.defs) this.defs.set(id, withVisual(def, this.itemFor(def)));
     // Cores de um móvel curado medidas antes da Fase 53: o tampo e o assento passam a ser os dele.
@@ -215,7 +220,7 @@ export function curationFor(item: CatalogItem, id: string): FurniCuration {
     // Assentos e camas com vários estados sentam/deitam (antes viravam interruptor, e o clique
     // ligava/desligava em vez de sentar ou deitar).
     interaction: item.x ?? (item.multi && !item.sit && !item.lay ? 'toggle' : undefined),
-    hasTop: hasTop(item),
+    hasTop: catalogTop(item),
   };
 }
 
@@ -233,16 +238,18 @@ export function layHeight(h: number): number {
   return Math.min(LAY_HEIGHT, Math.max(0.1, z));
 }
 
-/** Categorias do Habbo que são tampo (mesas, estantes, divisórias). */
-const TOP_CATEGORIES = new Set(['table', 'shelf', 'divider']);
-/** …e os de outras categorias que têm tampo pelo nome (balcão, armário, cômoda…). */
-const TOP_NAME =
-  /\b(mesa|mesinha|balc[aã]o|bancada|estante|prateleira|arm[aá]rio|c[oô]moda|escrivaninha|rack|aparador|criado|cristaleira|gaveteiro|penteadeira|bar)\b/i;
+/** Categorias do Habbo que não servem de base (luzes e plantas). */
+const NO_TOP_CATEGORIES = new Set(['lighting', 'plant']);
+/** …e pelo nome, as luzes, velas, cortinas e plantas das outras categorias (DE19). */
+const NO_TOP_NAME =
+  /(?<!\p{L})(lumin[aá]rias?|abajur(es)?|lustres?|lampi[aã]o|l[aâ]mpadas?|velas?|candelabros?|casti[cç]al|tochas?|cortinas?|plantas?|flor|vasos?|bonsai|cactos?|samambaias?|palmeiras?|arbustos?)(?!\p{L})/iu;
 
-/** Dá para pôr objetos em cima deste item do catálogo? */
-export function hasTop(item: CatalogItem): boolean {
-  if (item.wall || item.sit || item.lay || item.walk) return false;
-  return TOP_CATEGORIES.has(item.c) || TOP_NAME.test(item.n);
+/**
+ * Tampo de um item do catálogo (Fase 56). Vale a regra geral (`acceptsOnTop`): todo móvel sólido
+ * com altura serve de base, inclusive blocos e plataformas de pisar. As exceções voltam `false`.
+ */
+export function catalogTop(item: CatalogItem): false | undefined {
+  return NO_TOP_CATEGORIES.has(item.c) || NO_TOP_NAME.test(item.n) ? false : undefined;
 }
 
 /** Interações que desenham por cima da imagem do imager (quadro, tabuleiro): ficam estáticas. */

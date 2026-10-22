@@ -1581,35 +1581,131 @@ describe('OfficeRoom', () => {
       });
       expect(sameTop).toMatchObject({ ok: true, furni: { defId: 'base_teste*3' } });
     });
+  });
+  describe('empilhamento avançado (Fase 56)', () => {
+    function smallRoom(furni: Omit<PlacedFurni, 'id'>[]) {
+      const roomId = svc.rooms.create('Teste Fase 56', svc.furniDefs).id;
+      const owner = newUser('Dono').user.id;
+      const ids = furni.map((f) => svc.furni.add(roomId, f, owner).id);
+      return { roomId, ids };
+    }
+    const at = (defId: string, x: number, y: number, rot = 0, z = 0) => ({ defId, x, y, z, rot });
+    const near = (z: number) => expect.closeTo(z, 3) as unknown as number;
 
-    it('base quadrada com coisas em cima gira no lugar, mas não sai dele', async () => {
-      registerBase();
+    it('mover a base leva junto o que está em cima, girando com ela; e volta tudo', async () => {
+      // Mesa Norja 2×2 (tampo 0,8) com um computador no canto da direita.
       const { roomId, ids } = smallRoom([
-        at('base_teste', 4, 2),
-        at('computer_flatscreen', 4, 2, 0, 0.8),
+        at('table_norja_med', 3, 1),
+        at('computer_flatscreen', 4, 1, 2, 0.8),
       ]);
+      const [table, pc] = ids as [string, string];
       const room = await join(newUser('Ana').token, roomId);
-      const turned = await room.request(ClientMessage.FurniMove, {
-        furniId: ids[0]!,
-        x: 4,
-        y: 2,
-        rot: 2,
+      const move = (x: number, y: number, rot: number) =>
+        room.request(ClientMessage.FurniMove, {
+          furniId: table,
+          x,
+          y,
+          rot,
+        }) as Promise<FurniResult>;
+
+      // Girando no lugar, o computador vai para o canto girado e gira junto.
+      expect(await move(3, 1, 2)).toMatchObject({
+        ok: true,
+        furni: { id: table, rot: 2 },
+        moved: [{ id: table }, { id: pc, x: 4, y: 2, z: near(0.8), rot: 4 }],
       });
-      expect(turned).toMatchObject({ ok: true, furni: { rot: 2 } });
-      const moved = await room.request(ClientMessage.FurniMove, {
-        furniId: ids[0]!,
-        x: 5,
-        y: 2,
-        rot: 2,
-      });
-      expect(moved).toEqual({ ok: false, reason: 'Tire o que está em cima primeiro.' });
-      // O computador continua em cima, na altura do tampo.
-      expect(room.state.furni.get(ids[1]!)).toMatchObject({
-        x: 4,
-        y: 2,
-        z: expect.closeTo(0.8, 3),
-      });
+      await waitFor(() => room.state.furni.get(pc)?.y === 2);
+      expect(room.state.furni.get(pc)).toMatchObject({ x: 4, y: 2, z: near(0.8), rot: 4 });
+
+      // Mudando de lugar, vai junto (e fica gravado).
+      expect(await move(4, 2, 2)).toMatchObject({ ok: true, moved: [{}, { id: pc, x: 5, y: 3 }] });
+      await waitFor(() => room.state.furni.get(pc)?.x === 5);
+      expect(svc.furni.list(roomId).find((f) => f.id === pc)).toMatchObject({ x: 5, y: 3 });
+
+      // Desfazer = mover a base de volta: tudo volta como era.
+      expect(await move(3, 1, 0)).toMatchObject({ ok: true });
+      await waitFor(() => room.state.furni.get(pc)?.x === 4 && room.state.furni.get(pc)?.y === 1);
+      expect(room.state.furni.get(pc)).toMatchObject({ z: near(0.8), rot: 2 });
     });
+
+    it('ajuste fino de altura: a base sobe com a pilha; os limites vêm com o motivo', async () => {
+      const { roomId, ids } = smallRoom([
+        at('table_plasto_square', 4, 2),
+        at('computer_flatscreen', 4, 2, 0, 0.9),
+      ]);
+      const [table, pc] = ids as [string, string];
+      const room = await join(newUser('Ana').token, roomId);
+      const height = (furniId: string, z: number) =>
+        room.request(ClientMessage.FurniHeight, { furniId, z }) as Promise<FurniResult>;
+
+      expect(await height(table, 0.5)).toMatchObject({
+        ok: true,
+        furni: { id: table, z: near(0.5) },
+        moved: [{ id: table }, { id: pc, z: near(1.4) }],
+      });
+      await waitFor(() => Math.abs(room.state.furni.get(pc)!.z - 1.4) < 0.01);
+      expect(svc.furni.list(roomId).find((f) => f.id === table)!.z).toBeCloseTo(0.5, 3);
+
+      // O computador sozinho: sobe, mas não afunda na mesa.
+      expect(await height(pc, 1)).toEqual({ ok: false, reason: 'Está apoiado no móvel de baixo.' });
+      expect(await height(pc, 2)).toMatchObject({ ok: true, moved: [{ id: pc, z: near(2) }] });
+      // A pilha inteira até 6: a mesa a 5 levaria o computador a 6,5.
+      expect(await height(table, 5)).toEqual({ ok: false, reason: 'Mais alto não dá (até 6).' });
+      // De volta ao chão, o computador erguido continua na pilha.
+      expect(await height(table, 0)).toMatchObject({ ok: true, moved: [{}, { z: near(1.5) }] });
+    });
+
+    it('cadeira em cima de uma plataforma: senta na altura do assento e levanta para o lado', async () => {
+      const defs = svc.furniDefs as Map<string, FurniManifestEntry>;
+      const chair = svc.furniDefs.get('chair_norja')!;
+      // Plataforma 2×2 de pisar, altura 1 (como os blocos do catálogo).
+      defs.set('plataforma_teste', {
+        ...chair,
+        id: 'plataforma_teste',
+        width: 2,
+        depth: 2,
+        height: 1,
+        canSit: false,
+        sitHeight: 0,
+        canWalk: true,
+        directions: [0],
+      });
+      const { roomId, ids } = smallRoom([at('plataforma_teste', 4, 1)]);
+      const room = await join(newUser('Ana').token, roomId);
+      const me = () => room.state.players.get(room.sessionId)!;
+      const placed = (await room.request(ClientMessage.FurniPlace, {
+        defId: 'chair_norja',
+        x: 5,
+        y: 1,
+        rot: 4,
+      })) as FurniResult;
+      // A cadeira empilha na plataforma.
+      expect(placed).toMatchObject({ ok: true, furni: { x: 5, y: 1, z: near(1) } });
+      const chairId = placed.ok ? placed.furni!.id : '';
+      await waitFor(() => room.state.furni.has(chairId));
+
+      room.send(ClientMessage.Interact, { furniId: chairId });
+      await waitFor(() => me().action === 'sit', STEP_MS * 14);
+      expect(me()).toMatchObject({ x: 5, y: 1, z: near(1.5), dir: 4 });
+      // Ninguém mexe na plataforma (nem na cadeira) com alguém sentado em cima.
+      for (const furniId of [ids[0]!, chairId]) {
+        expect(await room.request(ClientMessage.FurniHeight, { furniId, z: 2 })).toMatchObject({
+          ok: false,
+          reason: 'Tem alguém em cima.',
+        });
+      }
+      expect(
+        await room.request(ClientMessage.FurniMove, { furniId: ids[0]!, x: 4, y: 3, rot: 0 }),
+      ).toMatchObject({ ok: false, reason: 'Tem alguém sentado aí.' });
+
+      room.send(ClientMessage.Posture, { posture: 'stand' });
+      await waitFor(() => me().action === 'idle');
+      expect(me().x === 5 && me().y === 1).toBe(false);
+      expect(Math.max(Math.abs(me().x - 5), Math.abs(me().y - 1))).toBe(1);
+      // Levantou em cima da plataforma (altura 1) ou no chão ao lado dela.
+      const onPlatform = me().x >= 4 && me().x <= 5 && me().y >= 1 && me().y <= 2;
+      expect(me().z).toBeCloseTo(onPlatform ? 1 : 0, 3);
+    }, 15_000);
   });
   describe('emotes e toca aqui (Fase 54)', () => {
     /** Sala vazia 8×6 (entrada em 1,4); cada um entra e anda até o seu tile. */

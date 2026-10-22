@@ -33,7 +33,10 @@ export interface FurniCuration {
   surface?: Record<string, [[number, number], [number, number], [number, number]]>;
   /** Emite luz quando ligado. */
   light?: boolean;
-  /** Tem tampo (aceita objetos em cima). Os do escritório vêm de `HAS_TOP`. */
+  /**
+   * Tampo explícito (os do escritório vêm de `HAS_TOP`). Sem ele vale a regra geral da Fase 56;
+   * `false` tira (exceções do catálogo: luzes, velas, cortinas, plantas).
+   */
   hasTop?: boolean;
 }
 
@@ -563,6 +566,8 @@ export const STACK_HEIGHTS: Readonly<Record<string, number>> = {
   exe_glassdvdr: 1,
   hc_bkshlf: 3,
   hc_tv: 1.3,
+  // O computador antigo do Habbo não tem tampo (altura de empilhar 0).
+  computer_old: 0,
   lamp_armas: 1.56,
   fireplace_armas: 1.56,
   fridge: 1,
@@ -590,6 +595,12 @@ export const HAS_TOP: ReadonlySet<string> = new Set([
   'fridge',
 ]);
 
+/** Tampo explícito: o da curadoria (`false` tira) ou o da lista do escritório. */
+function curatedTop(cur: FurniCuration): { hasTop?: boolean } {
+  const top = cur.hasTop ?? (HAS_TOP.has(cur.id) ? true : undefined);
+  return top === undefined ? {} : { hasTop: top };
+}
+
 /** Entrada de um móvel local (não passa pelo imager). */
 export function buildLocalEntry(cur: FurniCuration): FurniManifestEntry {
   return {
@@ -600,7 +611,7 @@ export function buildLocalEntry(cur: FurniCuration): FurniManifestEntry {
     depth: cur.depth ?? 1,
     height: cur.height,
     ...(STACK_HEIGHTS[cur.id] !== undefined ? { stackHeight: STACK_HEIGHTS[cur.id] } : {}),
-    ...((cur.hasTop ?? HAS_TOP.has(cur.id)) ? { hasTop: true } : {}),
+    ...curatedTop(cur),
     canSit: cur.canSit ?? false,
     canLay: cur.canLay ?? false,
     wall: cur.wall ?? false,
@@ -640,8 +651,7 @@ export function buildFurniEntry(
       depth: cur.depth ?? estimated.depth,
       height: cur.height,
       ...(STACK_HEIGHTS[cur.id] !== undefined ? { stackHeight: STACK_HEIGHTS[cur.id] } : {}),
-      ...((cur.hasTop ?? HAS_TOP.has(cur.id)) ? { hasTop: true } : {}),
-      ...((cur.hasTop ?? HAS_TOP.has(cur.id)) ? { hasTop: true } : {}),
+      ...curatedTop(cur),
       canSit: cur.canSit ?? false,
       canLay: cur.canLay ?? false,
       wall: cur.wall ?? false,

@@ -1,11 +1,17 @@
-import type { CatalogItem, FurniCatalog, FurniManifestEntry } from '@office/shared';
+import {
+  acceptsOnTop,
+  type CatalogItem,
+  type FurniCatalog,
+  type FurniDef,
+  type FurniManifestEntry,
+} from '@office/shared';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { openDatabase } from '../db/client.js';
 import { furniDefs } from '../db/schema.js';
-import { curationFor, FurniDefService, hasTop, layHeight } from './FurniDefService.js';
+import { catalogTop, curationFor, FurniDefService, layHeight } from './FurniDefService.js';
 
 const item = (over: Partial<CatalogItem>): CatalogItem => ({
   id: 'x',
@@ -18,27 +24,84 @@ const item = (over: Partial<CatalogItem>): CatalogItem => ({
   ...over,
 });
 
-describe('tampo dos móveis do catálogo (empilhar)', () => {
-  it('mesas, estantes e divisórias têm tampo; e pelo nome, balcões, armários, cômodas…', () => {
-    expect(hasTop(item({ c: 'table', n: 'Mesa Pura' }))).toBe(true);
-    expect(hasTop(item({ c: 'shelf', n: 'Estante' }))).toBe(true);
-    expect(hasTop(item({ c: 'divider', n: 'Divisória' }))).toBe(true);
-    for (const n of ['Balcão de Bar', 'Armário de Metal', 'Cômoda Antiga', 'Escrivaninha Pura'])
-      expect(hasTop(item({ n })), n).toBe(true);
+describe('tampo dos móveis do catálogo (Fase 56)', () => {
+  /** A definição de um item do catálogo serve de base? */
+  const base = (over: Partial<CatalogItem>) => {
+    const cur = curationFor(item(over), 'x');
+    return acceptsOnTop({ ...cur, width: 1, depth: 1, directions: [0] } as FurniDef);
+  };
+
+  it('todo móvel sólido com altura serve de base, inclusive blocos e plataformas (DE19, IN14)', () => {
+    expect(base({ c: 'table', n: 'Mesa Pura' })).toBe(true);
+    expect(base({ c: 'shelf', n: 'Estante' })).toBe(true);
+    expect(base({ c: 'other', n: 'Computador' })).toBe(true);
+    expect(base({ c: 'other', n: 'Caixa de Madeira', h: 0.5 })).toBe(true);
+    expect(base({ c: 'other', n: 'Bloco Fino', h: 1, walk: 1 })).toBe(true);
+    expect(base({ c: 'other', n: 'Plataforma', h: 2, walk: 1 })).toBe(true);
+    // Divisória "de flores" e um coelho com tiara de flores não são plantas.
+    expect(base({ c: 'divider', n: 'Divisória de Flores' })).toBe(true);
+    expect(base({ c: 'other', n: 'Coelhinho Tiara de Flores' })).toBe(true);
   });
 
-  it('assento, cama, tapete, parede e o resto não', () => {
-    expect(hasTop(item({ c: 'chair', n: 'Cadeira', sit: 1 }))).toBe(false);
-    expect(hasTop(item({ c: 'bed', n: 'Cama', lay: 1 }))).toBe(false);
-    expect(hasTop(item({ c: 'rug', n: 'Tapete de mesa', walk: 1 }))).toBe(false);
-    expect(hasTop(item({ c: 'wall_decoration', n: 'Prateleira de parede', wall: 1 }))).toBe(false);
-    expect(hasTop(item({ c: 'other', n: 'Computador' }))).toBe(false);
-    expect(hasTop(item({ c: 'plant', n: 'Planta' }))).toBe(false);
+  it('as exceções: luzes, velas, cortinas e plantas (pelo nome ou pela categoria)', () => {
+    for (const n of [
+      'Luminária de Mesa',
+      'Abajur Clube',
+      'Lâmpada de Abóbora',
+      'Vela de mesa',
+      'Porta-Velas Talhado',
+      'Cortina Imperial',
+      'Planta Zen',
+      'Flor Amarela',
+      'Vaso Opulento',
+      'Bonsai',
+      'Palmeira do Deserto',
+    ]) {
+      expect(base({ n }), n).toBe(false);
+      expect(catalogTop(item({ n })), n).toBe(false);
+    }
+    expect(base({ c: 'lighting', n: 'Neon Azul' })).toBe(false);
+    expect(base({ c: 'plant', n: 'Samambaia' })).toBe(false);
+    // Regra geral: o catálogo não diz nada (sem `hasTop`).
+    expect(catalogTop(item({ c: 'table', n: 'Mesa' }))).toBeUndefined();
   });
 
-  it('vai para a definição do móvel (curadoria)', () => {
-    expect(curationFor(item({ c: 'table', n: 'Mesa' }), 'mesa_x').hasTop).toBe(true);
-    expect(curationFor(item({ n: 'Abajur' }), 'abajur_x').hasTop).toBe(false);
+  it('assento, cama, tapete, parede e o que é baixo demais não', () => {
+    expect(base({ c: 'chair', n: 'Cadeira', sit: 1 })).toBe(false);
+    expect(base({ c: 'bed', n: 'Cama', lay: 1 })).toBe(false);
+    expect(base({ c: 'rug', n: 'Tapete de mesa', h: 0, walk: 1 })).toBe(false);
+    expect(base({ c: 'wall_decoration', n: 'Prateleira de parede', wall: 1 })).toBe(false);
+    expect(base({ c: 'other', n: 'Adesivo de chão', h: 0.1 })).toBe(false);
+  });
+
+  it('os gravados antes da Fase 56 seguem a regra nova ao carregar', () => {
+    const db = openDatabase(':memory:');
+    const file = join(mkdtempSync(join(tmpdir(), 'catalogo-')), 'catalog.json');
+    const items = [
+      item({ id: 'bloco_x', n: 'Bloco', h: 1, walk: 1 }),
+      item({ id: 'abajur_x', n: 'Abajur de Mesa', c: 'table' }),
+    ];
+    writeFileSync(file, JSON.stringify({ version: 1, generatedAt: '', items }));
+    // Como eram gravados: o bloco "sem tampo" (de pisar) e o abajur "com tampo" (de mesa).
+    const stored = [
+      { ...curationFor(items[0]!, 'bloco_x'), hasTop: false },
+      { ...curationFor(items[1]!, 'abajur_x'), hasTop: true },
+    ];
+    for (const d of stored) {
+      const json = JSON.stringify({ ...d, directions: [0], anchors: {}, states: [] });
+      db.insert(furniDefs).values({ id: d.id, json, createdAt: new Date() }).run();
+    }
+    const svc = new FurniDefService(
+      db,
+      new Map(),
+      async () => {
+        throw new Error('não mede');
+      },
+      file,
+    );
+    expect(svc.defs.get('bloco_x')!.hasTop).toBeUndefined();
+    expect(acceptsOnTop(svc.defs.get('bloco_x')!)).toBe(true);
+    expect(svc.defs.get('abajur_x')!.hasTop).toBe(false);
   });
 });
 
