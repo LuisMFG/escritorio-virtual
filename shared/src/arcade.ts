@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { footprint, type FurniDef, type PlacedFurni } from './furni.js';
 import type { TilePoint } from './iso.js';
+import { decodeBall, type PongBall } from './pong.js';
 
 /**
  * Salão de Jogos (Fase 57): base comum das mesas de sinuca e ping-pong. Cada mesa tem dois lados
@@ -79,6 +80,19 @@ export interface ArcadeFields {
   b2Away: number;
   scoreA: number;
   scoreB: number;
+  setsA: number;
+  setsB: number;
+  turn: string;
+  phase: string;
+  ball: string;
+  a1Px: number;
+  a1Py: number;
+  a2Px: number;
+  a2Py: number;
+  b1Px: number;
+  b1Py: number;
+  b2Px: number;
+  b2Py: number;
   detail: string;
   winner: string;
   end: string;
@@ -92,7 +106,15 @@ export interface ArcadeView {
   seats: Record<ArcadeSlot, ArcadeSeat>;
   scoreA: number;
   scoreB: number;
-  /** Detalhe do jogo (set, saque, grupo de bolas…). */
+  /** Sets ganhos por lado (ping-pong). */
+  setsA: number;
+  setsB: number;
+  /** Vaga da vez (quem saca), ou vazio. */
+  turn: ArcadeSlot | '';
+  phase: '' | 'serve' | 'rally' | 'point';
+  ball: PongBall | null;
+  paddles: Record<ArcadeSlot, { x: number; y: number }>;
+  /** Detalhe do jogo (o último ponto, set, grupo de bolas…). */
   detail: string;
   winner: '' | ArcadeSide;
   end: ArcadeEnd;
@@ -118,6 +140,14 @@ export function arcadeView(g: ArcadeFields): ArcadeView {
     >,
     scoreA: g.scoreA,
     scoreB: g.scoreB,
+    setsA: g.setsA,
+    setsB: g.setsB,
+    turn: (ARCADE_SLOTS as readonly string[]).includes(g.turn) ? (g.turn as ArcadeSlot) : '',
+    phase: (['serve', 'rally', 'point'] as const).find((p) => p === g.phase) ?? '',
+    ball: decodeBall(g.ball),
+    paddles: Object.fromEntries(
+      ARCADE_SLOTS.map((s) => [s, { x: g[`${s}Px`], y: g[`${s}Py`] }]),
+    ) as Record<ArcadeSlot, { x: number; y: number }>,
     detail: g.detail,
     winner: g.winner === 'a' || g.winner === 'b' ? g.winner : '',
     end: (['points', 'forfeit', 'wo'] as const).find((e) => e === g.end) ?? '',
@@ -147,8 +177,18 @@ export function scoreboardText(v: ArcadeView, now: number): string | null {
       .filter(Boolean)
       .join(' e ') || '…';
   const icon = ARCADE_INFO[v.kind].icon;
+  // Sets de quem venceu primeiro (ping-pong, Fase 58).
+  const sets = (w: ArcadeSide) =>
+    w === 'a' ? `${v.setsA} × ${v.setsB}` : `${v.setsB} × ${v.setsA}`;
   if (v.status === 'ended' && v.winner) {
-    const how = v.end === 'wo' ? ' (W.O.)' : v.end === 'forfeit' ? ' (desistência)' : '';
+    const how =
+      v.end === 'wo'
+        ? ' (W.O.)'
+        : v.end === 'forfeit'
+          ? ' (desistência)'
+          : v.end === 'points' && v.kind === 'pingpong'
+            ? ` (${sets(v.winner)})`
+            : '';
     const plural = sideSlots(v.winner, v.mode).filter((s) => v.seats[s].name).length > 1;
     return `🏆 ${names(v.winner)} ${plural ? 'venceram' : 'venceu'}${how}`;
   }
@@ -161,7 +201,8 @@ export function scoreboardText(v: ArcadeView, now: number): string | null {
     const left = Math.ceil((v.seats[away].awayUntil - now) / 1000);
     return `${line}\n⏳ ${short(v.seats[away].name)} saiu: W.O. em ${left} s`;
   }
-  return v.status === 'waiting' ? `${line}\nAguardando` : line;
+  if (v.status === 'waiting') return `${line}\nAguardando`;
+  return v.kind === 'pingpong' ? `${line}\nSets ${sets('a')}` : line;
 }
 
 /**

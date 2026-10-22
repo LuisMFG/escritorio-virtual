@@ -97,6 +97,12 @@ export const ClientMessage = {
   ArcadeForfeit: 'arcade.forfeit',
   /** `{ furniId, mode }`: 1×1 ou 2×2, antes de começar. */
   ArcadeMode: 'arcade.mode',
+  /** Ping-pong (Fase 58). `{ furniId, x, y }`: onde está a raquete (até 20 vezes por segundo). */
+  PongPaddle: 'pong.paddle',
+  /** Requisição `{ furniId, t, x, y }`: saque de quem tem a vez (`ArcadeReply`). */
+  PongServe: 'pong.serve',
+  /** Requisição `{ furniId, t, x, y, vx, vy }`: a raquete tocou a bola em `t` (`ArcadeReply`). */
+  PongHit: 'pong.hit',
   /** `{ question, options, anonymous }`: cria uma enquete no chat da sala. */
   PollCreate: 'poll.create',
   /** `{ pollId, option }`: vota (ou troca o voto). */

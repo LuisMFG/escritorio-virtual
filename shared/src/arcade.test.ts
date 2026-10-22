@@ -22,12 +22,24 @@ function fields(over: Partial<ArcadeFields> = {}): ArcadeFields {
       [`${s}Away`, 0],
     ]),
   );
+  const paddles = Object.fromEntries(
+    ARCADE_SLOTS.flatMap((s) => [
+      [`${s}Px`, 0],
+      [`${s}Py`, 0],
+    ]),
+  );
   return {
     kind: 'pingpong',
     mode: 1,
     status: 'waiting',
     scoreA: 0,
     scoreB: 0,
+    setsA: 0,
+    setsB: 0,
+    turn: '',
+    phase: '',
+    ball: '',
+    ...paddles,
     detail: '',
     winner: '',
     end: '',
@@ -68,11 +80,18 @@ describe('Salão de Jogos: base das mesas (Fase 57)', () => {
   it('o placar sobre a mesa: vazia, esperando, jogando, alguém saiu e o resultado', () => {
     expect(scoreboardText(arcadeView(fields()), 0)).toBeNull();
     expect(scoreboardText(arcadeView(fields({ ...ana })), 0)).toBe('🏓 Ana × …\nAguardando');
-    const game = fields({ ...ana, ...beto, status: 'playing', scoreA: 3, scoreB: 5 });
-    expect(scoreboardText(arcadeView(game), 0)).toBe('🏓 Ana 3 × 5 Beto');
+    const game = fields({ ...ana, ...beto, status: 'playing', scoreA: 3, scoreB: 5, setsA: 1 });
+    expect(scoreboardText(arcadeView(game), 0)).toBe('🏓 Ana 3 × 5 Beto\nSets 1 × 0');
     expect(scoreboardText(arcadeView({ ...game, b1Away: 12_000 }), 2_500)).toBe(
       '🏓 Ana 3 × 5 Beto\n⏳ Beto saiu: W.O. em 10 s',
     );
+    // Fim no jogo: os sets de quem venceu primeiro.
+    expect(
+      scoreboardText(
+        arcadeView({ ...game, status: 'ended', winner: 'b', end: 'points', setsA: 1, setsB: 2 }),
+        0,
+      ),
+    ).toBe('🏆 Beto venceu (2 × 1)');
     expect(
       scoreboardText(arcadeView({ ...game, status: 'ended', winner: 'b', end: 'wo' }), 0),
     ).toBe('🏆 Beto venceu (W.O.)');

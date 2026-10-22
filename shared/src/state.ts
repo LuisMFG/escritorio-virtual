@@ -138,7 +138,25 @@ export const ArcadeGame = schema(
     b2Away: t.float64(),
     scoreA: t.uint16(),
     scoreB: t.uint16(),
-    /** Detalhe do jogo (set, saque, grupo de bolas…). */
+    /** Sets (ou partidas) ganhos por lado (Fase 58). */
+    setsA: t.uint8(),
+    setsB: t.uint8(),
+    /** Vaga da vez: quem saca (ping-pong) ou joga (sinuca). */
+    turn: t.string(),
+    /** Momento do jogo: 'serve' | 'rally' | 'point' (vazio fora da partida). */
+    phase: t.string(),
+    /** Trecho da bola em jogo (JSON de `PongBall`; vazio = sem bola). Muda só no saque e na rebatida. */
+    ball: t.string(),
+    /** Raquetes (coordenadas da mesa, em metros), uma por vaga. */
+    a1Px: t.float32(),
+    a1Py: t.float32(),
+    a2Px: t.float32(),
+    a2Py: t.float32(),
+    b1Px: t.float32(),
+    b1Py: t.float32(),
+    b2Px: t.float32(),
+    b2Py: t.float32(),
+    /** Detalhe do jogo (o último ponto, set, grupo de bolas…). */
     detail: t.string(),
     /** '' | 'a' | 'b' */
     winner: t.string(),
