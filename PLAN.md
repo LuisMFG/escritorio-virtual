@@ -1478,7 +1478,7 @@ As fases 52 e 53 vêm primeiro porque corrigem o que já existe e é usado todo 
   3. Coloque blocos (ex.: "Bloco de Mármore") e empilhe um em cima do outro.
   4. Ponha uma cadeira em cima de um bloco → Concluir → sente nela e use `/levantar`.
 
-### Fase 57 — Salão de Jogos: sala, mesas, assistir e placar
+### Fase 57 — Salão de Jogos: sala, mesas, assistir e placar ✅ implementada
 - **Sala nova "Salão de Jogos"** com porta na Recepção (e de volta). Ela aparece sozinha nos servidores já instalados ao atualizar, como foi feito com a Recepção.
 - **Mesas:**
   - sinuca: a mesa "Snooker" do catálogo do Habbo;
@@ -1494,6 +1494,32 @@ As fases 52 e 53 vêm primeiro porque corrigem o que já existe e é usado todo 
   2. Clicar na mesa abre o painel com as vagas. Quem não joga assiste com placar ao vivo, e o placar também aparece sobre a mesa na sala.
   3. Sair libera a vaga.
 - **Testes:** sala (vagas, assistir, W.O.) e ponta a ponta (porta, abrir a mesa, assistir).
+- **Feito:**
+  - **Sala** (`shared/src/rooms.ts`, `GAMES`): duas mesas de sinuca e duas de ping-pong, sofás e cadeiras para a torcida, café e geladeira. A porta fica na parede da esquerda; a de volta, na parede do fundo da Recepção, perto do café, em (15,0).
+    - Instalação nova: a sala vem na semente.
+    - Instalação atualizada: no boot, `RoomRepository.ensureGamesRoom` cria a sala uma vez só e abre a porta na Recepção. Se o lugar pensado estiver ocupado, a porta vai para o lugar livre mais perto da entrada (`findDoorSpot` com lugar preferido). Se o admin excluir a sala depois, ela não volta.
+  - **Mesas:**
+    - sinuca: a "Snooker" do Habbo (`bling15_pooltable`), medida com `npm run assets:sync -- --only …` (opção nova, que mede só os móveis pedidos);
+    - ping-pong: arte própria em pixel art isométrica, no mesmo tamanho (2×1), com tampo azul, linhas, rede e pés. É gerada por `server/scripts/pingpong-art.ts` e está registrada no ASSETS.md.
+    - Nenhuma das duas aceita coisas em cima.
+  - **Base das mesas** (`shared/src/arcade.ts`, `server/src/rooms/arcade.ts`): a partida fica no estado da sala (`arcade`), com as vagas, o modo, o placar e o resultado.
+    - Vagas 1×1 ou 2×2. Quem entra anda até a ponta da mesa do seu lado e vira para ela.
+    - Começar (com as vagas cheias), desistir (o outro lado vence) e sair da vaga (no meio da partida, é desistir). Uma mesa por vez, contando o jogo da velha.
+    - Quem sai da sala, fecha a aba ou cai antes da partida perde a vaga na hora. No meio dela, tem 15 s para voltar (por reconexão, recarregando ou pela porta); depois, W.O. para o outro lado.
+    - O resultado vai para o placar de vitórias e derrotas de cada um e é avisado no chat ("🏆 venceu … no ping-pong (W.O.)").
+  - **Painel** (`client/src/ui/arcade.ts`): abre ao clicar na mesa, para qualquer pessoa da sala. Mostra o placar, a vista de cima da mesa em arte própria (com os nomes nas pontas), o modo, as vagas dos dois lados (com a contagem do W.O.) e os botões de quem joga.
+    - Quem não joga vê "Você está assistindo" e o placar ao vivo.
+    - Enquanto o jogo de cada mesa não chega (Fases 58 e 59), a partida fica "em andamento" até alguém desistir ou sair. O painel avisa isso.
+  - **Placar sobre a mesa:** uma placa flutua sobre a mesa na sala para todos. Mostra quem joga e o placar; quem saiu, com os segundos até o W.O.; e o vencedor no fim.
+  - **Testes:**
+    - unidade: `arcade.test.ts` (compartilhado: vagas, posições, placar sobre a mesa; servidor: entrar, trocar, modo, começar, desistir, sair, prazo, W.O., voltar a tempo, recarregar), `RoomRepository.test.ts` (o Salão nos bancos de antes, porta preferida ou livre, não volta se excluído) e `roomEdit.test.ts` (lugar preferido);
+    - sala: cinco testes em `OfficeRoom.test.ts` (vagas, andar até a ponta e assistir; 2×2 escolhido na mesa vazia; desistir com placar e chat; sair antes e W.O. no meio; voltar a tempo);
+    - ponta a ponta: `salao.spec.ts` (porta da Recepção, painel, três navegadores com quem assiste vendo o placar, desistir, mesa livre de novo).
+- **Como testar:**
+  1. Na Recepção, entre pela porta nova da parede do fundo, perto do café.
+  2. Clique numa mesa de ping-pong ou de sinuca e entre numa vaga. Outra pessoa entra no outro lado e alguém clica em Começar.
+  3. Uma terceira pessoa abre a mesa e vê o placar no painel e sobre a mesa.
+  4. Teste o Desistir, ou feche a aba de um jogador no meio da partida e espere 15 s.
 
 ### Fase 58 — Ping-pong em tempo real
 - **Jogo:** painel com vista de cima e arte própria.
