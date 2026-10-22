@@ -42,7 +42,7 @@ export const furniManifestEntrySchema = z.object({
    * O que acontece ao clicar fora do modo decorar: `toggle` alterna os estados (luz, TV…),
    * `coffee` serve um café (emote), `board` abre o mural de recados, `whiteboard` abre o
    * quadro branco, `tictactoe` abre o jogo da velha, `kudos` abre o mural de elogios, `jira`
-   * abre o quadro de demandas.
+   * abre o quadro de demandas, `pingpong` e `pool` abrem as mesas do Salão de Jogos (Fase 57).
    */
   interaction: z
     .enum([
@@ -58,6 +58,8 @@ export const furniManifestEntrySchema = z.object({
       'teleport',
       'jukebox',
       'tv',
+      'pingpong',
+      'pool',
     ])
     .optional(),
   /** Desenho do Habbo usado (quando o móvel reaproveita a arte de outro; padrão = `id`). */

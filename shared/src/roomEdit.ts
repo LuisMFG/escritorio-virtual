@@ -193,7 +193,8 @@ export function validateRoomEdit(
 
 /**
  * Lugar para uma porta nova (a "porta de volta"): na linha/coluna 0, encostada no piso,
- * alcançável a partir da entrada, o mais perto dela possível. `null` se não couber.
+ * alcançável a partir da entrada, o mais perto dela possível. `prefer`: o lugar pensado para
+ * ela, que vale primeiro se servir (Fase 57). `null` se não couber.
  */
 export function findDoorSpot(
   heightmap: readonly string[],
@@ -201,6 +202,7 @@ export function findDoorSpot(
   takenDoors: readonly TilePoint[],
   furni: readonly PlacedFurni[],
   defs: ReadonlyMap<string, FurniDef>,
+  prefer?: TilePoint,
 ): TilePoint | null {
   const taken = new Set(takenDoors.map((d) => key(d.x, d.y)));
   const candidates: TilePoint[] = [];
@@ -211,13 +213,11 @@ export function findDoorSpot(
   for (let x = 1; x < (rows[0]?.length ?? 0); x++) {
     if (rows[1]?.[x] === '0' && !taken.has(key(x, 0))) candidates.push({ x, y: 0 });
   }
-  candidates.sort(
-    (a, b) =>
-      Math.abs(a.x - spawn.x) +
-      Math.abs(a.y - spawn.y) -
-      Math.abs(b.x - spawn.x) -
-      Math.abs(b.y - spawn.y),
-  );
+  const dist = (t: TilePoint) =>
+    prefer && t.x === prefer.x && t.y === prefer.y
+      ? -1
+      : Math.abs(t.x - spawn.x) + Math.abs(t.y - spawn.y);
+  candidates.sort((a, b) => dist(a) - dist(b));
   for (const c of candidates) {
     const withDoor = rows.map((r, y) =>
       r.map((ch, x) => (x === c.x && y === c.y ? '0' : ch)).join(''),

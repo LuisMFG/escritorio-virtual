@@ -87,6 +87,16 @@ export const ClientMessage = {
   TttRematch: 'ttt.rematch',
   /** Requisição `{ furniId }`: placar (`TttScores`). */
   TttScores: 'ttt.scores',
+  /** Salão de Jogos (Fase 57), requisições que respondem `ArcadeReply`. `{ furniId, slot }`. */
+  ArcadeJoin: 'arcade.join',
+  /** `{ furniId }`: sai da vaga (no meio da partida, é desistir). */
+  ArcadeLeave: 'arcade.leave',
+  /** `{ furniId }`: começa a partida (com as vagas do modo cheias). */
+  ArcadeStart: 'arcade.start',
+  /** `{ furniId }`: desiste da partida (o outro lado vence). */
+  ArcadeForfeit: 'arcade.forfeit',
+  /** `{ furniId, mode }`: 1×1 ou 2×2, antes de começar. */
+  ArcadeMode: 'arcade.mode',
   /** `{ question, options, anonymous }`: cria uma enquete no chat da sala. */
   PollCreate: 'poll.create',
   /** `{ pollId, option }`: vota (ou troca o voto). */

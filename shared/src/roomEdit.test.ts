@@ -21,7 +21,7 @@ const defs = new Map(
     ),
   ).items.map((i) => [i.id, i]),
 );
-const roomIds = new Set(['reception', 'meeting', 'pantry']);
+const roomIds = new Set(ROOMS.map((r) => r.id));
 
 const base: RoomEdit = {
   name: 'Sala do TI',
@@ -103,6 +103,17 @@ describe('portas', () => {
     expect(
       findDoorSpot(['xxxx', 'x00x', 'x00x'], { x: 1, y: 1 }, [{ x: 1, y: 0 }], [], defs),
     ).toEqual({ x: 0, y: 1 });
+  });
+
+  it('findDoorSpot fica com o lugar preferido quando ele serve (Fase 57)', () => {
+    const map = ['xxxxx', 'x0000', 'x0000', 'x0000'];
+    expect(findDoorSpot(map, { x: 1, y: 1 }, [], [], defs, { x: 4, y: 0 })).toEqual({ x: 4, y: 0 });
+    // Com um móvel no tile de dentro, a porta preferida não dá: vai para a mais perto da entrada.
+    const plant = { id: 'p', defId: 'plant_yukka', x: 4, y: 1, z: 0, rot: 0 };
+    expect(findDoorSpot(map, { x: 1, y: 1 }, [], [plant], defs, { x: 4, y: 0 })).toEqual({
+      x: 0,
+      y: 1,
+    });
   });
 
   it('sala nova padrão passa na validação', () => {

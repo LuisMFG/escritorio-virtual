@@ -44,8 +44,8 @@ const key = (x: number, y: number) => `${x},${y}`;
 export const MAX_STACK_HEIGHT = 6;
 
 /**
- * Nada vai em cima: algo desenhado ou jogado por cima (quadros, tabuleiro), a tela da TV e a porta
- * do teleporte.
+ * Nada vai em cima: algo desenhado ou jogado por cima (quadros, tabuleiro, mesas do Salão de
+ * Jogos), a tela da TV e a porta do teleporte.
  */
 const NO_TOP_INTERACTIONS = new Set([
   'whiteboard',
@@ -53,6 +53,8 @@ const NO_TOP_INTERACTIONS = new Set([
   'kudos',
   'jira',
   'tictactoe',
+  'pingpong',
+  'pool',
   'tv',
   'teleport',
 ]);

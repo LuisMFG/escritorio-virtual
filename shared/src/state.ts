@@ -107,6 +107,48 @@ export const TttGame = schema(
 );
 export type TttGame = SchemaType<typeof TttGame>;
 
+/**
+ * Partida numa mesa do Salão de Jogos (Fase 57; chave = id da mesa): vagas, placar e resultado.
+ * Todo mundo na sala recebe, então quem não joga assiste ao vivo. As vagas são achatadas como
+ * no jogo da velha: sessão, conta, nome e até quando quem saiu pode voltar (`…Away`, epoch ms).
+ */
+export const ArcadeGame = schema(
+  {
+    /** 'pingpong' | 'pool' */
+    kind: t.string(),
+    /** Jogadores por lado: 1 (1×1) ou 2 (2×2). */
+    mode: t.uint8(),
+    /** 'waiting' | 'playing' | 'ended' */
+    status: t.string(),
+    a1Session: t.string(),
+    a1User: t.string(),
+    a1Name: t.string(),
+    a1Away: t.float64(),
+    a2Session: t.string(),
+    a2User: t.string(),
+    a2Name: t.string(),
+    a2Away: t.float64(),
+    b1Session: t.string(),
+    b1User: t.string(),
+    b1Name: t.string(),
+    b1Away: t.float64(),
+    b2Session: t.string(),
+    b2User: t.string(),
+    b2Name: t.string(),
+    b2Away: t.float64(),
+    scoreA: t.uint16(),
+    scoreB: t.uint16(),
+    /** Detalhe do jogo (set, saque, grupo de bolas…). */
+    detail: t.string(),
+    /** '' | 'a' | 'b' */
+    winner: t.string(),
+    /** '' | 'points' | 'forfeit' | 'wo' */
+    end: t.string(),
+  },
+  'ArcadeGame',
+);
+export type ArcadeGame = SchemaType<typeof ArcadeGame>;
+
 /** Pet que acompanha alguém na sala (chave = id da conta do dono). */
 export const Pet = schema(
   {
@@ -141,6 +183,8 @@ export const OfficeState = schema(
     furni: t.map(Furni),
     /** Partidas de jogo da velha (chave = id da mesa). */
     games: t.map(TttGame),
+    /** Mesas do Salão de Jogos com gente (chave = id da mesa, Fase 57). */
+    arcade: t.map(ArcadeGame),
     /** Pets de quem está na sala (chave = id da conta do dono). */
     pets: t.map(Pet),
     /** Só admins decoram esta sala. */

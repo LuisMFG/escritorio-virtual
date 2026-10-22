@@ -80,7 +80,7 @@ export const RECEPTION: RoomDefinition = {
   id: 'reception',
   name: 'Recepção',
   heightmap: [
-    'xxxxxxxxxxxxxxxxxxxxx0x', // porta para a Copa, na parede do fundo (perto do café)
+    'xxxxxxxxxxxxxxx0xxxxx0x', // portas para o Salão de Jogos e a Copa, na parede do fundo
     'x0000000000000000000000',
     'x0000000000000000000000',
     'x0000000000000000000000',
@@ -105,6 +105,8 @@ export const RECEPTION: RoomDefinition = {
   doors: [
     { x: 0, y: 4, targetRoomId: 'meeting', targetX: 1, targetY: 4, targetDir: 2 },
     { x: 21, y: 0, targetRoomId: 'pantry', targetX: 1, targetY: 3, targetDir: 2 },
+    // Salão de Jogos (Fase 57): bancos de antes ganham esta porta sozinhos ao atualizar.
+    { x: 15, y: 0, targetRoomId: 'games', targetX: 1, targetY: 4, targetDir: 2 },
   ],
   floorColor: '#b3b2ab',
   wallColor: '#d9dddc',
@@ -234,7 +236,55 @@ export const PANTRY: RoomDefinition = {
   ],
 };
 
-export const ROOMS: readonly RoomDefinition[] = [RECEPTION, MEETING, PANTRY];
+/**
+ * Salão de Jogos (Fase 57): duas mesas de sinuca (a "Snooker" do Habbo) e duas de ping-pong
+ * (arte própria), com as pontas livres para os jogadores, e sofás em volta para a torcida. A
+ * porta fica na parede da esquerda; a de volta, na parede do fundo da Recepção, perto do café.
+ */
+export const GAMES: RoomDefinition = {
+  id: 'games',
+  name: 'Salão de Jogos',
+  heightmap: [
+    'xxxxxxxxxxxxxxx', // linha 0: só parede
+    'x00000000000000',
+    'x00000000000000',
+    'x00000000000000',
+    '000000000000000', // porta para a Recepção
+    'x00000000000000',
+    'x00000000000000',
+    'x00000000000000',
+    'x00000000000000',
+    'x00000000000000',
+    'x00000000000000',
+    'x00000000000000',
+  ],
+  spawn: { x: 1, y: 4, dir: 2 },
+  doors: [{ x: 0, y: 4, targetRoomId: 'reception', targetX: 15, targetY: 1, targetDir: 4 }],
+  floorColor: '#7b8794',
+  wallColor: '#c4a170',
+  furni: [
+    // Sinucas no fundo e mesas de ping-pong na frente; os jogadores ficam nas pontas.
+    f('s-sinuca-1', 'bling15_pooltable', 4, 2),
+    f('s-sinuca-2', 'bling15_pooltable', 9, 2),
+    f('s-pingpong-1', 'pingpong_table', 4, 6),
+    f('s-pingpong-2', 'pingpong_table', 9, 6),
+    // Torcida: sofás de frente para as mesas.
+    f('s-sofa-1', 'exe_sofa', 3, 9, 0),
+    f('s-sofa-2', 'exe_sofa', 8, 9, 0),
+    f('s-sofa-3', 'sofa_silo', 13, 2, 6),
+    f('s-sofa-4', 'sofa_silo', 13, 6, 6),
+    f('s-banco-1', 'chair_norja', 12, 9, 0),
+    f('s-banco-2', 'chair_norja', 13, 9, 0),
+    // Café e geladeira para os intervalos; plantas nos cantos.
+    f('s-cafe', 'sunsetcafe_c20_coffeemachine', 7, 1, 4),
+    f('s-geladeira', 'fridge', 14, 1, 6),
+    f('s-planta-1', 'plant_yukka', 1, 1),
+    f('s-planta-2', 'plant_big_cactus', 1, 11),
+    f('s-planta-3', 'plant_yukka', 14, 11),
+  ],
+};
+
+export const ROOMS: readonly RoomDefinition[] = [RECEPTION, MEETING, PANTRY, GAMES];
 
 export function findRoom(id: string): RoomDefinition | undefined {
   return ROOMS.find((r) => r.id === id);

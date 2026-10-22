@@ -22,6 +22,7 @@ export * from './ambience.js';
 export * from './whiteboard.js';
 export * from './meetings.js';
 export * from './games.js';
+export * from './arcade.js';
 export * from './pets.js';
 export * from './achievements.js';
 export * from './activity.js';
