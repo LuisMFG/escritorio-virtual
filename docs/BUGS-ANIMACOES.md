@@ -25,7 +25,8 @@ Cada bug tem um código (AN = animação, IN = interação, DE = Decorar/empilha
 
 **Situação:**
 - A Fase 52 corrigiu AN1–AN8, AN10, AN11, AN13, AN14, IN1–IN11, IN13, IN15 e o IN16 (achado na conferência).
-- A Fase 53 corrigiu DE1–DE10, DE13–DE17 e DE20. DE11, DE12, DE18 e DE19 ficaram de fora do roadmap.
+- A Fase 53 corrigiu DE1–DE10, DE13–DE17 e DE20. DE11, DE12 e DE18 ficaram de fora do roadmap.
+- A Fase 56 corrigiu IN14 e DE19 (regra de tampo nova: todo móvel sólido com altura serve de base, menos assentos, camas e uma lista de exceções).
 
 ---
 
@@ -194,7 +195,7 @@ Cada bug tem um código (AN = animação, IN = interação, DE = Decorar/empilha
 
 ### IN13 · O servidor recusa móvel no destino final de quem está andando ("Tem alguém nesse lugar." com o fantasma verde) — **baixa-média** · ✅ corrigido na Fase 52
 
-### IN14 · Blocos altos "de pisar" (`bc_block`) não servem de base: o que vai em cima fica afundado — **baixa**
+### IN14 · Blocos altos "de pisar" (`bc_block`) não servem de base: o que vai em cima fica afundado — **baixa** · ✅ corrigido na Fase 56
 
 ### IN15 · Menores — **baixa** · ✅ corrigido na Fase 52
 - O item na mão de uma aba some nas outras abas com `/largar`.
@@ -271,7 +272,7 @@ Cada bug tem um código (AN = animação, IN = interação, DE = Decorar/empilha
 ### DE18 · Desempenho do arrasto — **baixa**
 - A cada movimento do mouse: validação completa (com caminho até cada porta) e redesenho da grade.
 
-### DE19 · O "tem tampo" do catálogo tem falsos positivos e falsos negativos — **baixa**
+### DE19 · O "tem tampo" do catálogo tem falsos positivos e falsos negativos — **baixa** · ✅ corrigido na Fase 56
 - **Falsos positivos:** luminárias e velas "de mesa", cortinas.
 - **Falsos negativos:** blocos e plataformas.
 
