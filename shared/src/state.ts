@@ -156,6 +156,18 @@ export const ArcadeGame = schema(
     b1Py: t.float32(),
     b2Px: t.float32(),
     b2Py: t.float32(),
+    /** Sinuca (Fase 59): as bolas paradas (JSON de `PoolBalls`) e a última tacada (para animar). */
+    balls: t.string(),
+    shot: t.string(),
+    /** Grupo do lado A ('solids' | 'stripes'; vazio = mesa aberta). */
+    groupA: t.string(),
+    /** Bola na mão para quem taca; a próxima tacada é a abertura. */
+    inHand: t.boolean(),
+    breakShot: t.boolean(),
+    /** Até quando quem tem a vez pode tacar (epoch ms). */
+    deadline: t.float64(),
+    /** Mira ao vivo de quem taca (JSON: direção, força e a branca), para os outros verem o taco. */
+    aim: t.string(),
     /** Detalhe do jogo (o último ponto, set, grupo de bolas…). */
     detail: t.string(),
     /** '' | 'a' | 'b' */

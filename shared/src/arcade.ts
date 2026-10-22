@@ -2,6 +2,14 @@ import { z } from 'zod';
 import { footprint, type FurniDef, type PlacedFurni } from './furni.js';
 import type { TilePoint } from './iso.js';
 import { decodeBall, type PongBall } from './pong.js';
+import {
+  decodeJson,
+  GROUP_NAMES,
+  otherGroup,
+  type PoolBalls,
+  type PoolGroup,
+  type PoolShotRecord,
+} from './pool.js';
 
 /**
  * Salão de Jogos (Fase 57): base comum das mesas de sinuca e ping-pong. Cada mesa tem dois lados
@@ -93,9 +101,36 @@ export interface ArcadeFields {
   b1Py: number;
   b2Px: number;
   b2Py: number;
+  balls: string;
+  shot: string;
+  groupA: string;
+  inHand: boolean;
+  breakShot: boolean;
+  deadline: number;
+  aim: string;
   detail: string;
   winner: string;
   end: string;
+}
+
+/** Mira ao vivo de quem taca na sinuca. */
+export interface PoolAim {
+  dx: number;
+  dy: number;
+  power: number;
+  cx: number;
+  cy: number;
+}
+
+/** A sinuca para ler (Fase 59). */
+export interface PoolView {
+  balls: PoolBalls | null;
+  shot: PoolShotRecord | null;
+  groupA: '' | PoolGroup;
+  inHand: boolean;
+  breakShot: boolean;
+  deadline: number;
+  aim: PoolAim | null;
 }
 
 /** A partida para ler: vagas como objetos. */
@@ -111,9 +146,11 @@ export interface ArcadeView {
   setsB: number;
   /** Vaga da vez (quem saca), ou vazio. */
   turn: ArcadeSlot | '';
-  phase: '' | 'serve' | 'rally' | 'point';
+  /** Ping-pong: 'serve' | 'rally' | 'point'; sinuca: 'aim' (mirando) | 'shot' (bolas andando). */
+  phase: '' | 'serve' | 'rally' | 'point' | 'aim' | 'shot';
   ball: PongBall | null;
   paddles: Record<ArcadeSlot, { x: number; y: number }>;
+  pool: PoolView;
   /** Detalhe do jogo (o último ponto, set, grupo de bolas…). */
   detail: string;
   winner: '' | ArcadeSide;
@@ -143,11 +180,20 @@ export function arcadeView(g: ArcadeFields): ArcadeView {
     setsA: g.setsA,
     setsB: g.setsB,
     turn: (ARCADE_SLOTS as readonly string[]).includes(g.turn) ? (g.turn as ArcadeSlot) : '',
-    phase: (['serve', 'rally', 'point'] as const).find((p) => p === g.phase) ?? '',
+    phase: (['serve', 'rally', 'point', 'aim', 'shot'] as const).find((p) => p === g.phase) ?? '',
     ball: decodeBall(g.ball),
     paddles: Object.fromEntries(
       ARCADE_SLOTS.map((s) => [s, { x: g[`${s}Px`], y: g[`${s}Py`] }]),
     ) as Record<ArcadeSlot, { x: number; y: number }>,
+    pool: {
+      balls: decodeJson<PoolBalls>(g.balls),
+      shot: decodeJson<PoolShotRecord>(g.shot),
+      groupA: g.groupA === 'solids' || g.groupA === 'stripes' ? g.groupA : '',
+      inHand: Boolean(g.inHand),
+      breakShot: Boolean(g.breakShot),
+      deadline: g.deadline ?? 0,
+      aim: decodeJson<PoolAim>(g.aim),
+    },
     detail: g.detail,
     winner: g.winner === 'a' || g.winner === 'b' ? g.winner : '',
     end: (['points', 'forfeit', 'wo'] as const).find((e) => e === g.end) ?? '',
@@ -188,7 +234,9 @@ export function scoreboardText(v: ArcadeView, now: number): string | null {
           ? ' (desistência)'
           : v.end === 'points' && v.kind === 'pingpong'
             ? ` (${sets(v.winner)})`
-            : '';
+            : v.end === 'points' && v.detail
+              ? ` (${v.detail})`
+              : '';
     const plural = sideSlots(v.winner, v.mode).filter((s) => v.seats[s].name).length > 1;
     return `🏆 ${names(v.winner)} ${plural ? 'venceram' : 'venceu'}${how}`;
   }
@@ -202,7 +250,12 @@ export function scoreboardText(v: ArcadeView, now: number): string | null {
     return `${line}\n⏳ ${short(v.seats[away].name)} saiu: W.O. em ${left} s`;
   }
   if (v.status === 'waiting') return `${line}\nAguardando`;
-  return v.kind === 'pingpong' ? `${line}\nSets ${sets('a')}` : line;
+  if (v.kind === 'pingpong') return `${line}\nSets ${sets('a')}`;
+  // Sinuca: o grupo de cada lado, ou a mesa aberta.
+  const g = v.pool.groupA;
+  return g
+    ? `${line}\nA: ${GROUP_NAMES[g]} · B: ${GROUP_NAMES[otherGroup(g)]}`
+    : `${line}\nMesa aberta`;
 }
 
 /**

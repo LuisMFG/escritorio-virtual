@@ -11,6 +11,7 @@ import {
   slotsOf,
   type ArcadeFields,
 } from './arcade.js';
+import { rackBalls } from './pool.js';
 
 /** Partida como o estado manda (vagas achatadas). */
 function fields(over: Partial<ArcadeFields> = {}): ArcadeFields {
@@ -39,6 +40,13 @@ function fields(over: Partial<ArcadeFields> = {}): ArcadeFields {
     turn: '',
     phase: '',
     ball: '',
+    balls: '',
+    shot: '',
+    groupA: '',
+    inHand: false,
+    breakShot: false,
+    deadline: 0,
+    aim: '',
     ...paddles,
     detail: '',
     winner: '',
@@ -111,6 +119,38 @@ describe('Salão de Jogos: base das mesas (Fase 57)', () => {
     const v = arcadeView(doubles);
     expect(sideNames(v, 'a')).toBe('Ana e Bianca Albuquerque');
     expect(scoreboardText(v, 0)).toBe('🏆 Ana e Bianca Albu… venceram (desistência)');
+  });
+
+  it('sinuca: o placar mostra os grupos (ou a mesa aberta) e o motivo do fim', () => {
+    const game = fields({ kind: 'pool', ...ana, ...beto, status: 'playing', scoreA: 2, scoreB: 1 });
+    expect(scoreboardText(arcadeView(game), 0)).toBe('🎱 Ana 2 × 1 Beto\nMesa aberta');
+    expect(scoreboardText(arcadeView({ ...game, groupA: 'stripes' }), 0)).toBe(
+      '🎱 Ana 2 × 1 Beto\nA: listradas · B: lisas',
+    );
+    const lost = { status: 'ended', winner: 'b', end: 'points', detail: 'a 8 caiu antes da hora' };
+    expect(scoreboardText(arcadeView({ ...game, ...lost }), 0)).toBe(
+      '🏆 Beto venceu (a 8 caiu antes da hora)',
+    );
+    // A vista lê as bolas, a mira ao vivo e as regras do estado.
+    const aim = { dx: 1, dy: 0, power: 0.5, cx: 0.4, cy: 0.5 };
+    const v = arcadeView({
+      ...game,
+      phase: 'shot',
+      balls: JSON.stringify(rackBalls()),
+      aim: JSON.stringify(aim),
+      inHand: true,
+      groupA: 'grupo-inventado',
+    });
+    expect(v.phase).toBe('shot');
+    expect(v.pool).toEqual({
+      balls: rackBalls(),
+      shot: null,
+      groupA: '',
+      inHand: true,
+      breakShot: false,
+      deadline: 0,
+      aim,
+    });
   });
 
   it('os pedidos só aceitam vagas e modos que existem', () => {

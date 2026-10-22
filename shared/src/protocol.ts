@@ -103,6 +103,10 @@ export const ClientMessage = {
   PongServe: 'pong.serve',
   /** Requisição `{ furniId, t, x, y, vx, vy }`: a raquete tocou a bola em `t` (`ArcadeReply`). */
   PongHit: 'pong.hit',
+  /** Sinuca (Fase 59). Requisição: a tacada (direção, força, efeito, branca e caçapa da 8). */
+  PoolShoot: 'pool.shoot',
+  /** `{ furniId, dx, dy, power, cx, cy }`: a mira ao vivo de quem taca (até 10 vezes por segundo). */
+  PoolAim: 'pool.aim',
   /** `{ question, options, anonymous }`: cria uma enquete no chat da sala. */
   PollCreate: 'poll.create',
   /** `{ pollId, option }`: vota (ou troca o voto). */
