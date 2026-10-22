@@ -2,13 +2,19 @@ import {
   ballAt,
   DANCES,
   decodeBall,
+  decodeJson,
   simulate,
+  simulateShot,
   TILE_H,
   TILE_W,
   tileHeight,
   tileToScreen,
+  type PoolAim,
+  type PoolBalls,
+  type PoolShotRecord,
 } from '@office/shared';
 import { courtTransform } from './ui/pong.js';
+import { poolTransform } from './ui/pool.js';
 import { Point as PixiPoint } from 'pixi.js';
 import type { OfficeRoomClient } from './net/OfficeConnection.js';
 import type { RoomScene } from './scene/RoomScene.js';
@@ -85,6 +91,30 @@ export interface E2EHook {
   } | null;
   /** Ponto da mesa de ping-pong (metros) na tela, no painel aberto. */
   pongPoint(x: number, y: number): Point | null;
+  /**
+   * Sinuca (Fase 59): a vez, as regras, as bolas paradas e a última tacada; `final` é onde a
+   * simulação desta página põe as bolas com a tacada gravada (tem que bater com `balls`).
+   */
+  pool(id: string): {
+    status: string;
+    phase: string;
+    turn: string;
+    inHand: boolean;
+    breakShot: boolean;
+    groupA: string;
+    scoreA: number;
+    scoreB: number;
+    detail: string;
+    balls: PoolBalls | null;
+    shot: { t0: number; ms: number } | null;
+    final: PoolBalls | null;
+    /** Mira ao vivo de quem taca, como os outros a recebem (a branca e a direção). */
+    aim: PoolAim | null;
+  } | null;
+  /** Ponto da mesa de sinuca (metros) na tela, no painel aberto. */
+  poolPoint(x: number, y: number): Point | null;
+  /** Ponto da barra de força (0 = em cima, 1 = embaixo) na tela, no painel aberto. */
+  poolPower(f: number): Point | null;
   /** Aproxima a câmera (nível de zoom) e centraliza num tile. */
   look(x: number, y: number, zoom: number): void;
   /** Sai da sala de verdade (fechar a aba deixaria o avatar parado 30 s esperando reconexão). */
@@ -183,6 +213,40 @@ export function exposeForTests(
       const r = c.getBoundingClientRect();
       const p = courtTransform(r.width).toPx({ x, y });
       return { x: Math.round(r.left + p.x), y: Math.round(r.top + p.y) };
+    },
+    pool: (id) => {
+      const g = room.state.arcade.get(id);
+      if (!g) return null;
+      const shot = decodeJson<PoolShotRecord>(g.shot);
+      return {
+        status: g.status,
+        phase: g.phase,
+        turn: g.turn,
+        inHand: g.inHand,
+        breakShot: g.breakShot,
+        groupA: g.groupA,
+        scoreA: g.scoreA,
+        scoreB: g.scoreB,
+        detail: g.detail,
+        balls: decodeJson<PoolBalls>(g.balls),
+        shot: shot ? { t0: shot.t0, ms: shot.ms } : null,
+        final: shot ? simulateShot(shot.start, shot).final : null,
+        aim: decodeJson<PoolAim>(g.aim),
+      };
+    },
+    poolPoint: (x, y) => {
+      const c = document.querySelector<HTMLCanvasElement>('.arcade-panel.live .arcade-court');
+      if (!c) return null;
+      const r = c.getBoundingClientRect();
+      const p = poolTransform(r.width).toPx([x, y]);
+      return { x: Math.round(r.left + p.x), y: Math.round(r.top + p.y) };
+    },
+    poolPower: (f) => {
+      const c = document.querySelector<HTMLCanvasElement>('.arcade-panel.live .arcade-court');
+      if (!c) return null;
+      const r = c.getBoundingClientRect();
+      const b = poolTransform(r.width).bar;
+      return { x: Math.round(r.left + b.x + b.w / 2), y: Math.round(r.top + b.y + b.h * f) };
     },
     decorGhost: () => {
       const g = scene.decor.ghostState();

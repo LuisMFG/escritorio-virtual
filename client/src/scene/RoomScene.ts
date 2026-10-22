@@ -370,9 +370,12 @@ export class RoomScene implements DecorHost {
 
   /** A partida de uma mesa mudou (`null` = mesa vazia): o placar sobre ela acompanha. */
   setArcade(furniId: string, view: ArcadeView | null): void {
+    const before = this.arcadeBoardText(furniId);
     if (view) this.arcade.set(furniId, view);
     else this.arcade.delete(furniId);
-    this.arcadeDirty = true;
+    // A mira e as raquetes mudam a partida várias vezes por segundo: só redesenha a placa se
+    // o texto dela mudou.
+    if (this.arcadeBoardText(furniId) !== before) this.arcadeDirty = true;
   }
 
   /** Texto do placar sobre a mesa agora (`null` = sem placar). Também para os testes. */

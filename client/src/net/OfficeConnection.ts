@@ -36,6 +36,8 @@ import {
   type FurniHeightMessage,
   type ArcadeMode,
   type ArcadeReply,
+  type PoolAim,
+  type PoolShotMessage,
   type ArcadeSlot,
   type FurniResult,
   type FurniPlaceMessage,
@@ -383,6 +385,16 @@ export class OfficeConnection {
     msg: { t: number; x: number; y: number; vx: number; vy: number },
   ): Promise<ArcadeReply> {
     return this.arcadeRequest(ClientMessage.PongHit, { furniId, ...msg });
+  }
+
+  /** Sinuca (Fase 59): a tacada (direção, força, efeito, onde pôs a branca e a caçapa da 8). */
+  poolShoot(furniId: string, msg: Omit<PoolShotMessage, 'furniId'>): Promise<ArcadeReply> {
+    return this.arcadeRequest(ClientMessage.PoolShoot, { furniId, ...msg });
+  }
+
+  /** A mira ao vivo de quem taca, para os outros verem o taco. */
+  poolAim(furniId: string, aim: PoolAim): void {
+    this.room?.send(ClientMessage.PoolAim, { furniId, ...aim });
   }
 
   async tttScores(furniId: string): Promise<TttScores> {

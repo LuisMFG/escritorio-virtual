@@ -1,6 +1,8 @@
 import {
   ARCADE_INFO,
   ARCADE_SLOTS,
+  GROUP_NAMES,
+  otherGroup,
   sideNames,
   sideSlots,
   slotsOf,
@@ -13,6 +15,7 @@ import {
 } from '@office/shared';
 import { makeDraggable } from './draggable.js';
 import { PongView, type PongViewOptions } from './pong.js';
+import { poolBallColor, poolLeft, PoolView, type PoolViewOptions } from './pool.js';
 
 export interface ArcadeOptions {
   furniId: string;
@@ -27,6 +30,8 @@ export interface ArcadeOptions {
   mode(mode: ArcadeMode): Promise<ArcadeReply>;
   /** Ping-pong (Fase 58): raquete, saque e rebatida. */
   pong?: Pick<PongViewOptions, 'paddle' | 'serve' | 'hit'>;
+  /** Sinuca (Fase 59): a tacada e a mira ao vivo. */
+  pool?: Pick<PoolViewOptions, 'shoot' | 'aim'>;
   /** Atraso simulado (ms, ida e volta), para testar com ping alto. */
   lag?: number;
 }
@@ -63,8 +68,17 @@ export function openArcade(opts: ArcadeOptions): ArcadeHandle {
     </div>
     <p class="arcade-sets muted" hidden></p>
     <p class="arcade-status"></p>
+    <div class="pool-info" hidden>
+      <div class="pool-left a"></div>
+      <span class="pool-clock"></span>
+      <div class="pool-left b"></div>
+    </div>
     <canvas class="arcade-court" aria-hidden="true"></canvas>
-    <p class="arcade-note muted" hidden>Vagas e placar já funcionam; as jogadas chegam na próxima atualização.</p>
+    <div class="pool-controls" hidden>
+      <div class="pool-spin" role="img" aria-label="Efeito na branca"
+        title="Efeito: clique onde o taco bate na branca (em cima segue, embaixo volta, no meio sem efeito)"></div>
+      <p class="pool-hint"></p>
+    </div>
     <div class="arcade-mode" role="group" aria-label="Modo de jogo"></div>
     <div class="arcade-slots"></div>
     <div class="arcade-actions"></div>`;
@@ -77,18 +91,22 @@ export function openArcade(opts: ArcadeOptions): ArcadeHandle {
   const setsEl = $<HTMLElement>('.arcade-sets');
   const status = $<HTMLElement>('.arcade-status');
   const court = $<HTMLCanvasElement>('.arcade-court');
-  const note = $<HTMLElement>('.arcade-note');
+  const poolInfo = $<HTMLElement>('.pool-info');
+  const poolControls = $<HTMLElement>('.pool-controls');
   const modeEl = $<HTMLElement>('.arcade-mode');
   const slotsEl = $<HTMLElement>('.arcade-slots');
   const actions = $<HTMLElement>('.arcade-actions');
 
   let view: ArcadeView | null = null;
-  /** A mesa ao vivo (ping-pong em andamento). */
+  /** A mesa ao vivo (ping-pong ou sinuca em andamento). */
   let pong: PongView | null = null;
+  let pool: PoolView | null = null;
   const mySlot = () =>
     (view && ARCADE_SLOTS.find((s) => view!.seats[s].session === opts.mySessionId())) || null;
   /** Pedido em andamento: os botões esperam a resposta (evita clique duplo). */
   let busy = false;
+  /** O que os botões e as vagas mostram agora (só são refeitos quando isso muda). */
+  let controlsKey = '';
   const act = (run: () => Promise<ArcadeReply>) => () => {
     if (busy) return;
     busy = true;
@@ -119,11 +137,18 @@ export function openArcade(opts: ArcadeOptions): ArcadeHandle {
     const full = seated.length === slotsOf(mode).length;
     const now = opts.now();
 
-    namesA.textContent = (v && sideNames(v, 'a')) || '—';
-    namesB.textContent = (v && sideNames(v, 'b')) || '—';
-    points.textContent = v && v.status !== 'waiting' ? `${v.scoreA} × ${v.scoreB}` : '×';
-    setsEl.hidden = !(opts.kind === 'pingpong' && v && v.status !== 'waiting');
-    if (v) setsEl.textContent = `Sets ${v.setsA} × ${v.setsB}`;
+    // Os textos só mudam quando mudam de verdade (o placar é lido por leitores de tela).
+    setText(namesA, (v && sideNames(v, 'a')) || '—');
+    setText(namesB, (v && sideNames(v, 'b')) || '—');
+    setText(points, v && v.status !== 'waiting' ? `${v.scoreA} × ${v.scoreB}` : '×');
+    // Ping-pong: os sets; sinuca: o que a última tacada deu (falta, grupos, a vez).
+    if (opts.kind === 'pingpong') {
+      setsEl.hidden = !(v && v.status !== 'waiting');
+      if (v) setText(setsEl, `Sets ${v.setsA} × ${v.setsB}`);
+    } else {
+      setsEl.hidden = !(v?.status === 'playing' && v.detail);
+      setText(setsEl, v?.detail ?? '');
+    }
 
     // Situação da mesa.
     const away =
@@ -143,30 +168,77 @@ export function openArcade(opts: ArcadeOptions): ArcadeHandle {
         ? `⏳ ${v.seats[away].name} saiu: W.O. em ${Math.ceil((v.seats[away].awayUntil - now) / 1000)} s`
         : opts.kind === 'pingpong'
           ? pongStatus(v, mine)
-          : mine
-            ? 'Partida em andamento.'
-            : '👀 Você está assistindo.';
+          : poolStatus(v, mine);
     } else {
-      const how = v.end === 'wo' ? ' (W.O.)' : v.end === 'forfeit' ? ' (desistência)' : '';
+      const how =
+        v.end === 'wo'
+          ? ' (W.O.)'
+          : v.end === 'forfeit'
+            ? ' (desistência)'
+            : opts.kind === 'pool' && v.detail
+              ? ` (${v.detail})`
+              : '';
       const winners = v.winner ? sideNames(v, v.winner) : '';
       text = winners
         ? `🏆 ${winners} ${winners.includes(' e ') ? 'venceram' : 'venceu'}${how}`
         : 'Partida encerrada.';
       if (mine && full) text += ' Começar de novo?';
     }
-    status.textContent = text;
-    // Ping-pong em andamento: a mesa vira o jogo (painel maior); a sinuca ainda não tem jogo.
-    const live = opts.kind === 'pingpong' && v?.status === 'playing' && Boolean(opts.pong);
+    setText(status, text);
+    // Partida em andamento: a mesa vira o jogo (painel maior). Na sinuca, as bolas continuam à
+    // mostra depois do fim.
+    const live =
+      opts.kind === 'pingpong'
+        ? v?.status === 'playing' && Boolean(opts.pong)
+        : Boolean(opts.pool && v?.pool.balls && v.status !== 'waiting');
     panel.classList.toggle('live', live);
-    note.hidden = v?.status !== 'playing' || opts.kind === 'pingpong';
-    if (live && !pong) {
+    panel.classList.toggle('pool', opts.kind === 'pool');
+    if (live && opts.kind === 'pingpong' && !pong) {
       pong = new PongView({ canvas: court, now: opts.now, mySlot, lag: opts.lag, ...opts.pong! });
     } else if (!live && pong) {
       pong.destroy();
       pong = null;
     }
+    if (live && opts.kind === 'pool' && !pool) {
+      pool = new PoolView({
+        canvas: court,
+        spin: $<HTMLElement>('.pool-spin'),
+        hint: $<HTMLElement>('.pool-hint'),
+        clock: $<HTMLElement>('.pool-clock'),
+        now: opts.now,
+        mySlot,
+        ...opts.pool!,
+      });
+    } else if (!live && pool) {
+      pool.destroy();
+      pool = null;
+    }
+    poolInfo.hidden = !pool;
+    poolControls.hidden = !(pool && mine && v?.status === 'playing');
+    if (pool && v) {
+      pool.update(v);
+      renderLeft(poolInfo, v);
+    }
     if (pong && v) pong.update(v);
-    else drawCourt(court, opts.kind, v ? sideNames(v, 'a') : '', v ? sideNames(v, 'b') : '');
+    else if (!pool) {
+      drawCourt(court, opts.kind, v ? sideNames(v, 'a') : '', v ? sideNames(v, 'b') : '');
+    }
+
+    // Botões e vagas só são refeitos quando mudam: a mira e as raquetes chegam várias vezes por
+    // segundo, e refazer um botão no meio do clique perderia o clique.
+    const controls = JSON.stringify([
+      busy,
+      mode,
+      v?.status ?? '',
+      me,
+      ARCADE_SLOTS.map((s) => {
+        const seat = v?.seats[s];
+        const left = seat && seat.awayUntil > now ? Math.ceil((seat.awayUntil - now) / 1000) : 0;
+        return [seat?.session ?? '', seat?.name ?? '', left];
+      }),
+    ]);
+    if (controls === controlsKey) return;
+    controlsKey = controls;
 
     // Modo: antes de começar.
     const canMode = !v || v.status !== 'playing';
@@ -246,6 +318,7 @@ export function openArcade(opts: ArcadeOptions): ArcadeHandle {
   });
   const close = () => {
     pong?.destroy();
+    pool?.destroy();
     window.clearInterval(timer);
     drag.destroy();
     panel.remove();
@@ -278,6 +351,48 @@ function pongStatus(v: ArcadeView, mine: ArcadeSlot | undefined): string {
       : `Saque de ${v.seats[v.turn].name}.${deuce}`;
   }
   return mine ? `Valendo!${deuce}` : `👀 Você está assistindo.${deuce}`;
+}
+
+function setText(el: HTMLElement, text: string): void {
+  if (el.textContent !== text) el.textContent = text;
+}
+
+/** O que acontece na sinuca agora: de quem é a vez, bola na mão, a tacada rolando. */
+function poolStatus(v: ArcadeView, mine: ArcadeSlot | undefined): string {
+  const name = v.turn ? v.seats[v.turn].name : '';
+  if (v.phase === 'shot') return `🎱 Tacada de ${name}…`;
+  if (v.turn && v.turn === mine) return v.pool.inHand ? 'Sua vez! Bola na mão.' : 'Sua vez!';
+  return `${mine ? '' : '👀 '}Vez de ${name}${v.pool.inHand ? ' (bola na mão)' : ''}.`;
+}
+
+/** Bolas que faltam de cada lado (o grupo e as bolinhas), em cima da mesa. */
+function renderLeft(info: HTMLElement, v: ArcadeView): void {
+  const g = v.pool.groupA;
+  for (const side of ['a', 'b'] as const) {
+    const el = info.querySelector<HTMLElement>(`.pool-left.${side}`)!;
+    const left = poolLeft(v, side);
+    const group = g ? GROUP_NAMES[side === 'a' ? g : otherGroup(g)] : '';
+    const label = !g ? 'mesa aberta' : left[0] === 8 ? 'falta a 8' : group;
+    const key = `${label}|${left.join(',')}`;
+    if (el.dataset.key === key) continue;
+    el.dataset.key = key;
+    const chips = left.map((ball) => {
+      const chip = document.createElement('span');
+      chip.className = `pool-chip${ball > 8 ? ' stripe' : ''}`;
+      chip.style.setProperty('--c', poolBallColor(ball));
+      chip.title = String(ball);
+      return chip;
+    });
+    const text = Object.assign(document.createElement('span'), {
+      className: 'pool-group',
+      textContent: label,
+    });
+    el.replaceChildren(...(side === 'a' ? [text, ...chips] : [...chips, text]));
+    el.setAttribute(
+      'aria-label',
+      `${SIDE_LABEL[side]}: ${label}${g && left[0] !== 8 ? `, faltam ${left.length}` : ''}`,
+    );
+  }
 }
 
 /** Largura e altura da vista de cima (px de CSS). */

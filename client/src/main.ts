@@ -969,7 +969,7 @@ async function start(): Promise<void> {
     for (const off of detachRoom) off();
     detachRoom = [];
     scene?.destroy();
-    /** Painel de uma mesa do Salão de Jogos (Fase 57; o ping-pong ao vivo, Fase 58). */
+    /** Painel de uma mesa do Salão de Jogos (Fase 57; ping-pong e sinuca ao vivo, Fases 58–59). */
     const openArcadePanel = (furniId: string) => {
       const f = room.state.furni.get(furniId);
       const kind = arcadeKindOf(f ? deps.furniDefs.get(f.defId)?.interaction : undefined);
@@ -989,6 +989,10 @@ async function start(): Promise<void> {
           paddle: (p) => connection.pongPaddle(furniId, p),
           serve: (m) => connection.pongServe(furniId, m),
           hit: (m) => connection.pongHit(furniId, m),
+        },
+        pool: {
+          shoot: (m) => connection.poolShoot(furniId, m),
+          aim: (m) => connection.poolAim(furniId, m),
         },
         lag: PONG_LAG,
       });
