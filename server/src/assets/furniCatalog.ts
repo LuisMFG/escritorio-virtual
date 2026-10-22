@@ -186,6 +186,29 @@ export const FURNI_CURATION: FurniCuration[] = [
     interaction: 'tictactoe',
   },
   {
+    // Salão de Jogos (Fase 57): a "Snooker" do Habbo vira a mesa de sinuca.
+    id: 'bling15_pooltable',
+    name: 'Mesa de Sinuca',
+    category: 'diversão',
+    width: 2,
+    depth: 1,
+    height: 1,
+    interaction: 'pool',
+  },
+  {
+    // O Habbo não tem mesa de ping-pong: arte própria (server/scripts/pingpong-art.ts).
+    id: 'pingpong_table',
+    name: 'Mesa de Ping-pong',
+    category: 'diversão',
+    width: 2,
+    depth: 1,
+    height: 1,
+    interaction: 'pingpong',
+    source: 'local',
+    directions: [0, 2],
+    anchors: { '0': [66, 72], '2': [34, 72] },
+  },
+  {
     id: 'plant_big_cactus',
     name: 'Cacto Grande',
     category: 'plantas',

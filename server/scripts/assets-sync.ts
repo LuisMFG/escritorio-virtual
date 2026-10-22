@@ -3,6 +3,7 @@
  *
  *   npm run assets:sync              # regenera o manifesto dos móveis
  *   npm run assets:sync -- --thumbs  # e pré-baixa as miniaturas das roupas básicas
+ *   npm run assets:sync -- --only a,b  # só esses móveis da curadoria (os outros ficam como estão)
  *
  * O catálogo de roupas (e os dados de montagem do avatar) vêm do `npm run assets:figure`.
  *
@@ -36,6 +37,9 @@ import { HabboAssetsClient } from '../src/assets/HabboAssetsClient.js';
 import { config, ROOT_DIR } from '../src/config.js';
 
 const withThumbs = process.argv.includes('--thumbs');
+const onlyArg = process.argv.indexOf('--only');
+/** `--only a,b`: mede só esses móveis e mantém os outros do manifesto atual. */
+const only = onlyArg >= 0 ? new Set((process.argv[onlyArg + 1] ?? '').split(',')) : null;
 const client = new HabboAssetsClient({
   apiKey: config.habboAssetsApiKey,
   restPerMinute: 60,
@@ -107,9 +111,20 @@ function readFurnidata(json: unknown): { name?: string; width?: number; depth?: 
   };
 }
 
+const furniOut = resolve(ROOT_DIR, 'client', 'public', 'assets', 'furni', 'manifest.json');
+const current = only
+  ? new Map(
+      parseFurniManifest(JSON.parse(await readFile(furniOut, 'utf8'))).items.map((i) => [i.id, i]),
+    )
+  : new Map<string, FurniManifestEntry>();
 const furniEntries: FurniManifestEntry[] = [];
 console.log('[sync] móveis…');
 for (const cur of FURNI_CURATION) {
+  const kept = only && !only.has(cur.id) ? current.get(cur.id) : undefined;
+  if (kept) {
+    furniEntries.push(kept);
+    continue;
+  }
   if (cur.source === 'local') {
     furniEntries.push(buildLocalEntry(cur));
     console.log(`[sync]   ${cur.id.padEnd(30)} local`);
@@ -166,7 +181,6 @@ for (const cur of FURNI_CURATION) {
   );
   furniEntries.push(entry);
 }
-const furniOut = resolve(ROOT_DIR, 'client', 'public', 'assets', 'furni', 'manifest.json');
 const furniManifest = parseFurniManifest({ version: 1, hotelId: 2, items: furniEntries });
 const furniComment =
   'Gerado por `npm run assets:sync`. Curadoria (nomes, categorias, tamanhos) em server/src/assets/furniCatalog.ts; ' +

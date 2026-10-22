@@ -51,8 +51,8 @@ Desde a Fase 2 as imagens passam pelo proxy do servidor (`/hh/avatar.png`, `/hh/
 
 ## Arte local e pacotes CC0
 
-Móveis com `source: 'local'` usam imagens em `client/public/assets/local/furni/{id}_{direção}.png` (ver README). Nenhum por enquanto. Ao adicionar, registre aqui:
+Móveis com `source: 'local'` usam imagens em `client/public/assets/local/furni/{id}_{direção}.png` (ver README). Ao adicionar, registre aqui:
 
 | Arquivo(s) | Autor | Licença | URL de origem |
 |---|---|---|---|
-| — | — | — | — |
+| `pingpong_table_0.png`, `pingpong_table_2.png` (mesa de ping-pong do Salão de Jogos, Fase 57) | arte própria do projeto, gerada por código (`npx tsx server/scripts/pingpong-art.ts`) | a do projeto | — |
