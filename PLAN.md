@@ -1521,7 +1521,7 @@ As fases 52 e 53 vêm primeiro porque corrigem o que já existe e é usado todo 
   3. Uma terceira pessoa abre a mesa e vê o placar no painel e sobre a mesa.
   4. Teste o Desistir, ou feche a aba de um jogador no meio da partida e espere 15 s.
 
-### Fase 58 — Ping-pong em tempo real
+### Fase 58 — Ping-pong em tempo real ✅ implementada
 - **Jogo:** painel com vista de cima e arte própria.
   - raquete pelo mouse ou toque;
   - bola com altura, que quica na mesa;
@@ -1538,6 +1538,35 @@ As fases 52 e 53 vêm primeiro porque corrigem o que já existe e é usado todo 
   - unidade: pontuação, saque, sets, física da rebatida e do quique;
   - sala: partida simulada;
   - ponta a ponta: dois navegadores marcando pontos.
+- **Feito:**
+  - **Física e regras compartilhadas** (`shared/src/pong.ts`): a bola anda em trechos de parábola entre eventos (saque, rebatida, quique, rede, chão). Cada trecho começa num instante da hora do servidor, então servidor e navegadores calculam a mesma bola sem mandar a posição a cada quadro.
+    - O trecho só muda no saque e na rebatida; os quiques todo mundo calcula igual.
+    - Gravidade mais fraca que a real, para dar tempo de jogar, e a bola acelera ao longo do ponto.
+    - Rebater mais forte (raquete indo para a frente) manda mais fundo e mais rápido. Pegar com a beirada ou mexendo para o lado manda na diagonal, e diagonal demais sai da mesa.
+    - Ponto: dois quiques do mesmo lado, bola que quicou e saiu sem rebatida, rede, quique no próprio lado ou bola fora.
+    - Placar: saque trocando a cada 2 pontos (a cada ponto no 10 × 10), set de 11 com 2 de vantagem, melhor de 3. No set seguinte, saca primeiro quem recebeu primeiro. No 2×2, os parceiros se revezam no saque e qualquer um do lado rebate.
+    - Simplificação: o saque vai direto para o outro lado, sem quicar antes do próprio lado.
+  - **Servidor** (`server/src/rooms/pong.ts`): a partida roda num laço de 60 Hz, só enquanto há partida.
+    - A rebatida vem do navegador de quem jogou, com o instante do toque. O servidor volta no tempo até 350 ms e confere se a bola estava ao alcance naquele instante.
+    - O ponto só fecha 300 ms depois do lance que o decidiu, para uma rebatida atrasada ainda valer. É isso que deixa jogar com ping alto.
+    - Se alguém cai no meio do ponto, o ponto vale de novo e o saque espera a volta (ou o W.O. da Fase 57).
+    - Fim da partida: placar de vitórias e aviso no chat com os sets.
+  - **Navegador** (`client/src/ui/pong.ts`): o painel da mesa cresce e vira a mesa ao vivo, vista de cima e em arte própria.
+    - A minha raquete segue o mouse ou o dedo na hora; as dos outros vêm do estado, suavizadas.
+    - O saque e a rebatida aparecem na hora (previstos com as mesmas contas) e o servidor confirma; se recusar, a bola volta ao caminho dela.
+    - A bola tem sombra e cresce quanto mais alta vai.
+    - Clique (ou toque) para sacar. O painel abre sozinho para quem joga quando a partida começa.
+    - Quem assiste vê a bola, as raquetes e o placar ao vivo, também na placa sobre a mesa (com os sets).
+    - `?atraso=150` simula ping (ida e volta) no ping-pong, para testar.
+  - **Testes:**
+    - unidade: `pong.test.ts` (compartilhado: placar, deuce, sets, saque no 1×1 e no 2×2, saque, quique, rebatida, força, diagonal e fora, rede, dois quiques, alcance, zona da raquete, mesmo cálculo em passos; servidor: começo, folga antes do ponto, rebatida conferida no instante do toque, ponto anulado e saque esperando quem saiu);
+    - sala: três testes em `OfficeRoom.test.ts` (saque, ponto sem rebatida e saque trocando; rebatida 150 ms atrasada aceita e atrasada demais recusada; fechando os sets, a partida acaba com placar gravado e chat);
+    - ponta a ponta: `pingpong.spec.ts` (dois navegadores com 150 ms de atraso simulado, dois pontos, saque trocando, uma devolução de verdade e uma terceira pessoa vendo a bola e o placar).
+- **Como testar:**
+  1. No Salão de Jogos, duas pessoas entram numa mesa de ping-pong e uma clica em Começar.
+  2. Quem saca clica na mesa. Mexa o mouse (ou o dedo) para levar a raquete até a bola depois que ela quicar do seu lado. Indo para a frente na hora do toque, a bola vai mais forte.
+  3. Uma terceira pessoa abre a mesa e assiste.
+  4. Para testar com ping alto, abra com `?atraso=150` no endereço.
 
 ### Fase 59 — Sinuca 8 Ball
 - **Física no servidor.**
