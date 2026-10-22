@@ -95,3 +95,36 @@ describe('depthOrder', () => {
     expect(o2[3]).toBe('d');
   });
 });
+
+describe('pilhas nas 4 rotações (Fase 56)', () => {
+  // Escrivaninha 2×1 (girada: 1×2) com um objeto em cada tile, um deles erguido bem alto.
+  const footprints = {
+    0: { minX: 2, minY: 3, maxX: 3, maxY: 3 },
+    2: { minX: 2, minY: 3, maxX: 2, maxY: 4 },
+    4: { minX: 2, minY: 3, maxX: 3, maxY: 3 },
+    6: { minX: 2, minY: 3, maxX: 2, maxY: 4 },
+  } as const;
+  for (const rot of [0, 2, 4, 6] as const) {
+    it(`rotação ${rot}: o que está em cima nunca fica atrás da base nem de quem passa atrás`, () => {
+      const fp = footprints[rot];
+      const desk: DepthBox = { id: 'desk', ...fp, z: 0, top: 0.8 };
+      const tiles = [
+        { x: fp.minX, y: fp.minY },
+        { x: fp.maxX, y: fp.maxY },
+      ];
+      const items = tiles.map((t, i) => ({
+        ...box(`item${i}`, t.x, t.y, t.x, t.y, i ? 3.5 : 0.8),
+        top: i ? 4.5 : 1.8,
+      }));
+      // Quem passa atrás da escrivaninha (nos dois lados de trás) e na frente dela.
+      const behind = [box('behindX', fp.minX - 1, fp.minY), box('behindY', fp.minX, fp.minY - 1)];
+      const front = box('front', fp.maxX + 1, fp.maxY + 1);
+      const order = depthOrder([front, ...items, desk, ...behind]);
+      for (const item of items) {
+        expect(before(order, 'desk', item.id), `${item.id} na frente da base`).toBe(true);
+        for (const b of behind) expect(before(order, b.id, item.id), `${b.id} atrás`).toBe(true);
+        expect(before(order, item.id, 'front')).toBe(true);
+      }
+    });
+  }
+});

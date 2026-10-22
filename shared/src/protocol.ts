@@ -31,6 +31,8 @@ export const ClientMessage = {
   FurniRemove: 'furni.remove',
   /** Modo decorar: outra cor do mesmo móvel `{ furniId, defId }`. */
   FurniColor: 'furni.color',
+  /** Modo decorar: ajuste fino de altura `{ furniId, z }` (Fase 56). */
+  FurniHeight: 'furni.height',
   /** Clique num móvel fora do modo decorar (sentar): `{ furniId }`. */
   Interact: 'interact',
   /** Minha mesa (Fase 42): ficar com a estação onde está sentado, largar e ir até ela. */
@@ -268,6 +270,9 @@ export const furniMoveSchema = z.object({
 /** Trocar a cor de um móvel (outra variação do mesmo móvel do Habbo). */
 export const furniColorSchema = z.object({ furniId, defId });
 export type FurniColorMessage = z.infer<typeof furniColorSchema>;
+/** Ajuste fino de altura (Fase 56): a altura nova do móvel; o que está em cima vai junto. */
+export const furniHeightSchema = z.object({ furniId, z: z.number().min(0).max(64) });
+export type FurniHeightMessage = z.infer<typeof furniHeightSchema>;
 export const furniRefSchema = z.object({ furniId });
 export type FurniPlaceMessage = z.infer<typeof furniPlaceSchema>;
 export type FurniMoveMessage = z.infer<typeof furniMoveSchema>;
@@ -278,7 +283,14 @@ export type FurniRefMessage = z.infer<typeof furniRefSchema>;
  * cliente só grava no desfazer o que foi aceito, e desfaz na tela o que foi recusado. `furni` é
  * como o móvel ficou; ao remover, vem sem ele. O motivo da recusa também chega como erro.
  */
-export type FurniResult = { ok: true; furni?: PlacedFurni } | { ok: false; reason?: string };
+export type FurniResult =
+  | {
+      ok: true;
+      furni?: PlacedFurni;
+      /** Tudo o que mudou de lugar junto: a base e a pilha em cima dela (Fase 56). */
+      moved?: PlacedFurni[];
+    }
+  | { ok: false; reason?: string };
 
 export const updateAvatarSchema = z.object({ figure: figureSchema, gender: genderSchema });
 export type UpdateAvatarMessage = z.infer<typeof updateAvatarSchema>;
