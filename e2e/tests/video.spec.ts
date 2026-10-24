@@ -32,7 +32,7 @@ test('vídeo: câmera chega para o outro, tela em destaque e ampliar', async ({ 
   await ana.page.getByRole('button', { name: 'Chamar para conversa' }).click();
   await ana.page.getByRole('dialog').getByRole('button', { name: 'Chamar' }).click();
   await beto.page.locator('.call-card').getByRole('button', { name: 'Aceitar' }).click();
-  await expect(ana.page.locator('.call-members li')).toHaveCount(2);
+  await expect(ana.page.locator('.call-tile')).toHaveCount(2);
 
   // Ana liga a câmera: prévia dela e o vídeo chegando para o Beto.
   await ana.page.getByRole('button', { name: 'Câmera', exact: true }).click();
@@ -40,9 +40,7 @@ test('vídeo: câmera chega para o outro, tela em destaque e ampliar', async ({ 
   await expect
     .poll(() => tilePlaying(beto.page, new RegExp(ana.name)), { timeout: 20_000 })
     .toBe(true);
-  await expect(
-    beto.page.locator('.call-members li', { hasText: ana.name }).locator('svg'),
-  ).toBeVisible();
+  await expect(beto.page.locator('.call-tile.has-video', { hasText: ana.name })).toBeVisible();
 
   // Arrastar a janela pela barra: fica onde soltou, em cada modo (pequena e ampliada).
   const panel = beto.page.locator('.call-panel');
@@ -83,8 +81,11 @@ test('vídeo: câmera chega para o outro, tela em destaque e ampliar', async ({ 
   await beto.page.getByRole('button', { name: 'Parar tela' }).click();
   await expect(ana.page.locator('.call-tile.screen')).toBeHidden();
 
-  // Câmera desligada: o vídeo some para o Beto.
+  // Câmera desligada: o vídeo some para o Beto (fica o rosto do avatar).
   await ana.page.getByRole('button', { name: 'Desligar câmera' }).click();
-  await expect(beto.page.locator('.call-tile')).toHaveCount(0);
+  await expect(beto.page.locator('.call-tile.has-video')).toHaveCount(0);
+  await expect(
+    beto.page.locator('.call-tile', { hasText: ana.name }).locator('.call-face img'),
+  ).toBeVisible();
   await ana.page.getByRole('button', { name: /Sair/ }).click();
 });

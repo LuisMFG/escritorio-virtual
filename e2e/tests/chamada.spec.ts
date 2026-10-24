@@ -49,9 +49,11 @@ test('chamada por convite: motivo, aceitar, áudio, terceiro entra, recusar e sa
   await card.getByRole('button', { name: 'Aceitar' }).click();
 
   // Os dois no painel da chamada e o áudio conectado (WebRTC de verdade, microfone falso).
+  // Cada um vê o outro pelo nome e a si mesmo como "Você".
+  await expect(ana.page.locator('.call-panel')).toContainText(beto.name);
+  await expect(beto.page.locator('.call-panel')).toContainText(ana.name);
   for (const p of [ana.page, beto.page]) {
-    await expect(p.locator('.call-panel')).toContainText(ana.name);
-    await expect(p.locator('.call-panel')).toContainText(beto.name);
+    await expect(p.locator('.call-tile.mine')).toContainText('Você');
   }
   await expect(ana.page.locator('.toasts')).toContainText(`${beto.name} entrou na chamada.`);
   await expect.poll(() => liveAudio(ana.page), { timeout: 20_000 }).toBe(1);
@@ -64,18 +66,18 @@ test('chamada por convite: motivo, aceitar, áudio, terceiro entra, recusar e sa
   const caioCard = caio.page.locator('.call-card');
   await expect(caioCard).toContainText(`Na conversa: `);
   await caioCard.getByRole('button', { name: 'Aceitar' }).click();
-  await expect(caio.page.locator('.call-members li')).toHaveCount(3);
+  await expect(caio.page.locator('.call-tile')).toHaveCount(3);
   await expect.poll(() => liveAudio(caio.page), { timeout: 20_000 }).toBe(2);
 
   // Mudo aparece para os outros.
   await caio.page.getByRole('button', { name: /Mudo/ }).click();
   await expect(
-    ana.page.locator('.call-members li', { hasText: caio.name }).locator('svg'),
+    ana.page.locator('.call-tile', { hasText: caio.name }).locator('.call-muted'),
   ).toBeVisible();
 
   // Caio sai; Beto sai: com uma pessoa só, a chamada acaba.
   await caio.page.getByRole('button', { name: /Sair/ }).click();
-  await expect(ana.page.locator('.call-members li')).toHaveCount(2);
+  await expect(ana.page.locator('.call-tile')).toHaveCount(2);
   await beto.page.getByRole('button', { name: /Sair/ }).click();
   await expect(ana.page.locator('.call-panel')).toBeHidden();
 

@@ -63,7 +63,7 @@ test('chamada: quem demora a liberar o microfone também é ouvido', async ({ br
     await ana.page.getByRole('button', { name: 'Chamar para conversa' }).click();
     await ana.page.getByRole('dialog').getByRole('button', { name: 'Chamar' }).click();
     await beto.page.locator('.call-card').getByRole('button', { name: 'Aceitar' }).click();
-    await expect(ana.page.locator('.call-members li')).toHaveCount(2);
+    await expect(ana.page.locator('.call-tile')).toHaveCount(2);
 
     await first.page.waitForTimeout(500);
     await first.page.evaluate(() =>
@@ -96,7 +96,7 @@ test('chamada: a conexão do canal cai e volta, e a conversa continua', async ({
   await ana.page.getByRole('button', { name: 'Chamar para conversa' }).click();
   await ana.page.getByRole('dialog').getByRole('button', { name: 'Chamar' }).click();
   await beto.page.locator('.call-card').getByRole('button', { name: 'Aceitar' }).click();
-  await expect(ana.page.locator('.call-members li')).toHaveCount(2);
+  await expect(ana.page.locator('.call-tile')).toHaveCount(2);
   for (const p of [ana.page, beto.page])
     await p.evaluate(() => (window as unknown as { __releaseMic: () => void }).__releaseMic());
   await expect
