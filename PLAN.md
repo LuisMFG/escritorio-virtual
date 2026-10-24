@@ -1635,6 +1635,34 @@ As fases 52 e 53 vêm primeiro porque corrigem o que já existe e é usado todo 
   4. Uma terceira pessoa abre a mesa e assiste: vê o taco, as bolas rolando e o placar.
   5. Para ver a 8: encaçape o seu grupo; na vez da 8, toque na caçapa e taque.
 
+### Tela de chamada: rostos, efeitos, dispositivos, tela cheia e mini-player ✅ implementada
+- **Pedido:**
+  1. Sem câmera, o rosto do avatar (visual atual) no lugar do nome; a boca acompanha o volume do microfone e fecha quando a pessoa para de falar; o contorno verde de "falando" continua.
+  2. Desfoque de fundo e supressão de ruído, cada um com liga/desliga, salvos para as próximas chamadas.
+  3. Botão Dispositivos funcionando: microfone, câmera e saída de áudio, com prévia da câmera e medidor do microfone; trocar durante a chamada não derruba a chamada.
+  4. Tela cheia da chamada inteira e, em cada vídeo (câmera ou tela), destacar na janela e tela cheia só daquele vídeo.
+  5. Minimizar para um mini-player arrastável num canto (quem fala; mudo, câmera, sair e restaurar), com a chamada seguindo normal.
+- **Decisões:** desfoque com o modelo de recorte de pessoa do MediaPipe, servido pelo próprio site (o WebAssembly tem ~13 MB e baixa só na primeira vez que alguém liga o desfoque); supressão de ruído é a do navegador.
+- **Feito:**
+  - **Quadros** (`client/src/ui/calls.ts`): um por pessoa. Com câmera ou tela, o vídeo; sem, o rosto do avatar de frente (montado no navegador como a prévia do editor, `callFace` em `main.ts`). O servidor manda o visual de cada um na chamada (`figure` em `CallMember`).
+    - A boca usa os quadros de fala do avatar: fechada no silêncio e no mudo, entreaberta ou aberta conforme o volume (`mouthFor`, em `client/src/ui/callFace.ts`).
+    - O volume de cada um é medido a cada 100 ms em ~43 ms de som e cai devagar (uma sílaba segura a boca e o contorno por alguns décimos, sem piscar). O áudio do navegador retoma no primeiro toque se começar pausado.
+  - **Dispositivos e efeitos:** janela própria (antes, a caixa sumia porque o painel se redesenhava logo depois do clique). Microfone com medidor, câmera com prévia, saída de áudio (onde o navegador deixa; no Safari e no Firefox, aviso), desfoque e supressão de ruído. Escolhas salvas em `ev-call-prefs` (`client/src/net/callPrefs.ts`), aproveitando as de antes.
+    - Trocar microfone, câmera, ruído ou desfoque troca a trilha nas conexões (`replaceTrack`, sem renegociar).
+    - **Desfoque** (`client/src/net/backgroundBlur.ts`): recorta a pessoa e borra o fundo num canvas; o vídeo só sai depois de borrado. Se o navegador não rodar o recorte, a câmera vai sem e avisa. O Vite copia o WebAssembly do pacote para `client/public/mediapipe/wasm` (fora do git); o modelo (`selfie_segmenter.tflite`, 250 KB) fica no repositório. A política de segurança ganhou `'wasm-unsafe-eval'`.
+  - **Tela cheia** (`client/src/ui/fullscreen.ts`): a chamada inteira ou um vídeo só. No iPhone, um vídeo vai pelo player do sistema; sem nada disso, cobre a janela.
+  - **Destacar:** o vídeo ocupa a janela da chamada (ampliada) e os outros ficam numa faixa; duplo clique no vídeo também.
+  - **Mini-player:** quem está falando (ou falou por último), em vídeo ou com o rosto do avatar; mudo, câmera, sair e restaurar. Arrasta pela imagem e lembra o lugar.
+  - O painel das mesas e o da chamada só refazem botões quando mudam.
+- **Testes:**
+  - unidade: `callFace.test.ts` (boca por volume e mudo, quem aparece no mini-player, escolhas salvas) e `CallService.test.ts` (visual de cada um na chamada);
+  - ponta a ponta: `chamada-tela.spec.ts` com 3 pessoas, uma no celular (rostos, boca mexendo e fechando no mudo, contorno, dispositivos com medidor e prévia, troca de microfone sem cair, efeitos salvos, câmera com desfoque chegando para o outro, destacar, tela cheia de um vídeo e da chamada, minimizar, arrastar, mudo e sair pelo mini-player, restaurar, painel cabendo no celular); `chamada.spec.ts`, `chamada-microfone.spec.ts` e `video.spec.ts` ajustados aos quadros.
+- **Como testar:**
+  1. Três pessoas numa chamada, uma com câmera e as outras sem: quem está sem câmera aparece com o rosto do avatar, e a boca mexe enquanto fala.
+  2. Em Dispositivos, troque o microfone no meio da conversa, ligue o desfoque e ligue a câmera.
+  3. Passe o mouse num vídeo: destaque ou tela cheia. No topo da janela: tela cheia da chamada e minimizar.
+  4. Minimizada, use o escritório; mude o mudo pelo mini-player e restaure.
+
 ### Extras sugeridos (fora do pedido; dá para encaixar depois)
 
 | Código | Ideia | Impacto | Esforço |
