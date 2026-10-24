@@ -53,3 +53,5 @@ Thumbs.db
 e2e-report/
 e2e-results/
 prova-fase31.png
+# WebAssembly do desfoque de fundo (copiado do pacote do MediaPipe pelo Vite)
+client/public/mediapipe/wasm/

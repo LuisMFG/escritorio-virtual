@@ -8,18 +8,23 @@ import {
   type CallState,
   type IceServer,
 } from '@office/shared';
+import { SPEAKING_LEVEL } from '../ui/callFace.js';
+import { BackgroundBlur } from './backgroundBlur.js';
+import { loadCallPrefs, saveCallPrefs, type CallPrefs } from './callPrefs.js';
 import type { LobbyConnection } from './LobbyConnection.js';
 
 /** Servidores ICE se o servidor não responder (só STUN público). */
 const FALLBACK_ICE: IceServer[] = [{ urls: ['stun:stun.cloudflare.com:3478'] }];
-/** Quanto de volume conta como "falando" (RMS de 0 a 1) e de quanto em quanto medir (ms). */
-const SPEAKING_LEVEL = 0.035;
-const SPEAKING_EVERY_MS = 150;
+/** De quanto em quanto medir o volume (ms): o anel de quem fala e a boca do avatar. */
+const LEVEL_EVERY_MS = 100;
+/**
+ * Quanto do volume da medida anterior sobra na seguinte: um som curto (uma sílaba) segura a
+ * boca aberta e o contorno aceso por alguns décimos, em vez de piscar; parando de falar, cai
+ * abaixo do limite em meio segundo.
+ */
+const LEVEL_DECAY = 0.6;
 /** Candidatos ICE saem juntos a cada tanto (ms), em vez de um por mensagem. */
 const ICE_BATCH_MS = 100;
-/** Dispositivos escolhidos (lembrados no navegador). */
-const MIC_KEY = 'ev-call-mic';
-const CAM_KEY = 'ev-call-cam';
 /** Câmera: qualidade boa sem pesar (cada um manda para até 5 pessoas). */
 const CAM_CONSTRAINTS: MediaTrackConstraints = {
   width: { ideal: 640 },
@@ -41,6 +46,8 @@ export interface CallEvents {
   result(result: CallInviteResult): void;
   /** Quem está falando agora (ids das contas; inclui você). */
   speaking(userIds: ReadonlySet<string>): void;
+  /** Volume de cada um agora (RMS de 0 a 1), a cada 100 ms: a boca do avatar acompanha. */
+  levels(levels: ReadonlyMap<string, number>): void;
   /** Vídeos ativos (câmera ou tela) por pessoa; o seu entra como prévia. */
   videos(videos: ReadonlyMap<string, CallVideo>): void;
   /** Erro para mostrar (microfone negado, etc.). */
@@ -59,21 +66,21 @@ interface Peer {
   video: MediaStream | null;
 }
 
-function readKey(key: string): string | undefined {
-  try {
-    return localStorage.getItem(key) || undefined;
-  } catch {
-    return undefined;
-  }
+/** Dispositivos do aparelho e os que estão em uso. */
+export interface CallDevices {
+  mics: MediaDeviceInfo[];
+  cams: MediaDeviceInfo[];
+  speakers: MediaDeviceInfo[];
+  mic?: string;
+  cam?: string;
+  speaker?: string;
+  /** O navegador deixa escolher a saída de áudio (no Safari e no Firefox, não). */
+  canPickSpeaker: boolean;
 }
 
-function writeKey(key: string, value: string): void {
-  try {
-    localStorage.setItem(key, value);
-  } catch {
-    // sem armazenamento: vale só para esta visita
-  }
-}
+type SinkAudio = HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> };
+const canPickSpeaker = () =>
+  typeof (HTMLMediaElement.prototype as SinkAudio).setSinkId === 'function';
 
 /**
  * Chamadas (Fases 49–50): uma conexão WebRTC com cada participante (malha), sinalizada pelo
@@ -85,14 +92,22 @@ export class CallManager {
   private current: CallState | null = null;
   private readonly peers = new Map<string, Peer>();
   private mic: MediaStream | null = null;
+  /** O que sai da câmera (com o desfoque, o vídeo já borrado). */
   private cam: MediaStream | null = null;
+  /** Desfoque de fundo rodando sobre a câmera. */
+  private blur: BackgroundBlur | null = null;
+  /** Ligando a câmera (um pedido por vez). */
+  private camBusy: Promise<boolean> | null = null;
   private screen: MediaStream | null = null;
+  private prefs: CallPrefs = loadCallPrefs();
   private ice: IceServer[] | null = null;
   private muted = false;
   private audioCtx: AudioContext | null = null;
   private localLevel: (() => number) | null = null;
   private speakingTimer = 0;
   private speakingNow = new Set<string>();
+  /** Volume suavizado de cada um (para o decaimento). */
+  private smooth = new Map<string, number>();
   /** Microfone + servidores ICE (uma vez por chamada); a sinalização espera por isso. */
   private ready: Promise<boolean> | null = null;
   /** Sinais em fila: cada um só começa depois do anterior (SDP antes dos candidatos). */
@@ -130,6 +145,26 @@ export class CallManager {
     return Boolean(this.screen);
   }
 
+  /** Efeitos escolhidos (valem para as próximas chamadas). */
+  get effects(): { blur: boolean; noise: boolean } {
+    return { blur: this.prefs.blur, noise: this.prefs.noise };
+  }
+
+  /** O desfoque está de fato no vídeo agora (o navegador conseguiu rodar o recorte). */
+  get blurActive(): boolean {
+    return Boolean(this.blur);
+  }
+
+  /** O vídeo que sai da minha câmera agora (para a prévia dos dispositivos). */
+  get cameraStream(): MediaStream | null {
+    return this.cam;
+  }
+
+  /** Volume do meu microfone agora (0 a 1), para o medidor dos dispositivos. */
+  micLevel(): number {
+    return this.muted ? 0 : (this.localLevel?.() ?? 0);
+  }
+
   /** Está numa chamada com essa pessoa? */
   hasMember(userId: string): boolean {
     return Boolean(this.current?.members.some((m) => m.userId === userId));
@@ -156,22 +191,75 @@ export class CallManager {
 
   /** Liga/desliga a câmera. Devolve se ficou ligada. */
   async setCamera(on: boolean): Promise<boolean> {
+    if (this.camBusy) await this.camBusy;
     if (!on) {
-      for (const t of this.cam?.getTracks() ?? []) t.stop();
-      this.cam = null;
-    } else if (!this.cam) {
-      try {
-        const deviceId = readKey(CAM_KEY);
-        this.cam = await navigator.mediaDevices.getUserMedia({
-          video: { ...CAM_CONSTRAINTS, ...(deviceId ? { deviceId: { ideal: deviceId } } : {}) },
-        });
-      } catch {
-        this.on.error('Sem acesso à câmera. Libere a câmera para este site e tente de novo.');
-        return false;
+      this.stopCamera();
+      this.applyVideo();
+      return false;
+    }
+    if (this.cam) return true;
+    this.camBusy = this.openCamera().finally(() => (this.camBusy = null));
+    return this.camBusy;
+  }
+
+  private stopCamera(): void {
+    this.blur?.stop();
+    this.blur = null;
+    for (const t of this.cam?.getTracks() ?? []) t.stop();
+    this.cam = null;
+  }
+
+  /**
+   * Abre a câmera escolhida e, com o desfoque ligado, só manda o vídeo depois de borrar o fundo
+   * (o fundo nunca aparece sem querer). Se o navegador não roda o desfoque, manda sem e avisa.
+   */
+  private async openCamera(): Promise<boolean> {
+    let raw: MediaStream;
+    try {
+      const deviceId = this.prefs.cam;
+      raw = await navigator.mediaDevices.getUserMedia({
+        video: { ...CAM_CONSTRAINTS, ...(deviceId ? { deviceId: { ideal: deviceId } } : {}) },
+      });
+    } catch {
+      this.on.error('Sem acesso à câmera. Libere a câmera para este site e tente de novo.');
+      return false;
+    }
+    const track = raw.getVideoTracks()[0]!;
+    if (this.prefs.blur) {
+      const blur = await BackgroundBlur.start(track);
+      if (blur) {
+        this.blur = blur;
+        this.cam = new MediaStream([blur.track]);
+      } else {
+        this.on.error('O desfoque de fundo não funcionou neste navegador. A câmera foi sem ele.');
       }
     }
+    this.cam ??= raw;
+    // Saiu da chamada enquanto a câmera abria.
+    if (!this.current?.here) {
+      this.stopCamera();
+      return false;
+    }
     this.applyVideo();
-    return Boolean(this.cam);
+    return true;
+  }
+
+  /** Desfoque de fundo: salva a escolha e, com a câmera ligada, troca o vídeo na hora. */
+  async setBlur(on: boolean): Promise<void> {
+    this.prefs = { ...this.prefs, blur: on };
+    saveCallPrefs(this.prefs);
+    if (this.camBusy) await this.camBusy;
+    if (!this.cam || Boolean(this.blur) === on) return;
+    this.stopCamera();
+    await this.setCamera(true);
+  }
+
+  /** Supressão de ruído: salva a escolha e reabre o microfone com ela (sem cair a chamada). */
+  async setNoise(on: boolean): Promise<void> {
+    this.prefs = { ...this.prefs, noise: on };
+    saveCallPrefs(this.prefs);
+    const current = this.mic?.getAudioTracks()[0];
+    if (current) await this.useMic(current.getSettings().deviceId ?? this.prefs.mic ?? '', true);
   }
 
   /** Compartilha (ou para de compartilhar) a tela. Devolve se ficou compartilhando. */
@@ -197,29 +285,34 @@ export class CallManager {
     return Boolean(this.screen);
   }
 
-  /** Microfones e câmeras do aparelho (os nomes só aparecem depois da permissão). */
-  async devices(): Promise<{
-    mics: MediaDeviceInfo[];
-    cams: MediaDeviceInfo[];
-    mic?: string;
-    cam?: string;
-  }> {
+  /** Microfones, câmeras e saídas de áudio (os nomes só aparecem depois da permissão). */
+  async devices(): Promise<CallDevices> {
     const all = await navigator.mediaDevices.enumerateDevices().catch(() => []);
+    const camSource = this.blur ? null : this.cam?.getVideoTracks()[0];
     return {
       mics: all.filter((d) => d.kind === 'audioinput'),
       cams: all.filter((d) => d.kind === 'videoinput'),
-      mic: this.mic?.getAudioTracks()[0]?.getSettings().deviceId ?? readKey(MIC_KEY),
-      cam: this.cam?.getVideoTracks()[0]?.getSettings().deviceId ?? readKey(CAM_KEY),
+      speakers: all.filter((d) => d.kind === 'audiooutput'),
+      mic: this.mic?.getAudioTracks()[0]?.getSettings().deviceId ?? this.prefs.mic,
+      cam: camSource?.getSettings().deviceId ?? this.prefs.cam,
+      speaker: this.prefs.speaker,
+      canPickSpeaker: canPickSpeaker(),
     };
   }
 
-  /** Troca o microfone (na hora, sem cair a chamada). */
-  async useMic(deviceId: string): Promise<void> {
-    writeKey(MIC_KEY, deviceId);
+  /**
+   * Troca o microfone na hora, sem cair a chamada: abre o novo, troca a trilha em todas as
+   * conexões (`replaceTrack`, sem renegociar) e só então fecha o antigo.
+   */
+  async useMic(deviceId: string, reopen = false): Promise<void> {
+    if (!reopen) {
+      this.prefs = { ...this.prefs, mic: deviceId || undefined };
+      saveCallPrefs(this.prefs);
+    }
     if (!this.mic) return;
     try {
       const next = await navigator.mediaDevices.getUserMedia({
-        audio: this.audioConstraints(deviceId),
+        audio: this.audioConstraints(deviceId || undefined),
       });
       const track = next.getAudioTracks()[0]!;
       track.enabled = !this.muted;
@@ -237,13 +330,30 @@ export class CallManager {
     }
   }
 
-  /** Troca a câmera (se estiver ligada, na hora). */
+  /** Troca a câmera (se estiver ligada, na hora, sem cair a chamada). */
   async useCam(deviceId: string): Promise<void> {
-    writeKey(CAM_KEY, deviceId);
+    this.prefs = { ...this.prefs, cam: deviceId || undefined };
+    saveCallPrefs(this.prefs);
+    if (this.camBusy) await this.camBusy;
     if (!this.cam) return;
-    for (const t of this.cam.getTracks()) t.stop();
-    this.cam = null;
+    this.stopCamera();
     await this.setCamera(true);
+  }
+
+  /** Troca a saída de áudio (alto-falante ou fone) de todo mundo na chamada. */
+  async useSpeaker(deviceId: string): Promise<void> {
+    this.prefs = { ...this.prefs, speaker: deviceId || undefined };
+    saveCallPrefs(this.prefs);
+    await Promise.all([...this.peers.values()].map((p) => this.applySpeaker(p.audio)));
+  }
+
+  private async applySpeaker(audio: SinkAudio): Promise<void> {
+    if (!canPickSpeaker()) return;
+    try {
+      await audio.setSinkId!(this.prefs.speaker ?? '');
+    } catch {
+      this.on.error('Não consegui usar essa saída de áudio.');
+    }
   }
 
   // ---------- Estado ----------
@@ -307,7 +417,7 @@ export class CallManager {
   private audioConstraints(deviceId?: string): MediaTrackConstraints {
     return {
       echoCancellation: true,
-      noiseSuppression: true,
+      noiseSuppression: this.prefs.noise,
       autoGainControl: true,
       ...(deviceId ? { deviceId: { ideal: deviceId } } : {}),
     };
@@ -316,7 +426,7 @@ export class CallManager {
   private async openMic(): Promise<MediaStream | null> {
     try {
       return await navigator.mediaDevices.getUserMedia({
-        audio: this.audioConstraints(readKey(MIC_KEY)),
+        audio: this.audioConstraints(this.prefs.mic),
       });
     } catch {
       this.on.error('Sem acesso ao microfone. Libere o microfone para este site e tente de novo.');
@@ -357,6 +467,7 @@ export class CallManager {
     audio.dataset.callPeer = userId;
     audio.hidden = true;
     document.body.append(audio);
+    if (this.prefs.speaker) void this.applySpeaker(audio);
     const peer: Peer = {
       pc,
       audio,
@@ -498,9 +609,9 @@ export class CallManager {
 
   private teardown(): void {
     for (const id of [...this.peers.keys()]) this.closePeer(id);
-    for (const s of [this.mic, this.cam, this.screen])
-      for (const t of s?.getTracks() ?? []) t.stop();
-    this.mic = this.cam = this.screen = null;
+    this.stopCamera();
+    for (const s of [this.mic, this.screen]) for (const t of s?.getTracks() ?? []) t.stop();
+    this.mic = this.screen = null;
     this.localLevel = null;
     this.ice = null;
     this.ready = null;
@@ -511,6 +622,8 @@ export class CallManager {
       this.speakingNow = new Set();
       this.on.speaking(this.speakingNow);
     }
+    this.smooth = new Map();
+    this.on.levels(new Map());
     this.on.videos(new Map());
   }
 
@@ -519,9 +632,21 @@ export class CallManager {
   /** Medidor de volume (RMS) de um fluxo de áudio. */
   private meter(stream: MediaStream): (() => number) | null {
     try {
-      this.audioCtx ??= new AudioContext();
+      if (!this.audioCtx) {
+        const ctx = new AudioContext();
+        this.audioCtx = ctx;
+        // Sem um clique antes, o navegador pode deixar o áudio pausado (e o medidor em zero):
+        // retoma no primeiro toque ou tecla.
+        if (ctx.state !== 'running') {
+          const resume = () => void ctx.resume().catch(() => undefined);
+          resume();
+          document.addEventListener('pointerdown', resume, { once: true });
+          document.addEventListener('keydown', resume, { once: true });
+        }
+      }
       const analyser = this.audioCtx.createAnalyser();
-      analyser.fftSize = 512;
+      // ~43 ms de som por medida: pega sílabas (e bipes) curtos entre uma medida e outra.
+      analyser.fftSize = 2048;
       this.audioCtx.createMediaStreamSource(stream).connect(analyser);
       const buf = new Float32Array(analyser.fftSize);
       return () => {
@@ -538,14 +663,25 @@ export class CallManager {
   private startSpeaking(): void {
     if (this.speakingTimer) return;
     this.speakingTimer = window.setInterval(() => {
+      const raw = new Map<string, number>();
+      raw.set(this.myUserId, this.micLevel());
+      for (const [id, p] of this.peers) raw.set(id, p.level?.() ?? 0);
+      // Quem anunciou mudo não fala (nem mexe a boca), mesmo com ruído chegando.
+      for (const m of this.current?.members ?? []) if (!m.mic) raw.set(m.userId, 0);
+      const levels = new Map<string, number>();
+      for (const [id, level] of raw) {
+        const prev = this.smooth.get(id) ?? 0;
+        levels.set(id, level === 0 ? 0 : Math.max(level, prev * LEVEL_DECAY));
+      }
+      this.smooth = levels;
+      this.on.levels(levels);
       const now = new Set<string>();
-      if (!this.muted && (this.localLevel?.() ?? 0) > SPEAKING_LEVEL) now.add(this.myUserId);
-      for (const [id, p] of this.peers) if ((p.level?.() ?? 0) > SPEAKING_LEVEL) now.add(id);
+      for (const [id, level] of levels) if (level > SPEAKING_LEVEL) now.add(id);
       const same =
         now.size === this.speakingNow.size && [...now].every((id) => this.speakingNow.has(id));
       if (same) return;
       this.speakingNow = now;
       this.on.speaking(now);
-    }, SPEAKING_EVERY_MS);
+    }, LEVEL_EVERY_MS);
   }
 }

@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@colyseus/sdk": "0.18.5",
+    "@mediapipe/tasks-vision": "1.0.1",
     "@office/shared": "*",
     "pixi.js": "^8.22.0"
   }

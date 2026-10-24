@@ -36,7 +36,7 @@ import {
   findPersonByName,
   HIGH_FIVE_RANGE,
 } from '@office/shared';
-import { Application, Container, Sprite, TextureSource } from 'pixi.js';
+import { Application, Container, Rectangle, Sprite, TextureSource, type Texture } from 'pixi.js';
 import { AssetLoader } from './assets/AssetLoader.js';
 import {
   AvatarTextureCache,
@@ -117,6 +117,7 @@ import { DecorHistory } from './scene/DecorHistory.js';
 import { installModalFocus } from './ui/a11y.js';
 import { CallManager } from './net/CallManager.js';
 import { CallPanel, IncomingCalls, openCallInvite } from './ui/calls.js';
+import type { CallFace } from './ui/callFace.js';
 
 const E2E_MODE = new URLSearchParams(location.search).has('e2e');
 const TOUR_IN_E2E = new URLSearchParams(location.search).has('tour');
@@ -127,6 +128,11 @@ const PONG_LAG = Math.min(
 );
 
 /** Sala pedida na URL (`#/meeting`), para recarregar no mesmo lugar. */
+/** Rosto do avatar na chamada: de frente, um quadrado do tamanho da cabeça, acima dos pés. */
+const FACE_DIR = 2;
+const FACE_SIZE = 44;
+const FACE_TOP = 84;
+
 function roomFromHash(): string {
   const id = location.hash.replace(/^#\/?/, '');
   return /^[a-z0-9-]{1,40}$/.test(id) ? id : RECEPTION.id;
@@ -285,6 +291,60 @@ async function start(): Promise<void> {
       box.destroy({ children: true });
     }
   };
+
+  /**
+   * Rosto do avatar na chamada (quem está sem câmera): a cabeça de frente, com a boca fechada e
+   * nos dois quadros de fala, montada aqui como a prévia do editor. Sem o montador (modo sem
+   * internet), o avatar provisório, com a boca parada.
+   */
+  const callFaces = new Map<string, Promise<CallFace | null>>();
+  const cropHead = async (texture: Texture, anchor: { x: number; y: number }) => {
+    const box = new Container();
+    box.addChild(new Sprite(texture));
+    const frame = new Rectangle(
+      Math.round(anchor.x - FACE_SIZE / 2),
+      Math.max(0, Math.round(anchor.y - FACE_TOP)),
+      FACE_SIZE,
+      FACE_SIZE,
+    );
+    try {
+      return await app.renderer.extract.base64({ target: box, frame });
+    } finally {
+      box.destroy({ children: true });
+    }
+  };
+  const callFace = (figure: string): Promise<CallFace | null> => {
+    let face = callFaces.get(figure);
+    if (!face) {
+      face = (async () => {
+        const poser = figure ? await figureRenderer?.poser(figure).catch(() => null) : null;
+        if (!poser) {
+          const p = placeholders.avatar(figure, FACE_DIR);
+          const still = await cropHead(p.texture, p.anchor);
+          return { closed: still, half: still, open: still };
+        }
+        try {
+          const shot = (pose: { talk?: boolean; talkFrame?: number }) => {
+            const f = poser.frame({ direction: FACE_DIR, ...pose });
+            return cropHead(f.texture, f.anchor);
+          };
+          return {
+            closed: await shot({}),
+            // O quadro 0 da fala é a boca bem aberta; o 1, quase fechada.
+            half: await shot({ talk: true, talkFrame: 1 }),
+            open: await shot({ talk: true, talkFrame: 0 }),
+          };
+        } finally {
+          poser.dispose?.();
+        }
+      })().catch(() => null);
+      callFaces.set(figure, face);
+    }
+    return face;
+  };
+
+  // Testes (e conferência do recorte): o rosto que a chamada mostraria para um visual.
+  if (E2E_MODE) (window as unknown as { __callFace: typeof callFace }).__callFace = callFace;
 
   let scene: RoomScene | undefined;
   let connection: OfficeConnection | undefined;
@@ -1463,9 +1523,18 @@ async function start(): Promise<void> {
       screen: async (on) => (await calls?.setScreen(on)) ?? false,
       cameraOn: () => calls?.cameraOn ?? false,
       screenOn: () => calls?.screenOn ?? false,
-      devices: async () => (await calls?.devices()) ?? { mics: [], cams: [] },
+      devices: async () =>
+        (await calls?.devices()) ?? { mics: [], cams: [], speakers: [], canPickSpeaker: false },
       useMic: async (id) => calls?.useMic(id),
       useCam: async (id) => calls?.useCam(id),
+      useSpeaker: async (id) => calls?.useSpeaker(id),
+      effects: () => calls?.effects ?? { blur: false, noise: true },
+      setBlur: async (on) => calls?.setBlur(on),
+      setNoise: async (on) => calls?.setNoise(on),
+      blurActive: () => calls?.blurActive ?? false,
+      micLevel: () => calls?.micLevel() ?? 0,
+      cameraStream: () => calls?.cameraStream ?? null,
+      face: callFace,
     });
     const panel = callPanel;
     calls = new CallManager(l, me, {
@@ -1498,6 +1567,7 @@ async function start(): Promise<void> {
           if (ids.has(p.userId)) sessions.add(sid);
         scene?.setSpeaking(sessions);
       },
+      levels: (levels) => panel.setLevels(levels),
       videos: (v) => panel.setVideos(v),
       error: (message) => overlay.notify(message, { kind: 'error', durationMs: 6000 }),
     });
