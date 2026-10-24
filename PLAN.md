@@ -1663,6 +1663,36 @@ As fases 52 e 53 vêm primeiro porque corrigem o que já existe e é usado todo 
   3. Passe o mouse num vídeo: destaque ou tela cheia. No topo da janela: tela cheia da chamada e minimizar.
   4. Minimizada, use o escritório; mude o mudo pelo mini-player e restaure.
 
+### Qualidade das chamadas: servidor de mídia, câmera e tela juntas, conexão e detalhes ✅ implementada
+- **Pedido:** vídeo com a maior qualidade, o menor atraso e o maior fps possíveis, caindo aos poucos quando a rede ou a máquina não aguentam. Tela legível (nitidez) ou fluida (fluidez), à escolha. Câmera e tela ao mesmo tempo: a tela em destaque, a câmera em miniatura móvel e escondível, e dá para trocar e maximizar cada um. Ajuste automático por pessoa, com a tela tendo prioridade na banda. Qualidade nas configurações (Automática, Alta, Economia). Indicador de conexão em cada pessoa e um painel de detalhes (resolução, fps, bitrate, atraso). Medir o antes e o depois, com 3 ou mais pessoas e rede ruim.
+- **Decisões:** servidor de mídia na VPS (LiveKit, uma SFU) no lugar da malha, porque as chamadas costumam ter 5 ou mais pessoas; limite subiu de 6 para 12.
+- **Feito:**
+  - **Servidor de mídia:** serviço `livekit` no `docker-compose.yml` (`livekit.yaml`), com UDP 7882 e TCP 7881 abertos; o Caddy encaminha `/livekit` para ele.
+    - O escritório continua cuidando de convites e participantes. Em vez de repassar a sinalização WebRTC, entrega uma **credencial** só para quem está na chamada, só na aba que fala, só para a sala daquela chamada (`MediaService`, `CallMessage.Token`). Quem sai é tirado da sala na hora (evento `left` do `CallService`).
+    - O TURN da Cloudflare vai junto para o navegador. Em desenvolvimento e nos testes: `livekit-server --dev` (`scripts/livekit-dev.mjs`, `brew install livekit`).
+  - **Envio** (`client/src/net/CallManager.ts`, `QUALITY_PLANS`):
+    - câmera capturada em até 1080p a 30 fps, em 3 camadas (simulcast: 1080p, 540p e 180p), cedendo resolução e fps juntos;
+    - tela em nitidez (guarda a resolução, cede fps) ou fluidez (guarda o fps, até 60 na Alta), com prioridade alta na banda e a câmera com prioridade baixa;
+    - camada que ninguém está vendo não é codificada (dynacast).
+  - **Recebimento:**
+    - cada vídeo chega no tamanho do quadro onde aparece (em dobro na tela retina), e quadro escondido não recebe vídeo;
+    - destacar um vídeo faz a qualidade dele subir;
+    - na Economia, as camadas menores.
+  - **Câmera e tela juntas** (`client/src/ui/calls.ts`): a tela em destaque e a câmera numa miniatura que arrasta dentro do quadro, esconde e mostra, troca de lugar com a tela (botão ou duplo clique) e vai sozinha para a tela cheia.
+  - **Compartilhar:** antes de escolher a tela, Nitidez ou Fluidez (salvo); compartilhando, um botão troca o modo sem escolher a tela de novo.
+  - **Qualidade** em Dispositivos: Automática, Alta ou Economia, salva em `ev-call-prefs` e aplicada na hora.
+  - **Conexão:** pontinho verde, amarelo ou vermelho no nome de cada um (a qualidade de conexão que o LiveKit mede).
+  - **Detalhes da conexão** (botão no topo da janela): cada vídeo que sai (as camadas) e que chega, com resolução, fps, bitrate, perda, motivo de limitação e atraso estimado, atualizando a cada segundo.
+  - A política de segurança libera o servidor de mídia quando ele está em outro endereço (desenvolvimento e testes).
+- **Medição** (`npm run medir:chamada`, `e2e/medicao/`): navegadores em Docker, um por pessoa, rede ruim com `tc netem`, atraso real medido por um relógio desenhado no vídeo. O antes e o depois ficam em [docs/MEDICAO-CHAMADAS.md](docs/MEDICAO-CHAMADAS.md).
+- **Testes:**
+  - unidade: escolhas salvas (qualidade e modo da tela), credencial da sala de mídia só para quem está na chamada e na aba que fala, quem sai é tirado da sala, limite de pessoas, política de segurança;
+  - ponta a ponta: `chamada-qualidade.spec.ts` com 3 pessoas (câmera e tela juntas, miniatura trocando, escondendo, arrastando e em tela cheia, indicador de conexão, detalhes, nitidez/fluidez, Economia saindo em até 360p); os outros testes de chamada passam pelo LiveKit.
+- **Como testar:**
+  1. Numa chamada, ligue a câmera e compartilhe a tela: os outros veem a tela grande e você na miniatura.
+  2. Abra os Detalhes da conexão (ícone de atividade no topo) e destaque alguém: a resolução sobe.
+  3. Em Dispositivos, troque a qualidade para Economia e veja a câmera sair em 360p.
+
 ### Extras sugeridos (fora do pedido; dá para encaixar depois)
 
 | Código | Ideia | Impacto | Esforço |
