@@ -55,3 +55,6 @@ e2e-results/
 prova-fase31.png
 # WebAssembly do desfoque de fundo (copiado do pacote do MediaPipe pelo Vite)
 client/public/mediapipe/wasm/
+
+# Resultados da medição das chamadas (npm run medir:chamada)
+e2e/medicao/resultados/

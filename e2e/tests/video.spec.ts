@@ -76,6 +76,10 @@ test('vídeo: câmera chega para o outro, tela em destaque e ampliar', async ({ 
 
   // Beto compartilha a tela: aparece em destaque para a Ana.
   await beto.page.getByRole('button', { name: 'Tela', exact: true }).click();
+  await beto.page
+    .getByRole('dialog', { name: 'Compartilhar a tela' })
+    .getByRole('button', { name: 'Compartilhar' })
+    .click();
   await expect(ana.page.locator('.call-tile.screen')).toBeVisible({ timeout: 20_000 });
   await expect.poll(() => tilePlaying(ana.page, /· tela$/), { timeout: 20_000 }).toBe(true);
   await beto.page.getByRole('button', { name: 'Parar tela' }).click();

@@ -38,6 +38,14 @@ export default defineConfig({
   },
   webServer: [
     {
+      // Servidor de mídia das chamadas (LiveKit em modo de desenvolvimento).
+      command: 'node scripts/livekit-dev.mjs',
+      cwd: '..',
+      url: 'http://127.0.0.1:7880',
+      reuseExistingServer: true,
+      timeout: 30_000,
+    },
+    {
       // Jira Cloud de mentira (Fase 30).
       command: 'node e2e/jira-mock.mjs',
       cwd: '..',
@@ -68,6 +76,11 @@ export default defineConfig({
         FURNI_MEASURE: 'offline',
         // TV (Fase 51): títulos sem ir ao YouTube.
         TV_OEMBED: 'offline',
+        // Chamadas: o LiveKit de desenvolvimento (chave e segredo padrão do `--dev`).
+        LIVEKIT_API_KEY: 'devkey',
+        LIVEKIT_API_SECRET: 'secret',
+        LIVEKIT_URL: 'ws://localhost:7880',
+        LIVEKIT_API_URL: 'http://localhost:7880',
       },
     },
   ],

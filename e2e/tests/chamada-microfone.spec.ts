@@ -2,12 +2,14 @@ import type { Page } from '@playwright/test';
 import { clickTile, expect, newPerson, openCard, test } from '../helpers.js';
 
 /**
- * Microfone demorando para abrir (a pessoa ainda clicando em "Permitir"): a oferta da conexão
- * chega antes e a resposta precisa esperar o microfone, senão essa pessoa fica muda para o outro.
- * O teste segura o microfone de cada um e solta em ordens diferentes (uma delas é a que quebrava).
+ * Microfone demorando para abrir (a pessoa ainda clicando em "Permitir"): a outra pessoa já está
+ * na sala de mídia, e quem demorou precisa ser ouvido quando o microfone abrir. O teste segura o
+ * microfone de cada um e solta em ordens diferentes.
  */
 async function holdMic(page: Page): Promise<void> {
-  await page.evaluate(() => {
+  // Antes de a página carregar: o servidor de mídia guarda a referência do RTCPeerConnection
+  // quando carrega, então a troca precisa vir antes.
+  await page.addInitScript(() => {
     const w = window as unknown as {
       __pcs: RTCPeerConnection[];
       __releaseMic: () => void;
@@ -20,6 +22,7 @@ async function holdMic(page: Page): Promise<void> {
       w.__pcs.push(pc);
       return pc;
     } as unknown as typeof RTCPeerConnection;
+    w.RTCPeerConnection.prototype = Orig.prototype;
     const md = navigator.mediaDevices;
     const gum = md.getUserMedia.bind(md);
     md.getUserMedia = (c) =>
@@ -27,22 +30,31 @@ async function holdMic(page: Page): Promise<void> {
         w.__releaseMic = () => gum(c).then(resolve, reject);
       });
   });
+  await page.reload();
+  await expect
+    .poll(() => page.evaluate(() => Boolean(window.__e2e?.mySessionId())), { timeout: 30_000 })
+    .toBe(true);
 }
 
-/** Bytes de áudio enviados e recebidos na conexão mais recente. */
+/**
+ * Bytes de áudio enviados e recebidos nas conexões abertas (com o servidor de mídia, envio e
+ * recebimento podem ir em conexões separadas).
+ */
 const audioBytes = (page: Page) =>
   page.evaluate(async () => {
     const pcs = (window as unknown as { __pcs: RTCPeerConnection[] }).__pcs;
-    const pc = pcs[pcs.length - 1];
     let sent = 0;
     let received = 0;
-    (await pc?.getStats())?.forEach(
-      (r: { type: string; kind?: string; bytesSent?: number; bytesReceived?: number }) => {
-        if (r.kind !== 'audio') return;
-        if (r.type === 'outbound-rtp') sent = r.bytesSent ?? 0;
-        if (r.type === 'inbound-rtp') received = r.bytesReceived ?? 0;
-      },
-    );
+    for (const pc of pcs) {
+      if (pc.connectionState === 'closed') continue;
+      (await pc.getStats()).forEach(
+        (r: { type: string; kind?: string; bytesSent?: number; bytesReceived?: number }) => {
+          if (r.kind !== 'audio') return;
+          if (r.type === 'outbound-rtp') sent += r.bytesSent ?? 0;
+          if (r.type === 'inbound-rtp') received += r.bytesReceived ?? 0;
+        },
+      );
+    }
     return { sent, received };
   });
 
