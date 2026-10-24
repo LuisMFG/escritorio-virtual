@@ -1,5 +1,12 @@
 # HTTPS automático (Let's Encrypt) para o domínio do .env.
 {$DOMAIN} {
 	encode zstd gzip
-	reverse_proxy escritorio:2567
+	# Servidor de mídia das chamadas (LiveKit): a conexão de controle passa por aqui; o áudio e o
+	# vídeo vão direto nas portas 7881/7882.
+	handle_path /livekit/* {
+		reverse_proxy livekit:7880
+	}
+	handle {
+		reverse_proxy escritorio:2567
+	}
 }

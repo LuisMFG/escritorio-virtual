@@ -13,7 +13,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "dev": "concurrently -k -n servidor,cliente -c blue,green \"npm run dev -w server\" \"npm run dev -w client\"",
+    "dev": "concurrently -k -n servidor,cliente,midia -c blue,green,magenta \"npm run dev -w server\" \"npm run dev -w client\" \"node scripts/livekit-dev.mjs\"",
     "build": "npm run build -w client",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -32,7 +32,8 @@
     "assets:figure-check": "npm run assets:figure-check -w server --",
     "assets:furni": "npm run assets:furni -w server --",
     "assets:pets": "npm run assets:pets -w server --",
-    "assets:costumes": "npm run assets:costumes -w server --"
+    "assets:costumes": "npm run assets:costumes -w server --",
+    "medir:chamada": "npm run build && playwright test -c e2e/medicao/medicao.config.ts"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.10.2",

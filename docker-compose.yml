@@ -1,5 +1,8 @@
 # Produção com Docker: `docker compose up -d --build`.
 #
+# As chamadas usam o servidor de mídia (LiveKit, serviço `livekit`): precisa de LIVEKIT_API_KEY e
+# LIVEKIT_API_SECRET no .env e das portas 7881/tcp e 7882/udp abertas para a internet.
+#
 # O app sempre sobe; a porta 2567 fica no próprio computador (127.0.0.1) — mude APP_BIND para
 # 0.0.0.0 no .env para abrir na rede local. Para a internet, escolha UM perfil em
 # COMPOSE_PROFILES no .env:
@@ -22,12 +25,25 @@ services:
     ports:
       - '${APP_BIND:-127.0.0.1}:${APP_PORT:-2567}:2567'
 
+  livekit:
+    image: livekit/livekit-server:v1.13.9
+    restart: unless-stopped
+    command: --config /etc/livekit.yaml
+    environment:
+      LIVEKIT_KEYS: '${LIVEKIT_API_KEY:-}: ${LIVEKIT_API_SECRET:-}'
+    volumes:
+      - ./livekit.yaml:/etc/livekit.yaml:ro
+    ports:
+      - '7881:7881'
+      - '7882:7882/udp'
+
   caddy:
     image: caddy:2-alpine
     profiles: [caddy]
     restart: unless-stopped
     depends_on:
       - escritorio
+      - livekit
     ports:
       - '80:80'
       - '443:443'

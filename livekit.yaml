@@ -1,0 +1,16 @@
+# Servidor de mídia das chamadas (LiveKit) em produção. A chave e o segredo vêm do .env
+# (LIVEKIT_API_KEY e LIVEKIT_API_SECRET, pelo LIVEKIT_KEYS do docker-compose).
+port: 7880
+rtc:
+  # Mídia: UDP numa porta só (mais rápido) e TCP de reserva para redes que bloqueiam UDP.
+  # As duas precisam estar abertas no firewall da VPS.
+  udp_port: 7882
+  tcp_port: 7881
+  # Descobre o IP público sozinho (o contêiner só vê o IP interno do Docker).
+  use_external_ip: true
+room:
+  # Sala sem ninguém fecha logo; quem caiu tem uns segundos para voltar.
+  empty_timeout: 60
+  departure_timeout: 20
+logging:
+  level: info

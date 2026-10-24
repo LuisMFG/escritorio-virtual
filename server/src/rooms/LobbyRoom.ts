@@ -31,9 +31,9 @@ import {
   callAnswerSchema,
   callInviteSchema,
   callMediaSchema,
-  callSignalSchema,
   type CallInvite,
   type CallInviteResult,
+  type CallToken,
   type CallState,
 } from '@office/shared';
 import { z } from 'zod';
@@ -147,16 +147,15 @@ export class LobbyRoom extends Room<{ state: LobbyState; client: LobbyClient }> 
       const me = (client as LobbyClient).auth?.id;
       if (me) services().calls.setMedia(me, msg);
     }),
-    [CallMessage.Signal]: validate(callSignalSchema, (client, msg) => {
+    // Credencial da sala de mídia: só para quem está na chamada, e só na aba que fala.
+    [CallMessage.Token]: async (client: Client): Promise<CallToken | null> => {
       const c = client as LobbyClient;
-      const me = c.auth?.id;
-      if (!me) return;
-      // Só entre participantes da mesma chamada, e só da/para a aba que fala.
-      if (this.callTab.get(me) !== this.tabOf(c)) return;
-      if (!services().calls.sameCall(me, msg.toUserId)) return;
-      this.callClient(msg.toUserId)?.send(CallMessage.Signal, { fromUserId: me, data: msg.data });
-    }),
-    [CallMessage.Ice]: async () => services().turn.iceServers(),
+      const me = c.auth;
+      const media = services().media;
+      const call = me ? services().calls.callOf(me.id) : null;
+      if (!me || !media || !call || this.callTab.get(me.id) !== this.tabOf(c)) return null;
+      return media.token(call.id, { id: me.id, name: me.name });
+    },
   };
 
   private readonly onCallInvited = (toUserId: string, invite: CallInvite): void => {
@@ -190,14 +189,6 @@ export class LobbyRoom extends Room<{ state: LobbyState; client: LobbyClient }> 
 
   private tabOf(client: LobbyClient): string {
     return this.tabs.get(client.sessionId) ?? client.sessionId;
-  }
-
-  /** Conexão (a mais recente) da aba que fala na chamada dessa pessoa. */
-  private callClient(userId: string): LobbyClient | undefined {
-    const tab = this.callTab.get(userId);
-    return this.clientsOf(userId)
-      .filter((c) => this.tabOf(c) === tab)
-      .at(-1);
   }
 
   private readonly syncPeople = (): void => {

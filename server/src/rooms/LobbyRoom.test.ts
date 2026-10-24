@@ -19,6 +19,7 @@ import {
   type CallInvite,
   type CallInviteResult,
   type CallState,
+  type CallToken,
 } from '@office/shared';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { openDatabase } from '../db/client.js';
@@ -29,9 +30,16 @@ import { OfficeRoom } from './OfficeRoom.js';
 
 let colyseus: ColyseusTestServer;
 let svc: Services;
+/** Quem foi tirado da sala de mídia (sala, pessoa). */
+const kicked: [string, string][] = [];
 
 beforeAll(async () => {
-  svc = createServices(openDatabase(':memory:'));
+  svc = createServices(openDatabase(':memory:'), undefined, undefined, undefined, undefined, {
+    media: {
+      config: { url: '/livekit', apiUrl: 'http://lk', apiKey: 'chave', apiSecret: 'segredo' },
+      rooms: { removeParticipant: (room, id) => (kicked.push([room, id]), Promise.resolve()) },
+    },
+  });
   setServices(svc);
   const server = defineServer({
     rooms: {
@@ -208,7 +216,7 @@ describe('LobbyRoom', () => {
   });
 
   describe('chamadas (Fase 49)', () => {
-    it('convite com motivo, aceitar: os dois recebem a chamada; sinalização só entre eles', async () => {
+    it('convite com motivo, aceitar: os dois recebem a chamada e a credencial da sala de mídia', async () => {
       const ana = newUser('Ana');
       const beto = newUser('Beto');
       // Online = numa sala do escritório.
@@ -235,15 +243,29 @@ describe('LobbyRoom', () => {
       expect(sa.members.map((m) => m.name).sort()).toEqual(['Ana', 'Beto']);
       expect(sa.here && sb.here).toBe(true);
 
-      const sig = b.waitForMessage(CallMessage.Signal) as Promise<{ fromUserId: string }>;
-      a.send(CallMessage.Signal, {
-        toUserId: beto.user.id,
-        data: { kind: 'sdp', type: 'offer', sdp: 'v=0' },
-      });
-      expect((await sig).fromUserId).toBe(ana.user.id);
+      // Credencial: vale só para a sala desta chamada, com a identidade de quem pediu.
+      const tok = (await a.request(CallMessage.Token)) as CallToken;
+      expect(tok.url).toBe('/livekit');
+      expect(Array.isArray(tok.iceServers)).toBe(true);
+      const claims = JSON.parse(Buffer.from(tok.token.split('.')[1]!, 'base64url').toString()) as {
+        sub: string;
+        video: { room: string; roomJoin: boolean; canPublishData: boolean };
+      };
+      expect(claims.sub).toBe(ana.user.id);
+      expect(claims.video).toMatchObject({ room: sa.id, roomJoin: true, canPublishData: false });
 
-      const ice = await a.request(CallMessage.Ice);
-      expect(Array.isArray(ice)).toBe(true);
+      // Saiu: sai da sala de mídia (e, com uma pessoa só, a chamada acaba e o outro também).
+      kicked.length = 0;
+      a.send(CallMessage.Leave, {});
+      await wait(100);
+      expect(kicked.sort()).toEqual(
+        [
+          [sa.id, ana.user.id],
+          [sa.id, beto.user.id],
+        ].sort(),
+      );
+      // Fora da chamada, não há credencial.
+      expect(await a.request(CallMessage.Token)).toBeNull();
       svc.presence.remove('sa');
       svc.presence.remove('sb');
     });
@@ -281,17 +303,9 @@ describe('LobbyRoom', () => {
       await b1.leave();
       await wait(100);
       expect(svc.calls.callOf(beto.user.id)?.members).toHaveLength(2);
-      const sig = b2.waitForMessage(CallMessage.Signal) as Promise<{ fromUserId: string }>;
-      a.send(CallMessage.Signal, {
-        toUserId: beto.user.id,
-        data: {
-          kind: 'ice',
-          candidates: [
-            { candidate: 'candidate:1 1 udp 1 1.2.3.4 5 typ host', sdpMid: '0', sdpMLineIndex: 0 },
-          ],
-        },
-      });
-      expect((await sig).fromUserId).toBe(ana.user.id);
+      // Só a aba que fala recebe a credencial da sala de mídia.
+      expect(await b2.request(CallMessage.Token)).not.toBeNull();
+      expect(await other.request(CallMessage.Token)).toBeNull();
 
       // Fechou a aba que fala (as duas conexões dela): sai da chamada.
       await b2.leave();

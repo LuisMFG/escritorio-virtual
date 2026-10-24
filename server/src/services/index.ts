@@ -40,6 +40,7 @@ import type { KickScope } from '@office/shared';
 import { CallService } from './CallService.js';
 import { OEmbedTvMeta, TvService, type TvMeta } from './TvService.js';
 import { TurnService, type TurnConfig } from './TurnService.js';
+import { MediaService, type MediaConfig, type MediaRooms } from './MediaService.js';
 
 /** Ações de moderação que as salas abertas precisam aplicar. */
 export interface ModerationEvents {
@@ -92,6 +93,8 @@ export interface Services {
   /** Chamadas de áudio por convite (Fase 49). */
   calls: CallService;
   turn: TurnService;
+  /** Sala de mídia (LiveKit) de cada chamada; sem configuração, `null`. */
+  media: MediaService | null;
   /** TVs com YouTube (Fase 51). */
   tv: TvService;
 }
@@ -107,6 +110,8 @@ export function createServices(
     http?: typeof fetch;
     /** TURN da Cloudflare (chamadas); sem ele, só STUN. */
     turn?: TurnConfig;
+    /** Servidor de mídia das chamadas (LiveKit); `rooms` troca o cliente da API nos testes. */
+    media?: { config: MediaConfig; rooms?: MediaRooms };
     /** Mede um móvel do catálogo (no servidor: pelo imager). */
     measureFurni?: (item: CatalogItem, id: string) => Promise<FurniManifestEntry>;
     catalogFile?: string;
@@ -156,6 +161,10 @@ export function createServices(
     opts.measureFurni ?? (() => Promise.reject(new Error('Medição de móveis não configurada.'))),
     opts.catalogFile,
   );
+  const turn = new TurnService(opts.turn, opts.http);
+  const media = opts.media ? new MediaService(opts.media.config, turn, opts.media.rooms) : null;
+  // Saiu da chamada: sai também da sala de mídia (não fica ouvindo nem sendo visto).
+  if (media) calls.events.on('left', (callId, ids) => void media.kick(callId, ids));
   const rooms = new RoomRepository(db);
   // Bancos de antes da Fase 57 recebem o Salão de Jogos (e a porta na Recepção) uma vez.
   rooms.ensureGamesRoom(furniCatalog.defs);
@@ -195,7 +204,8 @@ export function createServices(
     furniCatalog,
     avatarManifest: loadAvatarManifest(),
     calls,
-    turn: new TurnService(opts.turn, opts.http),
+    turn,
+    media,
     tv: new TvService(opts.tvMeta ?? new OEmbedTvMeta(opts.http)),
   };
 }

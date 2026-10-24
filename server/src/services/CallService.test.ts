@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { CallInvite, CallInviteResult } from '@office/shared';
+import { CALL_MAX_PEOPLE, type CallInvite, type CallInviteResult } from '@office/shared';
 import { CallService } from './CallService.js';
 
 function setup(online = ['ana', 'beto', 'caio', 'duda', 'eva', 'fabi', 'gil']) {
@@ -75,8 +75,9 @@ describe('CallService', () => {
     expect(t.last().quiet).toBe(true);
   });
 
-  it('em grupo: quem está na chamada adiciona outra pessoa; até 6', () => {
-    const t = setup();
+  it(`em grupo: quem está na chamada adiciona outra pessoa; até ${CALL_MAX_PEOPLE}`, () => {
+    const extra = Array.from({ length: CALL_MAX_PEOPLE }, (_, i) => `p${i}`);
+    const t = setup(['ana', 'beto', 'caio', 'gil', ...extra]);
     t.svc.invite('ana', 'beto', '');
     t.svc.answer('beto', t.last().id, true);
     const id = t.svc.callOf('ana')!.id;
@@ -84,19 +85,28 @@ describe('CallService', () => {
     expect(t.last()).toMatchObject({ callId: id, members: ['ANA', 'BETO'] });
     t.svc.answer('caio', t.last().id, true);
     expect(t.svc.callOf('caio')!.members).toHaveLength(3);
-    for (const u of ['duda', 'eva', 'fabi']) {
-      t.svc.invite('ana', u, '');
-      t.svc.answer(u, t.last().id, true);
+    for (let i = 3; i < CALL_MAX_PEOPLE; i++) {
+      t.svc.invite('ana', `p${i}`, '');
+      t.svc.answer(`p${i}`, t.last().id, true);
     }
-    expect(t.svc.callOf('ana')!.members).toHaveLength(6);
+    expect(t.svc.callOf('ana')!.members).toHaveLength(CALL_MAX_PEOPLE);
     expect(t.svc.invite('ana', 'gil', '')).toBe('full');
   });
 
   it('sair: com uma pessoa só a chamada acaba; sair do escritório cancela convites', () => {
     const t = setup();
+    const left: [string, string[]][] = [];
+    t.svc.events.on('left', (callId, ids) => left.push([callId, ids]));
     t.svc.invite('ana', 'beto', '');
     t.svc.answer('beto', t.last().id, true);
+    t.svc.invite('ana', 'caio', '');
+    t.svc.answer('caio', t.last().id, true);
+    const id = t.svc.callOf('ana')!.id;
+    // Com três, quem sai sai sozinho (da sala de mídia também); com dois, a chamada acaba.
+    t.svc.leave('caio');
+    expect(left).toEqual([[id, ['caio']]]);
     t.svc.leave('beto');
+    expect(left.at(-1)).toEqual([id, ['beto', 'ana']]);
     expect(t.svc.callOf('ana')).toBeNull();
     expect(t.svc.callOf('beto')).toBeNull();
 

@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import type { MediaConfig } from './services/MediaService.js';
 
 /** Raiz do monorepo (server/src/config.ts → ../../). */
 export const ROOT_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -70,6 +71,8 @@ export interface Config {
   loginRateLimit: number;
   /** TURN da Cloudflare para as chamadas (Fase 49); sem ele, só STUN. */
   turn?: { keyId: string; apiToken: string };
+  /** Servidor de mídia das chamadas (LiveKit); sem ele, as chamadas não ligam áudio e vídeo. */
+  media?: MediaConfig;
 }
 
 export const config: Config = {
@@ -93,7 +96,27 @@ export const config: Config = {
   backupKeep: Math.max(1, Number(process.env.BACKUP_KEEP ?? 7) || 7),
   loginRateLimit: Math.max(1, Number(process.env.LOGIN_RATE_LIMIT ?? 10) || 10),
   turn: turnConfig(),
+  media: mediaConfig(),
 };
+
+/**
+ * LiveKit: em desenvolvimento e nos testes, o `livekit-server --dev` (chave e segredo de
+ * desenvolvimento, porta 7880). Em produção, a chave do `.env` e o LiveKit atrás do Caddy em
+ * `/livekit` (o servidor fala com ele direto, pela rede do Docker).
+ */
+function mediaConfig(): MediaConfig | undefined {
+  const apiKey = process.env.LIVEKIT_API_KEY?.trim() || (isProduction ? '' : 'devkey');
+  const apiSecret = process.env.LIVEKIT_API_SECRET?.trim() || (isProduction ? '' : 'secret');
+  if (!apiKey || !apiSecret) return undefined;
+  return {
+    apiKey,
+    apiSecret,
+    url: process.env.LIVEKIT_URL?.trim() || (isProduction ? '/livekit' : 'ws://localhost:7880'),
+    apiUrl:
+      process.env.LIVEKIT_API_URL?.trim() ||
+      (isProduction ? 'http://livekit:7880' : 'http://localhost:7880'),
+  };
+}
 
 function turnConfig(): Config['turn'] {
   const keyId = process.env.CLOUDFLARE_TURN_KEY_ID?.trim();

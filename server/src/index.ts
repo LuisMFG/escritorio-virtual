@@ -13,7 +13,7 @@ import { HabboAssetsClient } from './assets/HabboAssetsClient.js';
 import { imagerMeasure, offlineMeasure } from './services/FurniDefService.js';
 import { OfflineTvMeta } from './services/TvService.js';
 
-/** Tamanho máximo de uma mensagem do WebSocket (a oferta WebRTC tem uns 5–8 KB). */
+/** Tamanho máximo de uma mensagem do WebSocket. */
 const WS_MAX_PAYLOAD = 32 * 1024;
 
 const services = createServices(
@@ -25,6 +25,7 @@ const services = createServices(
   {
     secretKey: loadSecretKey(config.secretKey, config.secretKeyFile),
     turn: config.turn,
+    media: config.media ? { config: config.media } : undefined,
     // Testes de ponta a ponta: sem depender do imager pela internet.
     measureFurni:
       process.env.FURNI_MEASURE === 'offline'
@@ -36,6 +37,11 @@ const services = createServices(
 );
 if (config.spotify) console.log('[spotify] integração ligada');
 console.log(config.turn ? '[chamadas] TURN da Cloudflare ligado' : '[chamadas] só STUN (sem TURN)');
+console.log(
+  config.media
+    ? `[chamadas] servidor de mídia: ${config.media.url}`
+    : '[chamadas] sem servidor de mídia (defina LIVEKIT_API_KEY e LIVEKIT_API_SECRET)',
+);
 setServices(services);
 
 const server = defineServer({

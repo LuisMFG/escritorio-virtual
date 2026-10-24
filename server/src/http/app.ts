@@ -41,27 +41,42 @@ import {
 
 /**
  * Política de conteúdo em produção: tudo da própria origem, mais as imagens da HabboAssets
- * (o cliente cai para o imager direto se o proxy falhar). Estilos inline são usados nas
- * amostras de cor do editor; scripts só os do build e o player do YouTube da TV.
+ * (o cliente cai para o imager direto se o proxy falhar) e o servidor de mídia das chamadas.
+ * Estilos inline são usados nas amostras de cor do editor; scripts só os do build e o player
+ * do YouTube da TV.
  */
-const CSP = [
-  "default-src 'self'",
-  "img-src 'self' data: blob: https://www.habboassets.com https://cdn.habboassets.com",
-  "connect-src 'self'",
-  "style-src 'self' 'unsafe-inline'",
-  // TV com YouTube (Fase 51): a API do player e o próprio player (num iframe). O desfoque de
-  // fundo da chamada roda o modelo de recorte em WebAssembly (só compilar, sem eval de JS).
-  "script-src 'self' 'wasm-unsafe-eval' https://www.youtube.com https://s.ytimg.com",
-  'frame-src https://www.youtube-nocookie.com https://www.youtube.com',
-  "worker-src 'self' blob:",
-  "frame-ancestors 'none'",
-  "base-uri 'self'",
-  "form-action 'self'",
-].join('; ');
+export function contentSecurityPolicy(mediaUrl?: string): string {
+  return [
+    "default-src 'self'",
+    "img-src 'self' data: blob: https://www.habboassets.com https://cdn.habboassets.com",
+    `connect-src 'self'${mediaOrigins(mediaUrl)}`,
+    "style-src 'self' 'unsafe-inline'",
+    // TV com YouTube (Fase 51): a API do player e o próprio player (num iframe). O desfoque de
+    // fundo da chamada roda o modelo de recorte em WebAssembly (só compilar, sem eval de JS).
+    "script-src 'self' 'wasm-unsafe-eval' https://www.youtube.com https://s.ytimg.com",
+    'frame-src https://www.youtube-nocookie.com https://www.youtube.com',
+    "worker-src 'self' blob:",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+  ].join('; ');
+}
+
+/**
+ * Servidor de mídia das chamadas em outro endereço (desenvolvimento, testes): libera a conexão
+ * com ele (WebSocket e a checagem por HTTP). Num caminho deste site (`/livekit`), o 'self' basta.
+ */
+function mediaOrigins(url?: string): string {
+  if (!url || !/^(wss?|https?):\/\//.test(url)) return '';
+  const { host, protocol } = new URL(url);
+  const secure = protocol === 'wss:' || protocol === 'https:';
+  return ` ${secure ? 'wss' : 'ws'}://${host} ${secure ? 'https' : 'http'}://${host}`;
+}
 
 /** Rotas HTTP: sessão, proxy de assets, healthcheck e (em produção) o cliente compilado. */
 export function configureApp(app: Application, cfg: Config, svc: Services): void {
   app.disable('x-powered-by');
+  const csp = contentSecurityPolicy(cfg.media?.url);
   // Atrás de um proxy reverso (Caddy/Nginx/Fly), o IP real vem do X-Forwarded-For.
   app.set('trust proxy', cfg.isProduction ? 1 : 'loopback');
   app.use((_req, res, next) => {
@@ -73,7 +88,7 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
       'Permissions-Policy',
       'camera=(self), microphone=(self), display-capture=(self), geolocation=()',
     );
-    if (cfg.isProduction) res.setHeader('Content-Security-Policy', CSP);
+    if (cfg.isProduction) res.setHeader('Content-Security-Policy', csp);
     next();
   });
   app.use('/api', express.json({ limit: '16kb' }));

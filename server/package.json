@@ -23,9 +23,10 @@
     "better-sqlite3": "^13.0.3",
     "drizzle-orm": "^0.45.4",
     "express": "^5.3.0",
+    "livekit-server-sdk": "2.19.1",
     "pngjs": "^7.0.0",
-    "zod": "^4.6.7",
-    "tsx": "^4.23.15"
+    "tsx": "^4.23.15",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@colyseus/testing": "0.18.6",

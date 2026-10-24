@@ -2,13 +2,13 @@ import { z } from 'zod';
 
 /**
  * Chamadas por convite (Fase 49): áudio entre pessoas que aceitaram, em qualquer sala. O
- * servidor (canal global) guarda convites e participantes e repassa a sinalização WebRTC; o
- * áudio vai direto entre os navegadores. Vídeo e tela (Fase 50) usam a mesma chamada: cada
- * participante já anuncia `cam` e `screen`.
+ * servidor (canal global) guarda convites e participantes; o áudio e o vídeo passam por um
+ * servidor de mídia (LiveKit), que entrega a cada um a qualidade que cabe na conexão dele.
+ * Vídeo e tela (Fase 50) usam a mesma chamada: cada participante anuncia `cam` e `screen`.
  */
 
-/** Pessoas por chamada (cada uma se conecta com cada outra). */
-export const CALL_MAX_PEOPLE = 6;
+/** Pessoas por chamada (o servidor de mídia aguenta bem mais; o limite é o painel). */
+export const CALL_MAX_PEOPLE = 12;
 /** Convite sem resposta expira em (ms). */
 export const CALL_INVITE_MS = 45_000;
 export const CALL_REASON_MAX = 80;
@@ -22,12 +22,10 @@ export const CallMessage = {
   Answer: 'call.answer',
   /** Cliente → servidor: sair da chamada. */
   Leave: 'call.leave',
-  /** Cliente → servidor `{ toUserId, data }`; servidor → cliente `{ fromUserId, data }`. */
-  Signal: 'call.signal',
   /** Cliente → servidor `CallMedia`: microfone, câmera e tela ligados. */
   Media: 'call.media',
-  /** Requisição: servidores ICE (STUN e, se configurado, TURN). */
-  Ice: 'call.ice',
+  /** Requisição: credencial da sala de mídia da minha chamada (`CallToken`, ou `null`). */
+  Token: 'call.token',
   /** Servidor → cliente `CallInvite`: alguém está chamando você. */
   Invited: 'call.invited',
   /** Servidor → cliente `{ inviteId }`: o convite não vale mais (cancelado/expirou/atendido). */
@@ -86,34 +84,6 @@ export interface CallState extends CallView {
   here: boolean;
 }
 
-/** Candidatos ICE por mensagem (no máximo). */
-export const CALL_ICE_BATCH_MAX = 20;
-
-/** Sinalização WebRTC repassada pelo servidor (descrição de sessão ou candidato ICE). */
-export const callSignalDataSchema = z.union([
-  z.object({
-    kind: z.literal('sdp'),
-    type: z.enum(['offer', 'answer']),
-    sdp: z.string().max(20_000),
-  }),
-  z.object({
-    kind: z.literal('ice'),
-    // Em lotes: no começo da chamada (com TURN) o navegador acha dezenas de candidatos de uma
-    // vez, e um por mensagem estourava o limite de mensagens por segundo do canal global.
-    candidates: z
-      .array(
-        z.object({
-          candidate: z.string().max(1_000),
-          sdpMid: z.string().max(64).nullable(),
-          sdpMLineIndex: z.number().int().min(0).max(64).nullable(),
-        }),
-      )
-      .min(1)
-      .max(CALL_ICE_BATCH_MAX),
-  }),
-]);
-export type CallSignalData = z.infer<typeof callSignalDataSchema>;
-
 const userId = z.string().min(1).max(64);
 export const callInviteSchema = z.object({
   toUserId: userId,
@@ -126,21 +96,26 @@ export const callAnswerSchema = z.object({
   inviteId: z.string().min(1).max(64),
   accept: z.boolean(),
 });
-export const callSignalSchema = z.object({ toUserId: userId, data: callSignalDataSchema });
 export const callMediaSchema = z.object({
   mic: z.boolean(),
   cam: z.boolean(),
   screen: z.boolean(),
 });
 
-/** Quem começa a conexão entre dois participantes (o de id menor), para não haver duas ofertas. */
-export function callInitiator(a: string, b: string): string {
-  return a < b ? a : b;
-}
-
 /** Servidores ICE para o navegador (formato do `RTCIceServer`). */
 export interface IceServer {
   urls: string | string[];
   username?: string;
   credential?: string;
+}
+
+/**
+ * Entrada na sala de mídia (LiveKit) da chamada: o endereço do servidor de mídia (absoluto ou um
+ * caminho neste site), a credencial assinada (vale só para esta chamada e esta pessoa) e os
+ * servidores ICE extras (TURN da Cloudflare, para redes que bloqueiam UDP).
+ */
+export interface CallToken {
+  url: string;
+  token: string;
+  iceServers: IceServer[];
 }

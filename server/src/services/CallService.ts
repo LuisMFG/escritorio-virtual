@@ -46,6 +46,8 @@ export class CallService {
     result: [fromUserId: string, result: CallInviteResult];
     /** A chamada dessas pessoas mudou (cada uma recebe `callOf`). */
     changed: [userIds: string[]];
+    /** Essas pessoas saíram da chamada (ou ela acabou): saem também da sala de mídia. */
+    left: [callId: string, userIds: string[]];
   }>();
 
   private readonly calls = new Map<string, Call>();
@@ -72,7 +74,7 @@ export class CallService {
     };
   }
 
-  /** Os dois estão na mesma chamada (só então a sinalização passa). */
+  /** Os dois estão na mesma chamada. */
   sameCall(a: string, b: string): boolean {
     const ca = this.userCall.get(a);
     return Boolean(ca && ca === this.userCall.get(b));
@@ -140,12 +142,15 @@ export class CallService {
     call.members.delete(userId);
     this.userCall.delete(userId);
     const affected = [userId, ...call.members.keys()];
+    const gone = [userId];
     if (call.members.size < 2) {
       for (const id of call.members.keys()) this.userCall.delete(id);
+      gone.push(...call.members.keys());
       call.members.clear();
       this.calls.delete(call.id);
     }
     this.events.emit('changed', affected);
+    this.events.emit('left', call.id, gone);
   }
 
   /** Saiu do escritório: sai da chamada e os convites dele/para ele acabam. */
