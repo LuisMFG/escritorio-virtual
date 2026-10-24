@@ -1,12 +1,21 @@
+/** Qualidade do vídeo: automática, alta (conexão boa) ou economia (4G, rede fraca). */
+export type CallQuality = 'auto' | 'alta' | 'economia';
+export const CALL_QUALITIES: readonly CallQuality[] = ['auto', 'alta', 'economia'];
+/** Tela compartilhada: nitidez (texto e código) ou fluidez (vídeo, rolagem). */
+export type ScreenMode = 'nitidez' | 'fluidez';
+
 /**
  * Escolhas da chamada que valem para as próximas: efeitos (desfoque de fundo e supressão de
- * ruído) e os dispositivos (microfone, câmera e saída de áudio). Ficam no navegador.
+ * ruído), qualidade do vídeo, o jeito de compartilhar a tela e os dispositivos (microfone,
+ * câmera e saída de áudio). Ficam no navegador.
  */
 export interface CallPrefs {
   /** Desfoque de fundo (modo retrato) na câmera. */
   blur: boolean;
   /** Supressão de ruído do navegador no microfone. */
   noise: boolean;
+  quality: CallQuality;
+  screenMode: ScreenMode;
   mic?: string;
   cam?: string;
   /** Saída de áudio (alto-falante ou fone). */
@@ -18,7 +27,12 @@ export const CALL_PREFS_KEY = 'ev-call-prefs';
 const OLD_MIC_KEY = 'ev-call-mic';
 const OLD_CAM_KEY = 'ev-call-cam';
 
-export const DEFAULT_CALL_PREFS: CallPrefs = { blur: false, noise: true };
+export const DEFAULT_CALL_PREFS: CallPrefs = {
+  blur: false,
+  noise: true,
+  quality: 'auto',
+  screenMode: 'nitidez',
+};
 
 const id = (v: unknown) =>
   typeof v === 'string' && v.length > 0 && v.length < 300 ? v : undefined;
@@ -40,6 +54,10 @@ export function parseCallPrefs(
   const prefs: CallPrefs = {
     blur: typeof data.blur === 'boolean' ? data.blur : DEFAULT_CALL_PREFS.blur,
     noise: typeof data.noise === 'boolean' ? data.noise : DEFAULT_CALL_PREFS.noise,
+    quality: CALL_QUALITIES.includes(data.quality as CallQuality)
+      ? (data.quality as CallQuality)
+      : DEFAULT_CALL_PREFS.quality,
+    screenMode: data.screenMode === 'fluidez' ? 'fluidez' : 'nitidez',
   };
   const mic = id(data.mic) ?? id(old.mic);
   const cam = id(data.cam) ?? id(old.cam);

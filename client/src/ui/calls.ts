@@ -1,5 +1,12 @@
 import { CALL_REASON_MAX, CALL_REASONS, type CallInvite, type CallState } from '@office/shared';
-import type { CallDevices } from '../net/CallManager.js';
+import type {
+  CallDevices,
+  CallVideo,
+  LinkQuality,
+  VideoRef,
+  VideoStat,
+} from '../net/CallManager.js';
+import type { CallQuality, ScreenMode } from '../net/callPrefs.js';
 import { mouthFor, spotlightOf, type CallFace, type Mouth } from './callFace.js';
 import { makeDraggable, type Draggable } from './draggable.js';
 import {
@@ -167,9 +174,11 @@ export interface CallPanelHandlers {
   leave(): void;
   isMuted(): boolean;
   camera(on: boolean): Promise<boolean>;
-  screen(on: boolean): Promise<boolean>;
+  /** Liga (no modo escolhido) ou desliga a tela; ligada, troca o modo sem pedir a tela de novo. */
+  screen(on: boolean, mode?: ScreenMode): Promise<boolean>;
   cameraOn(): boolean;
   screenOn(): boolean;
+  screenMode(): ScreenMode;
   devices(): Promise<CallDevices>;
   useMic(deviceId: string): Promise<void>;
   useCam(deviceId: string): Promise<void>;
@@ -178,38 +187,59 @@ export interface CallPanelHandlers {
   effects(): { blur: boolean; noise: boolean };
   setBlur(on: boolean): Promise<void>;
   setNoise(on: boolean): Promise<void>;
+  /** Qualidade do vídeo (automática, alta, economia), salva para as próximas. */
+  quality(): CallQuality;
+  setQuality(q: CallQuality): Promise<void>;
   /** O desfoque está de fato no vídeo agora. */
   blurActive(): boolean;
   /** Volume do meu microfone agora (0 a 1). */
   micLevel(): number;
   /** O vídeo que sai da minha câmera (prévia dos dispositivos). */
   cameraStream(): MediaStream | null;
+  /** Resolução, fps, bitrate e atraso de cada vídeo (painel de detalhes). */
+  stats(): Promise<VideoStat[]>;
   /** Rosto do avatar com esse visual (boca fechada e falando); `null` se não der para montar. */
   face(figure: string): Promise<CallFace | null>;
 }
 
-/** Vídeo no painel (câmera ou tela). */
-export interface PanelVideo {
-  stream: MediaStream;
-  kind: 'cam' | 'screen';
-}
+/** Vídeos de uma pessoa no painel (câmera e/ou tela). */
+export type PanelVideo = CallVideo;
 
-/** Um quadro por pessoa: o vídeo dela ou, sem vídeo, o rosto do avatar. */
+/**
+ * Um quadro por pessoa: o vídeo dela (com câmera e tela juntas, a tela em destaque e a câmera
+ * numa miniatura que dá para mover, esconder ou trocar de lugar) ou, sem vídeo, o rosto do avatar.
+ */
 interface Tile {
   el: HTMLElement;
   video: HTMLVideoElement;
+  /** Vídeo ligado em cada elemento agora (para não religar). */
+  mainRef: VideoRef | null;
+  pip: HTMLElement;
+  pipVideo: HTMLVideoElement;
+  pipRef: VideoRef | null;
+  pipSwap: HTMLButtonElement;
+  pipFull: HTMLButtonElement;
+  pipHide: HTMLButtonElement;
   face: HTMLImageElement;
   initial: HTMLElement;
   name: HTMLElement;
   icons: HTMLElement;
+  link: HTMLElement;
   tools: HTMLElement;
   pin: HTMLButtonElement;
   full: HTMLButtonElement;
+  showPip: HTMLButtonElement;
   figure: string;
   mouth: Mouth;
 }
 
 const nameOrYou = (id: string, me: string, name: string) => (id === me ? 'Você' : name);
+
+const LINK_TEXT: Record<LinkQuality, string> = {
+  bom: 'Conexão boa',
+  medio: 'Conexão média',
+  ruim: 'Conexão ruim',
+};
 
 /** Botão só com ícone (o nome vai no rótulo e na dica). */
 function iconButton(cls: string, onClick: () => void): HTMLButtonElement {
@@ -230,6 +260,19 @@ function label(b: HTMLButtonElement, name: Parameters<typeof icon>[0], text: str
   b.title = text;
 }
 
+/** Liga um vídeo num elemento (desligando o anterior); `null` desliga. */
+function bind(
+  el: HTMLVideoElement,
+  current: VideoRef | null,
+  next: VideoRef | null,
+): VideoRef | null {
+  if (current?.id === next?.id) return current;
+  current?.detach(el);
+  if (!next) el.srcObject = null;
+  next?.attach(el);
+  return next;
+}
+
 /**
  * Painel da chamada: um quadro por pessoa (a câmera ou a tela dela; sem vídeo, o rosto do
  * avatar, com a boca acompanhando a voz), tempo, mudo, câmera, tela, dispositivos e sair.
@@ -244,11 +287,13 @@ export class CallPanel {
   private readonly fullBtn: HTMLButtonElement;
   private readonly expandBtn: HTMLButtonElement;
   private readonly minBtn: HTMLButtonElement;
+  private readonly statsBtn: HTMLButtonElement;
   private readonly timeEl = Object.assign(document.createElement('span'), {
     className: 'call-time muted',
   });
   private readonly tiles = new Map<string, Tile>();
   private videos: ReadonlyMap<string, PanelVideo> = new Map();
+  private links: ReadonlyMap<string, LinkQuality> = new Map();
   private timer = 0;
   private state: CallState | null = null;
   private speaking: ReadonlySet<string> = new Set();
@@ -258,10 +303,16 @@ export class CallPanel {
   private expanded = false;
   /** Vídeo destacado na janela da chamada. */
   private pinned: string | null = null;
+  /** Quem está com a câmera em destaque e a tela na miniatura (trocou). */
+  private readonly swapped = new Set<string>();
+  /** Quem está com a miniatura escondida. */
+  private readonly pipHidden = new Set<string>();
   private minimized = false;
   private readonly faces = new Map<string, CallFace | null>();
   private readonly mini: CallMini;
   private closeDevices: (() => void) | null = null;
+  private closeStats: (() => void) | null = null;
+  private closeShare: (() => void) | null = null;
   /** Arrastar pela barra de cima (posição salva para pequena e ampliada). */
   private readonly drag: Draggable;
 
@@ -276,6 +327,8 @@ export class CallPanel {
     this.head.title = 'Arraste para mover (duplo clique volta ao lugar)';
     const grip = icon('grip', 14);
     grip.classList.add('drag-grip');
+    this.statsBtn = iconButton('call-stats-btn', () => this.toggleStats());
+    label(this.statsBtn, 'activity', 'Detalhes da conexão');
     this.fullBtn = iconButton('call-full', () => void toggleFullscreen(this.el));
     this.expandBtn = iconButton('call-expand', () => this.setExpanded(!this.expanded));
     this.minBtn = iconButton('call-minimize', () => void this.minimize());
@@ -285,6 +338,7 @@ export class CallPanel {
       icon('phone', 16),
       Object.assign(document.createElement('strong'), { textContent: 'Em chamada' }),
       this.timeEl,
+      this.statsBtn,
       this.fullBtn,
       this.expandBtn,
       this.minBtn,
@@ -322,9 +376,16 @@ export class CallPanel {
       this.mini.hide();
       this.minimized = false;
       this.pinned = null;
+      this.swapped.clear();
+      this.pipHidden.clear();
       this.closeDevices?.();
+      this.closeStats?.();
+      this.closeShare?.();
       if (fullscreenElement() && this.el.contains(fullscreenElement())) void exitFullscreen();
-      for (const t of this.tiles.values()) t.video.srcObject = null;
+      for (const t of this.tiles.values()) {
+        t.mainRef = bind(t.video, t.mainRef, null);
+        t.pipRef = bind(t.pipVideo, t.pipRef, null);
+      }
       this.tiles.clear();
       this.grid.replaceChildren();
       this.controls.replaceChildren();
@@ -361,6 +422,12 @@ export class CallPanel {
     this.updateMini();
   }
 
+  /** Qualidade da conexão de cada um (o pontinho no canto do quadro). */
+  setLinks(links: ReadonlyMap<string, LinkQuality>): void {
+    this.links = links;
+    for (const [id, t] of this.tiles) this.paintLink(id, t);
+  }
+
   /** Redesenha os botões (mudo, câmera…) e o mini-player depois de uma mudança. */
   refresh(): void {
     if (!this.state) return;
@@ -373,37 +440,77 @@ export class CallPanel {
     return this.state?.members.find((m) => m.userId === id);
   }
 
+  /** O que vai em destaque no quadro e o que vai na miniatura. */
+  private layout(id: string): { main: VideoRef | null; pip: VideoRef | null } {
+    const v = this.videos.get(id);
+    if (!v) return { main: null, pip: null };
+    if (v.screen && v.cam) {
+      return this.swapped.has(id) ? { main: v.cam, pip: v.screen } : { main: v.screen, pip: v.cam };
+    }
+    return { main: v.screen ?? v.cam ?? null, pip: null };
+  }
+
+  private mainKind(id: string): 'screen' | 'cam' | null {
+    const v = this.videos.get(id);
+    if (!v) return null;
+    if (v.screen && v.cam) return this.swapped.has(id) ? 'cam' : 'screen';
+    return v.screen ? 'screen' : v.cam ? 'cam' : null;
+  }
+
   private syncTiles(): void {
     const st = this.state;
     if (!st) return;
     const ids = new Set(st.members.map((m) => m.userId));
     for (const [id, t] of this.tiles) {
       if (ids.has(id)) continue;
-      t.video.srcObject = null;
+      t.mainRef = bind(t.video, t.mainRef, null);
+      t.pipRef = bind(t.pipVideo, t.pipRef, null);
       t.el.remove();
       this.tiles.delete(id);
     }
     if (this.pinned && !this.videos.has(this.pinned)) this.pinned = null;
+    for (const id of [...this.swapped]) {
+      const v = this.videos.get(id);
+      if (!v?.cam || !v.screen) this.swapped.delete(id);
+    }
     for (const m of st.members) {
       const t = this.tiles.get(m.userId) ?? this.makeTile(m.userId);
-      const v = this.videos.get(m.userId);
+      const { main, pip } = this.layout(m.userId);
+      const kind = this.mainKind(m.userId);
       const who = nameOrYou(m.userId, this.myUserId, m.name);
-      t.el.classList.toggle('has-video', Boolean(v));
-      t.el.classList.toggle('screen', v?.kind === 'screen');
-      t.el.classList.toggle('mine', m.userId === this.myUserId);
+      const mine = m.userId === this.myUserId;
+      t.el.classList.toggle('has-video', Boolean(main));
+      t.el.classList.toggle('screen', kind === 'screen');
+      t.el.classList.toggle('mine', mine);
       t.el.classList.toggle('speaking', this.speaking.has(m.userId));
       t.el.classList.toggle('pinned', this.pinned === m.userId);
       t.el.setAttribute('aria-label', who);
-      if (v) {
-        if (t.video.srcObject !== v.stream) {
-          t.video.srcObject = v.stream;
-          void t.video.play().catch(() => undefined);
-        }
-      } else if (t.video.srcObject) {
-        t.video.srcObject = null;
-      }
-      t.video.hidden = !v;
-      t.name.textContent = `${who}${v?.kind === 'screen' ? ' · tela' : ''}`;
+      t.mainRef = bind(t.video, t.mainRef, main);
+      t.video.hidden = !main;
+      t.video.dataset.kind = kind ?? '';
+      t.video.classList.toggle('mirror', mine && kind === 'cam');
+      // Miniatura (câmera sobre a tela, ou a tela sobre a câmera se trocou).
+      const showPip = Boolean(pip) && !this.pipHidden.has(m.userId);
+      t.pipRef = bind(t.pipVideo, t.pipRef, showPip ? pip : null);
+      t.pip.hidden = !showPip;
+      const pipKind = kind === 'screen' ? 'cam' : 'screen';
+      t.pipVideo.dataset.kind = pipKind;
+      t.pipVideo.classList.toggle('mirror', mine && pipKind === 'cam');
+      t.pip.classList.toggle('screen', pipKind === 'screen');
+      const pipName = pipKind === 'cam' ? `câmera de ${who}` : `tela de ${who}`;
+      if (mine) t.pip.setAttribute('aria-label', pipKind === 'cam' ? 'Sua câmera' : 'Sua tela');
+      else
+        t.pip.setAttribute('aria-label', pipKind === 'cam' ? `Câmera de ${who}` : `Tela de ${who}`);
+      label(t.pipSwap, 'arrow-left-right', `Trocar destaque: ${pipName}`);
+      label(
+        t.pipFull,
+        isFullscreen(t.pipVideo) ? 'fullscreen-exit' : 'fullscreen',
+        `Tela cheia: ${pipName}`,
+      );
+      label(t.pipHide, 'eye-off', `Esconder ${pipName}`);
+      t.showPip.hidden = !pip || showPip;
+      label(t.showPip, 'eye', `Mostrar ${pipName}`);
+      t.name.textContent = `${who}${kind === 'screen' ? ' · tela' : ''}`;
       t.icons.replaceChildren();
       if (!m.mic) {
         const muted = icon('mic-off', 13);
@@ -411,8 +518,10 @@ export class CallPanel {
         muted.setAttribute('aria-label', 'sem microfone');
         t.icons.append(muted);
       }
-      if (m.screen && v?.kind !== 'screen') t.icons.append(icon('screen-share', 13));
-      t.tools.hidden = !v;
+      if (m.screen && kind !== 'screen' && !pip) t.icons.append(icon('screen-share', 13));
+      t.icons.append(t.link);
+      this.paintLink(m.userId, t);
+      t.tools.hidden = !main;
       const pinned = this.pinned === m.userId;
       label(t.pin, pinned ? 'minimize' : 'maximize', pinned ? 'Voltar à grade' : `Destacar ${who}`);
       label(
@@ -429,13 +538,7 @@ export class CallPanel {
     }
     // Destacado primeiro, depois as telas, as câmeras e quem está sem vídeo.
     const rank = (id: string) =>
-      id === this.pinned
-        ? 0
-        : this.videos.get(id)?.kind === 'screen'
-          ? 1
-          : this.videos.has(id)
-            ? 2
-            : 3;
+      id === this.pinned ? 0 : this.videos.get(id)?.screen ? 1 : this.videos.has(id) ? 2 : 3;
     const order = st.members.map((m) => m.userId).sort((a, b) => rank(a) - rank(b));
     const current = [...this.grid.children].map((c) => (c as HTMLElement).dataset.user);
     if (order.join() !== current.join()) {
@@ -444,10 +547,18 @@ export class CallPanel {
     this.grid.classList.toggle('has-pin', Boolean(this.pinned));
     this.grid.classList.toggle(
       'has-screen',
-      [...this.videos.values()].some((v) => v.kind === 'screen'),
+      [...this.videos.values()].some((v) => v.screen),
     );
     this.grid.dataset.count = String(st.members.length);
     this.el.classList.toggle('with-video', this.videos.size > 0);
+  }
+
+  private paintLink(id: string, t: Tile): void {
+    const q = this.links.get(id);
+    t.link.hidden = !q;
+    t.link.dataset.link = q ?? '';
+    t.link.setAttribute('aria-label', q ? LINK_TEXT[q] : '');
+    t.link.title = q ? LINK_TEXT[q] : '';
   }
 
   private makeTile(id: string): Tile {
@@ -458,8 +569,16 @@ export class CallPanel {
     const video = document.createElement('video');
     video.autoplay = true;
     video.playsInline = true;
-    video.muted = true; // o áudio vem pela conexão de áudio
+    video.muted = true; // o áudio vem separado
     video.hidden = true;
+    const pip = Object.assign(document.createElement('div'), { className: 'call-pip' });
+    pip.setAttribute('role', 'group');
+    pip.hidden = true;
+    const pipVideo = document.createElement('video');
+    pipVideo.autoplay = true;
+    pipVideo.playsInline = true;
+    pipVideo.muted = true;
+    const pipTools = Object.assign(document.createElement('div'), { className: 'call-pip-tools' });
     const faceBox = document.createElement('div');
     faceBox.className = 'call-face';
     const face = Object.assign(document.createElement('img'), { alt: '', draggable: false });
@@ -472,28 +591,61 @@ export class CallPanel {
     const name = document.createElement('span');
     const icons = Object.assign(document.createElement('span'), { className: 'call-tile-icons' });
     caption.append(name, icons);
+    const link = Object.assign(document.createElement('span'), { className: 'call-link' });
+    link.setAttribute('role', 'img');
     const tools = Object.assign(document.createElement('div'), { className: 'call-tile-tools' });
     const t: Tile = {
       el,
       video,
+      mainRef: null,
+      pip,
+      pipVideo,
+      pipRef: null,
+      pipSwap: iconButton('call-pip-swap', () => this.toggleSwap(id)),
+      pipFull: iconButton('call-pip-full', () => void toggleFullscreen(pipVideo, pipVideo)),
+      pipHide: iconButton('call-pip-hide', () => this.setPipHidden(id, true)),
       face,
       initial,
       name,
       icons,
+      link,
       tools,
       pin: iconButton('call-pin', () => this.togglePin(id)),
       full: iconButton('call-tile-full', () => void toggleFullscreen(el, video)),
+      showPip: iconButton('call-pip-show', () => this.setPipHidden(id, false)),
       figure: '',
       mouth: 'closed',
     };
-    tools.append(t.pin, t.full);
-    el.append(video, faceBox, caption, tools);
+    pipTools.append(t.pipSwap, t.pipFull, t.pipHide);
+    pip.append(pipVideo, pipTools);
+    dragInside(pip, el);
+    tools.append(t.showPip, t.pin, t.full);
+    el.append(video, faceBox, pip, caption, tools);
     // Duplo clique num vídeo: destaca (ou volta à grade).
-    el.addEventListener('dblclick', () => {
+    el.addEventListener('dblclick', (e) => {
+      if (pip.contains(e.target as Node)) return;
       if (this.videos.has(id)) this.togglePin(id);
+    });
+    // Duplo clique na miniatura: troca o destaque.
+    pip.addEventListener('dblclick', (e) => {
+      e.stopPropagation();
+      this.toggleSwap(id);
     });
     this.tiles.set(id, t);
     return t;
+  }
+
+  private toggleSwap(id: string): void {
+    if (this.swapped.has(id)) this.swapped.delete(id);
+    else this.swapped.add(id);
+    this.syncTiles();
+    this.updateMini();
+  }
+
+  private setPipHidden(id: string, hidden: boolean): void {
+    if (hidden) this.pipHidden.add(id);
+    else this.pipHidden.delete(id);
+    this.syncTiles();
   }
 
   private togglePin(id: string): void {
@@ -540,6 +692,7 @@ export class CallPanel {
     const full = fullscreenElement();
     if (full && this.el.contains(full)) await exitFullscreen();
     this.closeDevices?.();
+    this.closeStats?.();
     this.minimized = true;
     this.el.hidden = true;
     this.mini.show();
@@ -553,6 +706,23 @@ export class CallPanel {
     this.el.hidden = false;
     this.drag.refresh();
     this.refresh();
+  }
+
+  private toggleStats(): void {
+    if (this.closeStats) return this.closeStats();
+    this.closeStats = openCallStats(
+      this.el,
+      this.on,
+      (id) => {
+        const m = this.member(id);
+        return nameOrYou(id, this.myUserId, m?.name ?? '?');
+      },
+      () => {
+        this.closeStats = null;
+        this.renderHead();
+      },
+    );
+    this.renderHead();
   }
 
   private renderHead(): void {
@@ -569,6 +739,8 @@ export class CallPanel {
       this.expanded ? 'Diminuir' : 'Ampliar',
     );
     this.expandBtn.hidden = full;
+    this.statsBtn.classList.toggle('on', Boolean(this.closeStats));
+    this.statsBtn.setAttribute('aria-pressed', String(Boolean(this.closeStats)));
     for (const [id, t] of this.tiles) {
       const tileFull = isFullscreen(t.el);
       const who = nameOrYou(id, this.myUserId, this.member(id)?.name ?? '');
@@ -635,9 +807,32 @@ export class CallPanel {
       },
     );
     const screen = this.on.screenOn();
-    btn('call-screen', 'screen-share', screen ? 'Parar tela' : 'Tela', screen, async () => {
-      await this.on.screen(!screen);
-    });
+    if (screen) {
+      btn('call-screen', 'screen-share', 'Parar tela', true, async () => {
+        await this.on.screen(false);
+      });
+      // Trocar nitidez/fluidez com a tela já compartilhada (sem escolher a tela de novo).
+      const mode = this.on.screenMode();
+      const other: ScreenMode = mode === 'nitidez' ? 'fluidez' : 'nitidez';
+      btn(
+        'call-screen-mode',
+        mode === 'nitidez' ? 'eye' : 'play',
+        mode === 'nitidez' ? 'Tela: nitidez' : 'Tela: fluidez',
+        null,
+        async () => {
+          await this.on.screen(true, other);
+        },
+      ).title = `Mudar para ${other}`;
+    } else {
+      // Antes de escolher a tela: nitidez (texto, código) ou fluidez (vídeo, rolagem).
+      btn('call-screen', 'screen-share', 'Tela', false, () => {
+        this.closeShare?.();
+        this.closeShare = openShareChoice(this.on, () => {
+          this.closeShare = null;
+          this.refresh();
+        });
+      });
+    }
     btn('call-devices', 'settings', 'Dispositivos', null, () => {
       this.closeDevices?.();
       this.closeDevices = openCallDevices(this.on, () => {
@@ -669,10 +864,11 @@ export class CallPanel {
     );
     const m = id ? this.member(id) : undefined;
     if (!id || !m) return;
+    const main = this.layout(id).main;
     this.mini.update({
       name: nameOrYou(id, this.myUserId, m.name),
-      stream: this.videos.get(id)?.stream ?? null,
-      mirror: id === this.myUserId && this.videos.get(id)?.kind === 'cam',
+      video: main,
+      mirror: id === this.myUserId && this.mainKind(id) === 'cam',
       face: this.faces.get(m.figure) ?? null,
       initial: (m.name.trim()[0] ?? '?').toUpperCase(),
       mouth: mouthFor(this.levels.get(id) ?? 0, this.tick, !m.mic),
@@ -691,9 +887,39 @@ export class CallPanel {
   }
 }
 
+/** Arrastar a miniatura dentro do quadro (fica onde soltou, sem sair dele). */
+function dragInside(el: HTMLElement, box: HTMLElement): void {
+  let start: { x: number; y: number; left: number; top: number } | null = null;
+  el.addEventListener('pointerdown', (e) => {
+    if ((e.target as HTMLElement).closest('button')) return;
+    const r = el.getBoundingClientRect();
+    const b = box.getBoundingClientRect();
+    start = { x: e.clientX, y: e.clientY, left: r.left - b.left, top: r.top - b.top };
+    el.setPointerCapture(e.pointerId);
+    el.classList.add('dragging');
+    e.stopPropagation();
+  });
+  el.addEventListener('pointermove', (e) => {
+    if (!start) return;
+    const b = box.getBoundingClientRect();
+    const left = Math.max(0, Math.min(b.width - el.offsetWidth, start.left + e.clientX - start.x));
+    const top = Math.max(0, Math.min(b.height - el.offsetHeight, start.top + e.clientY - start.y));
+    el.style.left = `${left}px`;
+    el.style.top = `${top}px`;
+    el.style.right = 'auto';
+    el.style.bottom = 'auto';
+  });
+  const end = () => {
+    start = null;
+    el.classList.remove('dragging');
+  };
+  el.addEventListener('pointerup', end);
+  el.addEventListener('pointercancel', end);
+}
+
 interface MiniInfo {
   name: string;
-  stream: MediaStream | null;
+  video: VideoRef | null;
   mirror: boolean;
   face: CallFace | null;
   initial: string;
@@ -712,6 +938,7 @@ class CallMini {
   private readonly el = document.createElement('section');
   private readonly stage = document.createElement('div');
   private readonly video = document.createElement('video');
+  private videoRef: VideoRef | null = null;
   private readonly face = Object.assign(document.createElement('img'), {
     alt: '',
     draggable: false,
@@ -766,19 +993,16 @@ class CallMini {
 
   hide(): void {
     this.el.hidden = true;
-    this.video.srcObject = null;
+    this.videoRef = bind(this.video, this.videoRef, null);
   }
 
   update(info: MiniInfo): void {
     if (this.el.hidden) return;
-    if (this.video.srcObject !== info.stream) {
-      this.video.srcObject = info.stream;
-      if (info.stream) void this.video.play().catch(() => undefined);
-    }
-    this.video.hidden = !info.stream;
+    this.videoRef = bind(this.video, this.videoRef, info.video);
+    this.video.hidden = !info.video;
     this.video.classList.toggle('mirror', info.mirror);
-    this.face.hidden = Boolean(info.stream) || !info.face;
-    this.initial.hidden = Boolean(info.stream) || Boolean(info.face);
+    this.face.hidden = Boolean(info.video) || !info.face;
+    this.initial.hidden = Boolean(info.video) || Boolean(info.face);
     this.initial.textContent = info.initial;
     if (info.face && this.face.src !== info.face[info.mouth]) this.face.src = info.face[info.mouth];
     this.el.dataset.mouth = info.mouth;
@@ -798,8 +1022,155 @@ class CallMini {
 }
 
 /**
+ * Antes de compartilhar a tela: nitidez (texto e código legíveis; com movimento, cai o fps) ou
+ * fluidez (vídeo e rolagem lisos; cai a resolução). A escolha fica salva. O clique em
+ * "Compartilhar" abre a escolha de tela do navegador. Devolve como fechar.
+ */
+function openShareChoice(on: CallPanelHandlers, closed: () => void): () => void {
+  const backdrop = document.createElement('div');
+  backdrop.className = 'modal-backdrop call-devices-backdrop';
+  const sheet = document.createElement('section');
+  sheet.className = 'sheet call-share-sheet';
+  sheet.setAttribute('role', 'dialog');
+  sheet.setAttribute('aria-modal', 'true');
+  sheet.setAttribute('aria-labelledby', 'call-share-title');
+  const mode = on.screenMode();
+  sheet.innerHTML = `
+    <header class="sheet-head">
+      <h2 id="call-share-title">Compartilhar a tela</h2>
+      <button type="button" class="sheet-close" aria-label="Fechar">${iconHtml('x')}</button>
+    </header>
+    <div class="sheet-body">
+      <fieldset class="call-share-modes">
+        <legend>Priorizar</legend>
+        <label class="call-share-mode"><input type="radio" name="call-share-mode" value="nitidez" ${mode === 'nitidez' ? 'checked' : ''} />
+          <span><strong>Nitidez</strong><small class="muted">Texto, código e planilhas legíveis. Com muito movimento, a tela anda mais devagar.</small></span></label>
+        <label class="call-share-mode"><input type="radio" name="call-share-mode" value="fluidez" ${mode === 'fluidez' ? 'checked' : ''} />
+          <span><strong>Fluidez</strong><small class="muted">Vídeo, animação e rolagem lisos. A imagem pode perder um pouco de definição.</small></span></label>
+      </fieldset>
+      <small class="muted">Sua câmera continua ligada: os outros veem a tela em destaque e você numa miniatura.</small>
+      <div class="sheet-actions"><button type="button" class="btn-primary call-share-go">Compartilhar</button></div>
+    </div>`;
+  backdrop.append(sheet);
+  (document.fullscreenElement ?? document.body).append(backdrop);
+  let done = false;
+  const close = () => {
+    if (done) return;
+    done = true;
+    backdrop.remove();
+    document.removeEventListener('keydown', onKey);
+    closed();
+  };
+  const onKey = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') close();
+  };
+  document.addEventListener('keydown', onKey);
+  backdrop.addEventListener('pointerdown', (e) => {
+    if (e.target === backdrop) close();
+  });
+  sheet.querySelector('.sheet-close')!.addEventListener('click', close);
+  const go = sheet.querySelector<HTMLButtonElement>('.call-share-go')!;
+  go.addEventListener('click', () => {
+    const picked = sheet.querySelector<HTMLInputElement>('input[name=call-share-mode]:checked');
+    const m: ScreenMode = picked?.value === 'fluidez' ? 'fluidez' : 'nitidez';
+    go.disabled = true;
+    // A escolha de tela do navegador precisa sair direto deste clique.
+    void on.screen(true, m).finally(close);
+  });
+  go.focus();
+  return close;
+}
+
+const fmtKbps = (k: number) => (k >= 1000 ? `${(k / 1000).toFixed(1)} Mbps` : `${k} kbps`);
+const LIMIT_TEXT: Record<string, string> = {
+  bandwidth: 'rede',
+  cpu: 'processador',
+  other: 'outro',
+};
+
+/**
+ * Detalhes da conexão (dentro da janela da chamada): cada vídeo que eu mando (as camadas) e que
+ * eu recebo, com resolução, fps, bitrate, perda e atraso. Atualiza a cada segundo.
+ */
+function openCallStats(
+  host: HTMLElement,
+  on: CallPanelHandlers,
+  nameOf: (userId: string) => string,
+  closed: () => void,
+): () => void {
+  const box = document.createElement('section');
+  box.className = 'call-stats';
+  box.setAttribute('aria-label', 'Detalhes da conexão');
+  const body = document.createElement('div');
+  box.append(body);
+  host.querySelector('.call-panel-head')!.after(box);
+  let running = true;
+  const draw = async () => {
+    const rows = await on.stats().catch(() => []);
+    if (!running) return;
+    if (!rows.length) {
+      body.replaceChildren(
+        Object.assign(document.createElement('small'), {
+          className: 'muted',
+          textContent: 'Sem vídeo agora. Ligue a câmera ou espere alguém ligar.',
+        }),
+      );
+      return;
+    }
+    const table = document.createElement('table');
+    table.innerHTML =
+      '<thead><tr><th>Vídeo</th><th>Resolução</th><th>fps</th><th>Bitrate</th><th>Atraso</th></tr></thead>';
+    const tb = document.createElement('tbody');
+    for (const r of rows.sort((a, b) =>
+      a.direction === b.direction ? 0 : a.direction === 'envio' ? -1 : 1,
+    )) {
+      const tr = document.createElement('tr');
+      const what = r.kind === 'screen' ? 'tela' : 'câmera';
+      const who =
+        r.direction === 'envio' ? `Você mandando (${what})` : `${nameOf(r.userId)} (${what})`;
+      const res = r.layers.map((l) => `${l.width}×${l.height}`).join(' · ') || '—';
+      const fps = r.layers.map((l) => l.fps).join(' · ') || '—';
+      const extra = [
+        r.limit ? `limitado pelo ${LIMIT_TEXT[r.limit] ?? r.limit}` : '',
+        r.lossPct ? `${r.lossPct}% perdido` : '',
+      ]
+        .filter(Boolean)
+        .join(', ');
+      const delay =
+        r.delayMs !== undefined
+          ? `~${r.delayMs} ms`
+          : r.rttMs !== undefined
+            ? `RTT ${r.rttMs} ms`
+            : '—';
+      const cells = [who, res, fps, `${fmtKbps(r.kbps)}${extra ? ` (${extra})` : ''}`, delay];
+      for (const c of cells)
+        tr.append(Object.assign(document.createElement('td'), { textContent: c }));
+      tb.append(tr);
+    }
+    table.append(tb);
+    body.replaceChildren(
+      table,
+      Object.assign(document.createElement('small'), {
+        className: 'muted',
+        textContent:
+          'Atraso: ida e volta pela rede mais a espera para tocar sem engasgar. Abaixo de 150 ms a conversa flui sem notar.',
+      }),
+    );
+  };
+  void draw();
+  const timer = window.setInterval(() => void draw(), 1000);
+  return () => {
+    running = false;
+    clearInterval(timer);
+    box.remove();
+    closed();
+  };
+}
+
+/**
  * Dispositivos e efeitos: microfone (com medidor de volume), câmera (com prévia), saída de
- * áudio, desfoque de fundo e supressão de ruído. Cada troca vale na hora, sem cair a chamada.
+ * áudio, qualidade do vídeo, desfoque de fundo e supressão de ruído. Cada troca vale na hora,
+ * sem cair a chamada.
  * Devolve como fechar.
  */
 function openCallDevices(on: CallPanelHandlers, closed: () => void): () => void {
@@ -822,6 +1193,12 @@ function openCallDevices(on: CallPanelHandlers, closed: () => void): () => void 
       <div class="call-preview"><video muted playsinline autoplay></video><small class="muted"></small></div>
       <label class="field call-dev-speaker"><span>Saída de áudio</span><select id="call-dev-speaker"></select></label>
       <small class="muted call-dev-speaker-note" hidden>Este navegador não deixa escolher a saída aqui: use a do sistema.</small>
+      <label class="field"><span>Qualidade do vídeo</span><select id="call-dev-quality">
+        <option value="auto">Automática (ajusta sozinha à sua conexão)</option>
+        <option value="alta">Alta (conexão boa: mais nitidez)</option>
+        <option value="economia">Economia (4G ou rede fraca)</option>
+      </select></label>
+      <small class="muted call-quality-note"></small>
       <fieldset class="call-effects">
         <legend>Efeitos (ficam salvos para as próximas chamadas)</legend>
         <label class="check"><input type="checkbox" id="call-fx-blur" /> Desfocar o fundo (modo retrato)</label>
@@ -842,6 +1219,13 @@ function openCallDevices(on: CallPanelHandlers, closed: () => void): () => void 
   const blurBox = $<HTMLInputElement>('#call-fx-blur');
   const noiseBox = $<HTMLInputElement>('#call-fx-noise');
   const fxNote = $<HTMLElement>('.call-fx-note');
+  const qualitySel = $<HTMLSelectElement>('#call-dev-quality');
+  const qualityNote = $<HTMLElement>('.call-quality-note');
+  const QUALITY_NOTES: Record<CallQuality, string> = {
+    auto: 'Até 1080p a 30 fps; cai e volta sozinha conforme a rede de cada um.',
+    alta: 'Até 1080p com mais bitrate (e tela a até 60 fps na fluidez). Use com conexão boa.',
+    economia: 'Câmera em 360p e vídeos dos outros menores: gasta bem menos dados.',
+  };
   /** Prévia com a câmera desligada: um fluxo só para a janela, fechado ao sair. */
   let own: MediaStream | null = null;
   let closedNow = false;
@@ -904,6 +1288,8 @@ function openCallDevices(on: CallPanelHandlers, closed: () => void): () => void 
     const fx = on.effects();
     blurBox.checked = fx.blur;
     noiseBox.checked = fx.noise;
+    qualitySel.value = on.quality();
+    qualityNote.textContent = QUALITY_NOTES[on.quality()];
     await showPreview();
   };
   const busy = async (el: HTMLInputElement | HTMLSelectElement, run: () => Promise<void>) => {
@@ -937,6 +1323,15 @@ function openCallDevices(on: CallPanelHandlers, closed: () => void): () => void 
               ? 'O fundo vai desfocado quando você ligar a câmera.'
               : '';
         await showPreview();
+      }),
+  );
+  qualitySel.addEventListener(
+    'change',
+    () =>
+      void busy(qualitySel, async () => {
+        const q = qualitySel.value as CallQuality;
+        qualityNote.textContent = QUALITY_NOTES[q];
+        await on.setQuality(q);
       }),
   );
   noiseBox.addEventListener(

@@ -23,9 +23,8 @@ import {
   type CallInvite,
   type CallInviteResult,
   type CallMedia,
-  type CallSignalData,
   type CallState,
-  type IceServer,
+  type CallToken,
 } from '@office/shared';
 import { isSessionError, serverEndpoint } from './OfficeConnection.js';
 
@@ -65,7 +64,6 @@ export interface CallHandlers {
   inviteGone(inviteId: string): void;
   result(result: CallInviteResult): void;
   state(state: CallState | null): void;
-  signal(fromUserId: string, data: CallSignalData): void;
 }
 
 const REJOIN_DELAYS_MS = [1000, 2000, 4000, 8000, 15000];
@@ -126,9 +124,6 @@ export class LobbyConnection {
     );
     room.onMessage(CallMessage.InviteResult, (r: CallInviteResult) => this.calls?.result(r));
     room.onMessage(CallMessage.State, (st: CallState | null) => this.calls?.state(st));
-    room.onMessage(CallMessage.Signal, (m: { fromUserId: string; data: CallSignalData }) =>
-      this.calls?.signal(m.fromUserId, m.data),
-    );
     const cb = Callbacks.get(room);
     const emit = () => this.on.people(this.people());
     cb.onAdd('people', (person) => {
@@ -208,17 +203,14 @@ export class LobbyConnection {
     this.room?.send(CallMessage.Leave, {});
   }
 
-  callSignal(toUserId: string, data: CallSignalData): void {
-    this.room?.send(CallMessage.Signal, { toUserId, data });
-  }
-
   callMedia(media: CallMedia): void {
     this.room?.send(CallMessage.Media, media);
   }
 
-  async iceServers(): Promise<IceServer[]> {
-    if (!this.room) return [];
-    return (await this.room.request(CallMessage.Ice)) as IceServer[];
+  /** Credencial para entrar na sala de mídia da minha chamada (só a aba que fala recebe). */
+  async callToken(): Promise<CallToken | null> {
+    if (!this.room) return null;
+    return (await this.room.request(CallMessage.Token)) as CallToken | null;
   }
 
   async leave(): Promise<void> {

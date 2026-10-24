@@ -7411,12 +7411,11 @@ kbd {
   display: block;
 }
 
-.call-tile.screen video {
+.call-tile.screen > video {
   object-fit: contain;
 }
 
 /* A própria câmera como espelho (a tela, não). */
-.call-tile.mine:not(.screen) video,
 .call-mini video.mirror,
 .call-preview video.mirror {
   transform: scaleX(-1);
@@ -7592,8 +7591,8 @@ kbd {
   z-index: 61;
 }
 
-.call-tile:fullscreen video,
-.call-tile.pseudo-full video {
+.call-tile:fullscreen > video,
+.call-tile.pseudo-full > video {
   object-fit: contain;
 }
 
@@ -8370,4 +8369,203 @@ kbd {
   .call-btn span {
     display: none;
   }
+}
+
+/* ---------- Qualidade das chamadas: tela + câmera, conexão e detalhes ---------- */
+
+/* Câmera em miniatura sobre a tela (ou a tela sobre a câmera, se trocou): dá para arrastar. */
+.call-pip {
+  position: absolute;
+  right: 8px;
+  bottom: 28px;
+  width: 28%;
+  min-width: 136px;
+  max-width: 260px;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: #000;
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  box-shadow: var(--shadow-2);
+  cursor: grab;
+  touch-action: none;
+  z-index: 2;
+}
+
+.call-pip[hidden] {
+  display: none;
+}
+
+.call-pip.dragging {
+  cursor: grabbing;
+}
+
+.call-pip video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  pointer-events: none;
+}
+
+.call-pip.screen video {
+  object-fit: contain;
+}
+
+.call-tile video.mirror,
+.call-pip video.mirror {
+  transform: scaleX(-1);
+}
+
+.call-pip-tools {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity var(--dur) var(--ease);
+}
+
+.call-pip:hover .call-pip-tools,
+.call-pip:focus-within .call-pip-tools,
+.call-pip:fullscreen .call-pip-tools {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .call-pip-tools {
+    opacity: 1;
+  }
+}
+
+.call-pip-tools .icon-btn {
+  width: 22px;
+  height: 22px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+}
+
+.call-pip-tools .icon-btn svg {
+  width: 13px;
+  height: 13px;
+}
+
+/* Indicador discreto da conexão: um pontinho no nome. */
+.call-link {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+  box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.35);
+}
+
+.call-link[hidden] {
+  display: none;
+}
+
+.call-link[data-link='bom'] {
+  background: var(--ok);
+}
+
+.call-link[data-link='medio'] {
+  background: #f2b33d;
+}
+
+.call-link[data-link='ruim'] {
+  background: var(--danger);
+}
+
+/* Detalhes da conexão (dentro da janela da chamada). */
+.call-stats {
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  max-height: 40dvh;
+  overflow: auto;
+  font-size: calc(12px * var(--font-scale, 1));
+}
+
+.call-stats table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.call-stats th,
+.call-stats td {
+  padding: 3px 6px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.call-stats th {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.call-stats tbody tr + tr td {
+  border-top: 1px solid var(--card-border);
+}
+
+.call-stats small {
+  display: block;
+  margin-top: 6px;
+  white-space: normal;
+}
+
+.call-panel-head .call-stats-btn.on {
+  color: var(--accent-text);
+  background: var(--accent-tint);
+}
+
+/* Escolha nitidez/fluidez antes de compartilhar a tela. */
+.call-share-sheet {
+  width: min(440px, calc(100vw - 32px));
+}
+
+.call-share-sheet .sheet-body {
+  display: grid;
+  gap: 10px;
+}
+
+.call-share-modes {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.call-share-modes legend {
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: calc(12px * var(--font-scale, 1));
+}
+
+.call-share-mode {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px;
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.call-share-mode:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+}
+
+.call-share-mode span {
+  display: grid;
+  gap: 2px;
+}
+
+.call-share-sheet .sheet-actions {
+  display: flex;
+  justify-content: flex-end;
 }

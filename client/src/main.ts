@@ -35,6 +35,7 @@ import {
   emotePosture,
   findPersonByName,
   HIGH_FIVE_RANGE,
+  CALL_MAX_PEOPLE,
 } from '@office/shared';
 import { Application, Container, Rectangle, Sprite, TextureSource, type Texture } from 'pixi.js';
 import { AssetLoader } from './assets/AssetLoader.js';
@@ -1510,7 +1511,7 @@ async function start(): Promise<void> {
     expired: (n) => [`${n} não respondeu.`, 'info'],
     busy: (n) => [`${n || 'A pessoa'} está em outra chamada.`, 'info'],
     offline: (n) => [`${n || 'A pessoa'} não está no escritório agora.`, 'info'],
-    full: () => ['A chamada está cheia (até 6 pessoas).', 'error'],
+    full: () => [`A chamada está cheia (até ${CALL_MAX_PEOPLE} pessoas).`, 'error'],
   };
   function setupCalls(l: LobbyConnection): void {
     if (!session) return;
@@ -1520,9 +1521,10 @@ async function start(): Promise<void> {
       leave: () => calls?.leave(),
       isMuted: () => calls?.isMuted ?? false,
       camera: async (on) => (await calls?.setCamera(on)) ?? false,
-      screen: async (on) => (await calls?.setScreen(on)) ?? false,
+      screen: async (on, mode) => (await calls?.setScreen(on, mode)) ?? false,
       cameraOn: () => calls?.cameraOn ?? false,
       screenOn: () => calls?.screenOn ?? false,
+      screenMode: () => calls?.screenMode ?? 'nitidez',
       devices: async () =>
         (await calls?.devices()) ?? { mics: [], cams: [], speakers: [], canPickSpeaker: false },
       useMic: async (id) => calls?.useMic(id),
@@ -1531,6 +1533,9 @@ async function start(): Promise<void> {
       effects: () => calls?.effects ?? { blur: false, noise: true },
       setBlur: async (on) => calls?.setBlur(on),
       setNoise: async (on) => calls?.setNoise(on),
+      quality: () => calls?.quality ?? 'auto',
+      setQuality: async (q) => calls?.setQuality(q),
+      stats: async () => (await calls?.stats()) ?? [],
       blurActive: () => calls?.blurActive ?? false,
       micLevel: () => calls?.micLevel() ?? 0,
       cameraStream: () => calls?.cameraStream ?? null,
@@ -1569,6 +1574,7 @@ async function start(): Promise<void> {
       },
       levels: (levels) => panel.setLevels(levels),
       videos: (v) => panel.setVideos(v),
+      links: (l) => panel.setLinks(l),
       error: (message) => overlay.notify(message, { kind: 'error', durationMs: 6000 }),
     });
   }

@@ -29,26 +29,39 @@ describe('rosto do avatar na chamada', () => {
   });
 });
 
+const PADRAO = { blur: false, noise: true, quality: 'auto', screenMode: 'nitidez' };
+
 describe('escolhas da chamada salvas', () => {
   it('padrão sem nada salvo e com salvo corrompido', () => {
-    expect(parseCallPrefs(null)).toEqual({ blur: false, noise: true });
-    expect(parseCallPrefs('{nada')).toEqual({ blur: false, noise: true });
-    expect(parseCallPrefs('[1,2]')).toEqual({ blur: false, noise: true });
+    expect(parseCallPrefs(null)).toEqual(PADRAO);
+    expect(parseCallPrefs('{nada')).toEqual(PADRAO);
+    expect(parseCallPrefs('[1,2]')).toEqual(PADRAO);
   });
 
-  it('lê efeitos e dispositivos, e aproveita os dispositivos antigos', () => {
-    const saved = JSON.stringify({ blur: true, noise: false, mic: 'm1', speaker: 's1', cam: 7 });
+  it('lê efeitos, qualidade, tela e dispositivos, e aproveita os dispositivos antigos', () => {
+    const saved = JSON.stringify({
+      blur: true,
+      noise: false,
+      quality: 'economia',
+      screenMode: 'fluidez',
+      mic: 'm1',
+      speaker: 's1',
+      cam: 7,
+    });
     expect(parseCallPrefs(saved, { cam: 'c-antiga' })).toEqual({
       blur: true,
       noise: false,
+      quality: 'economia',
+      screenMode: 'fluidez',
       mic: 'm1',
       cam: 'c-antiga',
       speaker: 's1',
     });
     expect(parseCallPrefs(null, { mic: 'm-antigo', cam: '' })).toEqual({
-      blur: false,
-      noise: true,
+      ...PADRAO,
       mic: 'm-antigo',
     });
+    // Qualidade ou modo desconhecidos voltam ao padrão.
+    expect(parseCallPrefs(JSON.stringify({ quality: 'ultra', screenMode: 1 }))).toEqual(PADRAO);
   });
 });
