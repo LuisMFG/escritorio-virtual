@@ -145,6 +145,7 @@ export function createServices(
     isOnline: (id) => presence.list().some((e) => e.userId === id),
     nameOf: (id) =>
       presence.list().find((e) => e.userId === id)?.name ?? users.findById(id)?.name ?? '?',
+    figureOf: (id) => users.findById(id)?.figure ?? '',
     isQuiet: (id) =>
       focus.get(id)?.kind === 'focus' ||
       presence.list().some((e) => e.userId === id && e.status === 'busy'),

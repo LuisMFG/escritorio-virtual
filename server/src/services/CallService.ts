@@ -14,6 +14,8 @@ import {
 export interface CallDirectory {
   isOnline(userId: string): boolean;
   nameOf(userId: string): string;
+  /** Visual do avatar (o rosto aparece na chamada quando a câmera está desligada). */
+  figureOf(userId: string): string;
   /** Em Foco ou Ocupado: o convite chega sem som. */
   isQuiet(userId: string): boolean;
 }
@@ -21,7 +23,7 @@ export interface CallDirectory {
 interface Call {
   id: string;
   startedAt: number;
-  members: Map<string, { name: string } & CallMedia>;
+  members: Map<string, { name: string; figure: string } & CallMedia>;
 }
 
 interface PendingInvite {
@@ -167,6 +169,7 @@ export class CallService {
   private join(call: Call, userId: string): void {
     call.members.set(userId, {
       name: this.dir.nameOf(userId),
+      figure: this.dir.figureOf(userId),
       mic: true,
       cam: false,
       screen: false,

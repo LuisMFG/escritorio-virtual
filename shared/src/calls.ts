@@ -71,6 +71,8 @@ export interface CallMedia {
 export interface CallMember extends CallMedia {
   userId: string;
   name: string;
+  /** Visual do avatar (para o rosto no lugar da câmera desligada). */
+  figure: string;
 }
 
 export interface CallView {

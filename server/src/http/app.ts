@@ -49,8 +49,9 @@ const CSP = [
   "img-src 'self' data: blob: https://www.habboassets.com https://cdn.habboassets.com",
   "connect-src 'self'",
   "style-src 'self' 'unsafe-inline'",
-  // TV com YouTube (Fase 51): a API do player e o próprio player (num iframe).
-  "script-src 'self' https://www.youtube.com https://s.ytimg.com",
+  // TV com YouTube (Fase 51): a API do player e o próprio player (num iframe). O desfoque de
+  // fundo da chamada roda o modelo de recorte em WebAssembly (só compilar, sem eval de JS).
+  "script-src 'self' 'wasm-unsafe-eval' https://www.youtube.com https://s.ytimg.com",
   'frame-src https://www.youtube-nocookie.com https://www.youtube.com',
   "worker-src 'self' blob:",
   "frame-ancestors 'none'",

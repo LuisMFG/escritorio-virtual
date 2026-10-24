@@ -7,7 +7,12 @@ function setup(online = ['ana', 'beto', 'caio', 'duda', 'eva', 'fabi', 'gil']) {
   const quiet = new Set<string>();
   const pending: (() => void)[] = [];
   const svc = new CallService(
-    { isOnline: (u) => u in names, nameOf: (u) => names[u] ?? u, isQuiet: (u) => quiet.has(u) },
+    {
+      isOnline: (u) => u in names,
+      nameOf: (u) => names[u] ?? u,
+      figureOf: (u) => `hd-180-1.fig-${u}`,
+      isQuiet: (u) => quiet.has(u),
+    },
     () => 1000,
     { set: (fn) => (pending.push(fn), 0 as never), clear: () => undefined },
   );
@@ -37,6 +42,8 @@ describe('CallService', () => {
     expect(t.results.at(-1)![1]).toMatchObject({ toUserId: 'beto', outcome: 'accepted' });
     const view = t.svc.callOf('ana')!;
     expect(view.members.map((m) => m.userId).sort()).toEqual(['ana', 'beto']);
+    // O visual de cada um vai junto (rosto do avatar com a câmera desligada).
+    expect(view.members.find((m) => m.userId === 'beto')!.figure).toBe('hd-180-1.fig-beto');
     expect(t.svc.callOf('beto')!.id).toBe(view.id);
     expect(t.svc.sameCall('ana', 'beto')).toBe(true);
     expect(t.changed.at(-1)!.sort()).toEqual(['ana', 'beto']);
