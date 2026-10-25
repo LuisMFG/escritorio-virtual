@@ -97,6 +97,10 @@ export const ClientMessage = {
   ArcadeForfeit: 'arcade.forfeit',
   /** `{ furniId, mode }`: 1×1 ou 2×2, antes de começar. */
   ArcadeMode: 'arcade.mode',
+  /** `{ furniId, cheer }`: quem assiste torce (aplausos, "uuh!"…). */
+  ArcadeCheer: 'arcade.cheer',
+  /** Requisição `{ kind }`: ranking do jogo (`ArcadeRanking`). */
+  ArcadeRanking: 'arcade.ranking',
   /** Ping-pong (Fase 58). `{ furniId, x, y }`: onde está a raquete (até 20 vezes por segundo). */
   PongPaddle: 'pong.paddle',
   /** Requisição `{ furniId, t, x, y }`: saque de quem tem a vez (`ArcadeReply`). */
@@ -138,6 +142,10 @@ export const ServerMessage = {
   ChatReactions: 'chat.reactions',
   /** Um admin tirou você da sala ou do escritório (`KickedMessage`). */
   Kicked: 'moderation.kicked',
+  /** A mesma conta entrou por outra aba ou aparelho (`ReplacedMessage`): esta aba sai. */
+  Replaced: 'session.replaced',
+  /** A torcida reagiu numa mesa do Salão (`ArcadeCheerMessage`). */
+  ArcadeCheer: 'arcade.cheered',
   /** A sala foi editada: o cliente pede o layout de novo e remonta a cena. */
   LayoutChanged: 'room.layoutChanged',
   /** `{ furniId }`: os recados de um mural mudaram. */
@@ -248,6 +256,16 @@ export interface ApiError {
   field?: string;
 }
 
+/** Esta aba saiu porque a conta entrou por outra aba ou aparelho. */
+export interface ReplacedMessage {
+  message: string;
+}
+
+/** Aviso de quem foi substituído (e o motivo da recusa, se a aba antiga tentar voltar sozinha). */
+export const REPLACED_TEXT = 'Você abriu o escritório em outra aba ou aparelho.';
+/** Código da recusa quando uma aba substituída tenta reconectar sozinha. */
+export const REPLACED_CODE = 4409;
+
 /** Opções enviadas no `joinOrCreate`. */
 export const joinOptionsSchema = z.object({
   /**
@@ -258,6 +276,11 @@ export const joinOptionsSchema = z.object({
   token: z.string().min(1).max(200),
   /** Ticket de uso único recebido ao passar por uma porta (define onde nascer). */
   ticket: z.string().max(100).optional(),
+  /**
+   * Identidade da aba (a mesma em todas as salas e reconexões). Uma pessoa fica no escritório
+   * por uma aba só: entrar por outra aba ou aparelho tira a anterior.
+   */
+  tab: z.string().min(1).max(64).optional(),
 });
 export type JoinOptions = z.infer<typeof joinOptionsSchema>;
 

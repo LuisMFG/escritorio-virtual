@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { footprint, type FurniDef, type PlacedFurni } from './furni.js';
 import type { TilePoint } from './iso.js';
+import type { GameScore } from './games.js';
 import { decodeBall, type PongBall } from './pong.js';
 import {
   decodeJson,
@@ -286,6 +287,36 @@ export const arcadeModeSchema = z.object({
 });
 export type ArcadeJoinMessage = z.infer<typeof arcadeJoinSchema>;
 export type ArcadeModeMessage = z.infer<typeof arcadeModeSchema>;
+
+/** Torcida: o que quem assiste pode mandar para a mesa (aparece sobre ela para a sala toda). */
+export const ARCADE_CHEERS = {
+  clap: { emoji: '👏', label: 'Aplausos' },
+  uuh: { emoji: '😮', label: 'Uuh!' },
+  hype: { emoji: '🔥', label: 'Vai, vai!' },
+  laugh: { emoji: '😂', label: 'Kkkk' },
+} as const;
+export type ArcadeCheer = keyof typeof ARCADE_CHEERS;
+export const ARCADE_CHEER_IDS = Object.keys(ARCADE_CHEERS) as ArcadeCheer[];
+export const arcadeCheerSchema = z.object({
+  furniId,
+  cheer: z.enum(ARCADE_CHEER_IDS as [ArcadeCheer, ...ArcadeCheer[]]),
+});
+/** Alguém da torcida reagiu (servidor → sala). */
+export interface ArcadeCheerMessage {
+  furniId: string;
+  cheer: ArcadeCheer;
+  sessionId: string;
+  name: string;
+}
+
+/** Ranking de um jogo do Salão: os melhores e o placar de quem pediu. */
+export const ARCADE_RANKING_TOP = 10;
+export const arcadeRankingSchema = z.object({ kind: z.enum(ARCADE_KINDS) });
+export interface ArcadeRanking {
+  kind: ArcadeKind;
+  top: GameScore[];
+  me: GameScore;
+}
 
 /** Resposta dos pedidos das mesas: aceito, ou o motivo da recusa. */
 export type ArcadeReply = { ok: true } | { ok: false; reason: string };

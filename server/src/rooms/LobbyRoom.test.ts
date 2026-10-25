@@ -20,6 +20,9 @@ import {
   type CallInviteResult,
   type CallState,
   type CallToken,
+  REPLACED_CODE,
+  ServerMessage,
+  type ReplacedMessage,
 } from '@office/shared';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { openDatabase } from '../db/client.js';
@@ -215,6 +218,43 @@ describe('LobbyRoom', () => {
     await left;
   });
 
+  it('uma aba por pessoa: entrar por outra aba tira a anterior, que não volta sozinha', async () => {
+    const ana = newUser('Ana');
+    const office = (tab: string) =>
+      colyseus.sdk.joinOrCreate(
+        OFFICE_ROOM,
+        { officeRoomId: RECEPTION.id, token: ana.token, tab },
+        OfficeState,
+      );
+    const r1 = await office('pc');
+    const l1 = await lobby(ana.token, 'pc');
+    const replaced = Promise.all([
+      r1.waitForMessage(ServerMessage.Replaced) as Promise<ReplacedMessage>,
+      l1.waitForMessage(ServerMessage.Replaced) as Promise<ReplacedMessage>,
+    ]);
+    const gone = Promise.all([
+      new Promise((r) => r1.onLeave(r)),
+      new Promise((r) => l1.onLeave(r)),
+    ]);
+    // Abriu no celular.
+    const r2 = await office('celular');
+    const [msg] = await replaced;
+    expect(msg.message).toMatch(/outra aba ou aparelho/);
+    await gone;
+    await r2.waitForInitialState();
+    const mine = () => [...r2.state.players.values()].filter((p) => p.userId === ana.user.id);
+    for (let i = 0; i < 20 && mine().length > 1; i++) await wait(50);
+    expect(mine()).toHaveLength(1);
+    // A aba do PC tentando voltar sozinha é recusada (recarregar gera outra aba, que pode).
+    await expect(office('pc')).rejects.toMatchObject({ code: REPLACED_CODE });
+    await expect(lobby(ana.token, 'pc')).rejects.toMatchObject({ code: REPLACED_CODE });
+    // Trocar de sala pela mesma aba não tira ninguém.
+    const l2 = await lobby(ana.token, 'celular');
+    await wait(100);
+    expect(l2.connection.isOpen).toBe(true);
+    await Promise.all([r2.leave(), l2.leave()]);
+  });
+
   describe('chamadas (Fase 49)', () => {
     it('convite com motivo, aceitar: os dois recebem a chamada e a credencial da sala de mídia', async () => {
       const ana = newUser('Ana');
@@ -307,11 +347,65 @@ describe('LobbyRoom', () => {
       expect(await b2.request(CallMessage.Token)).not.toBeNull();
       expect(await other.request(CallMessage.Token)).toBeNull();
 
-      // Fechou a aba que fala (as duas conexões dela): sai da chamada.
+      // Fechou a aba que fala (as duas conexões dela), com outra aberta: a chamada passa para
+      // a outra, que entra sozinha.
+      const moved = other.waitForMessage(CallMessage.State) as Promise<CallState>;
       await b2.leave();
-      await wait(100);
-      expect(svc.calls.callOf(beto.user.id)).toBeFalsy();
+      expect((await moved).here).toBe(true);
+      expect(await other.request(CallMessage.Token)).not.toBeNull();
       await other.leave();
+      svc.presence.remove('sa');
+      svc.presence.remove('sb');
+    });
+
+    it('caiu ou recarregou no meio da chamada: volta sozinho pela aba nova', async () => {
+      const ana = newUser('Ana');
+      const beto = newUser('Beto');
+      svc.presence.add({ sessionId: 'sa', userId: ana.user.id, name: 'Ana', roomId: 'reception' });
+      svc.presence.add({
+        sessionId: 'sb',
+        userId: beto.user.id,
+        name: 'Beto',
+        roomId: 'reception',
+      });
+      const a = await lobby(ana.token, 'aba-ana');
+      const b1 = await lobby(beto.token, 'aba-1');
+      const invited = b1.waitForMessage(CallMessage.Invited) as Promise<CallInvite>;
+      a.send(CallMessage.Invite, { toUserId: beto.user.id, reason: '' });
+      const inv = await invited;
+      const started = b1.waitForMessage(CallMessage.State) as Promise<CallState>;
+      b1.send(CallMessage.Answer, { inviteId: inv.id, accept: true });
+      const callId = (await started).id;
+
+      // Recarregou a página: a conexão sai, mas o Beto continua na chamada, "reconectando".
+      kicked.length = 0;
+      const seen = new Promise<CallState>((resolve) =>
+        a.onMessage(CallMessage.State, (st: CallState) => {
+          if (st.members.some((m) => m.away)) resolve(st);
+        }),
+      );
+      await b1.leave();
+      const away = (await seen).members.find((m) => m.userId === beto.user.id)!;
+      expect(away.away).toBe(true);
+      expect(kicked).toEqual([[callId, beto.user.id]]);
+
+      // A página nova (outra aba) conecta: a chamada vem para ela, que entra sozinha.
+      const b2 = await colyseus.sdk.joinOrCreate(
+        LOBBY_ROOM,
+        { token: beto.token, tab: 'aba-2' },
+        LobbyState,
+      );
+      const back = (await b2.waitForMessage(CallMessage.State)) as CallState;
+      expect(back).toMatchObject({ id: callId, here: true, rejoined: true });
+      expect(back.members.every((m) => !m.away)).toBe(true);
+      expect(await b2.request(CallMessage.Token)).not.toBeNull();
+      expect(svc.calls.isAway(beto.user.id)).toBe(false);
+
+      // Um admin tirar do escritório tira da chamada na hora (sem esperar a volta).
+      svc.moderation.emit('kick', { userId: beto.user.id, scope: 'office', byName: 'Ana' });
+      await wait(150);
+      expect(svc.calls.callOf(beto.user.id)).toBeNull();
+      await a.leave();
       svc.presence.remove('sa');
       svc.presence.remove('sb');
     });

@@ -316,6 +316,10 @@ export const gameScores = sqliteTable(
     wins: integer('wins').notNull().default(0),
     losses: integer('losses').notNull().default(0),
     draws: integer('draws').notNull().default(0),
+    /** Vitórias seguidas agora (perder zera; empate não mexe). */
+    streak: integer('streak').notNull().default(0),
+    /** Maior sequência de vitórias que a pessoa já fez nesse jogo. */
+    bestStreak: integer('best_streak').notNull().default(0),
   },
   (t) => [primaryKey({ columns: [t.userId, t.game] })],
 );

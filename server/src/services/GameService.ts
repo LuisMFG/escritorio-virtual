@@ -7,16 +7,25 @@ import { gameScores, users } from '../db/schema.js';
 export class GameService {
   constructor(private readonly db: Db) {}
 
-  /** Partida com vencedor. */
-  recordWin(game: string, winnerId: string, loserId: string): void {
-    this.bump(game, winnerId, 'wins');
-    this.bump(game, loserId, 'losses');
+  /** Partida com vencedor. Devolve as vitórias seguidas de quem venceu. */
+  recordWin(game: string, winnerId: string, loserId: string): number {
+    const streak = this.win(game, winnerId);
+    this.lose(game, loserId);
+    return streak;
   }
 
-  /** Partida de duplas (Salão de Jogos, Fase 57): vitória para cada um de um lado, derrota do outro. */
-  recordTeams(game: string, winners: readonly string[], losers: readonly string[]): void {
-    for (const id of winners) this.bump(game, id, 'wins');
-    for (const id of losers) this.bump(game, id, 'losses');
+  /**
+   * Partida de duplas (Salão de Jogos, Fase 57): vitória para cada um de um lado, derrota do
+   * outro. Devolve as vitórias seguidas de cada vencedor.
+   */
+  recordTeams(
+    game: string,
+    winners: readonly string[],
+    losers: readonly string[],
+  ): Map<string, number> {
+    const streaks = new Map(winners.map((id) => [id, this.win(game, id)]));
+    for (const id of losers) this.lose(game, id);
+    return streaks;
   }
 
   recordDraw(game: string, a: string, b: string): void {
@@ -57,6 +66,8 @@ export class GameService {
           wins: 0,
           losses: 0,
           draws: 0,
+          streak: 0,
+          bestStreak: 0,
         },
     );
   }
@@ -69,6 +80,8 @@ export class GameService {
         wins: gameScores.wins,
         losses: gameScores.losses,
         draws: gameScores.draws,
+        streak: gameScores.streak,
+        bestStreak: gameScores.bestStreak,
       })
       .from(gameScores)
       .innerJoin(users, eq(users.id, gameScores.userId))
@@ -76,7 +89,38 @@ export class GameService {
       .$dynamic();
   }
 
-  private bump(game: string, userId: string, field: 'wins' | 'losses' | 'draws'): void {
+  /** Mais uma vitória e mais uma na sequência (a melhor sequência acompanha). */
+  private win(game: string, userId: string): number {
+    const row = this.db
+      .insert(gameScores)
+      .values({ userId, game, wins: 1, streak: 1, bestStreak: 1 })
+      .onConflictDoUpdate({
+        target: [gameScores.userId, gameScores.game],
+        // No UPDATE do SQLite, as colunas à direita ainda são os valores de antes.
+        set: {
+          wins: sql`${gameScores.wins} + 1`,
+          streak: sql`${gameScores.streak} + 1`,
+          bestStreak: sql`max(${gameScores.bestStreak}, ${gameScores.streak} + 1)`,
+        },
+      })
+      .returning({ streak: gameScores.streak })
+      .get();
+    return row?.streak ?? 1;
+  }
+
+  /** Perdeu: mais uma derrota e a sequência volta a zero. */
+  private lose(game: string, userId: string): void {
+    this.db
+      .insert(gameScores)
+      .values({ userId, game, losses: 1 })
+      .onConflictDoUpdate({
+        target: [gameScores.userId, gameScores.game],
+        set: { losses: sql`${gameScores.losses} + 1`, streak: 0 },
+      })
+      .run();
+  }
+
+  private bump(game: string, userId: string, field: 'draws'): void {
     const col = gameScores[field];
     this.db
       .insert(gameScores)

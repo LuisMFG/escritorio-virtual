@@ -9,6 +9,8 @@ import {
   MEETING,
   RECEPTION,
   ServerMessage,
+  type ArcadeCheerMessage,
+  type ArcadeRanking,
   STEP_MS,
   type ChatMessage,
   type EmoteMessage,
@@ -88,10 +90,11 @@ const testConfig: Config = {
   loginRateLimit: 10,
 };
 
-async function join(token: string, roomId = RECEPTION.id, ticket?: string) {
+/** Por padrão, todas as conexões de uma pessoa saem da mesma aba (não se tiram umas às outras). */
+async function join(token: string, roomId = RECEPTION.id, ticket?: string, tab = 'aba') {
   const room = await colyseus.sdk.joinOrCreate(
     OFFICE_ROOM,
-    { officeRoomId: roomId, token, ticket },
+    { officeRoomId: roomId, token, ticket, tab },
     OfficeState,
   );
   await room.waitForInitialState();
@@ -1825,6 +1828,69 @@ describe('OfficeRoom', () => {
         { wins: 0, losses: 1 },
       ]);
     }, 20_000);
+
+    it('ranking com sequência de vitórias, conquistas do Salão e torcida', async () => {
+      const { roomId, table } = hall();
+      const ana = await enter('Ana', roomId);
+      const beto = await enter('Beto', roomId);
+      const carla = await enter('Carla', roomId);
+      await ask(ana.room, ClientMessage.ArcadeJoin, { furniId: table, slot: 'a1' });
+      await ask(beto.room, ClientMessage.ArcadeJoin, { furniId: table, slot: 'b1' });
+      // Cinco partidas seguidas para a Ana (o Beto desiste em todas).
+      for (let i = 0; i < 5; i++) {
+        expect(await ask(ana.room, ClientMessage.ArcadeStart, { furniId: table })).toEqual({
+          ok: true,
+        });
+        await waitFor(() => ana.room.state.arcade.get(table)?.status === 'playing');
+        await ask(beto.room, ClientMessage.ArcadeForfeit, { furniId: table });
+        await waitFor(() => ana.room.state.arcade.get(table)?.status === 'ended');
+      }
+      const unlocked = svc.achievements.get(ana.user.id).unlocked.map((u) => u.id);
+      expect(unlocked).toEqual(expect.arrayContaining(['arcade_first', 'unbeatable']));
+      expect(unlocked).not.toContain('pingpong_king');
+      expect(svc.achievements.get(beto.user.id).unlocked.map((u) => u.id)).not.toContain(
+        'arcade_first',
+      );
+
+      // Ranking: a Ana em primeiro, com 5 seguidas; quem nunca jogou vem zerado.
+      const ranking = (await carla.room.request(ClientMessage.ArcadeRanking, {
+        kind: 'pingpong',
+      })) as ArcadeRanking;
+      // (Outros testes também jogam ping-pong no mesmo banco: vale por quem é.)
+      const row = (id: string) => ranking.top.find((r) => r.userId === id);
+      expect(ranking.top[0]!.userId).toBe(ana.user.id);
+      expect(row(ana.user.id)).toMatchObject({ wins: 5, streak: 5, bestStreak: 5 });
+      expect(svc.games.of('pingpong', [beto.user.id])[0]).toMatchObject({ losses: 5, streak: 0 });
+      expect(ranking.me).toMatchObject({ wins: 0, losses: 0, streak: 0, bestStreak: 0 });
+      // Perder zera a sequência, mas a melhor fica.
+      await ask(ana.room, ClientMessage.ArcadeStart, { furniId: table });
+      await waitFor(() => ana.room.state.arcade.get(table)?.status === 'playing');
+      await ask(ana.room, ClientMessage.ArcadeForfeit, { furniId: table });
+      await waitFor(() => ana.room.state.arcade.get(table)?.status === 'ended');
+      expect(svc.games.of('pingpong', [ana.user.id])[0]).toMatchObject({
+        streak: 0,
+        bestStreak: 5,
+        losses: 1,
+      });
+
+      // Torcida: quem assiste reage e todos na sala veem; quem está jogando não torce.
+      const seen = ana.room.waitForMessage(
+        ServerMessage.ArcadeCheer,
+      ) as Promise<ArcadeCheerMessage>;
+      carla.room.send(ClientMessage.ArcadeCheer, { furniId: table, cheer: 'clap' });
+      expect(await seen).toMatchObject({ furniId: table, cheer: 'clap', name: 'Carla' });
+      const got: ArcadeCheerMessage[] = [];
+      carla.room.onMessage(ServerMessage.ArcadeCheer, (m: ArcadeCheerMessage) => got.push(m));
+      ana.room.send(ClientMessage.ArcadeCheer, { furniId: table, cheer: 'uuh' });
+      // Muitas seguidas: passa um tanto e o resto é ignorado.
+      for (let i = 0; i < 10; i++) {
+        carla.room.send(ClientMessage.ArcadeCheer, { furniId: table, cheer: 'hype' });
+      }
+      await wait(300);
+      expect(got.every((m) => m.name === 'Carla' && m.cheer === 'hype')).toBe(true);
+      expect(got.length).toBeGreaterThan(0);
+      expect(got.length).toBeLessThan(10);
+    }, 40_000);
 
     it('sair da sala antes da partida libera a vaga; no meio dela, W.O. depois do prazo', async () => {
       const { roomId, table } = hall();

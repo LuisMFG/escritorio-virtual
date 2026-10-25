@@ -74,6 +74,10 @@ export interface GameScore {
   wins: number;
   losses: number;
   draws: number;
+  /** Vitórias seguidas agora. */
+  streak: number;
+  /** Maior sequência de vitórias. */
+  bestStreak: number;
 }
 
 /** Resposta de `ttt.scores`: os melhores e o placar de quem está na mesa. */

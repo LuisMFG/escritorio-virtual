@@ -116,6 +116,14 @@ import {
   type EffectFlash,
   ERROR_MESSAGES,
   ErrorCode,
+  REPLACED_CODE,
+  REPLACED_TEXT,
+  type ReplacedMessage,
+  arcadeCheerSchema,
+  arcadeRankingSchema,
+  ARCADE_RANKING_TOP,
+  type ArcadeCheerMessage,
+  type ArcadeRanking,
   joinOptionsSchema,
   moveSchema,
   updateAvatarSchema,
@@ -158,6 +166,8 @@ import { PetKeeper } from './PetKeeper.js';
 const TICK_MS = 50;
 /** Segundos que um avatar desconectado espera por reconexão antes de sair da sala. */
 const RECONNECT_SECONDS = 30;
+/** Vitórias seguidas no mesmo jogo do Salão para a conquista "Imbatível". */
+const ARCADE_STREAK_GOAL = 5;
 /** Item na mão de cada pessoa (vale entre salas, até vencer). */
 const HELD = new HeldItems();
 /** Aniversários já comemorados hoje (`userId:AAAA-MM-DD`). */
@@ -225,6 +235,8 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
   private readonly draftLimiter = new KeyedRateLimiter(40, 25);
   /** Jogo da velha: 10 ações seguidas, recarregando 4 por segundo. */
   private readonly gameLimiter = new KeyedRateLimiter(10, 4);
+  /** Torcida: 3 seguidas, depois 1 por segundo. */
+  private readonly cheerLimiter = new KeyedRateLimiter(3, 1);
   /** TV: 10 ações seguidas (tocar, pular, adicionar…), recarregando 3 por segundo. */
   private readonly tvLimiter = new KeyedRateLimiter(10, 3);
   /** Decorar: rajada de 10 ações, recarregando 4 por segundo. */
@@ -247,6 +259,8 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
   private readonly teleporting = new Set<string>();
   /** Reconexões pendentes por sessionId, para cancelar quando a pessoa volta numa aba nova. */
   private readonly pendingReconnects = new Map<string, Deferred<Client>>();
+  /** Sessão → aba de onde a pessoa entrou (uma aba por pessoa no escritório). */
+  private readonly tabs = new Map<string, string>();
 
   override messages = {
     [ClientMessage.Move]: validate(moveSchema, (client, msg) =>
@@ -518,6 +532,30 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     [ClientMessage.ArcadeMode]: validate(arcadeModeSchema, (client, msg) =>
       this.handleArcadeMode(client as OfficeClient, msg.furniId, msg.mode),
     ),
+    // Torcida: quem não está jogando naquela mesa reage, e a sala toda vê sobre a mesa.
+    [ClientMessage.ArcadeCheer]: validate(arcadeCheerSchema, (client, msg) => {
+      const game = this.state.arcade.get(msg.furniId);
+      const player = this.state.players.get(client.sessionId);
+      if (!game || !player || arcade.slotOf(game, client.sessionId)) return;
+      if (!this.cheerLimiter.tryTake(client.sessionId)) return;
+      this.broadcast(ServerMessage.ArcadeCheer, {
+        furniId: msg.furniId,
+        cheer: msg.cheer,
+        sessionId: client.sessionId,
+        name: player.name,
+      } satisfies ArcadeCheerMessage);
+    }),
+    [ClientMessage.ArcadeRanking]: (client: Client, input: unknown): ArcadeRanking | null => {
+      const p = arcadeRankingSchema.safeParse(input);
+      const me = (client as OfficeClient).auth;
+      if (!p.success || !me) return null;
+      const games = services().games;
+      return {
+        kind: p.data.kind,
+        top: games.top(p.data.kind, ARCADE_RANKING_TOP),
+        me: games.of(p.data.kind, [me.id])[0]!,
+      };
+    },
     // ---------- Ping-pong (Fase 58) ----------
     [ClientMessage.PongPaddle]: validate(pongPaddleSchema, (client, msg) => {
       const game = this.state.arcade.get(msg.furniId);
@@ -620,6 +658,26 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       for (const [sessionId, p] of this.state.players.entries()) {
         if (p.userId === userId && p.away) this.pendingReconnects.get(sessionId)?.reject(false);
       }
+    }
+  };
+
+  /** A pessoa entrou por outra aba ou aparelho: as conexões das outras abas dela saem daqui. */
+  private readonly onClaimed = (userId: string, tab: string): void => {
+    for (const client of this.clients) {
+      if (client.auth?.id !== userId) continue;
+      const old = this.tabs.get(client.sessionId);
+      if (old === tab) continue;
+      if (old) services().presence.markReplaced(userId, old);
+      client.send(ServerMessage.Replaced, { message: REPLACED_TEXT } satisfies ReplacedMessage);
+      client.leave(CloseCode.CONSENTED);
+    }
+    // Abas que estavam reconectando também não voltam mais.
+    for (const [sessionId, p] of this.state.players.entries()) {
+      if (p.userId !== userId || !p.away) continue;
+      const old = this.tabs.get(sessionId);
+      if (old === tab) continue;
+      if (old) services().presence.markReplaced(userId, old);
+      this.pendingReconnects.get(sessionId)?.reject(false);
     }
   };
 
@@ -769,6 +827,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     this.clock.setInterval(() => this.expireArcade(), 500);
     services().users.events.on('updated', this.onUserUpdated);
     services().moderation.on('kick', this.onKick);
+    services().presence.events.on('claimed', this.onClaimed);
     services().moderation.on('room', this.onRoomSettings);
     services().moderation.on('layout', this.onLayout);
     services().pets.events.on('changed', this.onPetChanged);
@@ -788,6 +847,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
   override onDispose(): void {
     services().users.events.off('updated', this.onUserUpdated);
     services().moderation.off('kick', this.onKick);
+    services().presence.events.off('claimed', this.onClaimed);
     services().moderation.off('room', this.onRoomSettings);
     services().moderation.off('layout', this.onLayout);
     services().pets.events.off('changed', this.onPetChanged);
@@ -800,10 +860,18 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     for (const t of this.handTimers.values()) t.clear();
   }
 
-  override onAuth(_client: Client, options: unknown): UserRow {
+  override onAuth(client: Client, options: unknown): UserRow {
     const parsed = joinOptionsSchema.safeParse(options);
     const user = parsed.success ? services().users.findByToken(parsed.data.token) : undefined;
     if (!user) throw new ServerError(401, ERROR_MESSAGES.INVALID_SESSION);
+    // Sem identidade de aba (cliente antigo): cada conexão conta como uma aba.
+    const tab = parsed.data?.tab ?? client.sessionId;
+    // A aba antiga tentando voltar sozinha não tira a nova (recarregar a página pode).
+    this.tabs.set(client.sessionId, tab);
+    if (!services().presence.claim(user.id, tab)) {
+      this.tabs.delete(client.sessionId);
+      throw new ServerError(REPLACED_CODE, REPLACED_TEXT);
+    }
     return user;
   }
 
@@ -908,6 +976,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
 
   override onLeave(client: OfficeClient): void {
     this.pendingReconnects.delete(client.sessionId);
+    this.tabs.delete(client.sessionId);
     this.state.players.delete(client.sessionId);
     this.movement.remove(client.sessionId);
     this.moveLimiter.delete(client.sessionId);
@@ -923,6 +992,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     this.wbLimiter.delete(client.sessionId);
     this.draftLimiter.delete(client.sessionId);
     this.gameLimiter.delete(client.sessionId);
+    this.cheerLimiter.delete(client.sessionId);
     this.tvLimiter.delete(client.sessionId);
     services().tv.leave(client.sessionId);
     this.intents.delete(client.sessionId);
@@ -1752,11 +1822,18 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
   /** Fim de partida: placar de cada um e aviso no chat da sala. */
   private arcadeFinished(kind: string, outcome: arcade.ArcadeOutcome, score = ''): void {
     const info = ARCADE_INFO[(arcadeKindOf(kind) ?? 'pingpong') as ArcadeKind];
-    services().games.recordTeams(
+    const streaks = services().games.recordTeams(
       kind,
       outcome.winners.map((p) => p.user),
       outcome.losers.map((p) => p.user),
     );
+    // Conquistas do Salão: vitórias por jogo e sequência.
+    const achievements = services().achievements;
+    for (const [userId, streak] of streaks) {
+      achievements.bump(userId, 'arcadeWins');
+      achievements.bump(userId, kind === 'pool' ? 'poolWins' : 'pingpongWins');
+      if (streak >= ARCADE_STREAK_GOAL) achievements.unlock(userId, 'unbeatable');
+    }
     const [first, ...partners] = outcome.winners;
     if (!first) return;
     const how =

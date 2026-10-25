@@ -204,6 +204,13 @@
       "when": 1792525244321,
       "tag": "0028_minha_mesa",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "6",
+      "when": 1792946455708,
+      "tag": "0029_sequencias",
+      "breakpoints": true
     }
   ]
 }

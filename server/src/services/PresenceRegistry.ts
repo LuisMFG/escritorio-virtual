@@ -1,6 +1,10 @@
 import { EventEmitter } from 'node:events';
 import { nameKey, NAME_MAX } from '@office/shared';
 
+/** Por quanto tempo uma aba substituída fica sem poder voltar sozinha (recarregar sempre pode). */
+const REPLACED_TTL_MS = 12 * 3600_000;
+const REPLACED_MAX = 5000;
+
 export interface OnlineEntry {
   sessionId: string;
   userId: string;
@@ -16,8 +20,13 @@ export interface OnlineEntry {
  */
 export class PresenceRegistry {
   private readonly bySession = new Map<string, OnlineEntry>();
-  /** `changed`: alguém entrou, saiu, trocou de sala, de nome ou de status (o lobby repassa). */
-  readonly events = new EventEmitter<{ changed: [] }>();
+  /** Abas que saíram porque a conta entrou por outra (`userId:aba` → quando). */
+  private readonly replaced = new Map<string, number>();
+  /**
+   * `changed`: alguém entrou, saiu, trocou de sala, de nome ou de status (o lobby repassa).
+   * `claimed`: a pessoa entrou por esta aba; as conexões das outras abas dela saem.
+   */
+  readonly events = new EventEmitter<{ changed: []; claimed: [userId: string, tab: string] }>();
 
   constructor() {
     this.events.setMaxListeners(100);
@@ -43,6 +52,33 @@ export class PresenceRegistry {
     if (!e || e.status === status) return;
     e.status = status;
     this.events.emit('changed');
+  }
+
+  /**
+   * Uma pessoa, uma aba: entrou por `tab`, então as outras abas dela saem (cada sala e o canal
+   * global tiram as suas conexões e chamam `markReplaced`). Recusada se `tab` já foi substituída
+   * (a aba antiga tentando voltar sozinha não tira a nova).
+   */
+  claim(userId: string, tab: string): boolean {
+    if (this.wasReplaced(userId, tab)) return false;
+    this.events.emit('claimed', userId, tab);
+    return true;
+  }
+
+  markReplaced(userId: string, tab: string, now = Date.now()): void {
+    this.replaced.set(`${userId}:${tab}`, now);
+    if (this.replaced.size > REPLACED_MAX) {
+      for (const [key, at] of this.replaced) {
+        if (now - at > REPLACED_TTL_MS || this.replaced.size > REPLACED_MAX) {
+          this.replaced.delete(key);
+        }
+      }
+    }
+  }
+
+  wasReplaced(userId: string, tab: string, now = Date.now()): boolean {
+    const at = this.replaced.get(`${userId}:${tab}`);
+    return at !== undefined && now - at <= REPLACED_TTL_MS;
   }
 
   list(): OnlineEntry[] {

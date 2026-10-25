@@ -3,7 +3,9 @@ import {
   EMOTE_ANIMS,
   emoteBodyDy,
   emotePose,
+  facingToward,
   frameAt,
+  headTurn,
   nextBlinkDelay,
   talkDurationMs,
   walkFrame,
@@ -172,5 +174,29 @@ describe('emotes novos (Fase 54)', () => {
     expect(findPersonByName('beto', people)).toEqual({ person: people[2] });
     expect(findPersonByName('ana', people)).toEqual({ ambiguous: [people[0], people[1]] });
     expect(findPersonByName('carla', people)).toBeNull();
+  });
+});
+
+describe('olhar para quem fala', () => {
+  it('direção pelo ângulo, não só pelo sinal', () => {
+    const me = { x: 5, y: 5 };
+    expect(facingToward(me, { x: 5, y: 2 })).toBe(0);
+    expect(facingToward(me, { x: 8, y: 5 })).toBe(2);
+    expect(facingToward(me, { x: 5, y: 9 })).toBe(4);
+    expect(facingToward(me, { x: 2, y: 5 })).toBe(6);
+    expect(facingToward(me, { x: 7, y: 7 })).toBe(3);
+    // Quase reto para a direita conta como direita, não como diagonal.
+    expect(facingToward(me, { x: 9, y: 6 })).toBe(2);
+    expect(facingToward(me, me)).toBeNull();
+  });
+
+  it('a cabeça gira até 2 direções para cada lado; de costas não vira', () => {
+    expect(headTurn(2, 2)).toBeNull();
+    expect(headTurn(2, 3)).toBe(1);
+    expect(headTurn(2, 0)).toBe(-2);
+    expect(headTurn(0, 7)).toBe(-1);
+    expect(headTurn(7, 1)).toBe(2);
+    expect(headTurn(2, 5)).toBeNull();
+    expect(headTurn(2, 6)).toBeNull();
   });
 });

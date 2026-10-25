@@ -35,6 +35,10 @@ import {
   type CallInviteResult,
   type CallToken,
   type CallState,
+  REPLACED_CODE,
+  REPLACED_TEXT,
+  ServerMessage,
+  type ReplacedMessage,
 } from '@office/shared';
 import { z } from 'zod';
 import type { UserRow } from '../db/schema.js';
@@ -72,6 +76,10 @@ export class LobbyRoom extends Room<{ state: LobbyState; client: LobbyClient }> 
   private readonly callTab = new Map<string, string>();
   /** Sessão → identidade da aba. */
   private readonly tabs = new Map<string, string>();
+  /** Pessoa → aba que está voltando para a chamada agora (o próximo estado avisa só ela). */
+  private readonly rejoining = new Map<string, string>();
+  /** Sessões que um admin tirou do escritório: saem da chamada de vez, sem esperar a volta. */
+  private readonly kicked = new Set<string>();
 
   override messages = {
     [LobbyClientMessage.DmSend]: validate(dmSendSchema, (client, msg) =>
@@ -175,14 +183,24 @@ export class LobbyRoom extends Room<{ state: LobbyState; client: LobbyClient }> 
     for (const id of userIds) this.sendCallState(id);
   };
 
-  private sendCallState(userId: string): void {
+  /** Manda a chamada a cada aba da pessoa (a que acabou de voltar sozinha fica sabendo). */
+  private sendCallState(userId: string, rejoinedTab = this.rejoining.get(userId)): void {
+    this.rejoining.delete(userId);
     const view = services().calls.callOf(userId);
     if (!view) this.callTab.delete(userId);
     const owner = this.callTab.get(userId);
     for (const c of this.clientsOf(userId)) {
+      const tab = this.tabOf(c);
+      const here = tab === owner;
       c.send(
         CallMessage.State,
-        view ? ({ ...view, here: this.tabOf(c) === owner } satisfies CallState) : null,
+        view
+          ? ({
+              ...view,
+              here,
+              ...(here && tab === rejoinedTab ? { rejoined: true } : {}),
+            } satisfies CallState)
+          : null,
       );
     }
   }
@@ -280,7 +298,22 @@ export class LobbyRoom extends Room<{ state: LobbyState; client: LobbyClient }> 
   /** Tirado do escritório (ou conta desativada): o canal global também fecha. */
   private readonly onKick = ({ userId, scope }: ModerationEvents['kick'][0]): void => {
     if (scope !== 'office') return;
-    for (const c of this.clients) if (c.auth?.id === userId) c.leave(CloseCode.CONSENTED);
+    for (const c of this.clients) {
+      if (c.auth?.id !== userId) continue;
+      this.kicked.add(c.sessionId);
+      c.leave(CloseCode.CONSENTED);
+    }
+  };
+
+  /** A pessoa entrou no escritório por outra aba ou aparelho: as outras abas dela saem. */
+  private readonly onClaimed = (userId: string, tab: string): void => {
+    for (const c of this.clientsOf(userId)) {
+      if (this.tabOf(c) === `${userId}:${tab}`) continue;
+      const old = this.tabs.get(c.sessionId);
+      if (old) services().presence.markReplaced(userId, old.slice(userId.length + 1));
+      c.send(ServerMessage.Replaced, { message: REPLACED_TEXT } satisfies ReplacedMessage);
+      c.leave(CloseCode.CONSENTED);
+    }
   };
 
   override onCreate(): void {
@@ -296,6 +329,7 @@ export class LobbyRoom extends Room<{ state: LobbyState; client: LobbyClient }> 
     ev.on('dm', this.onAutoDm);
     ev.on('tick', this.syncRooms);
     services().moderation.on('kick', this.onKick);
+    services().presence.events.on('claimed', this.onClaimed);
     services().achievements.events.on('unlocked', this.onUnlocked);
     services().activity.events.on('changed', this.syncPeople);
     services().announcements.events.on('created', this.onAnnouncement);
@@ -323,6 +357,7 @@ export class LobbyRoom extends Room<{ state: LobbyState; client: LobbyClient }> 
     ev.off('dm', this.onAutoDm);
     ev.off('tick', this.syncRooms);
     services().moderation.off('kick', this.onKick);
+    services().presence.events.off('claimed', this.onClaimed);
     services().achievements.events.off('unlocked', this.onUnlocked);
     services().activity.events.off('changed', this.syncPeople);
     services().announcements.events.off('created', this.onAnnouncement);
@@ -334,7 +369,12 @@ export class LobbyRoom extends Room<{ state: LobbyState; client: LobbyClient }> 
     const parsed = lobbyJoinSchema.safeParse(options);
     const user = parsed.success ? services().users.findByToken(parsed.data.token) : undefined;
     if (!user) throw new ServerError(401, ERROR_MESSAGES.INVALID_SESSION);
-    if (parsed.data?.tab) this.tabs.set(client.sessionId, `${user.id}:${parsed.data.tab}`);
+    const tab = parsed.data?.tab;
+    // A aba que outra substituiu não volta sozinha (recarregar a página pode).
+    if (tab && services().presence.wasReplaced(user.id, tab)) {
+      throw new ServerError(REPLACED_CODE, REPLACED_TEXT);
+    }
+    if (tab) this.tabs.set(client.sessionId, `${user.id}:${tab}`);
     return user;
   }
 
@@ -343,9 +383,20 @@ export class LobbyRoom extends Room<{ state: LobbyState; client: LobbyClient }> 
   }
 
   override onJoin(client: LobbyClient): void {
-    // Voltou (outra aba ou reconexão): vê a chamada em que já está.
     const me = client.auth?.id;
-    if (me && services().calls.callOf(me)) this.sendCallState(me);
+    const calls = services().calls;
+    if (!me || !calls.callOf(me)) return;
+    // Caiu (ou recarregou, ou abriu em outra aba) e voltou a tempo: a chamada vem para esta aba
+    // e ela entra sozinha.
+    if (calls.isAway(me)) {
+      const tab = this.tabOf(client);
+      this.callTab.set(me, tab);
+      this.rejoining.set(me, tab);
+      calls.resume(me);
+      return;
+    }
+    // Voltou (outra aba ou reconexão): vê a chamada em que já está.
+    this.sendCallState(me);
   }
 
   override onLeave(client: LobbyClient): void {
@@ -354,15 +405,23 @@ export class LobbyRoom extends Room<{ state: LobbyState; client: LobbyClient }> 
     this.callLimiter.delete(client.sessionId);
     const tab = this.tabOf(client);
     this.tabs.delete(client.sessionId);
+    const kicked = this.kicked.delete(client.sessionId);
     const userId = client.auth?.id;
     if (!userId) return;
-    // Fechou a aba que falava, ou saiu de vez: sai da chamada (e os convites acabam). Se a
-    // mesma aba já voltou com outra conexão, a chamada segue.
+    const calls = services().calls;
     const others = this.clientsOf(userId).filter((c) => c.sessionId !== client.sessionId);
-    if (!others.length) {
-      services().calls.disconnect(userId);
-    } else if (this.callTab.get(userId) === tab && !others.some((c) => this.tabOf(c) === tab)) {
-      services().calls.leave(userId);
+    // Um admin tirou do escritório: sai da chamada de vez (e os convites acabam).
+    if (kicked) return calls.disconnect(userId);
+    // Caiu de vez, fechou ou recarregou a aba: a vaga na chamada fica guardada um tempo, para
+    // voltar sozinho (`CALL_REJOIN_MS`).
+    if (!others.length) return calls.hold(userId);
+    // Fechou a aba que falava, com outra aberta: a chamada passa para a outra. Se a mesma aba já
+    // voltou com outra conexão, a chamada segue nela.
+    if (this.callTab.get(userId) === tab && !others.some((c) => this.tabOf(c) === tab)) {
+      if (!calls.callOf(userId)) return;
+      const next = others[others.length - 1]!;
+      this.callTab.set(userId, this.tabOf(next));
+      this.sendCallState(userId, this.tabOf(next));
     }
   }
 

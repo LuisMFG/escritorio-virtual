@@ -255,3 +255,33 @@ export function emoteBodyDy(id: EmoteId, elapsedMs: number): number | null {
   const anim = EMOTE_ANIMS[id];
   return anim ? (frameAt(anim, elapsedMs).bodyDy ?? 0) : null;
 }
+
+/** Olhar para quem fala: quem está até esta distância (tiles) vira a cabeça. */
+export const LOOK_RADIUS = 4;
+/** Por quanto tempo a cabeça fica virada (ms). */
+export const LOOK_MS = 3000;
+/** A cabeça gira no máximo isto (direções) para cada lado; mais que isso seria olhar para trás. */
+export const LOOK_MAX_TURN = 2;
+
+/** Direção (0–7) de quem está em `from` olhando para `to`, pelo ângulo (não só pelo sinal). */
+export function facingToward(
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+): number | null {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  if (dx === 0 && dy === 0) return null;
+  // 0 é "para cima" (y diminuindo) e as direções seguem no sentido horário, de 45 em 45 graus.
+  const deg = (Math.atan2(dx, -dy) * 180) / Math.PI;
+  return ((Math.round(deg / 45) % 8) + 8) % 8;
+}
+
+/**
+ * Quanto a cabeça gira (em direções, negativo = anti-horário) para olhar de `bodyDir` para
+ * `target`. `null` se não precisa virar ou se a pessoa está de costas para quem fala.
+ */
+export function headTurn(bodyDir: number, target: number): number | null {
+  const delta = ((((target - bodyDir) % 8) + 12) % 8) - 4;
+  if (delta === 0 || Math.abs(delta) > LOOK_MAX_TURN) return null;
+  return delta;
+}

@@ -9,6 +9,11 @@ import { z } from 'zod';
 
 /** Pessoas por chamada (o servidor de mídia aguenta bem mais; o limite é o painel). */
 export const CALL_MAX_PEOPLE = 12;
+/**
+ * Quem caiu (a aba fechou, recarregou ou perdeu a conexão) continua na chamada por esse tempo
+ * (ms), aparecendo como "reconectando". Voltando nesse prazo, entra de novo sozinho.
+ */
+export const CALL_REJOIN_MS = 60_000;
 /** Convite sem resposta expira em (ms). */
 export const CALL_INVITE_MS = 45_000;
 export const CALL_REASON_MAX = 80;
@@ -71,6 +76,8 @@ export interface CallMember extends CallMedia {
   name: string;
   /** Visual do avatar (para o rosto no lugar da câmera desligada). */
   figure: string;
+  /** Caiu e ainda pode voltar sozinho (`CALL_REJOIN_MS`). */
+  away: boolean;
 }
 
 export interface CallView {
@@ -82,6 +89,8 @@ export interface CallView {
 /** O que cada aba recebe: a chamada e se é esta aba que fala (com duas abas, só uma conecta). */
 export interface CallState extends CallView {
   here: boolean;
+  /** Esta aba acabou de voltar para a chamada sozinha (depois de cair ou recarregar). */
+  rejoined?: boolean;
 }
 
 const userId = z.string().min(1).max(64);

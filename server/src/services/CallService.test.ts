@@ -14,7 +14,8 @@ function setup(online = ['ana', 'beto', 'caio', 'duda', 'eva', 'fabi', 'gil']) {
       isQuiet: (u) => quiet.has(u),
     },
     () => 1000,
-    { set: (fn) => (pending.push(fn), 0 as never), clear: () => undefined },
+    // Cada prazo vira uma função em `pending`; o "id" é a posição (cancelar não tira da lista).
+    { set: (fn) => (pending.push(fn), pending.length as never), clear: () => undefined },
   );
   const invited: [string, CallInvite][] = [];
   const results: [string, CallInviteResult][] = [];
@@ -124,5 +125,50 @@ describe('CallService', () => {
     t.svc.setMedia('beto', { mic: false, cam: true, screen: false });
     const beto = t.svc.callOf('ana')!.members.find((m) => m.userId === 'beto')!;
     expect(beto).toMatchObject({ mic: false, cam: true, screen: false });
+  });
+
+  it('caiu: fica como "reconectando" por um tempo e volta sozinho; sem voltar, sai', () => {
+    const t = setup();
+    const left: [string, string[]][] = [];
+    t.svc.events.on('left', (id, ids) => left.push([id, ids]));
+    t.svc.invite('ana', 'beto', '');
+    t.svc.answer('beto', t.last().id, true);
+    t.svc.invite('ana', 'caio', '');
+    t.svc.answer('caio', t.last().id, true);
+    t.svc.setMedia('beto', { mic: true, cam: true, screen: true });
+    const callId = t.svc.callOf('ana')!.id;
+    // Um convite do Beto pendente acaba quando ele cai.
+    t.svc.invite('beto', 'duda', '');
+    t.svc.hold('beto');
+    expect(t.gone.at(-1)![0]).toBe('duda');
+    const beto = () => t.svc.callOf('ana')!.members.find((m) => m.userId === 'beto');
+    // Continua na chamada, como "reconectando", sem câmera nem tela; sai só da sala de mídia.
+    expect(beto()).toMatchObject({ away: true, cam: false, screen: false });
+    expect(t.svc.isAway('beto')).toBe(true);
+    expect(left.at(-1)).toEqual([callId, ['beto']]);
+    expect(t.changed.at(-1)!.sort()).toEqual(['ana', 'beto', 'caio']);
+    const firstDeadline = t.pending.at(-1)!;
+
+    // Voltou a tempo.
+    expect(t.svc.resume('beto')).toBe(true);
+    expect(beto()!.away).toBe(false);
+    expect(t.svc.resume('beto')).toBe(false);
+    // O prazo da primeira queda vencendo depois não tira ninguém.
+    firstDeadline();
+    expect(beto()).toBeTruthy();
+
+    // Caiu de novo e não voltou: sai, e a chamada segue com os outros.
+    t.svc.hold('beto');
+    t.pending.at(-1)!();
+    expect(beto()).toBeUndefined();
+    expect(t.svc.callOf('beto')).toBeNull();
+    expect(t.svc.callOf('ana')!.members).toHaveLength(2);
+
+    // Quem caiu numa chamada de dois: o outro sair encerra tudo (inclusive a espera).
+    t.svc.hold('caio');
+    t.svc.leave('ana');
+    expect(t.svc.callOf('caio')).toBeNull();
+    expect(t.svc.isAway('caio')).toBe(false);
+    expect(t.svc.resume('caio')).toBe(false);
   });
 });
