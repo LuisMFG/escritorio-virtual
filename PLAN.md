@@ -1693,13 +1693,33 @@ As fases 52 e 53 vêm primeiro porque corrigem o que já existe e é usado todo 
   2. Abra os Detalhes da conexão (ícone de atividade no topo) e destaque alguém: a resolução sobe.
   3. Em Dispositivos, troque a qualidade para Economia e veja a câmera sair em 360p.
 
+### Depois da primeira reunião de verdade (25/10/2026) ✅ implementada
+- **Como foi a reunião de 24/10** (registros da VPS): 5 pessoas, das 17h07 às 19h32, sem nenhum erro no servidor (processador folgado, menos de 1 GB de memória). As travadas vieram da internet de envio de duas pessoas (uma com perda de pacotes, outra com banda limitada por uns 13 minutos), e o servidor de mídia baixou a qualidade só delas. Uma conta aparecia duas vezes na Recepção (duas abas).
+- **Pedido:** uma presença por conta, o ajuste de rede do servidor de mídia, avisar quem está com internet fraca, voltar sozinho para a chamada, e os extras X1 (olhar para quem fala), X3 (ranking e conquistas do Salão) e X4 (torcida).
+- **Feito:**
+  - **Uma aba por pessoa:** cada aba manda a sua identidade (`client/src/net/tab.ts`) ao entrar nas salas e no canal global. Entrar por outra aba ou aparelho tira as conexões das outras abas da mesma conta (`PresenceRegistry.claim`, ouvido por cada sala e pelo canal global), e a aba antiga mostra "Você abriu o escritório em outra aba ou aparelho" com **Usar aqui** (recarrega e tira a outra). A aba substituída não volta sozinha ao reconectar (recusa com o código `4409`); recarregar a página pode. Trocar de sala pela mesma aba não tira ninguém.
+  - **Rede do servidor de mídia:** na VPS, `/etc/sysctl.d/60-livekit.conf` sobe o buffer de UDP para 5 MB (`net.core.rmem_max`/`wmem_max`), o tamanho que o LiveKit pede para produção; o aviso dele sumiu.
+  - **Voltar sozinho para a chamada:** quem cai (aba fechada, recarregada, sem internet além dos 30 s de reconexão, ou a conta aberta em outra aba) fica na chamada como "reconectando…" por 60 s (`CALL_REJOIN_MS`, `CallService.hold`/`resume`), já fora da sala de mídia e com câmera e tela desligadas. Voltando nesse prazo, a página nova entra na chamada sozinha e avisa "Você voltou para a chamada.". **Sair** continua saindo na hora, e um admin tirar do escritório também. Com duas abas abertas, fechar a que fala passa a chamada para a outra.
+  - **Internet fraca:** se a conexão de quem fala fica ruim por 4 s (a medida do servidor de mídia), aparece um aviso no topo da janela da chamada só para essa pessoa, com dicas e **Usar Economia**; some depois de 8 s boa de novo, e fechado não volta por 3 min. Com a chamada minimizada, vira uma notificação.
+  - **Olhar para quem fala (X1):** quem está a até 4 tiles de quem falou no chat vira a cabeça para essa pessoa por 3 s (até 2 direções para cada lado; de costas, não vira). O corpo fica como está; andando, deitado, num emote, dançando ou jogando no Salão, nada muda. Tudo no cliente (`facingToward`/`headTurn` em `shared/src/avatarAnim.ts`, `AvatarView.lookAt`), igual para todos porque todos recebem a mesma fala.
+  - **Ranking e conquistas do Salão (X3):** o placar guarda as vitórias seguidas e a melhor sequência de cada jogo (migração `0029_sequencias`). No painel da mesa, **🏅 Ranking** mostra os 10 melhores (vitórias, derrotas e 🔥 sequência) e o seu placar. Conquistas novas: **Estreia no Salão** (1ª vitória), **Mestre da Sinuca** (10 na sinuca), **Rei do Ping-pong** (10 no ping-pong) e **Imbatível** (5 seguidas no mesmo jogo).
+  - **Torcida (X4):** quem não está jogando tem 👏 😮 🔥 😂 no painel da mesa; o emoji sobe sobre a mesa na sala para todo mundo e pula sobre a vista da mesa no painel. Até 3 seguidas e depois 1 por segundo.
+- **Testes:**
+  - unidade: segurar e devolver a vaga na chamada (prazo, voltar e cair de novo, o outro sair), aba substituída e volta automática no canal global, chamada passando para a outra aba, ranking com sequência, conquistas e torcida na sala, direção do olhar e giro da cabeça;
+  - ponta a ponta: `presenca-e-salao.spec.ts` (mesma conta em dois navegadores e **Usar aqui**; recarregar no meio da chamada e voltar sozinho, com o aviso de internet fraca; a cabeça virando para quem fala e voltando; torcida e ranking com três pessoas).
+- **Como testar:**
+  1. Abra o escritório em duas abas com a mesma conta: a primeira mostra o aviso, e a pessoa aparece uma vez só na sala.
+  2. Numa chamada, recarregue a página: os outros veem "reconectando…" e você volta sozinho.
+  3. Pare perto de alguém e peça para a pessoa falar no chat: a cabeça do seu avatar vira para ela.
+  4. No Salão de Jogos, jogue uma partida, abra **🏅 Ranking** na mesa e peça para quem assiste torcer.
+
 ### Extras sugeridos (fora do pedido; dá para encaixar depois)
 
 | Código | Ideia | Impacto | Esforço |
 |---|---|---|---|
-| X1 | **Olhar para quem fala:** a cabeça vira para quem fala por perto (usa a direção da cabeça da Fase 54) | médio | baixo |
+| X1 | ✅ **Olhar para quem fala** (feito em 25/10/2026) | médio | baixo |
 | X2 | **Cochilo automático:** ausente há 10 min, fecha os olhos e mostra "Zzz" (usa o emote dormir) | baixo | baixo |
-| X3 | **Ranking e conquistas do Salão de Jogos:** vitórias, sequência, "Mestre da Sinuca", "Rei do Ping-pong" | médio | médio |
-| X4 | **Torcida:** botões de reação para quem assiste (aplausos, "uuh!") sobre a mesa | médio | baixo |
+| X3 | ✅ **Ranking e conquistas do Salão de Jogos** (feito em 25/10/2026) | médio | médio |
+| X4 | ✅ **Torcida** (feito em 25/10/2026) | médio | baixo |
 | X5 | **Gesto de "pegar"** na geladeira ou no café antes de ficar com o item | baixo | baixo |
 | X6 | **Teste visual automático das poses:** grade comparada com imagens de referência, para pegar regressões de animação | médio | médio |
