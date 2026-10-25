@@ -42,6 +42,8 @@ interface Hook {
   furni(id: string): { x: number; y: number } | null;
   avatar(sessionId: string): { x: number; y: number } | null;
   avatarDir(sessionId: string): number | null;
+  /** Quanto a cabeça está virada para quem falou (0 = para a frente). */
+  avatarLook(sessionId: string): number | null;
   avatarEmote(sessionId: string): string | null;
   avatarDance(sessionId: string): { id: string; frame: number; frames: number } | null;
   wall(x: number, y: number, rot: 2 | 4, h: number): { x: number; y: number };
@@ -58,6 +60,7 @@ interface Hook {
   furniList(): { id: string; defId: string; x: number; y: number; z: number }[];
   players(): {
     id: string;
+    userId: string;
     name: string;
     x: number;
     y: number;
