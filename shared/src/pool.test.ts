@@ -4,6 +4,9 @@ import {
   canPlaceCue,
   cueSpot,
   FOOT_SPOT,
+  firstHitFoul,
+  foulHelp,
+  groupOf,
   HEAD_X,
   judgeShot,
   newPoolRules,
@@ -11,6 +14,8 @@ import {
   POCKETS,
   POOL,
   rackBalls,
+  shotGoal,
+  shotSpeed,
   shooterSlot,
   simulateShot,
   timeoutRules,
@@ -25,13 +30,14 @@ const { tableL: L, tableW: W, ballR: R } = POOL;
 function table(pos: Record<number, PoolPos>): PoolBalls {
   return Array.from({ length: 16 }, (_, i) => pos[i] ?? null);
 }
-const shot = (dx: number, dy: number, power = 0.3, sx = 0, sy = 0) => ({ dx, dy, power, sx, sy });
+/** Força na curva da barra (0,55 manda a branca uns 2 m/s). */
+const shot = (dx: number, dy: number, power = 0.55, sx = 0, sy = 0) => ({ dx, dy, power, sx, sy });
 const dist = (a: PoolPos | null, b: PoolPos | null) => Math.hypot(a![0] - b![0], a![1] - b![1]);
 
 describe('sinuca: a física da mesa (Fase 59)', () => {
   it('choque de frente: a branca para e a bola acertada segue', () => {
     const start = table({ 0: [0.5, 0.56], 3: [0.9, 0.56] });
-    const res = simulateShot(start, shot(1, 0, 0.15));
+    const res = simulateShot(start, shot(1, 0, 0.4));
     expect(res.events.first).toBe(3);
     // A branca fica no ponto do choque; a 3 segue em frente na mesma linha.
     expect(Math.abs(res.final[0]![0] - (0.9 - 2 * R))).toBeLessThan(0.03);
@@ -45,7 +51,7 @@ describe('sinuca: a física da mesa (Fase 59)', () => {
     expect(guide).toMatchObject({ kind: 'ball', ball: 5 });
     if (guide?.kind !== 'ball') throw new Error('sem guia');
     expect(guide.ghost[0]).toBeCloseTo(1.0 - Math.sqrt(4 * R * R - 0.03 * 0.03), 6);
-    const res = simulateShot(start, shot(1, 0, 0.15));
+    const res = simulateShot(start, shot(1, 0, 0.4));
     const moved: PoolPos = [res.final[5]![0] - 1.0, res.final[5]![1] - 0.53];
     const len = Math.hypot(...moved);
     expect(moved[0] / len).toBeCloseTo(guide.objectDir[0], 2);
@@ -54,20 +60,20 @@ describe('sinuca: a física da mesa (Fase 59)', () => {
 
   it('na tabela a bola volta com perda; o efeito de lado muda o rebote', () => {
     const start = table({ 0: [0.6, 0.5] });
-    const plain = simulateShot(start, shot(0, -1, 0.25));
+    const plain = simulateShot(start, shot(0, -1, 0.5));
     // Voltou da tabela de cima (y = 0) para baixo, e não acertou nenhuma bola.
     expect(plain.final[0]![1]).toBeGreaterThan(R);
     expect(plain.events.first).toBeNull();
-    const angled = simulateShot(start, shot(0.4, -1, 0.3));
-    const english = simulateShot(start, shot(0.4, -1, 0.3, 1, 0));
+    const angled = simulateShot(start, shot(0.4, -1, 0.55));
+    const english = simulateShot(start, shot(0.4, -1, 0.55, 1, 0));
     expect(dist(angled.final[0]!, english.final[0]!)).toBeGreaterThan(0.05);
   });
 
   it('caçapas: no canto e no meio da tabela comprida', () => {
-    const corner = simulateShot(table({ 0: [0.4, 0.4] }), shot(-1, -1, 0.4));
+    const corner = simulateShot(table({ 0: [0.4, 0.4] }), shot(-1, -1, 0.65));
     expect(corner.events.pocketed).toEqual([{ ball: 0, pocket: 0 }]);
     expect(corner.final[0]).toBeNull();
-    const side = simulateShot(table({ 0: [L / 2, 0.5], 7: [L / 2, 0.2] }), shot(0, -1, 0.3));
+    const side = simulateShot(table({ 0: [L / 2, 0.5], 7: [L / 2, 0.2] }), shot(0, -1, 0.55));
     expect(side.events.pocketed.map((p) => p)).toContainEqual({ ball: 7, pocket: 1 });
     expect(POCKETS).toHaveLength(6);
   });
@@ -76,7 +82,7 @@ describe('sinuca: a física da mesa (Fase 59)', () => {
     const start = table({ 0: [1.0, 0.56], 2: [1.3, 0.56] });
     /** Quanto a branca andou (em x) no quarto de segundo depois do choque. */
     const after = (sy: number) => {
-      const res = simulateShot(start, shot(1, 0, 0.3, 0, sy), true);
+      const res = simulateShot(start, shot(1, 0, 0.55, 0, sy), true);
       const f = res.frames!;
       const hit = f.findIndex((fr) => fr[4]! > 1.3 + 1e-6);
       return f[hit + 30]![0]! - f[hit]![0]!;
@@ -84,6 +90,48 @@ describe('sinuca: a física da mesa (Fase 59)', () => {
     expect(after(-1)).toBeLessThan(-0.08);
     expect(after(1)).toBeGreaterThan(0.08);
     expect(Math.abs(after(0))).toBeLessThan(0.03);
+  });
+
+  it('força em curva: o meio da barra manda a branca uma mesa; o fim, quase cinco', () => {
+    const travel = (power: number) => {
+      const f = simulateShot(table({ 0: [HEAD_X, W / 2] }), shot(1, 0, power), true).frames!;
+      let d = 0;
+      for (let k = 1; k < f.length; k++)
+        d += Math.hypot(f[k]![0]! - f[k - 1]![0]!, f[k]![1]! - f[k - 1]![1]!);
+      return d / L;
+    };
+    expect(shotSpeed(0)).toBe(POOL.minSpeed);
+    expect(shotSpeed(1)).toBe(POOL.maxSpeed);
+    expect(travel(0.5)).toBeGreaterThan(0.85);
+    expect(travel(0.5)).toBeLessThan(1.15);
+    expect(travel(0.3)).toBeLessThan(0.35);
+    expect(travel(1)).toBeGreaterThan(4);
+  });
+
+  it('atrito em duas fases: desliza e freia rápido no começo, depois rola devagar', () => {
+    const f = simulateShot(table({ 0: [0.3, W / 2] }), shot(1, 0, 0.6), true).frames!;
+    // Velocidade (m/s) entre quadros (cada um a 3 passos de 1/360 s).
+    const v = (k: number) => (f[k + 1]![0]! - f[k]![0]!) * (360 / POOL.frameEvery);
+    // (O primeiro quadro tem um passo só; começa no segundo.)
+    const early = v(1) - v(11);
+    const late = v(60) - v(70);
+    expect(early).toBeGreaterThan(late * 3);
+    // E desliza até 5/7 da velocidade da tacada.
+    expect(v(40)).toBeCloseTo(shotSpeed(0.6) * POOL.rollRatio, 1);
+  });
+
+  it('triângulo com sorteio: muda um pouquinho, sem encostar demais', () => {
+    let seed = 1;
+    const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const a = rackBalls(random);
+    const b = rackBalls(random);
+    expect(a).not.toEqual(b);
+    const perfect = rackBalls();
+    a.forEach((p, i) => {
+      if (!p) return;
+      expect(Math.abs(p[0] - perfect[i]![0])).toBeLessThanOrEqual(POOL.rackJitter);
+      expect(Math.abs(p[1] - perfect[i]![1])).toBeLessThanOrEqual(POOL.rackJitter);
+    });
   });
 
   it('é determinística: a mesma tacada dá exatamente o mesmo resultado, também pelo JSON', () => {
@@ -271,5 +319,58 @@ describe('sinuca: as regras do 8 Ball (Fase 59)', () => {
     ).rules;
     expect(shooterSlot(kept, 2)).toBe('a2');
     expect(timeoutRules(open, 1)).toMatchObject({ turn: 'b', inHand: true });
+  });
+});
+
+describe('sinuca: explicações para quem nunca jogou', () => {
+  const rules = (groupA: '' | 'solids' | 'stripes', breakShot = false, inHand = false) => ({
+    groupA,
+    breakShot,
+    inHand,
+  });
+
+  it('a linha-guia sabe quando a primeira bola acertada seria falta', () => {
+    const all = rackBalls();
+    // Abertura: qualquer bola.
+    expect(firstHitFoul(rules('', true), all, 'a', 8)).toBeNull();
+    // Mesa aberta: só a 8 é falta.
+    expect(firstHitFoul(rules(''), all, 'a', 3)).toBeNull();
+    expect(firstHitFoul(rules(''), all, 'a', 12)).toBeNull();
+    expect(firstHitFoul(rules(''), all, 'a', 8)).toBe('acertou a 8 primeiro');
+    // Com grupo: a do outro grupo e a 8 são falta (o lado B tem o outro grupo).
+    expect(firstHitFoul(rules('solids'), all, 'a', 2)).toBeNull();
+    expect(firstHitFoul(rules('solids'), all, 'a', 10)).toBe('acertou primeiro uma listrada');
+    expect(firstHitFoul(rules('solids'), all, 'b', 2)).toBe('acertou primeiro uma lisa');
+    expect(firstHitFoul(rules('solids'), all, 'a', 8)).toBe('acertou a 8 primeiro');
+    // Grupo todo encaçapado: só a 8.
+    const onlyStripes = all.map((b, i) => (groupOf(i) === 'solids' ? null : b));
+    expect(firstHitFoul(rules('solids'), onlyStripes, 'a', 8)).toBeNull();
+    expect(firstHitFoul(rules('solids'), onlyStripes, 'a', 9)).toBe('era a vez da 8');
+  });
+
+  it('o objetivo da tacada muda com a partida', () => {
+    const all = rackBalls();
+    expect(shotGoal(rules('', true, true), all, 'a', false)).toMatch(/^Abertura/);
+    expect(shotGoal(rules(''), all, 'a', false)).toMatch(/^Mesa aberta: .*menos a 8/);
+    expect(shotGoal(rules('solids'), all, 'b', false)).toBe(
+      'Acerte primeiro uma das listradas e encaçape (faltam 7).',
+    );
+    expect(shotGoal(rules('solids', false, true), all, 'a', false)).toMatch(/Bola na mão/);
+    const onlyStripes = all.map((b, i) => (groupOf(i) === 'solids' ? null : b));
+    expect(shotGoal(rules('solids'), onlyStripes, 'a', false)).toMatch(/escolha a caçapa/);
+    expect(shotGoal(rules('solids'), onlyStripes, 'a', true)).toMatch(/caçapa escolhida/);
+  });
+
+  it('cada falta tem a explicação da regra', () => {
+    for (const foul of [
+      'branca na caçapa',
+      'a branca não acertou nenhuma bola',
+      'acertou a 8 primeiro',
+      'era a vez da 8',
+      'acertou primeiro uma lisa',
+      'nenhuma bola tocou a tabela',
+    ]) {
+      expect(foulHelp(foul).length).toBeGreaterThan(20);
+    }
   });
 });

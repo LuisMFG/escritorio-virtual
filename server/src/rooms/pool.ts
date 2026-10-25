@@ -1,11 +1,13 @@
 import {
   ARCADE_SLOTS,
   canPlaceCue,
+  foulHelp,
   GROUP_NAMES,
   judgeShot,
   newPoolRules,
   onEight,
   otherGroup,
+  otherPoolSide,
   POOL,
   rackBalls,
   remaining,
@@ -18,6 +20,7 @@ import {
   type ArcadeReply,
   type ArcadeSlot,
   type PoolBalls,
+  type PoolLogEntry,
   type PoolRules,
   type PoolShotMessage,
   type PoolShotRecord,
@@ -32,6 +35,8 @@ export interface PoolEnd {
 
 /** Folga antes de a tacada começar na tela de todos (o pacote chega antes). */
 const LEAD_MS = 150;
+/** Tacadas guardadas no histórico. */
+const LOG_MAX = 6;
 /** Pausa depois de as bolas pararem, antes da próxima vez. */
 const SETTLE_MS = 400;
 
@@ -45,7 +50,7 @@ const refuse = (reason: string): ArcadeReply => ({ ok: false, reason });
  */
 export class PoolMatch {
   private rules: PoolRules = newPoolRules();
-  private balls: PoolBalls = rackBalls();
+  private balls: PoolBalls;
   /** A tacada em andamento termina (na tela) neste instante. */
   private busyUntil = 0;
   private deadline: number;
@@ -54,15 +59,23 @@ export class PoolMatch {
   private pendingEnd: PoolEnd | null = null;
   /** O que a última tacada deu (falta, grupos, a vez), mostrado quando as bolas param. */
   private outcome = '';
+  /** A linha do histórico dessa tacada, que entra junto com o resultado. */
+  private outcomeLog: PoolLogEntry | null = null;
+  /** As últimas tacadas (a mais nova primeiro). */
+  private log: PoolLogEntry[] = [];
 
   constructor(
     private readonly game: ArcadeGame,
     private readonly names: (side: PoolSide) => string,
     now: number,
+    /** Sorteio do triângulo (cada abertura espalha diferente); os testes passam um fixo. */
+    random: () => number = Math.random,
   ) {
+    this.balls = rackBalls(random);
     this.deadline = now + POOL.shotMs;
     this.lastTick = now;
     this.game.shot = '';
+    this.game.log = '';
     this.game.detail = 'Abertura: a branca pode ir em qualquer lugar atrás da linha.';
     this.write();
   }
@@ -124,6 +137,8 @@ export class PoolMatch {
     this.pendingEnd = verdict.end ?? null;
     const who = this.nameOf(slot);
     const next = this.nameOf(this.shooter);
+    const other = this.nameOf(`${otherPoolSide(side)}1` as ArcadeSlot);
+    const eightBack = before.breakShot && result.events.pocketed.some((p) => p.ball === 8);
     this.outcome = verdict.end
       ? ''
       : verdict.foul
@@ -133,6 +148,33 @@ export class PoolMatch {
           : verdict.keep
             ? `${who} encaçapou e continua.`
             : `Vez de ${next}.`;
+    const mine = sideGroup(this.rules, side);
+    this.outcomeLog = verdict.end
+      ? {
+          kind: 'end',
+          text: `${verdict.end.winner === side ? who : other} venceu: ${verdict.end.reason}.`,
+        }
+      : verdict.foul
+        ? { kind: 'foul', text: this.outcome, help: foulHelp(verdict.foul) }
+        : this.rules.groupA && !before.groupA && mine
+          ? {
+              kind: 'good',
+              text: `${who} encaçapou e fica com as ${GROUP_NAMES[mine]}; ${other} fica com as ${GROUP_NAMES[otherGroup(mine)]}.`,
+            }
+          : verdict.keep
+            ? {
+                kind: 'good',
+                text: before.breakShot
+                  ? `${who} encaçapou na abertura e continua. A mesa segue aberta.`
+                  : `${who} encaçapou e continua.`,
+              }
+            : {
+                kind: 'info',
+                text: `${who} não encaçapou ${mine ? 'nenhuma das suas' : 'nenhuma bola'}. Vez de ${next}.`,
+              };
+    if (eightBack && !verdict.end) {
+      this.outcomeLog.text += ' (A 8 caiu na abertura e voltou para a mesa.)';
+    }
     // Vai a tacada e onde as bolas param; a vez, o placar e a falta só quando elas pararem na
     // tela de todos (não estraga a surpresa no meio da animação).
     Object.assign(this.game, {
@@ -161,6 +203,8 @@ export class PoolMatch {
     if (this.game.phase === 'shot') {
       // As bolas pararam: o resultado aparece para todos ao mesmo tempo.
       this.game.detail = this.outcome;
+      if (this.outcomeLog) this.addLog(this.outcomeLog);
+      this.outcomeLog = null;
       this.write();
     }
     if (this.pendingEnd) return this.pendingEnd;
@@ -175,11 +219,21 @@ export class PoolMatch {
       this.rules = timeoutRules(this.rules, this.game.mode);
       this.deadline = now + POOL.shotMs;
       this.game.detail = `Tempo esgotado para ${who}. Bola na mão para ${this.nameOf(this.shooter)}.`;
+      this.addLog({
+        kind: 'foul',
+        text: this.game.detail,
+        help: `Cada tacada tem ${POOL.shotMs / 1000} s. Passou do tempo, é falta.`,
+      });
       // A mira de quem perdeu a vez sai da mesa.
       this.game.aim = '';
       this.write();
     }
     return null;
+  }
+
+  private addLog(entry: PoolLogEntry): void {
+    this.log = [entry, ...this.log].slice(0, LOG_MAX);
+    this.game.log = JSON.stringify(this.log);
   }
 
   /** Escreve as bolas, as regras, a vez e o placar (bolas do grupo encaçapadas) no estado. */

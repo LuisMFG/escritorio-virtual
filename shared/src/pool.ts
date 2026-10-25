@@ -21,19 +21,32 @@ export const POOL = {
   /** Passo da simulação e o limite de passos de uma tacada. */
   dt: 1 / 360,
   maxSteps: 360 * 30,
-  /** Desaceleração do rolar (m/s²) e a velocidade abaixo da qual a bola para. */
-  friction: 0.8,
+  /**
+   * Atrito do pano em duas fases, como na mesa de verdade: logo depois da tacada ou de um choque a
+   * bola desliza e freia rápido (`slideDecel`) até chegar a 5/7 da velocidade; daí rola e freia
+   * devagar (`rollDecel`, um pouco mais que o real, para a partida não arrastar). Velocidade (m/s)
+   * abaixo da qual a bola para.
+   */
+  slideDecel: 2,
+  rollDecel: 0.35,
+  rollRatio: 5 / 7,
   stopSpeed: 0.01,
   railBounce: 0.78,
   ballBounce: 0.96,
-  /** Velocidade da branca com a força mínima e a máxima. */
-  minSpeed: 0.4,
+  /**
+   * Velocidade da branca com a força mínima e a máxima. A barra cresce em curva (`powerCurve`): o
+   * meio dela manda a branca mais ou menos uma mesa, e o fim é a força da abertura.
+   */
+  minSpeed: 0.3,
   maxSpeed: 6,
+  powerCurve: 2,
   /** Efeito: quanto do alto/baixo volta na branca depois do choque, e do lado na tabela. */
   followGain: 0.8,
   sideGain: 0.5,
   /** Tempo por tacada. */
-  shotMs: 30_000,
+  shotMs: 45_000,
+  /** Desalinhamento máximo (m) de cada bola do triângulo, para a abertura não ser sempre igual. */
+  rackJitter: 0.0006,
   /** Passos da simulação por quadro gravado para animar. */
   frameEvery: 3,
 } as const;
@@ -75,17 +88,31 @@ export const HEAD_X = L / 4;
 /** Triângulo: a 8 no meio, uma lisa e uma listrada nos cantos de trás. */
 const RACK = [[1], [10, 2], [3, 8, 11], [12, 4, 13, 6], [14, 7, 15, 9, 5]];
 
-/** Mesa arrumada para a abertura: o triângulo e a branca atrás da linha de saída. */
-export function rackBalls(): PoolBalls {
+/**
+ * Mesa arrumada para a abertura: o triângulo e a branca atrás da linha de saída. Com `random`,
+ * cada bola do triângulo sai um pouquinho do lugar (menos que a folga entre elas, sem encostar):
+ * como numa mesa de verdade, cada abertura espalha diferente. Sem ele, o triângulo perfeito.
+ */
+export function rackBalls(random?: () => number): PoolBalls {
   const balls: PoolBalls = new Array(16).fill(null);
   balls[0] = [HEAD_X, W / 2];
   const dx = R * Math.sqrt(3) + 0.0002;
+  const jitter = () => (random ? (random() * 2 - 1) * POOL.rackJitter : 0);
   RACK.forEach((row, k) => {
     row.forEach((ball, j) => {
-      balls[ball] = [FOOT_SPOT[0] + k * dx, FOOT_SPOT[1] + (j - k / 2) * (2 * R + 0.0002)];
+      balls[ball] = [
+        FOOT_SPOT[0] + k * dx + jitter(),
+        FOOT_SPOT[1] + (j - k / 2) * (2 * R + 0.0002) + jitter(),
+      ];
     });
   });
   return balls;
+}
+
+/** Velocidade da branca (m/s) para uma força de 0 a 1 (em curva: mais controle nas fracas). */
+export function shotSpeed(power: number): number {
+  const p = Math.min(1, Math.max(0, power));
+  return POOL.minSpeed + Math.pow(p, POOL.powerCurve) * (POOL.maxSpeed - POOL.minSpeed);
 }
 
 /** A tacada: direção (vetor), força (0–1) e o efeito na branca (lado e alto/baixo, −1 a 1). */
@@ -136,6 +163,8 @@ export function simulateShot(start: PoolBalls, shot: PoolShot, record = false): 
   const vx = new Float64Array(n);
   const vy = new Float64Array(n);
   const on: boolean[] = [];
+  /** Velocidade em que cada bola para de deslizar e passa a rolar (0 = já rolando). */
+  const rollAt = new Float64Array(n);
   for (let i = 0; i < n; i++) {
     const p = start[i];
     on.push(Boolean(p));
@@ -145,10 +174,10 @@ export function simulateShot(start: PoolBalls, shot: PoolShot, record = false): 
     }
   }
   const len = Math.sqrt(shot.dx * shot.dx + shot.dy * shot.dy) || 1;
-  const power = Math.min(1, Math.max(0, shot.power));
-  const speed = POOL.minSpeed + power * (POOL.maxSpeed - POOL.minSpeed);
+  const speed = shotSpeed(shot.power);
   vx[0] = (shot.dx / len) * speed;
   vy[0] = (shot.dy / len) * speed;
+  rollAt[0] = speed * POOL.rollRatio;
   // Efeito: alto (+) ou baixo (−) volta na branca depois do primeiro choque; lado, na tabela.
   let follow = Math.min(1, Math.max(-1, shot.sy)) * speed * 0.5;
   let side = Math.min(1, Math.max(-1, shot.sx)) * speed * 0.25;
@@ -278,6 +307,11 @@ export function simulateShot(start: PoolBalls, shot: PoolShot, record = false): 
           vy[i] = vy[i]! - k * ny;
           vx[j] = vx[j]! + k * nx;
           vy[j] = vy[j]! + k * ny;
+          // A bola acertada sai deslizando, e a que bateu volta a deslizar (o choque tira o rolar).
+          const vj = Math.sqrt(vx[j]! * vx[j]! + vy[j]! * vy[j]!);
+          const vi = Math.sqrt(vx[i]! * vx[i]! + vy[i]! * vy[i]!);
+          rollAt[j] = vj * POOL.rollRatio;
+          rollAt[i] = vi * POOL.rollRatio;
           if (cue && events.first === null) {
             events.first = j;
             // Alto segue em frente, baixo volta: soma na direção em que a branca vinha.
@@ -285,6 +319,7 @@ export function simulateShot(start: PoolBalls, shot: PoolShot, record = false): 
             if (bl > 0 && follow !== 0) {
               vx[0] = vx[0]! + (before!.x / bl) * follow * POOL.followGain;
               vy[0] = vy[0]! + (before!.y / bl) * follow * POOL.followGain;
+              rollAt[0] = Math.sqrt(vx[0]! * vx[0]! + vy[0]! * vy[0]!) * POOL.rollRatio;
             }
             follow = 0;
           }
@@ -296,12 +331,16 @@ export function simulateShot(start: PoolBalls, shot: PoolShot, record = false): 
         }
       }
     }
-    // Atrito do pano.
+    // Atrito do pano: desliza (freia rápido) até a velocidade de rolar, depois rola.
     for (let i = 0; i < n; i++) {
       if (!on[i]) continue;
       const v = Math.sqrt(vx[i]! * vx[i]! + vy[i]! * vy[i]!);
       if (v === 0) continue;
-      const next = v - POOL.friction * POOL.dt;
+      const sliding = v > rollAt[i]!;
+      const next = Math.max(
+        sliding ? rollAt[i]! : 0,
+        v - (sliding ? POOL.slideDecel : POOL.rollDecel) * POOL.dt,
+      );
       if (next < POOL.stopSpeed) {
         vx[i] = 0;
         vy[i] = 0;
@@ -582,6 +621,82 @@ export function timeoutRules(rules: PoolRules, mode: number): PoolRules {
     inHand: true,
     breakShot: false,
   };
+}
+
+// ---------- Explicações (para quem nunca jogou) ----------
+
+/** Uma linha do histórico das tacadas: o que aconteceu e, numa falta, por que é falta. */
+export interface PoolLogEntry {
+  kind: 'foul' | 'good' | 'info' | 'end';
+  text: string;
+  /** Explicação da regra (faltas). */
+  help?: string;
+}
+
+/** Por que cada falta é falta, em palavras simples. */
+export function foulHelp(foul: string): string {
+  if (foul.startsWith('branca na caçapa')) {
+    return 'A branca não pode cair. O adversário põe a branca onde quiser.';
+  }
+  if (foul.startsWith('a branca não acertou')) return 'A branca precisa acertar alguma bola.';
+  if (foul.startsWith('acertou a 8 primeiro')) {
+    return 'A 8 só pode ser a primeira bola acertada depois que você encaçapar o seu grupo todo.';
+  }
+  if (foul.startsWith('era a vez da 8')) {
+    return 'Com o seu grupo todo encaçapado, a primeira bola acertada tem que ser a 8.';
+  }
+  if (foul.startsWith('acertou primeiro uma')) {
+    return 'A primeira bola que a branca acerta tem que ser do seu grupo.';
+  }
+  if (foul.startsWith('nenhuma bola tocou a tabela')) {
+    return 'Depois do choque, alguma bola precisa cair ou encostar numa tabela.';
+  }
+  return '';
+}
+
+/**
+ * Acertar `ball` primeiro agora seria falta? Devolve o motivo (o mesmo do juiz), ou `null`.
+ * Serve para a linha-guia ficar vermelha antes da tacada.
+ */
+export function firstHitFoul(
+  rules: Pick<PoolRules, 'groupA' | 'breakShot'>,
+  balls: PoolBalls,
+  side: PoolSide,
+  ball: number,
+): string | null {
+  if (rules.breakShot || ball === 0) return null;
+  const mine = sideGroup(rules, side);
+  const eight = onEight({ ...rules, turn: side, next: { a: 0, b: 0 }, inHand: false }, balls, side);
+  if (!mine) return ball === 8 ? 'acertou a 8 primeiro' : null;
+  if (eight) return ball === 8 ? null : 'era a vez da 8';
+  if (groupOf(ball) === mine) return null;
+  if (ball === 8) return 'acertou a 8 primeiro';
+  return `acertou primeiro uma ${GROUP_NAMES[otherGroup(mine)].slice(0, -1)}`;
+}
+
+/** O objetivo da tacada de agora, para quem taca (`you`) ou para quem assiste. */
+export function shotGoal(
+  rules: Pick<PoolRules, 'groupA' | 'breakShot' | 'inHand'>,
+  balls: PoolBalls,
+  side: PoolSide,
+  called: boolean,
+): string {
+  const mine = sideGroup(rules, side);
+  const hand =
+    rules.inHand && !rules.breakShot ? ' Bola na mão: dá para pôr a branca onde quiser.' : '';
+  if (rules.breakShot) {
+    return 'Abertura: ponha a branca atrás da linha, mire no triângulo e taque forte.';
+  }
+  if (!mine) {
+    return `Mesa aberta: acerte qualquer bola, menos a 8. A primeira que cair define o grupo.${hand}`;
+  }
+  if (remaining(balls, mine) === 0) {
+    return called
+      ? `Agora é a 8, na caçapa escolhida. Se cair em outra, perde.${hand}`
+      : `Agora é a 8: escolha a caçapa onde ela vai cair.${hand}`;
+  }
+  const left = remaining(balls, mine);
+  return `Acerte primeiro uma das ${GROUP_NAMES[mine]} e encaçape (faltam ${left}).${hand}`;
 }
 
 // ---------- Mensagens e estado ----------

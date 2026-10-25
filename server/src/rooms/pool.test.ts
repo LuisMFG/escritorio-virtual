@@ -4,6 +4,7 @@ import {
   rackBalls,
   simulateShot,
   type PoolBalls,
+  type PoolLogEntry,
   type PoolShotRecord,
 } from '@office/shared';
 import { describe, expect, it } from 'vitest';
@@ -28,7 +29,8 @@ function setup(mode: 1 | 2 = 1) {
     join(game, 'b2', duda);
   }
   start(game, ana.session);
-  const match = new PoolMatch(game, names, 0);
+  // Triângulo sem sorteio (o perfeito), para comparar com `rackBalls()`.
+  const match = new PoolMatch(game, names, 0, () => 0.5);
   return { game, match };
 }
 
@@ -46,7 +48,7 @@ function onTheEight(match: PoolMatch) {
     rules: { groupA: 'solids', turn: 'a', next: { a: 0, b: 0 }, inHand: false, breakShot: false },
   });
 }
-const toTheCorner = { ...shot, dx: -Math.SQRT1_2, dy: -Math.SQRT1_2, power: 0.3 };
+const toTheCorner = { ...shot, dx: -Math.SQRT1_2, dy: -Math.SQRT1_2, power: 0.55 };
 
 /** Anda o relógio até as bolas pararem (e a pausa depois). */
 function settle(game: { shot: string }, match: PoolMatch) {
@@ -56,7 +58,7 @@ function settle(game: { shot: string }, match: PoolMatch) {
 }
 
 describe('sinuca no servidor (Fase 59)', () => {
-  it('começa na abertura: bola na mão da Ana, triângulo arrumado e 30 s no relógio', () => {
+  it('começa na abertura: bola na mão da Ana, triângulo arrumado e 45 s no relógio', () => {
     const { game } = setup();
     expect(game).toMatchObject({
       phase: 'aim',
@@ -100,7 +102,12 @@ describe('sinuca no servidor (Fase 59)', () => {
     expect(rec.ms).toBe(again.ms);
     expect(JSON.parse(game.balls)).toEqual(again.final);
     // Enquanto as bolas andam, a vez, o placar e o aviso ficam como estavam.
-    expect(game).toMatchObject({ phase: 'shot', turn: 'a1', breakShot: true, deadline: 30_000 });
+    expect(game).toMatchObject({
+      phase: 'shot',
+      turn: 'a1',
+      breakShot: true,
+      deadline: POOL.shotMs,
+    });
     expect(game.detail).toMatch(/^Abertura/);
     expect(match.shoot('b1', shot, 1100)).toEqual({
       ok: false,
@@ -125,6 +132,17 @@ describe('sinuca no servidor (Fase 59)', () => {
     expect(game.detail).toBe(
       'Falta de Ana: a branca não acertou nenhuma bola. Bola na mão para Beto.',
     );
+    // O histórico guarda a falta com a explicação; a próxima tacada não apaga.
+    const log = () => JSON.parse(game.log) as PoolLogEntry[];
+    expect(log()[0]).toEqual({
+      kind: 'foul',
+      text: 'Falta de Ana: a branca não acertou nenhuma bola. Bola na mão para Beto.',
+      help: 'A branca precisa acertar alguma bola.',
+    });
+    expect(match.shoot('b1', { ...miss, cx: 0.4, cy: 0.5 }, 20_000)).toEqual({ ok: true });
+    settle(game, match);
+    expect(log()).toHaveLength(2);
+    expect(log()[1]!.text).toMatch(/^Falta de Ana/);
   });
 
   it('tempo esgotado: bola na mão para o adversário; com alguém fora, o relógio para', () => {

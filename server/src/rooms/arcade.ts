@@ -74,6 +74,7 @@ function resetMatch(g: ArcadeGame): void {
     deadline: 0,
     aim: '',
     detail: '',
+    log: '',
     winner: '',
     end: '',
   });

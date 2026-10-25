@@ -170,6 +170,8 @@ export const ArcadeGame = schema(
     aim: t.string(),
     /** Detalhe do jogo (o último ponto, set, grupo de bolas…). */
     detail: t.string(),
+    /** Sinuca: as últimas tacadas, a mais nova primeiro (JSON de `PoolLogEntry[]`). */
+    log: t.string(),
     /** '' | 'a' | 'b' */
     winner: t.string(),
     /** '' | 'points' | 'forfeit' | 'wo' */

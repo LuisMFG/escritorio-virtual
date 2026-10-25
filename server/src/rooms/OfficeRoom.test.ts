@@ -2117,7 +2117,7 @@ describe('OfficeRoom', () => {
           breakShot: false,
         },
       });
-      const toTheCorner = { dx: -Math.SQRT1_2, dy: -Math.SQRT1_2, power: 0.3, sx: 0, sy: 0 };
+      const toTheCorner = { dx: -Math.SQRT1_2, dy: -Math.SQRT1_2, power: 0.55, sx: 0, sy: 0 };
       expect(await shoot(ana.room, toTheCorner)).toEqual({
         ok: false,
         reason: 'Cante a caçapa da 8: clique numa caçapa.',

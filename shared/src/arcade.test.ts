@@ -150,7 +150,12 @@ describe('Salão de Jogos: base das mesas (Fase 57)', () => {
       breakShot: false,
       deadline: 0,
       aim,
+      log: [],
     });
+    // O histórico das tacadas vem do estado (ruim ou vazio vira lista vazia).
+    const log = [{ kind: 'foul', text: 'Falta de Ana: branca na caçapa.', help: 'A branca…' }];
+    expect(arcadeView({ ...game, log: JSON.stringify(log) }).pool.log).toEqual(log);
+    expect(arcadeView({ ...game, log: '{quebrado' }).pool.log).toEqual([]);
   });
 
   it('os pedidos só aceitam vagas e modos que existem', () => {

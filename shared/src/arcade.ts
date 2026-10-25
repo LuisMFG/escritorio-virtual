@@ -9,6 +9,7 @@ import {
   otherGroup,
   type PoolBalls,
   type PoolGroup,
+  type PoolLogEntry,
   type PoolShotRecord,
 } from './pool.js';
 
@@ -110,6 +111,7 @@ export interface ArcadeFields {
   deadline: number;
   aim: string;
   detail: string;
+  log: string;
   winner: string;
   end: string;
 }
@@ -132,6 +134,8 @@ export interface PoolView {
   breakShot: boolean;
   deadline: number;
   aim: PoolAim | null;
+  /** As últimas tacadas, a mais nova primeiro. */
+  log: PoolLogEntry[];
 }
 
 /** A partida para ler: vagas como objetos. */
@@ -194,6 +198,7 @@ export function arcadeView(g: ArcadeFields): ArcadeView {
       breakShot: Boolean(g.breakShot),
       deadline: g.deadline ?? 0,
       aim: decodeJson<PoolAim>(g.aim),
+      log: decodeJson<PoolLogEntry[]>(g.log ?? '') ?? [],
     },
     detail: g.detail,
     winner: g.winner === 'a' || g.winner === 'b' ? g.winner : '',
