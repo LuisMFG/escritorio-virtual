@@ -1,4 +1,7 @@
 import {
+  ARCADE_CPU_SESSION,
+  ARCADE_LEVELS,
+  LEVEL_NAMES,
   ARCADE_CHEERS,
   ARCADE_CHEER_IDS,
   ARCADE_INFO,
@@ -12,6 +15,8 @@ import {
   type ArcadeCheer,
   type ArcadeCheerMessage,
   type ArcadeKind,
+  type ArcadeLevel,
+  type ArcadeSolo,
   type ArcadeRanking,
   type ArcadeMode,
   type ArcadeReply,
@@ -33,6 +38,11 @@ export interface ArcadeOptions {
   leave(): Promise<ArcadeReply>;
   start(): Promise<ArcadeReply>;
   forfeit(): Promise<ArcadeReply>;
+  /** Jogar sozinho (treino ou contra o computador). */
+  solo(solo: ArcadeSolo, level: ArcadeLevel): Promise<ArcadeReply>;
+  /** Pedir a mesa a quem joga sozinho; responder ao pedido. */
+  ask(): Promise<ArcadeReply>;
+  answer(accept: boolean): Promise<ArcadeReply>;
   mode(mode: ArcadeMode): Promise<ArcadeReply>;
   /** Torcer (quem não está jogando nesta mesa). */
   cheer(cheer: ArcadeCheer): void;
@@ -41,7 +51,7 @@ export interface ArcadeOptions {
   /** Ping-pong (Fase 58): raquete, saque e rebatida. */
   pong?: Pick<PongViewOptions, 'paddle' | 'serve' | 'hit'>;
   /** Sinuca (Fase 59): a tacada e a mira ao vivo. */
-  pool?: Pick<PoolViewOptions, 'shoot' | 'aim'>;
+  pool?: Pick<PoolViewOptions, 'shoot' | 'aim' | 'place' | 'undo' | 'reset'>;
   /** Atraso simulado (ms, ida e volta), para testar com ping alto. */
   lag?: number;
 }
@@ -56,6 +66,23 @@ export interface ArcadeHandle {
 }
 
 const SIDE_LABEL: Record<ArcadeSide, string> = { a: 'Lado A', b: 'Lado B' };
+
+/** O nível escolhido fica guardado para as próximas vezes. */
+const LEVEL_KEY = 'ev-salao-nivel';
+function savedLevel(): ArcadeLevel {
+  try {
+    return ARCADE_LEVELS.find((l) => l === localStorage.getItem(LEVEL_KEY)) ?? 'medio';
+  } catch {
+    return 'medio';
+  }
+}
+function saveLevel(level: ArcadeLevel): void {
+  try {
+    localStorage.setItem(LEVEL_KEY, level);
+  } catch {
+    // sem armazenamento: vale só agora
+  }
+}
 
 /**
  * Painel de uma mesa do Salão de Jogos (Fase 57): placar, vista de cima da mesa, vagas dos dois
@@ -104,6 +131,8 @@ export function openArcade(opts: ArcadeOptions): ArcadeHandle {
     <div class="arcade-cheers" role="group" aria-label="Torcida" hidden></div>
     <div class="arcade-mode" role="group" aria-label="Modo de jogo"></div>
     <div class="arcade-slots"></div>
+    <div class="arcade-ask" role="alertdialog" aria-label="Pedido da mesa" hidden></div>
+    <div class="arcade-solo" role="group" aria-label="Jogar sozinho" hidden></div>
     <div class="arcade-actions"></div>
     <details class="arcade-ranking">
       <summary></summary>
@@ -124,6 +153,8 @@ export function openArcade(opts: ArcadeOptions): ArcadeHandle {
   const modeEl = $<HTMLElement>('.arcade-mode');
   const slotsEl = $<HTMLElement>('.arcade-slots');
   const actions = $<HTMLElement>('.arcade-actions');
+  const soloEl = $<HTMLElement>('.arcade-solo');
+  const askEl = $<HTMLElement>('.arcade-ask');
   const scoreEl = $<HTMLElement>('.arcade-score');
   const poolTurn = $<HTMLElement>('.pool-turn');
   const poolLog = $<HTMLElement>('.pool-log');
@@ -221,7 +252,11 @@ export function openArcade(opts: ArcadeOptions): ArcadeHandle {
     const mode: ArcadeMode = v?.mode ?? 1;
     const mine = v ? ARCADE_SLOTS.find((s) => v.seats[s].session === me) : undefined;
     const seated = v ? slotsOf(mode).filter((s) => v.seats[s].session) : [];
-    const full = seated.length === slotsOf(mode).length;
+    // Gente de verdade nas vagas (o computador não conta para começar uma partida entre pessoas).
+    const people = v
+      ? slotsOf(mode).filter((s) => v.seats[s].session && v.seats[s].session !== ARCADE_CPU_SESSION)
+      : [];
+    const full = people.length === slotsOf(mode).length;
     const now = opts.now();
 
     // Os textos só mudam quando mudam de verdade (o placar é lido por leitores de tela).
@@ -231,7 +266,13 @@ export function openArcade(opts: ArcadeOptions): ArcadeHandle {
     // Ping-pong: os sets; sinuca: o que a última tacada deu (falta, grupos, a vez).
     if (opts.kind === 'pingpong') {
       setsEl.hidden = !(v && v.status !== 'waiting');
-      if (v) setText(setsEl, `Sets ${v.setsA} × ${v.setsB}`);
+      // Treino com a máquina: o placar é devolvidas × perdidas, sem sets.
+      if (v) {
+        setText(
+          setsEl,
+          v.solo === 'practice' ? 'Devolvidas × perdidas' : `Sets ${v.setsA} × ${v.setsB}`,
+        );
+      }
     } else {
       setsEl.hidden = !(v?.status === 'playing' && v.detail);
       setText(setsEl, v?.detail ?? '');
@@ -342,6 +383,8 @@ export function openArcade(opts: ArcadeOptions): ArcadeHandle {
       mode,
       v?.status ?? '',
       me,
+      v?.solo ?? '',
+      v?.ask ? [v.ask.session, Math.ceil((v.ask.until - now) / 1000)] : null,
       ARCADE_SLOTS.map((s) => {
         const seat = v?.seats[s];
         const left = seat && seat.awayUntil > now ? Math.ceil((seat.awayUntil - now) / 1000) : 0;
@@ -403,13 +446,28 @@ export function openArcade(opts: ArcadeOptions): ArcadeHandle {
       }),
     );
 
+    renderSolo(v, mine, people.length, now);
+
     // Ações de quem joga.
     const btns: HTMLElement[] = [];
     if (mine && v?.status !== 'playing' && full) {
       btns.push(button('Começar', 'btn-primary', act(opts.start)));
     }
     if (mine && v?.status === 'playing') {
-      btns.push(button('Desistir', 'btn-secondary', act(opts.forfeit)));
+      const practice = v.solo === 'practice';
+      if (practice && opts.kind === 'pool') {
+        btns.push(
+          button('Repetir a última tacada', 'btn-secondary', () => {
+            pool?.repeatLast();
+          }),
+          button(
+            'Arrumar de novo',
+            'btn-secondary',
+            act(() => opts.pool!.reset()),
+          ),
+        );
+      }
+      btns.push(button(practice ? 'Parar treino' : 'Desistir', 'btn-secondary', act(opts.forfeit)));
     }
     if (mine && v?.status !== 'playing') {
       btns.push(button('Sair da vaga', 'btn-secondary', act(opts.leave)));
@@ -417,9 +475,113 @@ export function openArcade(opts: ArcadeOptions): ArcadeHandle {
     actions.replaceChildren(...btns);
   };
 
-  // Contagem do W.O. ao vivo.
+  /**
+   * Jogar sozinho: as opções (só eu na mesa, antes de começar); para quem assiste, pedir a mesa; e
+   * para quem joga sozinho, o pedido de alguém (com a contagem até liberar sozinho).
+   */
+  const renderSolo = (
+    v: ArcadeView | null,
+    mine: ArcadeSlot | undefined,
+    people: number,
+    now: number,
+  ) => {
+    soloEl.replaceChildren();
+    askEl.replaceChildren();
+    soloEl.hidden = true;
+    askEl.hidden = true;
+    const me = opts.mySessionId();
+    const left = v?.ask ? Math.max(0, Math.ceil((v.ask.until - now) / 1000)) : 0;
+    // Só eu na mesa, antes de começar: treino ou contra o computador.
+    if (mine && v?.status !== 'playing' && people === 1) {
+      soloEl.hidden = false;
+      const level = Object.assign(document.createElement('select'), { className: 'arcade-level' });
+      level.setAttribute('aria-label', 'Dificuldade');
+      for (const l of ARCADE_LEVELS) {
+        level.append(new Option(`Nível ${LEVEL_NAMES[l]}`, l, false, l === savedLevel()));
+      }
+      level.addEventListener('change', () => saveLevel(level.value as ArcadeLevel));
+      const pick = () => (level.value as ArcadeLevel) || 'medio';
+      soloEl.append(
+        Object.assign(document.createElement('strong'), { textContent: 'Jogar sozinho' }),
+        button(
+          opts.kind === 'pool' ? 'Treino livre' : 'Máquina de bolas',
+          'btn-secondary',
+          act(() => opts.solo('practice', pick())),
+        ),
+        button(
+          'Contra o computador',
+          'btn-secondary',
+          act(() => opts.solo('cpu', pick())),
+        ),
+        level,
+        Object.assign(document.createElement('small'), {
+          className: 'muted',
+          textContent:
+            opts.kind === 'pool'
+              ? 'Não conta no ranking. O nível vale para o computador.'
+              : 'Não conta no ranking. O nível vale para a máquina e para o computador.',
+        }),
+      );
+      return;
+    }
+    if (!v?.solo || v.status !== 'playing') return;
+    // Quem joga sozinho: alguém pediu a mesa.
+    if (mine && v.ask) {
+      askEl.hidden = false;
+      askEl.append(
+        Object.assign(document.createElement('p'), {
+          textContent: `${v.ask.name} quer jogar nesta mesa. Sem resposta, ela é liberada em ${left} s.`,
+        }),
+        button(
+          `Jogar contra ${v.ask.name}`,
+          'btn-primary',
+          act(() => opts.answer(true)),
+        ),
+        button(
+          'Continuar sozinho',
+          'btn-secondary',
+          act(() => opts.answer(false)),
+        ),
+      );
+      return;
+    }
+    if (mine) return;
+    // Quem assiste: pedir a mesa (ou esperar a resposta).
+    soloEl.hidden = false;
+    const trainee = Object.values(v.seats).find(
+      (s) => s.session && s.session !== ARCADE_CPU_SESSION,
+    );
+    const who = trainee?.name ?? 'Quem joga';
+    if (v.ask?.session === me) {
+      soloEl.append(
+        Object.assign(document.createElement('p'), {
+          textContent: `Pedido enviado. Esperando ${who} responder (libera em ${left} s).`,
+        }),
+      );
+    } else if (v.ask) {
+      soloEl.append(
+        Object.assign(document.createElement('p'), {
+          textContent: `${v.ask.name} já pediu a mesa.`,
+        }),
+      );
+    } else {
+      soloEl.append(
+        Object.assign(document.createElement('p'), {
+          textContent: `${who} está ${v.solo === 'practice' ? 'treinando' : 'jogando contra o computador'}.`,
+        }),
+        button('Pedir a mesa', 'btn-primary', act(opts.ask)),
+      );
+    }
+  };
+
+  // Contagem do W.O. e do pedido da mesa, ao vivo.
   const timer = window.setInterval(() => {
-    if (view?.status === 'playing' && ARCADE_SLOTS.some((s) => view!.seats[s].awayUntil)) render();
+    if (
+      view?.status === 'playing' &&
+      (view.ask || ARCADE_SLOTS.some((s) => view!.seats[s].awayUntil))
+    ) {
+      render();
+    }
   }, 1000);
 
   const drag = makeDraggable(panel, {
@@ -466,8 +628,13 @@ export function openArcade(opts: ArcadeOptions): ArcadeHandle {
 
 /** O que acontece no ping-pong agora: de quem é o saque, o ponto, o deuce. */
 function pongStatus(v: ArcadeView, mine: ArcadeSlot | undefined): string {
-  const deuce = v.scoreA >= 10 && v.scoreB >= 10 ? ' Deuce!' : '';
+  const deuce = v.scoreA >= 10 && v.scoreB >= 10 && v.solo !== 'practice' ? ' Deuce!' : '';
   if (v.phase === 'point') return v.detail;
+  if (v.solo === 'practice') {
+    return v.phase === 'serve'
+      ? 'A máquina vai lançar…'
+      : v.detail || (mine ? 'Devolva a bola!' : '👀 Você está assistindo.');
+  }
   if (v.phase === 'serve' && v.turn) {
     return v.turn === mine
       ? `Seu saque: clique, aperte espaço ou espere.${deuce}`
@@ -497,11 +664,22 @@ function renderLeft(info: HTMLElement, v: ArcadeView, me: string): void {
   const turnSide = v.turn ? sideOf(v.turn) : null;
   for (const side of ['a', 'b'] as const) {
     const el = info.querySelector<HTMLElement>(`.pool-left.${side}`)!;
+    // Treino: só o cartão de quem treina, com as bolas que já caíram.
+    const practice = v.solo === 'practice';
+    const seatedHere = sideSlots(side, v.mode).some((s) => v.seats[s].session);
+    el.style.visibility = practice && !seatedHere ? 'hidden' : '';
     const left = poolLeft(v, side);
     const group = g ? GROUP_NAMES[side === 'a' ? g : otherGroup(g)] : '';
     const eight = left[0] === 8;
-    const label = !g ? 'mesa aberta' : group;
-    const count = !g ? 'grupo a definir' : eight ? 'só falta a 8' : `faltam ${left.length}`;
+    const score = side === 'a' ? v.scoreA : v.scoreB;
+    const label = practice ? 'treino' : !g ? 'mesa aberta' : group;
+    const count = practice
+      ? `caíram ${score}`
+      : !g
+        ? 'grupo a definir'
+        : eight
+          ? 'só falta a 8'
+          : `faltam ${left.length}`;
     const names = sideNames(v, side) || SIDE_LABEL[side];
     const you = sideSlots(side, v.mode).some((s) => v.seats[s].session === me);
     const isTurn = v.status === 'playing' && turnSide === side;

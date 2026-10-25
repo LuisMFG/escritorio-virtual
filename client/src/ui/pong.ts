@@ -1,4 +1,5 @@
 import {
+  ARCADE_CPU_SESSION,
   ARCADE_SLOTS,
   ballAt,
   canHit,
@@ -646,6 +647,7 @@ export class PongView {
     pos: PongPoint,
     mine: boolean,
   ): void {
+    if (this.isMachine(slot)) return this.machine3d(ctx, pr, pos);
     const p = pr.toPx(pos.x, pos.y, 0.12);
     const r = Math.max(4, PONG.paddleR * p.k);
     ctx.strokeStyle = '#a0773f';
@@ -666,6 +668,29 @@ export class PongView {
     ctx.stroke();
   }
 
+  /** A vaga é da máquina de bolas (treino). */
+  private isMachine(slot: ArcadeSlot): boolean {
+    const v = this.view;
+    return Boolean(v && v.solo === 'practice' && v.seats[slot].session === ARCADE_CPU_SESSION);
+  }
+
+  /** Máquina de bolas: uma caixa cinza com a boca de onde as bolas saem. */
+  private machine3d(
+    ctx: CanvasRenderingContext2D,
+    pr: ReturnType<typeof perspective>,
+    pos: PongPoint,
+  ): void {
+    const top = pr.toPx(pos.x, pos.y, 0.45);
+    const base = pr.toPx(pos.x, pos.y, 0);
+    const w = Math.max(10, 0.3 * base.k);
+    ctx.fillStyle = '#5b6270';
+    ctx.fillRect(top.x - w / 2, top.y, w, base.y - top.y);
+    ctx.fillStyle = '#2b2f36';
+    ctx.beginPath();
+    ctx.ellipse(top.x, top.y + (base.y - top.y) * 0.3, w * 0.22, w * 0.18, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
   /** Vista de cima (quem assiste). */
   private drawTop(
     ctx: CanvasRenderingContext2D,
@@ -679,7 +704,14 @@ export class PongView {
     ctx.fillRect(0, 0, width, tr.height);
     drawTable(ctx, tr);
     if (ball) drawBall(ctx, tr, ball);
-    for (const { slot, p } of paddles) drawPaddle(ctx, tr, slot, p, slot === mine);
+    for (const { slot, p } of paddles) {
+      if (this.isMachine(slot)) {
+        const q = tr.toPx(p);
+        const w = Math.max(10, 0.3 * tr.s);
+        ctx.fillStyle = '#5b6270';
+        ctx.fillRect(q.x - w / 2, q.y - w / 2, w, w);
+      } else drawPaddle(ctx, tr, slot, p, slot === mine);
+    }
   }
 }
 

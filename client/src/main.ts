@@ -516,6 +516,8 @@ async function start(): Promise<void> {
   let ttt: TicTacToeHandle | null = null;
   /** Painel aberto de uma mesa do Salão de Jogos (Fase 57). */
   let arcadePanel: ArcadeHandle | null = null;
+  /** Abre o painel de uma mesa da sala atual (para quando a mesa que pedi foi liberada). */
+  let openArcadePanelById: ((furniId: string) => void) | null = null;
   /** TV aberta (Fase 51) e o que passa em cada TV da sala (capa na tela do móvel). */
   let tvPanel: TvPanel | null = null;
   const tvScreens = new Map<string, string>();
@@ -1058,7 +1060,13 @@ async function start(): Promise<void> {
         pool: {
           shoot: (m) => connection.poolShoot(furniId, m),
           aim: (m) => connection.poolAim(furniId, m),
+          place: (ball, x, y) => connection.poolPlace(furniId, ball, x, y),
+          undo: () => connection.poolUndo(furniId),
+          reset: () => connection.poolReset(furniId),
         },
+        solo: (solo, level) => connection.arcadeSolo(furniId, solo, level),
+        ask: () => connection.arcadeAsk(furniId),
+        answer: (accept) => connection.arcadeAnswer(furniId, accept),
         lag: PONG_LAG,
       });
       const g = room.state.arcade.get(furniId);
@@ -1066,6 +1074,7 @@ async function start(): Promise<void> {
       // Testes: mostrar no painel uma situação da partida (a vez da 8, por exemplo).
       if (E2E_MODE) (window as unknown as { __e2eArcade: ArcadeHandle }).__e2eArcade = arcadePanel;
     };
+    openArcadePanelById = openArcadePanel;
     const s = new RoomScene(
       app,
       layout,
@@ -1433,9 +1442,19 @@ async function start(): Promise<void> {
     // Mesas do Salão de Jogos (Fase 57): placar sobre a mesa e painel aberto, ao vivo.
     arcadePanel?.close();
     arcadePanel = null;
+    const asked = new Map<string, string>();
     const syncArcade = (id: string, g: ArcadeFields | null) => {
       const view = g ? arcadeView(g) : null;
       s.setArcade(id, view);
+      // Alguém pediu a mesa em que eu jogo sozinho: aviso com som (a resposta é no painel).
+      const mine = view && Object.values(view.seats).some((p) => p.session === room.sessionId);
+      const ask = view?.ask?.session ?? '';
+      if (mine && ask && asked.get(id) !== ask) {
+        sound.mention();
+        overlay.notify(`${view.ask!.name} quer jogar nesta mesa: responda no painel.`);
+        if (arcadePanel?.furniId !== id) openArcadePanel(id);
+      }
+      asked.set(id, ask);
       // A partida começou e eu jogo nela: o painel abre sozinho (é nele que se joga).
       const seated = view && Object.values(view.seats).some((p) => p.session === room.sessionId);
       if (view?.status === 'playing' && seated && arcadePanel?.furniId !== id) {
@@ -1791,6 +1810,15 @@ async function start(): Promise<void> {
       pollUpdated: ({ poll }) => chat.updatePoll(poll),
       focusPhase: (p) => focus.phase(p),
       effectFlash: (msg) => scene?.flashEffect(msg.sessionId, msg.effect, msg.ms),
+      arcadeAskResult: (msg) => {
+        overlay.notify(
+          msg.accepted
+            ? `${msg.name} liberou a mesa: vocês jogam agora.`
+            : `${msg.name} quis continuar sozinho na mesa.`,
+          { kind: msg.accepted ? 'success' : 'info' },
+        );
+        if (msg.accepted) openArcadePanelById?.(msg.furniId);
+      },
       arcadeCheer: (msg) => {
         scene?.cheer(msg.furniId, ARCADE_CHEERS[msg.cheer].emoji);
         if (arcadePanel?.furniId === msg.furniId) arcadePanel.cheered(msg);

@@ -13,8 +13,11 @@ import {
   REPLACED_CODE,
   REPLACED_TEXT,
   type ReplacedMessage,
+  type ArcadeAskResult,
   type ArcadeCheer,
   type ArcadeCheerMessage,
+  type ArcadeLevel,
+  type ArcadeSolo,
   type ArcadeKind,
   type ArcadeRanking,
   type BoardNote,
@@ -91,6 +94,8 @@ interface Handlers {
   effectFlash: (msg: EffectFlash) => void;
   /** A torcida reagiu numa mesa do Salão. */
   arcadeCheer: (msg: ArcadeCheerMessage) => void;
+  /** Resposta ao meu pedido de uma mesa (de quem jogava sozinho). */
+  arcadeAskResult: (msg: ArcadeAskResult) => void;
   /** Recados de um mural mudaram. */
   boardChanged: (furniId: string) => void;
   wbStroke: (msg: WbStrokeMessage) => void;
@@ -388,6 +393,34 @@ export class OfficeConnection {
     this.room?.send(ClientMessage.ArcadeCheer, { furniId, cheer });
   }
 
+  /** Jogar sozinho: treino ou contra o computador, no nível escolhido. */
+  arcadeSolo(furniId: string, solo: ArcadeSolo, level: ArcadeLevel): Promise<ArcadeReply> {
+    return this.arcadeRequest(ClientMessage.ArcadeSolo, { furniId, solo, level });
+  }
+
+  /** Pedir a mesa a quem joga sozinho nela. */
+  arcadeAsk(furniId: string): Promise<ArcadeReply> {
+    return this.arcadeRequest(ClientMessage.ArcadeAsk, { furniId });
+  }
+
+  /** Responder ao pedido da mesa (quem joga sozinho). */
+  arcadeAnswer(furniId: string, accept: boolean): Promise<ArcadeReply> {
+    return this.arcadeRequest(ClientMessage.ArcadeAnswer, { furniId, accept });
+  }
+
+  /** Treino de sinuca: mudar uma bola de lugar, repetir a última tacada, arrumar de novo. */
+  poolPlace(furniId: string, ball: number, x: number, y: number): Promise<ArcadeReply> {
+    return this.arcadeRequest(ClientMessage.PoolPlace, { furniId, ball, x, y });
+  }
+
+  poolUndo(furniId: string): Promise<ArcadeReply> {
+    return this.arcadeRequest(ClientMessage.PoolUndo, { furniId });
+  }
+
+  poolReset(furniId: string): Promise<ArcadeReply> {
+    return this.arcadeRequest(ClientMessage.PoolReset, { furniId });
+  }
+
   /** Ranking de um jogo do Salão (`null` sem conexão). */
   async arcadeRanking(kind: ArcadeKind): Promise<ArcadeRanking | null> {
     if (!this.room) return null;
@@ -529,6 +562,9 @@ export class OfficeConnection {
     room.onMessage(ServerMessage.EffectFlash, (msg: EffectFlash) => this.on.effectFlash(msg));
     room.onMessage(ServerMessage.ArcadeCheer, (msg: ArcadeCheerMessage) =>
       this.on.arcadeCheer(msg),
+    );
+    room.onMessage(ServerMessage.ArcadeAskResult, (msg: ArcadeAskResult) =>
+      this.on.arcadeAskResult(msg),
     );
     room.onMessage(ServerMessage.BoardChanged, (m: { furniId: string }) =>
       this.on.boardChanged(m.furniId),

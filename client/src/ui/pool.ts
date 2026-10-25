@@ -66,6 +66,10 @@ export interface PoolViewOptions {
   mySlot: () => ArcadeSlot | null;
   shoot(msg: Omit<PoolShotMessage, 'furniId'>): Promise<ArcadeReply>;
   aim(msg: PoolAim): void;
+  /** Treino: mudar uma bola de lugar, voltar para antes da última tacada, arrumar de novo. */
+  place(ball: number, x: number, y: number): Promise<ArcadeReply>;
+  undo(): Promise<ArcadeReply>;
+  reset(): Promise<ArcadeReply>;
 }
 
 /** Converte entre o canvas (px de CSS) e o pano (metros); a barra de força fica à direita. */
@@ -121,7 +125,11 @@ export class PoolView {
   private turnKey = '';
   private aimDir: PoolPos = [1, 0];
   private power = 0;
-  private drag: 'aim' | 'cue' | 'power' | null = null;
+  private drag: 'aim' | 'cue' | 'power' | 'ball' | null = null;
+  /** Treino: a bola sendo arrastada (e onde ela está agora). */
+  private moving: { ball: number; pos: PoolPos } | null = null;
+  /** A força da última tacada (uma marca na barra, para repetir). */
+  private lastPower = 0;
   /** Toque numa caçapa na vez da 8 (vira o canto se o dedo não arrastar). */
   private tap: { pocket: number; px: number; py: number } | null = null;
   /** Onde quem tem bola na mão pôs a branca (`null` = onde ela parou). */
@@ -224,6 +232,23 @@ export class PoolView {
     );
   }
 
+  /** Treino: as bolas voltam para antes da última tacada, com a mesma mira e o mesmo efeito. */
+  repeatLast(): void {
+    const shot = this.view?.pool.shot;
+    void this.opts.undo().then((res) => {
+      if (!res.ok || !shot) return;
+      this.aimDir = [shot.dx, shot.dy];
+      this.spin = { x: shot.sx, y: shot.sy };
+      this.lastPower = shot.power;
+      this.cuePos = null;
+      this.sendAim();
+    });
+  }
+
+  private get practice(): boolean {
+    return this.view?.solo === 'practice';
+  }
+
   // ---------- Estado ----------
 
   /** É a minha vez de tacar agora. */
@@ -241,9 +266,10 @@ export class PoolView {
     if (!v.pool.inHand || v.phase !== 'aim') return balls;
     const aim = v.pool.aim;
     const cue: PoolPos | null = this.myTurn ? this.cuePos : aim ? [aim.cx, aim.cy] : null;
-    if (!cue) return balls;
+    if (!cue && !this.moving) return balls;
     const out = balls.slice();
-    out[0] = cue;
+    if (cue) out[0] = cue;
+    if (this.moving) out[this.moving.ball] = this.moving.pos;
     return out;
   }
 
@@ -293,6 +319,11 @@ export class PoolView {
     ) {
       this.drag = 'cue';
       this.placeCue(p);
+    } else if (this.practice && this.ballAt(p, tr.s) > 0) {
+      // Treino: arrasta qualquer bola para montar a jogada.
+      const ball = this.ballAt(p, tr.s);
+      this.drag = 'ball';
+      this.moving = { ball, pos: this.restBalls()![ball]! };
     } else if (calling && pocket >= 0) {
       // Na vez da 8, tocar na caçapa canta; arrastar dali ainda mira.
       this.drag = 'aim';
@@ -313,13 +344,25 @@ export class PoolView {
       this.tap = null;
       this.aimAt(p);
     } else if (this.drag === 'cue') this.placeCue(p);
-    else this.power = clamp((py - tr.bar.y) / tr.bar.h, 0, 1);
+    else if (this.drag === 'ball' && this.moving) {
+      const R = POOL.ballR;
+      this.moving.pos = [clamp(p[0], R, POOL.tableL - R), clamp(p[1], R, POOL.tableW - R)];
+      return;
+    } else this.power = clamp((py - tr.bar.y) / tr.bar.h, 0, 1);
     this.sendAim();
   };
 
   private readonly onUp = (): void => {
     const was = this.drag;
     this.drag = null;
+    if (was === 'ball' && this.moving) {
+      const { ball, pos } = this.moving;
+      void this.opts.place(ball, pos[0], pos[1]).then((res) => {
+        if (!res.ok) this.say(res.reason);
+        this.moving = null;
+      });
+      return;
+    }
     if (this.tap) {
       this.call = this.tap.pocket;
       this.tap = null;
@@ -339,6 +382,24 @@ export class PoolView {
     this.aimDir = [x * Math.cos(a) - y * Math.sin(a), x * Math.sin(a) + y * Math.cos(a)];
     this.sendAim();
   };
+
+  /** Bola (fora a branca) embaixo do dedo ou do mouse; 0 = nenhuma. */
+  private ballAt(p: PoolPos, scale: number): number {
+    const balls = this.restBalls();
+    if (!balls) return 0;
+    const near = Math.max(POOL.ballR * 1.4, 10 / scale);
+    let best = 0;
+    let bestD = near;
+    balls.forEach((b, i) => {
+      if (!b || i === 0) return;
+      const d = dist(p, b);
+      if (d < bestD) {
+        bestD = d;
+        best = i;
+      }
+    });
+    return best;
+  }
 
   private aimAt(p: PoolPos): void {
     const cue = this.restBalls()?.[0];
@@ -396,6 +457,7 @@ export class PoolView {
   private shoot(): void {
     const v = this.view!;
     const power = this.power;
+    this.lastPower = this.practice ? power : 0;
     this.power = 0;
     const balls = this.restBalls();
     if (!balls?.[0]) return;
@@ -523,7 +585,13 @@ export class PoolView {
       ctx.arc(c.x, c.y, POOL.ballR * tr.s + 3, 0, Math.PI * 2);
       ctx.stroke();
     }
-    drawPowerBar(ctx, tr, mine ? this.power : (v?.pool.aim?.power ?? 0), mine);
+    drawPowerBar(
+      ctx,
+      tr,
+      mine ? this.power : (v?.pool.aim?.power ?? 0),
+      mine,
+      mine ? this.lastPower : 0,
+    );
     this.drawBanner(v);
     this.dot.style.left = `${50 + this.spin.x * 40}%`;
     this.dot.style.top = `${50 - this.spin.y * 40}%`;
@@ -549,6 +617,17 @@ export class PoolView {
         : mine
           ? 'Sua vez'
           : `Vez de ${name}`;
+    if (this.practice) {
+      setText(this.opts.turnTitle, v.phase === 'shot' ? '🎱 Tacada…' : 'Treino');
+      setText(
+        this.opts.turnGoal,
+        v.phase === 'shot'
+          ? ''
+          : 'Arraste a branca ou qualquer bola para montar a jogada e taque à vontade.',
+      );
+      this.opts.turnTitle.parentElement?.classList.toggle('mine', true);
+      return;
+    }
     const goal = shotGoal(
       { groupA: v.pool.groupA, breakShot: v.pool.breakShot, inHand: v.pool.inHand },
       v.pool.balls,
@@ -746,7 +825,14 @@ function drawCue(
 }
 
 /** Barra de força: puxe para baixo e solte para tacar. */
-function drawPowerBar(ctx: CanvasRenderingContext2D, tr: Tr, power: number, active: boolean): void {
+function drawPowerBar(
+  ctx: CanvasRenderingContext2D,
+  tr: Tr,
+  power: number,
+  active: boolean,
+  /** Marca da força da última tacada (treino: repetir), 0 = sem marca. */
+  last = 0,
+): void {
   const b = tr.bar;
   ctx.fillStyle = 'rgba(255,255,255,0.08)';
   roundRect(ctx, b.x, b.y, b.w, b.h, 6);
@@ -759,6 +845,15 @@ function drawPowerBar(ctx: CanvasRenderingContext2D, tr: Tr, power: number, acti
   ctx.strokeStyle = active ? '#f2c14e' : 'rgba(255,255,255,0.3)';
   ctx.lineWidth = active ? 2 : 1;
   ctx.strokeRect(b.x + 0.5, b.y + 0.5, b.w - 1, b.h - 1);
+  if (last > 0) {
+    const y = b.y + 3 + (b.h - 6) * last;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(b.x - 4, y);
+    ctx.lineTo(b.x + b.w + 4, y);
+    ctx.stroke();
+  }
   // O nome em pé ao longo da barra e, puxando, a força em palavras.
   ctx.save();
   ctx.fillStyle = active ? '#f4f6f8' : 'rgba(255,255,255,0.55)';

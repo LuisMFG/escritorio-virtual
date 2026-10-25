@@ -3987,6 +3987,49 @@ button.reply-quote:hover {
   margin-top: 10px;
 }
 
+/* Jogar sozinho (treino ou contra o computador) e o pedido da mesa. */
+.arcade-solo,
+.arcade-ask {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px 8px;
+  margin-top: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  font-size: calc(12.5px * var(--font-scale, 1));
+}
+
+.arcade-solo[hidden],
+.arcade-ask[hidden] {
+  display: none;
+}
+
+.arcade-solo > strong {
+  flex-basis: 100%;
+  text-align: center;
+}
+
+.arcade-solo p,
+.arcade-ask p {
+  flex-basis: 100%;
+  margin: 0;
+  text-align: center;
+}
+
+.arcade-solo small {
+  flex-basis: 100%;
+  text-align: center;
+}
+
+.arcade-ask {
+  border-color: var(--warn);
+  background: var(--warn-soft);
+}
+
 /* Torcida: botões para quem assiste e o emoji que pula sobre a mesa. */
 .arcade-cheers {
   display: flex;
