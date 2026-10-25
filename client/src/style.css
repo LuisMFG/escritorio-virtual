@@ -1809,6 +1809,16 @@ mark.mention {
   line-height: 1.5;
 }
 
+/* Aba substituída: cobre tudo (a cena parou) e não fecha clicando fora. */
+.replaced-backdrop {
+  z-index: 1000;
+}
+
+.replaced-box h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
 .confirm-actions {
   display: flex;
   justify-content: flex-end;
@@ -3794,6 +3804,106 @@ button.reply-quote:hover {
   justify-content: center;
   min-height: 34px;
   margin-top: 10px;
+}
+
+/* Torcida: botões para quem assiste e o emoji que pula sobre a mesa. */
+.arcade-cheers {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.arcade-cheers[hidden] {
+  display: none;
+}
+
+.arcade-cheer {
+  width: 36px;
+  height: 32px;
+  padding: 0;
+  font-size: 1.1rem;
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+
+.arcade-cheer:hover {
+  background: var(--surface-3);
+}
+
+.arcade-cheer:active {
+  transform: scale(0.92);
+}
+
+.arcade-cheer-pop {
+  position: absolute;
+  font-size: 1.4rem;
+  pointer-events: none;
+  animation: cheer-pop 1.6s ease-out forwards;
+}
+
+@keyframes cheer-pop {
+  0% {
+    opacity: 0;
+    transform: translateY(0) scale(0.6);
+  }
+  15% {
+    opacity: 1;
+    transform: translateY(-8px) scale(1.1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-60px) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .arcade-cheer-pop {
+    animation-duration: 0.8s;
+  }
+}
+
+/* Ranking do jogo (abre e fecha). */
+.arcade-ranking {
+  margin-top: 10px;
+  border-top: 1px solid var(--card-border);
+  padding-top: 8px;
+}
+
+.arcade-ranking summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.arcade-ranking-list {
+  margin: 8px 0 4px;
+  padding-left: 22px;
+}
+
+.arcade-ranking-list li::marker {
+  color: var(--muted);
+}
+
+.arcade-ranking-list li {
+  padding: 2px 0;
+}
+
+.arcade-ranking-list li span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.arcade-ranking-score {
+  float: right;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.arcade-ranking-me {
+  margin: 4px 0 0;
+  font-size: 0.85rem;
 }
 
 /* ---------- Fase 18: pets ---------- */
@@ -7368,6 +7478,44 @@ kbd {
 }
 
 /* Um quadro por pessoa: vídeo (16:9) ou o rosto do avatar. */
+/* Minha internet está fraca: aviso entre o topo e os quadros. */
+.call-weak {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 8px 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--warn);
+  border-radius: var(--radius-md);
+  background: var(--warn-soft);
+  color: var(--text);
+  font-size: 0.82rem;
+}
+
+.call-weak[hidden] {
+  display: none;
+}
+
+.call-weak > svg {
+  flex: none;
+  color: var(--warn);
+}
+
+.call-weak p {
+  flex: 1;
+  margin: 0;
+  line-height: 1.35;
+}
+
+.call-weak button {
+  flex: none;
+}
+
+/* Caiu e está voltando: quadro apagado até reconectar. */
+.call-tile.away {
+  opacity: 0.55;
+}
+
 .call-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));

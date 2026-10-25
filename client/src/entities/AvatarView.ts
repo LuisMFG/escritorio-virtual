@@ -17,6 +17,7 @@ import {
   nextBlinkDelay,
   poseKey,
   TALK_FRAME_MS,
+  headTurn,
   walkFrame,
   type FigurePose,
   focusLeft,
@@ -147,6 +148,8 @@ export class AvatarView extends Container {
   private poser: AvatarPoser | null = null;
   private poseShown = '';
   private talkUntil = 0;
+  /** Olhando para quem falou: direção do olhar e até quando. */
+  private look: { dir: number; until: number } | null = null;
   private blinkAt = nextBlinkDelay();
   private lying = false;
   private handItem = 0;
@@ -337,6 +340,19 @@ export class AvatarView extends Container {
   /** Comemoração: efeito por alguns segundos. */
   flashEffect(id: EffectId, ms: number): void {
     this.fxLayer?.flashFor(id, ms);
+  }
+
+  /** Alguém por perto falou: vira a cabeça para lá por um tempo (o corpo fica como está). */
+  lookAt(dir: number, durationMs: number): void {
+    this.look = { dir, until: this.clock + durationMs };
+  }
+
+  /** Quanto a cabeça está virada para quem falou agora (testes e depuração). */
+  get lookingTurn(): number {
+    const look = this.look;
+    if (!look || this.clock >= look.until || this.step || this.lying || this.emote) return 0;
+    if (this.danceNow()) return 0;
+    return headTurn(this.dir, look.dir) ?? 0;
   }
 
   /** Falou no chat: a boca mexe por um tempo. */
@@ -745,6 +761,13 @@ export class AvatarView extends Container {
       else if (LEFT_ARM_GESTURES.has(pose.gesture)) pose.handGesture = 'crr';
     }
     if (this.step && pose.posture !== 'wlk') pose.posture = 'wlk';
+    // Olhando para quem falou: só a cabeça gira, e só parado (andando, deitado, no meio de um
+    // emote ou dançando, segue como está).
+    if (this.look && this.clock >= this.look.until) this.look = null;
+    if (this.look && !this.step && !this.lying && !this.emote && !dance) {
+      const dd = headTurn(this.dir, this.look.dir);
+      if (dd !== null) pose.parts = { ...pose.parts, head: { ...pose.parts?.head, dd } };
+    }
     if (this.clock < this.talkUntil && !pose.talk) {
       pose.talk = true;
       pose.talkFrame = Math.floor(this.clock / TALK_FRAME_MS) % 2;

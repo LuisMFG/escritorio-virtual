@@ -16,6 +16,9 @@ import {
   stackedOn,
   RoomGrid,
   talkDurationMs,
+  facingToward,
+  LOOK_MS,
+  LOOK_RADIUS,
   tileCorners,
   tileHeight,
   type DepthBox,
@@ -66,6 +69,9 @@ const SPOTLIGHT_MS = 1800;
 /** Ponta do balão: um pouco acima do nome do avatar. */
 const HEAD_OFFSET_Y = -100;
 const MAX_BUBBLES = 10;
+/** Reações da torcida na tela ao mesmo tempo, e quanto cada uma dura (ms). */
+const MAX_CHEERS = 24;
+const CHEER_MS = 1600;
 /** zIndex do fantasma do modo decorar: sempre por cima. */
 const GHOST_Z = 1_000_000;
 /** Brilho sobre os dois no toca aqui (ms). */
@@ -154,6 +160,9 @@ export class RoomScene implements DecorHost {
   /** Placar que flutua sobre as mesas do Salão de Jogos (Fase 57). */
   private readonly arcadeBoards = new Container({ label: 'arcadeBoards' });
   private readonly arcade = new Map<string, ArcadeView>();
+  /** Torcida subindo sobre as mesas do Salão (emoji, idade em ms). */
+  private readonly cheers = new Container({ label: 'cheers' });
+  private readonly cheerAge = new Map<Text, number>();
   private arcadeDirty = false;
   /** Contagem do W.O.: o placar se redesenha a cada segundo enquanto alguém está fora. */
   private arcadeTick = 0;
@@ -220,6 +229,7 @@ export class RoomScene implements DecorHost {
       this.debugLayer,
       this.plaques,
       this.arcadeBoards,
+      this.cheers,
       this.spotlight,
       this.bubbles,
       this.doorLabel,
@@ -424,6 +434,45 @@ export class RoomScene implements DecorHost {
       board.position.set(Math.round(p.sx), Math.round(p.sy - label.height / 2));
       board.eventMode = 'none';
       this.arcadeBoards.addChild(board);
+    }
+  }
+
+  /** Alguém da torcida reagiu: o emoji sobe sobre a mesa e some. */
+  cheer(furniId: string, emoji: string): void {
+    const f = this.furni.get(furniId);
+    if (!f) return;
+    const fp = f.footprint;
+    const p = tileToScreen(
+      (fp.minX + fp.maxX) / 2,
+      (fp.minY + fp.maxY) / 2,
+      f.placed.z + f.def.height + 1.4,
+    );
+    const t = new Text({ text: emoji, resolution: 2, style: { fontSize: 18 } });
+    t.anchor.set(0.5);
+    // Um pouco para os lados, para várias reações seguidas não ficarem uma em cima da outra.
+    t.position.set(Math.round(p.sx + (Math.random() - 0.5) * 48), Math.round(p.sy - 14));
+    t.eventMode = 'none';
+    this.cheers.addChild(t);
+    this.cheerAge.set(t, 0);
+    while (this.cheers.children.length > MAX_CHEERS)
+      this.dropCheer(this.cheers.children[0] as Text);
+  }
+
+  private dropCheer(t: Text): void {
+    this.cheerAge.delete(t);
+    t.destroy();
+  }
+
+  private animateCheers(dtMs: number): void {
+    for (const [t, age] of this.cheerAge) {
+      const next = age + dtMs;
+      if (next >= CHEER_MS) {
+        this.dropCheer(t);
+        continue;
+      }
+      this.cheerAge.set(t, next);
+      t.y -= dtMs * 0.03;
+      t.alpha = next > CHEER_MS * 0.6 ? 1 - (next - CHEER_MS * 0.6) / (CHEER_MS * 0.4) : 1;
     }
   }
 
@@ -835,6 +884,7 @@ export class RoomScene implements DecorHost {
     const avatar = this.avatars.get(sessionId);
     if (!avatar) return;
     avatar.talk(talkDurationMs(text));
+    this.lookAtSpeaker(sessionId, avatar);
     const bubble = new ChatBubble(name, text, avatar.isLocal, highlight);
     const gap = 3;
     for (const b of this.bubbles.children as ChatBubble[]) b.targetY -= bubble.stackHeight + gap;
@@ -846,10 +896,27 @@ export class RoomScene implements DecorHost {
     }
   }
 
+  /** Quem está por perto (e não está jogando) vira a cabeça para quem falou. */
+  private lookAtSpeaker(speakerId: string, speaker: AvatarView): void {
+    const at = speaker.destination;
+    const playing = new Set<string>();
+    for (const view of this.arcade.values()) {
+      for (const seat of Object.values(view.seats)) if (seat.session) playing.add(seat.session);
+    }
+    for (const [id, other] of this.avatars) {
+      if (id === speakerId || playing.has(id)) continue;
+      const from = other.destination;
+      if (Math.hypot(at.x - from.x, at.y - from.y) > LOOK_RADIUS) continue;
+      const dir = facingToward(from, at);
+      if (dir !== null) other.lookAt(dir, LOOK_MS);
+    }
+  }
+
   // ---------- Ciclo ----------
 
   update(dtMs: number): void {
     for (const f of this.furni.values()) f.animate();
+    if (this.cheerAge.size) this.animateCheers(dtMs);
     this.updateSpotlight(dtMs);
     if (this.plaquesDirty) {
       this.plaquesDirty = false;

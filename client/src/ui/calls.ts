@@ -200,7 +200,16 @@ export interface CallPanelHandlers {
   stats(): Promise<VideoStat[]>;
   /** Rosto do avatar com esse visual (boca fechada e falando); `null` se não der para montar. */
   face(figure: string): Promise<CallFace | null>;
+  /** A minha internet ficou fraca com a janela minimizada (o aviso vai como notificação). */
+  weakLink(): void;
 }
+
+/** Conexão ruim por esse tempo (ms) antes de avisar (piscadas curtas não contam). */
+const WEAK_AFTER_MS = 4000;
+/** Boa de novo por esse tempo (ms) antes de tirar o aviso. */
+const WEAK_CLEAR_MS = 8000;
+/** Fechou o aviso: não volta por esse tempo (ms). */
+const WEAK_SNOOZE_MS = 3 * 60_000;
 
 /** Vídeos de uma pessoa no painel (câmera e/ou tela). */
 export type PanelVideo = CallVideo;
@@ -292,6 +301,10 @@ export class CallPanel {
     className: 'call-time muted',
   });
   private readonly tiles = new Map<string, Tile>();
+  /** Aviso de que a minha internet está fraca (entre o topo e os quadros). */
+  private readonly weak = document.createElement('div');
+  private weakTimer = 0;
+  private weakSnoozedUntil = 0;
   private videos: ReadonlyMap<string, PanelVideo> = new Map();
   private links: ReadonlyMap<string, LinkQuality> = new Map();
   private timer = 0;
@@ -345,7 +358,8 @@ export class CallPanel {
     );
     this.grid.className = 'call-grid';
     this.controls.className = 'call-controls';
-    this.el.append(this.head, this.grid, this.controls);
+    this.buildWeak();
+    this.el.append(this.head, this.weak, this.grid, this.controls);
     document.body.append(this.el);
     this.drag = makeDraggable(this.el, {
       handle: '.call-panel-head',
@@ -387,6 +401,8 @@ export class CallPanel {
         t.pipRef = bind(t.pipVideo, t.pipRef, null);
       }
       this.tiles.clear();
+      clearTimeout(this.weakTimer);
+      this.weak.hidden = true;
       this.grid.replaceChildren();
       this.controls.replaceChildren();
       this.setExpanded(false);
@@ -424,8 +440,55 @@ export class CallPanel {
 
   /** Qualidade da conexão de cada um (o pontinho no canto do quadro). */
   setLinks(links: ReadonlyMap<string, LinkQuality>): void {
+    const wasWeak = this.links.get(this.myUserId) === 'ruim';
     this.links = links;
     for (const [id, t] of this.tiles) this.paintLink(id, t);
+    const weak = links.get(this.myUserId) === 'ruim';
+    if (weak === wasWeak) return;
+    // Só avisa (ou tira o aviso) se a mudança durar: a qualidade oscila.
+    clearTimeout(this.weakTimer);
+    this.weakTimer = window.setTimeout(
+      () => this.setWeak(weak),
+      weak ? WEAK_AFTER_MS : WEAK_CLEAR_MS,
+    );
+  }
+
+  private buildWeak(): void {
+    this.weak.className = 'call-weak';
+    this.weak.setAttribute('role', 'status');
+    this.weak.hidden = true;
+    const text = Object.assign(document.createElement('p'), {
+      textContent:
+        'Sua internet está fraca: os outros podem ver e ouvir você com falhas. Feche downloads e vídeos ou chegue mais perto do Wi-Fi.',
+    });
+    const economy = Object.assign(document.createElement('button'), {
+      type: 'button',
+      className: 'btn-secondary call-weak-economy',
+      textContent: 'Usar Economia',
+    });
+    economy.addEventListener('click', () => {
+      void this.on.setQuality('economia');
+      this.weak.hidden = true;
+    });
+    const close = iconButton('call-weak-close', () => {
+      this.weak.hidden = true;
+      this.weakSnoozedUntil = Date.now() + WEAK_SNOOZE_MS;
+    });
+    label(close, 'x', 'Fechar aviso de internet fraca');
+    this.weak.append(icon('wifi-off', 16), text, economy, close);
+  }
+
+  private setWeak(on: boolean): void {
+    if (!this.state) return;
+    if (!on) {
+      this.weak.hidden = true;
+      return;
+    }
+    if (Date.now() < this.weakSnoozedUntil || !this.weak.hidden) return;
+    const economy = this.weak.querySelector<HTMLButtonElement>('.call-weak-economy')!;
+    economy.hidden = this.on.quality() === 'economia';
+    this.weak.hidden = false;
+    if (this.minimized) this.on.weakLink();
   }
 
   /** Redesenha os botões (mudo, câmera…) e o mini-player depois de uma mudança. */
@@ -510,7 +573,10 @@ export class CallPanel {
       label(t.pipHide, 'eye-off', `Esconder ${pipName}`);
       t.showPip.hidden = !pip || showPip;
       label(t.showPip, 'eye', `Mostrar ${pipName}`);
-      t.name.textContent = `${who}${kind === 'screen' ? ' · tela' : ''}`;
+      t.name.textContent = m.away
+        ? `${who} · reconectando…`
+        : `${who}${kind === 'screen' ? ' · tela' : ''}`;
+      t.el.classList.toggle('away', m.away);
       t.icons.replaceChildren();
       if (!m.mic) {
         const muted = icon('mic-off', 13);

@@ -5,6 +5,7 @@ import { Callbacks } from '@colyseus/sdk';
 import {
   arcadeKindOf,
   arcadeView,
+  ARCADE_CHEERS,
   type ArcadeFields,
   parseAvatarManifest,
   parseFurniManifest,
@@ -98,6 +99,7 @@ import { showReminder } from './ui/reminder.js';
 import { MessagesPanel } from './ui/messages.js';
 import { SystemNotifier } from './ui/notifications.js';
 import { LobbyConnection, type OnlineInfo } from './net/LobbyConnection.js';
+import { showReplaced } from './ui/replaced.js';
 import { confirmDialog } from './ui/confirm.js';
 import { ChatSound } from './ui/sound.js';
 import { Overlay } from './ui/overlay.js';
@@ -1046,6 +1048,8 @@ async function start(): Promise<void> {
         start: () => connection.arcadeStart(furniId),
         forfeit: () => connection.arcadeForfeit(furniId),
         mode: (m) => connection.arcadeMode(furniId, m),
+        cheer: (c) => connection.arcadeCheer(furniId, c),
+        ranking: () => connection.arcadeRanking(kind),
         pong: {
           paddle: (p) => connection.pongPaddle(furniId, p),
           serve: (m) => connection.pongServe(furniId, m),
@@ -1540,11 +1544,20 @@ async function start(): Promise<void> {
       micLevel: () => calls?.micLevel() ?? 0,
       cameraStream: () => calls?.cameraStream ?? null,
       face: callFace,
+      weakLink: () =>
+        overlay.notify('Sua internet está fraca: os outros podem ver e ouvir você com falhas.', {
+          kind: 'error',
+          durationMs: 6000,
+        }),
     });
     const panel = callPanel;
+    // Testes: simular a qualidade da conexão (o aviso de internet fraca).
+    if (E2E_MODE) (window as unknown as { __e2eCallPanel: CallPanel }).__e2eCallPanel = panel;
     calls = new CallManager(l, me, {
       state: (st) => {
         panel.set(st);
+        // Caiu ou recarregou no meio da chamada e voltou sozinho.
+        if (st?.rejoined) overlay.notify('Você voltou para a chamada.', { kind: 'success' });
         if (!st) scene?.setSpeaking(new Set());
       },
       invited: (invite) => {
@@ -1577,6 +1590,19 @@ async function start(): Promise<void> {
       links: (l) => panel.setLinks(l),
       error: (message) => overlay.notify(message, { kind: 'error', durationMs: 6000 }),
     });
+  }
+
+  /**
+   * A conta entrou por outra aba ou aparelho: esta para tudo (sala, canal global e chamada, que
+   * segue na outra) e mostra o aviso com "Usar aqui".
+   */
+  async function replacedHere(message: string): Promise<void> {
+    showReplaced(message);
+    await Promise.all([
+      calls?.stop(),
+      connection?.leave().catch(() => undefined),
+      lobby?.leave().catch(() => undefined),
+    ]);
   }
 
   async function connectLobby(token: string): Promise<void> {
@@ -1666,6 +1692,7 @@ async function start(): Promise<void> {
         annBanner.remove(id);
         annPanel?.refresh();
       },
+      replaced: (msg) => void replacedHere(msg.message),
       ready: () => {
         void messages.refresh();
         // Avisos que a pessoa ainda não leu (inclusive os de antes de ela entrar).
@@ -1762,6 +1789,10 @@ async function start(): Promise<void> {
       pollUpdated: ({ poll }) => chat.updatePoll(poll),
       focusPhase: (p) => focus.phase(p),
       effectFlash: (msg) => scene?.flashEffect(msg.sessionId, msg.effect, msg.ms),
+      arcadeCheer: (msg) => {
+        scene?.cheer(msg.furniId, ARCADE_CHEERS[msg.cheer].emoji);
+        if (arcadePanel?.furniId === msg.furniId) arcadePanel.cheered(msg);
+      },
       kicked: (msg) => {
         if (msg.scope === 'room') return overlay.notify(msg.message);
         // Do escritório: volta para a entrada com o aviso.
@@ -1773,6 +1804,7 @@ async function start(): Promise<void> {
         }
         location.reload();
       },
+      replaced: (msg) => void replacedHere(msg.message),
       sessionInvalid: () => {
         forgetToken();
         location.reload();

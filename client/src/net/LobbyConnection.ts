@@ -25,8 +25,12 @@ import {
   type CallMedia,
   type CallState,
   type CallToken,
+  REPLACED_TEXT,
+  ServerMessage,
+  type ReplacedMessage,
 } from '@office/shared';
-import { isSessionError, serverEndpoint } from './OfficeConnection.js';
+import { isReplacedError, isSessionError, serverEndpoint } from './OfficeConnection.js';
+import { TAB_ID } from './tab.js';
 
 export interface OnlineInfo {
   userId: string;
@@ -56,6 +60,8 @@ interface LobbyHandlers {
   kudosChanged(): void;
   /** O canal global (re)conectou: hora de recarregar conversas e não lidas. */
   ready(): void;
+  /** A conta entrou por outra aba ou aparelho: esta aba saiu. */
+  replaced(msg: ReplacedMessage): void;
 }
 
 /** Mensagens das chamadas (Fase 49), ligadas depois pelo `CallManager`. */
@@ -78,11 +84,6 @@ export class LobbyConnection {
   private leaving = false;
   private rejoining = false;
   private calls: CallHandlers | null = null;
-  /**
-   * Identidade desta aba: a mesma em todas as reconexões. Assim, se a conexão cair no meio de
-   * uma chamada, o servidor sabe que é a mesma aba que voltou e a chamada continua.
-   */
-  private readonly tab = Math.random().toString(36).slice(2, 12) + Date.now().toString(36);
 
   constructor(
     private readonly token: string,
@@ -100,7 +101,7 @@ export class LobbyConnection {
   async connect(): Promise<void> {
     const room: Room<unknown, LobbyState> = await this.client.joinOrCreate(
       LOBBY_ROOM,
-      { token: this.token, tab: this.tab },
+      { token: this.token, tab: TAB_ID },
       LobbyState,
     );
     this.room = room;
@@ -142,6 +143,11 @@ export class LobbyConnection {
       emitRooms();
     });
     cb.onRemove('rooms', emitRooms);
+    room.onMessage(ServerMessage.Replaced, (m: ReplacedMessage) => {
+      // A conta entrou por outra aba: não tenta voltar quando o servidor fechar a conexão.
+      this.leaving = true;
+      this.on.replaced(m);
+    });
     room.onReconnect(() => this.on.ready());
     room.onLeave((code) => {
       if (this.leaving || code === CloseCode.CONSENTED) return;
@@ -232,6 +238,12 @@ export class LobbyConnection {
       } catch (err) {
         // Sessão recusada: a conexão da sala trata (volta para a entrada).
         if (isSessionError(err)) break;
+        // Outra aba assumiu enquanto esta estava sem conexão.
+        if (isReplacedError(err)) {
+          this.leaving = true;
+          this.on.replaced({ message: REPLACED_TEXT });
+          break;
+        }
       }
     }
     this.rejoining = false;

@@ -10,6 +10,13 @@ import {
   type ChatMessage,
   type ChatDeletedMessage,
   type KickedMessage,
+  REPLACED_CODE,
+  REPLACED_TEXT,
+  type ReplacedMessage,
+  type ArcadeCheer,
+  type ArcadeCheerMessage,
+  type ArcadeKind,
+  type ArcadeRanking,
   type BoardNote,
   type PollCreate,
   type FocusPhase,
@@ -48,6 +55,7 @@ import {
   type RoomTransferMessage,
   RECEPTION,
 } from '@office/shared';
+import { TAB_ID } from './tab.js';
 
 export type ConnectionStatus = 'connecting' | 'online' | 'reconnecting' | 'offline';
 export type OfficeRoomClient = Room<unknown, OfficeState>;
@@ -81,6 +89,8 @@ interface Handlers {
   focusPhase: (msg: FocusPhase) => void;
   /** Comemoração: efeito por alguns segundos sobre alguém. */
   effectFlash: (msg: EffectFlash) => void;
+  /** A torcida reagiu numa mesa do Salão. */
+  arcadeCheer: (msg: ArcadeCheerMessage) => void;
   /** Recados de um mural mudaram. */
   boardChanged: (furniId: string) => void;
   wbStroke: (msg: WbStrokeMessage) => void;
@@ -95,6 +105,8 @@ interface Handlers {
   layoutChanged: (room: OfficeRoomClient, layout: RoomLayoutMessage) => void;
   /** Um admin tirou você (da sala: vem um transfer em seguida; do escritório: fim). */
   kicked: (msg: KickedMessage) => void;
+  /** A conta entrou por outra aba ou aparelho: esta aba saiu do escritório. */
+  replaced: (msg: ReplacedMessage) => void;
   /** Vai trocar de sala por uma porta (hora de escurecer a tela). */
   transferStart: (targetRoomId: string) => void;
   /** Sessão recusada pelo servidor: voltar para a tela de entrada. */
@@ -371,6 +383,17 @@ export class OfficeConnection {
     return this.arcadeRequest(ClientMessage.ArcadeMode, { furniId, mode });
   }
 
+  /** Torcida numa mesa do Salão (quem não está jogando). */
+  arcadeCheer(furniId: string, cheer: ArcadeCheer): void {
+    this.room?.send(ClientMessage.ArcadeCheer, { furniId, cheer });
+  }
+
+  /** Ranking de um jogo do Salão (`null` sem conexão). */
+  async arcadeRanking(kind: ArcadeKind): Promise<ArcadeRanking | null> {
+    if (!this.room) return null;
+    return (await this.room.request(ClientMessage.ArcadeRanking, { kind })) as ArcadeRanking | null;
+  }
+
   /** Ping-pong (Fase 58): onde está a minha raquete. */
   pongPaddle(furniId: string, p: { x: number; y: number }): void {
     this.room?.send(ClientMessage.PongPaddle, { furniId, x: p.x, y: p.y });
@@ -480,6 +503,7 @@ export class OfficeConnection {
       officeRoomId: this.roomId,
       token: this.token,
       ticket: this.ticket,
+      tab: TAB_ID,
     };
     this.ticket = undefined;
     const room = await this.client.joinOrCreate(OFFICE_ROOM, options, OfficeState);
@@ -503,6 +527,9 @@ export class OfficeConnection {
     room.onMessage(ServerMessage.PollUpdated, (msg: PollUpdated) => this.on.pollUpdated(msg));
     room.onMessage(ServerMessage.FocusPhase, (msg: FocusPhase) => this.on.focusPhase(msg));
     room.onMessage(ServerMessage.EffectFlash, (msg: EffectFlash) => this.on.effectFlash(msg));
+    room.onMessage(ServerMessage.ArcadeCheer, (msg: ArcadeCheerMessage) =>
+      this.on.arcadeCheer(msg),
+    );
     room.onMessage(ServerMessage.BoardChanged, (m: { furniId: string }) =>
       this.on.boardChanged(m.furniId),
     );
@@ -523,6 +550,11 @@ export class OfficeConnection {
       // Do escritório: não tenta reconectar quando o servidor fechar a conexão.
       if (msg.scope === 'office') this.leaving = true;
       this.on.kicked(msg);
+    });
+    room.onMessage(ServerMessage.Replaced, (msg: ReplacedMessage) => {
+      this.leaving = true;
+      this.on.status('offline');
+      this.on.replaced(msg);
     });
     room.onMessage(
       ServerMessage.RoomTransfer,
@@ -584,6 +616,13 @@ export class OfficeConnection {
           this.on.sessionInvalid();
           break;
         }
+        // Outra aba assumiu enquanto esta estava sem conexão.
+        if (isReplacedError(err)) {
+          this.leaving = true;
+          this.on.status('offline');
+          this.on.replaced({ message: REPLACED_TEXT });
+          break;
+        }
       }
     }
     this.rejoining = false;
@@ -593,6 +632,11 @@ export class OfficeConnection {
 /** A sala pedida não existe (foi excluída no editor). */
 function isMissingRoom(err: unknown): boolean {
   return /sala inexistente/i.test((err as { message?: string }).message ?? '');
+}
+
+/** A conta já entrou por outra aba ou aparelho depois que esta caiu. */
+export function isReplacedError(err: unknown): boolean {
+  return (err as { code?: number }).code === REPLACED_CODE;
 }
 
 /** O servidor recusou o token (sessão apagada ou banco recriado). */

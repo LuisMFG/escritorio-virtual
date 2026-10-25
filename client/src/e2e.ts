@@ -55,6 +55,8 @@ export interface E2EHook {
   avatar(sessionId: string): Point | null;
   /** Direção em que o avatar está desenhado (a que se vê, não a do servidor). */
   avatarDir(sessionId: string): number | null;
+  /** Quanto a cabeça está virada para quem falou (0 = olhando para a frente). */
+  avatarLook(sessionId: string): number | null;
   /** Emote que o avatar está fazendo agora (Fase 54). */
   avatarEmote(sessionId: string): string | null;
   /** Dança e quadro que a tela mostra agora (Fase 55). */
@@ -62,6 +64,7 @@ export interface E2EHook {
   furniList(): { id: string; defId: string; x: number; y: number; z: number }[];
   players(): {
     id: string;
+    userId: string;
     name: string;
     x: number;
     y: number;
@@ -181,6 +184,7 @@ export function exposeForTests(
       return { x: Math.round(r.left + c.x), y: Math.round(r.top + c.y) };
     },
     avatarDir: (id) => scene.avatarView(id)?.dir ?? null,
+    avatarLook: (id) => scene.avatarView(id)?.lookingTurn ?? null,
     avatarEmote: (id) => scene.avatarView(id)?.currentEmote ?? null,
     avatarDance: (id) => {
       const d = scene.avatarView(id)?.currentDance;
@@ -275,6 +279,7 @@ export function exposeForTests(
     players: () =>
       [...room.state.players.entries()].map(([id, p]) => ({
         id,
+        userId: p.userId,
         name: p.name,
         x: p.x,
         y: p.y,

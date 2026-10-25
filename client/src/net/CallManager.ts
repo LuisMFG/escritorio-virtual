@@ -344,6 +344,16 @@ export class CallManager {
     this.lobby.callAnswer(inviteId, accept);
   }
 
+  /**
+   * Esta aba saiu do escritório (a conta entrou por outra): solta o microfone e a sala de mídia
+   * sem avisar o servidor, porque a chamada continua na aba nova.
+   */
+  async stop(): Promise<void> {
+    this.current = null;
+    this.on.state(null);
+    await this.teardown();
+  }
+
   leave(): void {
     this.lobby.callLeave();
     void this.applyState(null);

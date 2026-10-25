@@ -1,4 +1,6 @@
 import {
+  ARCADE_CHEERS,
+  ARCADE_CHEER_IDS,
   ARCADE_INFO,
   ARCADE_SLOTS,
   GROUP_NAMES,
@@ -6,7 +8,10 @@ import {
   sideNames,
   sideSlots,
   slotsOf,
+  type ArcadeCheer,
+  type ArcadeCheerMessage,
   type ArcadeKind,
+  type ArcadeRanking,
   type ArcadeMode,
   type ArcadeReply,
   type ArcadeSide,
@@ -28,6 +33,10 @@ export interface ArcadeOptions {
   start(): Promise<ArcadeReply>;
   forfeit(): Promise<ArcadeReply>;
   mode(mode: ArcadeMode): Promise<ArcadeReply>;
+  /** Torcer (quem não está jogando nesta mesa). */
+  cheer(cheer: ArcadeCheer): void;
+  /** Ranking deste jogo (os melhores e o meu placar). */
+  ranking(): Promise<ArcadeRanking | null>;
   /** Ping-pong (Fase 58): raquete, saque e rebatida. */
   pong?: Pick<PongViewOptions, 'paddle' | 'serve' | 'hit'>;
   /** Sinuca (Fase 59): a tacada e a mira ao vivo. */
@@ -40,6 +49,8 @@ export interface ArcadeHandle {
   furniId: string;
   /** A partida mudou (`null` = mesa vazia). */
   update(view: ArcadeView | null): void;
+  /** Alguém da torcida reagiu nesta mesa. */
+  cheered(msg: ArcadeCheerMessage): void;
   close(): void;
 }
 
@@ -79,9 +90,15 @@ export function openArcade(opts: ArcadeOptions): ArcadeHandle {
         title="Efeito: clique onde o taco bate na branca (em cima segue, embaixo volta, no meio sem efeito)"></div>
       <p class="pool-hint"></p>
     </div>
+    <div class="arcade-cheers" role="group" aria-label="Torcida" hidden></div>
     <div class="arcade-mode" role="group" aria-label="Modo de jogo"></div>
     <div class="arcade-slots"></div>
-    <div class="arcade-actions"></div>`;
+    <div class="arcade-actions"></div>
+    <details class="arcade-ranking">
+      <summary></summary>
+      <ol class="arcade-ranking-list"></ol>
+      <p class="arcade-ranking-me muted"></p>
+    </details>`;
   document.body.append(panel);
   const $ = <T extends Element>(sel: string) => panel.querySelector<T>(sel)!;
   $<HTMLElement>('#arcade-title').textContent = `${info.icon} ${info.name}`;
@@ -96,6 +113,53 @@ export function openArcade(opts: ArcadeOptions): ArcadeHandle {
   const modeEl = $<HTMLElement>('.arcade-mode');
   const slotsEl = $<HTMLElement>('.arcade-slots');
   const actions = $<HTMLElement>('.arcade-actions');
+  const cheersEl = $<HTMLElement>('.arcade-cheers');
+  const rankingEl = $<HTMLDetailsElement>('.arcade-ranking');
+  $<HTMLElement>('.arcade-ranking summary').textContent =
+    `🏅 Ranking ${info.game.replace(/^n/, 'd')}`;
+  for (const id of ARCADE_CHEER_IDS) {
+    const c = ARCADE_CHEERS[id];
+    const b = Object.assign(document.createElement('button'), {
+      type: 'button',
+      className: 'arcade-cheer',
+      textContent: c.emoji,
+      title: c.label,
+    });
+    b.setAttribute('aria-label', `Torcer: ${c.label}`);
+    b.addEventListener('click', () => opts.cheer(id));
+    cheersEl.append(b);
+  }
+  /** Ranking: carrega ao abrir e de novo quando uma partida acaba (com ele aberto). */
+  const loadRanking = async () => {
+    const r = await opts.ranking().catch(() => null);
+    if (!r || !panel.isConnected) return;
+    const list = $<HTMLOListElement>('.arcade-ranking-list');
+    list.replaceChildren(
+      ...(r.top.length
+        ? r.top.map((s) => {
+            const li = document.createElement('li');
+            const name = Object.assign(document.createElement('span'), { textContent: s.name });
+            const score = Object.assign(document.createElement('span'), {
+              className: 'arcade-ranking-score',
+              textContent: `${s.wins} V · ${s.losses} D${s.streak >= 2 ? ` · 🔥 ${s.streak}` : ''}`,
+            });
+            score.title = `Melhor sequência: ${s.bestStreak} vitória(s) seguida(s)`;
+            li.append(name, score);
+            return li;
+          })
+        : [Object.assign(document.createElement('li'), { textContent: 'Ninguém jogou ainda.' })]),
+    );
+    const me = r.me;
+    $<HTMLElement>('.arcade-ranking-me').textContent =
+      me.wins + me.losses === 0
+        ? 'Você ainda não jogou aqui.'
+        : `Você: ${me.wins} vitória(s), ${me.losses} derrota(s), melhor sequência ${me.bestStreak}` +
+          (me.streak >= 2 ? `, ${me.streak} seguidas agora 🔥` : '');
+  };
+  rankingEl.addEventListener('toggle', () => {
+    if (rankingEl.open) void loadRanking();
+  });
+  let lastStatus = '';
 
   let view: ArcadeView | null = null;
   /** A mesa ao vivo (ping-pong ou sinuca em andamento). */
@@ -185,6 +249,12 @@ export function openArcade(opts: ArcadeOptions): ArcadeHandle {
       if (mine && full) text += ' Começar de novo?';
     }
     setText(status, text);
+    // Torcida: para quem não está jogando, com alguém na mesa.
+    cheersEl.hidden = Boolean(mine) || !seated.length;
+    if (v && v.status !== lastStatus) {
+      if (v.status === 'ended' && rankingEl.open) void loadRanking();
+      lastStatus = v.status;
+    }
     // Partida em andamento: a mesa vira o jogo (painel maior). Na sinuca, as bolas continuam à
     // mostra depois do fim.
     const live =
@@ -336,6 +406,18 @@ export function openArcade(opts: ArcadeOptions): ArcadeHandle {
     update(v) {
       view = v;
       if (panel.isConnected) render();
+    },
+    cheered(msg) {
+      // O emoji pula sobre a vista da mesa, com o nome de quem torceu.
+      const pop = Object.assign(document.createElement('span'), {
+        className: 'arcade-cheer-pop',
+        textContent: ARCADE_CHEERS[msg.cheer].emoji,
+        title: msg.name,
+      });
+      pop.style.left = `${15 + Math.random() * 70}%`;
+      pop.style.top = `${court.offsetTop + court.offsetHeight / 2}px`;
+      court.insertAdjacentElement('afterend', pop);
+      window.setTimeout(() => pop.remove(), 1600);
     },
     close,
   };
