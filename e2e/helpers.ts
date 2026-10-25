@@ -84,9 +84,11 @@ interface Hook {
     setsA: number;
     setsB: number;
     ball: { x: number; y: number; h: number; by: string; na: number; nb: number } | null;
+    /** Onde está a raquete de cada vaga (a última posição que chegou ao servidor). */
+    paddles: Record<string, { x: number; y: number }>;
   } | null;
-  /** Ponto da mesa de ping-pong (metros) na tela, no painel aberto. */
-  pongPoint(x: number, y: number): { x: number; y: number } | null;
+  /** Ponto da mesa de ping-pong (metros, e a altura) na tela, como a pessoa vê no painel aberto. */
+  pongPoint(x: number, y: number, h?: number): { x: number; y: number } | null;
   /** Sinuca (Fase 59): a vez, as regras, as bolas paradas, a última tacada e a simulação dela. */
   pool(id: string): {
     status: string;

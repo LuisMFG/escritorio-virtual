@@ -28,7 +28,8 @@ async function pull(page: Page, f: number): Promise<void> {
 test('sinuca: abertura e tacada em dois navegadores; todos veem as mesmas bolas e o placar', async ({
   browser,
 }) => {
-  test.setTimeout(120_000);
+  // (As bolas rolam como numa mesa de verdade: a abertura leva uns segundos para parar.)
+  test.setTimeout(180_000);
   const ana = await newPerson(browser, 'Ana');
   const beto = await newPerson(browser, 'Beto');
   const carla = await newPerson(browser, 'Carla');
@@ -39,19 +40,38 @@ test('sinuca: abertura e tacada em dois navegadores; todos veem as mesmas bolas 
   await ana.page.getByRole('button', { name: 'Entrar na vaga 1 do lado a' }).click();
   await clickFurni(beto.page, TABLE);
   await beto.page.getByRole('button', { name: 'Entrar na vaga 1 do lado b' }).click();
+  // Primeira mesa de cada um: o tutorial de 4 passos (o Beto pula; a Ana lê até o fim).
+  const tutorialB = beto.page.getByRole('dialog', { name: 'Como jogar sinuca' });
+  await expect(tutorialB).toContainText('1/4 · O objetivo');
+  await tutorialB.getByRole('button', { name: 'Pular' }).click();
   await beto.page.getByRole('button', { name: 'Começar' }).click();
+  const tutorialA = ana.page.getByRole('dialog', { name: 'Como jogar sinuca' });
+  await expect(tutorialA).toContainText('Encaçape as 7 bolas do seu grupo');
+  for (let i = 0; i < 3; i++) await tutorialA.getByRole('button', { name: 'Próximo' }).click();
+  await expect(tutorialA).toContainText('4/4 · Faltas e a 8');
+  await tutorialA.getByRole('button', { name: 'Entendi' }).click();
+  await expect(tutorialA).toBeHidden();
   const liveA = ana.page.locator('.arcade-panel.live');
   const liveB = beto.page.locator('.arcade-panel.live');
-  await expect(liveA.locator('.arcade-status')).toHaveText('Sua vez! Bola na mão.');
-  await expect(liveA.locator('.pool-hint')).toHaveText(/^Abertura: arraste a branca/);
+  // A faixa da vez diz de quem é e o que fazer; a dica de baixo, como fazer.
+  await expect(liveA.locator('.pool-turn-title')).toHaveText('Sua vez');
+  await expect(liveA.locator('.pool-turn-goal')).toHaveText(/^Abertura: ponha a branca/);
+  await expect(liveA.locator('.pool-hint')).toHaveText(/^Arraste a branca \(atrás da linha\)/);
   await expect(liveA.locator('.pool-clock')).toHaveText(/^⏱ \d+ s$/);
-  await expect(liveB.locator('.arcade-status')).toHaveText(`Vez de ${ana.name} (bola na mão).`);
+  await expect(liveB.locator('.pool-turn-title')).toHaveText(`Vez de ${ana.name}`);
+  // Regras sempre à mão.
+  await liveB.getByRole('button', { name: 'Regras' }).click();
+  await expect(liveB.getByRole('region', { name: 'Regras da sinuca' })).toContainText(
+    'Bola na mão',
+  );
+  await liveB.getByRole('button', { name: 'Regras' }).click();
 
   // Carla assiste: a mesa ao vivo, a mesa aberta e o placar sobre a mesa na sala.
   await clickFurni(carla.page, TABLE);
   const liveC = carla.page.locator('.arcade-panel.live');
-  await expect(liveC.locator('.arcade-status')).toHaveText(`👀 Vez de ${ana.name} (bola na mão).`);
-  await expect(liveC.locator('.pool-left.a')).toHaveText('mesa aberta');
+  await expect(liveC.locator('.pool-turn-title')).toHaveText(`Vez de ${ana.name}`);
+  await expect(liveC.locator('.pool-left.a')).toContainText('mesa aberta');
+  await expect(liveC.locator('.pool-left.a')).toContainText(ana.name);
   await expect
     .poll(() => carla.page.evaluate((id) => window.__e2e!.arcadeBoard(id), TABLE))
     .toMatch(/^🎱 Ana .* 0 × 0 Beto.*\nMesa aberta$/);
@@ -61,7 +81,7 @@ test('sinuca: abertura e tacada em dois navegadores; todos veem as mesmas bolas 
   await ana.page.screenshot({ path: 'e2e-results/shot-sinuca-mira.png' });
   await pull(ana.page, 0.9);
   await expect.poll(async () => (await pool(carla.page))?.shot !== null).toBe(true);
-  await expect(liveC.locator('.arcade-status')).toHaveText(`🎱 Tacada de ${ana.name}…`);
+  await expect(liveC.locator('.pool-turn-title')).toHaveText(`🎱 Tacada de ${ana.name}…`);
   await carla.page.waitForTimeout(600);
   await carla.page.screenshot({ path: 'e2e-results/shot-sinuca.png' });
 
@@ -77,15 +97,16 @@ test('sinuca: abertura e tacada em dois navegadores; todos veem as mesmas bolas 
       s.balls!.map((p, i) => (i === 8 ? null : p)),
     );
   }
-  await expect(liveC.locator('.arcade-points')).toHaveText(`${c!.scoreA} × ${c!.scoreB}`);
-  await expect(liveC.locator('.arcade-sets')).toHaveText(c!.detail);
+  await expect(liveC.locator('.arcade-score')).toBeHidden();
+  // O histórico guarda a tacada (e fica depois da próxima).
+  await expect(liveC.locator('.pool-log li')).toHaveCount(1);
 
   // Quem tem a vez agora taca de novo (fraco, para a tabela de baixo); todos veem o mesmo fim.
   const shooter = c!.turn === 'a1' ? ana : beto;
   const before = c!.shot!.t0;
   const cue = c!.balls![0] ?? [0.5, 0.56];
   if (c!.inHand) {
-    await expect(shooter.page.locator('.pool-hint')).toHaveText(/^Bola na mão/);
+    await expect(shooter.page.locator('.pool-hint')).toHaveText(/^Arraste a branca para onde/);
   }
   await aim(shooter.page, cue[0], 1.0);
   await pull(shooter.page, 0.3);
@@ -94,6 +115,12 @@ test('sinuca: abertura e tacada em dois navegadores; todos veem as mesmas bolas 
   const [a2, c2] = await Promise.all([pool(ana.page), pool(carla.page)]);
   expect(c2!.balls).toEqual(a2!.balls);
   expect(c2!.final).toEqual(c2!.balls);
+  // As duas tacadas no histórico; numa falta, a explicação da regra vem junto.
+  await expect(liveC.locator('.pool-log li')).toHaveCount(2);
+  if (c2!.detail.startsWith('Falta')) {
+    await expect(liveC.locator('.pool-log li').first().locator('.pool-log-help')).toBeVisible();
+  }
+  await carla.page.screenshot({ path: 'e2e-results/shot-sinuca-historico.png' });
 
   // Beto desiste: a partida acaba para todos, e as bolas continuam à mostra.
   await liveB.getByRole('button', { name: 'Desistir' }).click();

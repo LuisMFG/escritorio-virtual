@@ -6,9 +6,65 @@ const pong = (page: Page) => page.evaluate((id) => window.__e2e!.pong(id), TABLE
 const at = (page: Page, x: number, y: number) =>
   page.evaluate(([px, py]) => window.__e2e!.pongPoint(px!, py!), [x, y]);
 
-/** Saca clicando na mesa, atrás da própria linha de fundo. */
+/** Espera (a cada quadro, dentro da página) a bola aparecer em jogo para quem assiste. */
+const sawBall = (page: Page) =>
+  page.evaluate(
+    (id) =>
+      new Promise<boolean>((resolve) => {
+        const end = performance.now() + 10_000;
+        const step = () => {
+          if (window.__e2e!.pong(id)?.ball) return resolve(true);
+          if (performance.now() > end) return resolve(false);
+          requestAnimationFrame(step);
+        };
+        step();
+      }),
+    TABLE,
+  );
+
+/**
+ * Devolve só com o teclado (lado A): segura → ou ← até a raquete chegar perto da linha da bola;
+ * daí o ímã termina o serviço. Roda dentro da página, a cada quadro.
+ */
+async function returnWithKeys(page: Page): Promise<void> {
+  await page.evaluate(
+    (id) =>
+      new Promise<void>((resolve, reject) => {
+        const end = performance.now() + 12_000;
+        let held = '';
+        const press = (key: string) => {
+          if (held === key) return;
+          if (held) window.dispatchEvent(new KeyboardEvent('keyup', { key: held }));
+          if (key) window.dispatchEvent(new KeyboardEvent('keydown', { key }));
+          held = key;
+        };
+        const step = () => {
+          const g = window.__e2e!.pong(id);
+          const b = g?.ball;
+          if (b?.by === 'a') {
+            press('');
+            return resolve();
+          }
+          if (performance.now() > end) return reject(new Error('o teclado não alcançou a bola'));
+          const me = g?.paddles.a1;
+          if (b && me) {
+            const d = b.y - me.y;
+            press(Math.abs(d) < 0.1 ? '' : d > 0 ? 'ArrowRight' : 'ArrowLeft');
+          }
+          requestAnimationFrame(step);
+        };
+        step();
+      }),
+    TABLE,
+  );
+}
+
+/** Onde a raquete espera (atrás da linha de fundo): é aí que o mouse aponta para os lados. */
+const home = (side: 'a' | 'b') => (side === 'a' ? -0.25 : 2.99);
+
+/** Saca clicando na mesa, com a raquete no meio. */
 async function serve(page: Page, side: 'a' | 'b'): Promise<void> {
-  const p = (await at(page, side === 'a' ? -0.2 : 2.94, 0.76))!;
+  const p = (await at(page, home(side), 0.76))!;
   await page.mouse.move(p.x, p.y);
   await page.mouse.click(p.x, p.y);
 }
@@ -27,12 +83,17 @@ async function returnBall(page: Page, side: 'a' | 'b'): Promise<void> {
           const b = window.__e2e!.pong(id!)?.ball;
           if (b?.by === me) return resolve();
           if (performance.now() > end) return reject(new Error('a raquete não alcançou a bola'));
-          if (b && (me === 'a' ? b.na : b.nb) >= 1) {
-            const p = window.__e2e!.pongPoint(b.x, b.y);
-            const court = document.querySelector('.arcade-panel.live .arcade-court');
-            if (p && court) {
-              court.dispatchEvent(
-                new PointerEvent('pointermove', { clientX: p.x, clientY: p.y, bubbles: true }),
+          if (b && b.by !== me) {
+            // Só para os lados: o mouse aponta para a linha da bola; a raquete avança sozinha.
+            const p = window.__e2e!.pongPoint(me === 'a' ? -0.25 : 2.99, b.y);
+            if (p) {
+              window.dispatchEvent(
+                new PointerEvent('pointermove', {
+                  clientX: p.x,
+                  clientY: p.y,
+                  pointerType: 'mouse',
+                  bubbles: true,
+                }),
               );
             }
           }
@@ -67,7 +128,7 @@ test('ping-pong: saque, pontos e rebatida em dois navegadores com 150 ms de atra
   await beto.page.getByRole('button', { name: 'Começar' }).click();
   const liveA = ana.page.locator('.arcade-panel.live');
   const liveB = beto.page.locator('.arcade-panel.live');
-  await expect(liveA.getByText('Seu saque: clique na mesa.')).toBeVisible();
+  await expect(liveA.getByText('Seu saque: clique, aperte espaço ou espere.')).toBeVisible();
   await expect(liveB.getByText(`Saque de ${ana.name}.`)).toBeVisible();
 
   // Carla assiste: abre a mesa e vê a partida ao vivo.
@@ -75,11 +136,14 @@ test('ping-pong: saque, pontos e rebatida em dois navegadores com 150 ms de atra
   const liveC = carla.page.locator('.arcade-panel.live');
   await expect(liveC.getByText('Sets 0 × 0')).toBeVisible();
 
-  // Dois saques da Ana; o Beto não rebate: 2 × 0. A Carla vê a bola em jogo.
+  // Dois saques da Ana; o Beto deixa a raquete no canto e não rebate: 2 × 0. A Carla vê a bola.
+  const away = (await at(beto.page, home('b'), -0.45))!;
+  await beto.page.mouse.move(away.x, away.y);
   for (const n of [1, 2]) {
     await expect.poll(() => pong(ana.page)).toMatchObject({ phase: 'serve', turn: 'a1' });
+    const seen = sawBall(carla.page);
     await serve(ana.page, 'a');
-    await expect.poll(async () => (await pong(carla.page))?.ball !== null).toBe(true);
+    expect(await seen).toBe(true);
     await expect.poll(async () => (await pong(beto.page))?.scoreA, { timeout: 10_000 }).toBe(n);
   }
   await expect(liveC.locator('.arcade-points')).toHaveText('2 × 0');
@@ -91,7 +155,7 @@ test('ping-pong: saque, pontos e rebatida em dois navegadores com 150 ms de atra
       phase: 'serve',
       turn: 'b1',
     });
-  await expect(liveB.getByText('Seu saque: clique na mesa.')).toBeVisible();
+  await expect(liveB.getByText('Seu saque: clique, aperte espaço ou espere.')).toBeVisible();
   await serve(beto.page, 'b');
   // Depois do saque, a raquete do Beto vai para o canto (para ele não alcançar a devolução).
   const corner = (await at(beto.page, 3.6, -0.45))!;
@@ -106,6 +170,14 @@ test('ping-pong: saque, pontos e rebatida em dois navegadores com 150 ms de atra
   await expect
     .poll(() => carla.page.evaluate((id) => window.__e2e!.arcadeBoard(id), TABLE))
     .toMatch(/ 3 × 0 .*\nSets 0 × 0$/);
+
+  // O Beto saca de novo, agora sozinho (sem clicar), e a Ana devolve só com o teclado: 4 × 0.
+  await expect
+    .poll(() => pong(beto.page), { timeout: 10_000 })
+    .toMatchObject({ phase: 'serve', turn: 'b1' });
+  await ana.page.locator('.arcade-panel.live .arcade-court').focus();
+  await returnWithKeys(ana.page);
+  await expect.poll(async () => (await pong(beto.page))?.scoreA, { timeout: 10_000 }).toBe(4);
 
   // Beto desiste: a partida acaba para todos.
   await liveB.getByRole('button', { name: 'Desistir' }).click();
