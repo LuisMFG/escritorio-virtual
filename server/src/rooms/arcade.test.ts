@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  answer,
   arcadeTiming,
+  ask,
+  askExpired,
   back,
+  cpuSlot,
   dropped,
   expire,
   forfeit,
@@ -10,9 +14,11 @@ import {
   join,
   leave,
   newArcade,
+  releaseSolo,
   setMode,
   slotOf,
   start,
+  startSolo,
 } from './arcade.js';
 
 const ana = { session: 's-ana', user: 'u-ana', name: 'Ana' };
@@ -145,5 +151,101 @@ describe('mesas do Salão de Jogos (Fase 57)', () => {
     expect(g.a1Session).toBe('s-ana-2');
     // Quem não estava na mesa não ganha nada.
     expect(back(g, carla.user, 's-carla-2', () => true)).toBe(false);
+  });
+});
+
+describe('jogar sozinho e pedir a mesa', () => {
+  it('contra o computador: ele fica com a outra vaga; a mesa conta como só minha', () => {
+    const g = newArcade('pool');
+    join(g, 'b1', ana);
+    expect(startSolo(g, beto.session, 'cpu', 'medio')).toEqual({
+      ok: false,
+      reason: 'Entre numa vaga antes.',
+    });
+    expect(startSolo(g, ana.session, 'cpu', 'dificil')).toEqual({ ok: true });
+    expect(g).toMatchObject({
+      status: 'playing',
+      solo: 'cpu',
+      level: 'dificil',
+      mode: 1,
+      a1Session: 'cpu',
+      a1Name: 'Computador (difícil)',
+      a1User: '',
+    });
+    expect(cpuSlot(g)).toBe('a1');
+    // Sair: só para (sem vencedor), e o computador sai junto; a mesa fica vazia.
+    expect(leave(g, ana.session)).toEqual({});
+    expect(g).toMatchObject({ status: 'waiting', solo: '', a1Session: '', b1Session: '' });
+    expect(isEmpty(g)).toBe(true);
+  });
+
+  it('treino: sinuca sem adversário; ping-pong com a máquina de bolas; parar não tem vencedor', () => {
+    const pool = newArcade('pool');
+    join(pool, 'a1', ana);
+    startSolo(pool, ana.session, 'practice', 'medio');
+    expect(pool).toMatchObject({ status: 'playing', solo: 'practice', b1Session: '' });
+    expect(forfeit(pool, ana.session)).toEqual({ ok: true });
+    expect(pool).toMatchObject({ status: 'waiting', solo: '', a1Session: ana.session });
+
+    const pong = newArcade('pingpong');
+    join(pong, 'a1', ana);
+    startSolo(pong, ana.session, 'practice', 'facil');
+    expect(pong).toMatchObject({ b1Session: 'cpu', b1Name: 'Máquina de bolas (fácil)' });
+    // Só com a mesa só minha: com outra pessoa sentada, não.
+    const busy = newArcade('pingpong');
+    join(busy, 'a1', ana);
+    join(busy, 'b1', beto);
+    expect(startSolo(busy, ana.session, 'cpu', 'medio')).toMatchObject({ ok: false });
+  });
+
+  it('depois de jogar contra o computador, começar exige um adversário de verdade', () => {
+    const g = newArcade('pingpong');
+    join(g, 'a1', ana);
+    startSolo(g, ana.session, 'cpu', 'facil');
+    expect(forfeit(g, ana.session)).toMatchObject({ ok: true });
+    expect(g.status).toBe('ended');
+    expect(start(g, ana.session)).toEqual({ ok: false, reason: 'Falta um adversário.' });
+    // Alguém entra na vaga: o computador sai e o resultado antigo some.
+    expect(join(g, 'b1', beto)).toEqual({ ok: true });
+    expect(g).toMatchObject({ solo: '', b1Session: beto.session, status: 'waiting' });
+  });
+
+  it('pedir a mesa: quem treina aceita ou recusa; sem resposta, libera', () => {
+    const g = newArcade('pool');
+    join(g, 'a1', ana);
+    startSolo(g, ana.session, 'practice', 'medio');
+    expect(ask(g, ana, 0)).toEqual({ ok: false, reason: 'Você já está nesta mesa.' });
+    expect(ask(g, beto, 1000)).toEqual({ ok: true });
+    expect(g).toMatchObject({ askSession: beto.session, askName: 'Beto' });
+    expect(ask(g, carla, 2000)).toEqual({
+      ok: false,
+      reason: 'Beto já pediu a mesa. Espere a resposta.',
+    });
+    // Só quem treina responde.
+    expect(answer(g, carla.session, true)).toMatchObject({ ok: false });
+    expect(answer(g, ana.session, false)).toEqual({ ok: true, asker: beto.session, name: 'Beto' });
+    expect(g).toMatchObject({ askSession: '', status: 'playing', solo: 'practice' });
+    // Aceitando: o treino acaba e a mesa espera (quem pediu entra na outra vaga pela sala).
+    ask(g, carla, 3000);
+    expect(answer(g, ana.session, true)).toMatchObject({ ok: true, asker: carla.session });
+    expect(g).toMatchObject({ status: 'waiting', solo: '', a1Session: ana.session });
+    // Sem resposta no prazo: vence o pedido.
+    startSolo(g, ana.session, 'cpu', 'medio');
+    ask(g, duda, 10_000);
+    expect(askExpired(g, 10_000 + arcadeTiming.askMs - 1)).toBe(false);
+    expect(askExpired(g, 10_000 + arcadeTiming.askMs)).toBe(true);
+    releaseSolo(g);
+    expect(g).toMatchObject({ status: 'waiting', b1Session: '', askSession: '' });
+    // Sem ninguém jogando sozinho, não tem o que pedir.
+    expect(ask(g, duda, 0)).toMatchObject({ ok: false });
+  });
+
+  it('jogando sozinho, sair da sala libera a mesa na hora (sem esperar W.O.)', () => {
+    const g = newArcade('pingpong');
+    join(g, 'a1', ana);
+    startSolo(g, ana.session, 'cpu', 'medio');
+    expect(gone(g, ana.session, 0)).toBe(true);
+    expect(isEmpty(g)).toBe(true);
+    expect(g.status).toBe('waiting');
   });
 });

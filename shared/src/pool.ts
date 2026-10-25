@@ -717,6 +717,24 @@ export const poolShotSchema = z.object({
   call: z.number().int().min(0).max(5).optional(),
 });
 export type PoolShotMessage = z.infer<typeof poolShotSchema>;
+/** Treino: muda uma bola de lugar (a branca é a 0). */
+export const poolPlaceSchema = z.object({
+  furniId,
+  ball: z.number().int().min(0).max(15),
+  x: z.number().min(0).max(POOL.tableL),
+  y: z.number().min(0).max(POOL.tableW),
+});
+/** Dá para pôr esta bola aqui? Na mesa e sem encostar em outra. */
+export function canPlaceBall(balls: PoolBalls, ball: number, pos: PoolPos): boolean {
+  const [px, py] = pos;
+  if (px < R || px > L - R || py < R || py > W - R) return false;
+  return balls.every((b, i) => {
+    if (!b || i === ball) return true;
+    const dx = b[0] - px;
+    const dy = b[1] - py;
+    return dx * dx + dy * dy >= (2 * R + 0.001) * (2 * R + 0.001);
+  });
+}
 /** Mira ao vivo de quem taca (para os outros verem o taco): direção, força e a branca. */
 export const poolAimSchema = z.object({
   furniId,

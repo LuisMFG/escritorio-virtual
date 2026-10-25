@@ -1,6 +1,9 @@
 import {
+  ARCADE_ASK_MS,
+  ARCADE_CPU_SESSION,
   ARCADE_SLOTS,
   ARCADE_WO_MS,
+  soloOpponentName,
   ArcadeGame,
   otherSide,
   seatOf,
@@ -8,10 +11,12 @@ import {
   sideSlots,
   slotsOf,
   type ArcadeKind,
+  type ArcadeLevel,
   type ArcadeMode,
   type ArcadeSeat,
   type ArcadeSide,
   type ArcadeSlot,
+  type ArcadeSolo,
 } from '@office/shared';
 
 /** Quem ocupa uma vaga: sessão (avatar), conta e nome. */
@@ -31,8 +36,8 @@ export interface ArcadeOutcome {
 
 type Result<T = object> = ({ ok: true } & T) | { ok: false; reason: string };
 
-/** Prazo para voltar antes do W.O. (os testes encurtam). */
-export const arcadeTiming = { woMs: ARCADE_WO_MS };
+/** Prazo para voltar antes do W.O. e para responder ao pedido da mesa (os testes encurtam). */
+export const arcadeTiming = { woMs: ARCADE_WO_MS, askMs: ARCADE_ASK_MS };
 
 const EMPTY: ArcadeSeat = { session: '', user: '', name: '', awayUntil: 0 };
 
@@ -56,8 +61,18 @@ function setSeat(g: ArcadeGame, slot: ArcadeSlot, seat: ArcadeSeat): void {
   g[`${slot}Away`] = seat.awayUntil;
 }
 
+/** É o computador (ou a máquina de bolas), não alguém da sala. */
+export const isCpu = (session: string) => session === ARCADE_CPU_SESSION;
+
 function resetMatch(g: ArcadeGame): void {
+  // Quem joga sozinho volta a ser só a pessoa: o computador sai da vaga dele.
+  for (const s of ARCADE_SLOTS) if (isCpu(g[`${s}Session`])) setSeat(g, s, EMPTY);
   Object.assign(g, {
+    solo: '',
+    level: '',
+    askSession: '',
+    askName: '',
+    askUntil: 0,
     status: 'waiting',
     scoreA: 0,
     scoreB: 0,
@@ -85,9 +100,97 @@ export function slotOf(g: ArcadeGame, session: string): ArcadeSlot | null {
   return ARCADE_SLOTS.find((s) => session && g[`${s}Session`] === session) ?? null;
 }
 
-/** Ninguém na mesa: a sala pode descartar a partida. */
+/** Ninguém da sala na mesa (o computador não conta): a sala pode descartar a partida. */
 export function isEmpty(g: ArcadeGame): boolean {
-  return ARCADE_SLOTS.every((s) => !g[`${s}Session`]);
+  return ARCADE_SLOTS.every((s) => !g[`${s}Session`] || isCpu(g[`${s}Session`]));
+}
+
+/** A vaga do computador (ou da máquina), se houver. */
+export function cpuSlot(g: ArcadeGame): ArcadeSlot | null {
+  return ARCADE_SLOTS.find((s) => isCpu(g[`${s}Session`])) ?? null;
+}
+
+/**
+ * Joga sozinho: só eu na mesa, no 1×1. No treino de sinuca a outra vaga fica vazia; no do
+ * ping-pong entra a máquina de bolas; contra o computador, ele.
+ */
+export function startSolo(
+  g: ArcadeGame,
+  session: string,
+  solo: ArcadeSolo,
+  level: ArcadeLevel,
+): Result {
+  const mine = slotOf(g, session);
+  if (!mine) return { ok: false, reason: 'Entre numa vaga antes.' };
+  if (g.status === 'playing') return { ok: false, reason: 'A partida já começou.' };
+  if (ARCADE_SLOTS.some((s) => s !== mine && g[`${s}Session`] && !isCpu(g[`${s}Session`]))) {
+    return { ok: false, reason: 'Para jogar sozinho, a mesa precisa estar só com você.' };
+  }
+  resetMatch(g);
+  g.mode = 1;
+  // Só eu, na primeira vaga do meu lado (no 2×2 eu podia estar na segunda).
+  const side = sideOf(mine);
+  const me = seatOf(g, mine);
+  const slot = `${side}1` as ArcadeSlot;
+  if (mine !== slot) {
+    setSeat(g, mine, EMPTY);
+    setSeat(g, slot, me);
+  }
+  const name = soloOpponentName(g.kind as ArcadeKind, solo, level);
+  if (name) {
+    setSeat(g, `${otherSide(side)}1` as ArcadeSlot, {
+      session: ARCADE_CPU_SESSION,
+      user: '',
+      name,
+      awayUntil: 0,
+    });
+  }
+  Object.assign(g, { status: 'playing', solo, level });
+  return { ok: true };
+}
+
+/** Pedir a mesa a quem joga sozinho: a pessoa responde, e sem resposta a mesa é liberada. */
+export function ask(g: ArcadeGame, p: ArcadePlayer, now: number): Result {
+  if (!g.solo || g.status !== 'playing') {
+    return { ok: false, reason: 'Ninguém está jogando sozinho aqui.' };
+  }
+  if (slotOf(g, p.session)) return { ok: false, reason: 'Você já está nesta mesa.' };
+  if (g.askSession && g.askSession !== p.session && g.askUntil > now) {
+    return { ok: false, reason: `${g.askName} já pediu a mesa. Espere a resposta.` };
+  }
+  Object.assign(g, { askSession: p.session, askName: p.name, askUntil: now + arcadeTiming.askMs });
+  return { ok: true };
+}
+
+/** A partida sozinha acaba sem resultado: a mesa volta a esperar, com a pessoa na vaga dela. */
+export function releaseSolo(g: ArcadeGame): void {
+  resetMatch(g);
+  g.status = 'waiting';
+}
+
+/**
+ * Resposta ao pedido (só quem joga sozinho responde). Aceitando, o jogo sozinho acaba e quem
+ * pediu fica com a vaga do outro lado (a sala põe a pessoa lá). Devolve quem tinha pedido.
+ */
+export function answer(
+  g: ArcadeGame,
+  session: string,
+  accept: boolean,
+): Result<{ asker: string; name: string }> {
+  if (!g.askSession) return { ok: false, reason: 'Ninguém pediu a mesa.' };
+  if (!slotOf(g, session) || isCpu(session)) {
+    return { ok: false, reason: 'Só quem está jogando responde.' };
+  }
+  const asker = g.askSession;
+  const name = g.askName;
+  if (accept) releaseSolo(g);
+  else Object.assign(g, { askSession: '', askName: '', askUntil: 0 });
+  return { ok: true, asker, name };
+}
+
+/** O pedido venceu sem resposta: a mesa é liberada como se tivesse aceitado. */
+export function askExpired(g: ArcadeGame, now: number): boolean {
+  return Boolean(g.askSession && g.askUntil <= now);
 }
 
 /** Quem joga de um lado (no modo atual). */
@@ -105,7 +208,9 @@ export function join(g: ArcadeGame, slot: ArcadeSlot, p: ArcadePlayer): Result {
   if (!slotsOf(g.mode).includes(slot)) return { ok: false, reason: 'Essa vaga é do 2×2.' };
   const mine = slotOf(g, p.session);
   if (mine === slot) return { ok: true };
-  if (g[`${slot}Session`]) return { ok: false, reason: 'Essa vaga já tem alguém.' };
+  // (A vaga do computador, depois da partida contra ele, está livre.)
+  const taken = g[`${slot}Session`];
+  if (taken && !isCpu(taken)) return { ok: false, reason: 'Essa vaga já tem alguém.' };
   if (!mine && p.user && ARCADE_SLOTS.some((s) => g[`${s}User`] === p.user)) {
     return { ok: false, reason: 'Você já está nesta mesa (em outra aba).' };
   }
@@ -134,7 +239,8 @@ export function setMode(g: ArcadeGame, mode: ArcadeMode, session: string): Resul
 export function start(g: ArcadeGame, session: string): Result {
   if (!slotOf(g, session)) return { ok: false, reason: 'Só quem está na mesa começa a partida.' };
   if (g.status === 'playing') return { ok: false, reason: 'A partida já começou.' };
-  if (slotsOf(g.mode).some((s) => !g[`${s}Session`])) {
+  // (Depois de jogar contra o computador, a vaga dele não conta: ele sai ao recomeçar.)
+  if (slotsOf(g.mode).some((s) => !g[`${s}Session`] || isCpu(g[`${s}Session`]))) {
     return {
       ok: false,
       reason: g.mode === 2 ? 'Faltam jogadores: o 2×2 precisa de quatro.' : 'Falta um adversário.',
@@ -163,10 +269,15 @@ export function finishPoints(g: ArcadeGame, winner: ArcadeSide): ArcadeOutcome {
 }
 
 /** Desiste: o outro lado vence. Todos continuam na mesa (dá para começar de novo). */
-export function forfeit(g: ArcadeGame, session: string): Result<{ outcome: ArcadeOutcome }> {
+export function forfeit(g: ArcadeGame, session: string): Result<{ outcome?: ArcadeOutcome }> {
   const slot = slotOf(g, session);
   if (!slot) return { ok: false, reason: 'Você não está jogando nesta mesa.' };
   if (g.status !== 'playing') return { ok: false, reason: 'A partida não está em andamento.' };
+  // Treino: só para (não tem quem vença).
+  if (g.solo === 'practice') {
+    releaseSolo(g);
+    return { ok: true };
+  }
   return { ok: true, outcome: finish(g, otherSide(sideOf(slot)), 'forfeit') };
 }
 
@@ -174,6 +285,12 @@ export function forfeit(g: ArcadeGame, session: string): Result<{ outcome: Arcad
 export function leave(g: ArcadeGame, session: string): { outcome?: ArcadeOutcome } | null {
   const slot = slotOf(g, session);
   if (!slot) return null;
+  // Sozinho: só para (sem resultado), e o computador sai junto.
+  if (g.solo) {
+    releaseSolo(g);
+    setSeat(g, slot, EMPTY);
+    return {};
+  }
   const outcome =
     g.status === 'playing' ? finish(g, otherSide(sideOf(slot)), 'forfeit') : undefined;
   setSeat(g, slot, EMPTY);
@@ -195,6 +312,12 @@ export function dropped(g: ArcadeGame, session: string, now: number): boolean {
 export function gone(g: ArcadeGame, session: string, now: number): boolean {
   const slot = slotOf(g, session);
   if (!slot) return false;
+  // Jogando sozinho: não tem por que segurar a mesa.
+  if (g.solo) {
+    releaseSolo(g);
+    setSeat(g, slot, EMPTY);
+    return true;
+  }
   if (g.status === 'playing') return dropped(g, session, now);
   setSeat(g, slot, EMPTY);
   return true;

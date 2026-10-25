@@ -1,5 +1,8 @@
 import {
+  ARCADE_CPU_SESSION,
+  cueSpot,
   ARCADE_SLOTS,
+  canPlaceBall,
   canPlaceCue,
   foulHelp,
   GROUP_NAMES,
@@ -17,6 +20,7 @@ import {
   simulateShot,
   timeoutRules,
   type ArcadeGame,
+  type ArcadeLevel,
   type ArcadeReply,
   type ArcadeSlot,
   type PoolBalls,
@@ -24,8 +28,10 @@ import {
   type PoolRules,
   type PoolShotMessage,
   type PoolShotRecord,
+  type PoolPos,
   type PoolSide,
 } from '@office/shared';
+import { chooseShot } from './poolCpu.js';
 
 /** Fim da partida: quem venceu e por quê. */
 export interface PoolEnd {
@@ -37,6 +43,9 @@ export interface PoolEnd {
 const LEAD_MS = 150;
 /** Tacadas guardadas no histórico. */
 const LOG_MAX = 6;
+/** Quanto o computador "pensa" antes de tacar (ms), e quando o taco dele aparece mirando. */
+const CPU_THINK_MS = [1400, 2600] as const;
+const CPU_SHOW_AIM_MS = 900;
 /** Pausa depois de as bolas pararem, antes da próxima vez. */
 const SETTLE_MS = 400;
 
@@ -63,21 +72,43 @@ export class PoolMatch {
   private outcomeLog: PoolLogEntry | null = null;
   /** As últimas tacadas (a mais nova primeiro). */
   private log: PoolLogEntry[] = [];
+  /** Treino: as bolas antes da última tacada (para repetir) e quantas caíram desde o triângulo. */
+  private before: PoolBalls | null = null;
+  private sunk = 0;
+  /** Vez do computador: quando ele taca, e a tacada já escolhida. */
+  private cpuAt = 0;
+  private cpuShot: ReturnType<typeof chooseShot> | null = null;
 
   constructor(
     private readonly game: ArcadeGame,
     private readonly names: (side: PoolSide) => string,
     now: number,
     /** Sorteio do triângulo (cada abertura espalha diferente); os testes passam um fixo. */
-    random: () => number = Math.random,
+    private readonly random: () => number = Math.random,
   ) {
     this.balls = rackBalls(random);
-    this.deadline = now + POOL.shotMs;
     this.lastTick = now;
     this.game.shot = '';
     this.game.log = '';
-    this.game.detail = 'Abertura: a branca pode ir em qualquer lugar atrás da linha.';
+    if (this.practice) {
+      // Treino: a vez é sempre de quem treina, a branca vai onde a pessoa quiser e sem relógio.
+      const me = ARCADE_SLOTS.find((s) => this.game[`${s}Session`]);
+      this.rules = { ...newPoolRules(), turn: me ? sideOf(me) : 'a', breakShot: false };
+      this.deadline = 0;
+      this.game.detail = 'Treino: arraste a branca e as bolas, taque à vontade.';
+    } else {
+      this.deadline = now + POOL.shotMs;
+      this.game.detail = 'Abertura: a branca pode ir em qualquer lugar atrás da linha.';
+    }
     this.write();
+  }
+
+  private get practice(): boolean {
+    return this.game.solo === 'practice';
+  }
+
+  private get level(): ArcadeLevel {
+    return (['facil', 'medio', 'dificil'] as const).find((l) => l === this.game.level) ?? 'medio';
   }
 
   /** Vaga de quem taca agora. */
@@ -119,6 +150,7 @@ export class PoolMatch {
       return refuse('Cante a caçapa da 8: clique numa caçapa.');
     }
     const shot = { dx: msg.dx / len, dy: msg.dy / len, power: msg.power, sx: msg.sx, sy: msg.sy };
+    if (this.practice) return this.practiceShot(start, shot, now);
     const result = simulateShot(start, shot);
     const verdict = judgeShot(
       this.rules,
@@ -186,6 +218,80 @@ export class PoolMatch {
     return { ok: true };
   }
 
+  /** Treino: sem regras de vez nem falta; a branca que cair volta na mão. */
+  private practiceShot(
+    start: PoolBalls,
+    shot: { dx: number; dy: number; power: number; sx: number; sy: number },
+    now: number,
+  ): ArcadeReply {
+    const result = simulateShot(start, shot);
+    const record: PoolShotRecord = { ...shot, t0: now + LEAD_MS, start, ms: result.ms };
+    this.before = start;
+    this.balls = result.final;
+    this.busyUntil = record.t0 + result.ms + SETTLE_MS;
+    const fell = result.events.pocketed.map((p) => p.ball).filter((b) => b !== 0);
+    this.sunk += fell.length;
+    const cue = result.events.pocketed.some((p) => p.ball === 0);
+    const text = fell.length
+      ? `Caiu: ${fell.join(', ')}.${cue ? ' A branca também caiu: ponha onde quiser.' : ''}`
+      : cue
+        ? 'A branca caiu: ponha onde quiser.'
+        : 'Nenhuma bola caiu.';
+    this.outcome = text;
+    this.outcomeLog = { kind: fell.length ? 'good' : 'info', text };
+    if (this.balls.slice(1).every((b) => !b)) {
+      this.outcomeLog = { kind: 'end', text: `${text} Mesa limpa! Reinicie para jogar de novo.` };
+    }
+    Object.assign(this.game, {
+      shot: JSON.stringify(record),
+      balls: JSON.stringify(this.balls),
+      phase: 'shot',
+      aim: '',
+    });
+    return { ok: true };
+  }
+
+  /** Treino: muda uma bola de lugar (a branca é a 0). */
+  place(slot: ArcadeSlot, ball: number, pos: PoolPos): ArcadeReply {
+    if (!this.practice) return refuse('Só no treino.');
+    if (slot !== this.shooter) return refuse('Você não está treinando nesta mesa.');
+    if (this.game.phase !== 'aim') return refuse('Espere as bolas pararem.');
+    if (ball !== 0 && !this.balls[ball]) return refuse('Essa bola já caiu.');
+    if (!canPlaceBall(this.balls, ball, pos)) return refuse('A bola não cabe aí.');
+    this.balls[ball] = pos;
+    this.write();
+    return { ok: true };
+  }
+
+  /** Treino: volta a mesa para como estava antes da última tacada. */
+  undo(slot: ArcadeSlot): ArcadeReply {
+    if (!this.practice) return refuse('Só no treino.');
+    if (slot !== this.shooter) return refuse('Você não está treinando nesta mesa.');
+    if (this.game.phase !== 'aim') return refuse('Espere as bolas pararem.');
+    if (!this.before) return refuse('Ainda não teve tacada para repetir.');
+    const fell = this.before.filter((b, i) => i > 0 && b).length;
+    const now = this.balls.filter((b, i) => i > 0 && b).length;
+    this.sunk = Math.max(0, this.sunk - (fell - now));
+    this.balls = this.before;
+    this.before = null;
+    this.addLog({ kind: 'info', text: 'As bolas voltaram para antes da última tacada.' });
+    this.write();
+    return { ok: true };
+  }
+
+  /** Treino: arruma o triângulo de novo. */
+  reset(slot: ArcadeSlot): ArcadeReply {
+    if (!this.practice) return refuse('Só no treino.');
+    if (slot !== this.shooter) return refuse('Você não está treinando nesta mesa.');
+    if (this.game.phase !== 'aim') return refuse('Espere as bolas pararem.');
+    this.balls = rackBalls(this.random);
+    this.before = null;
+    this.sunk = 0;
+    this.addLog({ kind: 'info', text: 'Mesa arrumada de novo.' });
+    this.write();
+    return { ok: true };
+  }
+
   /** Mira ao vivo de quem taca (os outros veem o taco). */
   aim(
     slot: ArcadeSlot,
@@ -208,6 +314,8 @@ export class PoolMatch {
       this.write();
     }
     if (this.pendingEnd) return this.pendingEnd;
+    if (this.practice) return null;
+    if (this.cpuTurn(now)) return null;
     // Com alguém fora, o relógio da tacada para.
     if (this.someoneAway()) {
       this.deadline += dt;
@@ -231,6 +339,73 @@ export class PoolMatch {
     return null;
   }
 
+  /**
+   * Vez do computador: escolhe a tacada, mostra o taco mirando um pouco antes e taca. Devolve se
+   * é a vez dele (o relógio não corre para ele).
+   */
+  private cpuTurn(now: number): boolean {
+    const slot = this.shooter;
+    if (this.game[`${slot}Session`] !== ARCADE_CPU_SESSION) return false;
+    if (this.game.phase !== 'aim' || this.someoneAway()) {
+      this.cpuAt = 0;
+      return true;
+    }
+    if (!this.cpuAt) {
+      const [lo, hi] = CPU_THINK_MS;
+      this.cpuAt = now + lo + this.random() * (hi - lo);
+      this.cpuShot = chooseShot(this.rules, this.balls, this.level, this.game.mode, this.random);
+      return true;
+    }
+    const shot = this.cpuShot!;
+    const cue = shot.cue ?? this.balls[0];
+    if (now >= this.cpuAt - CPU_SHOW_AIM_MS && now < this.cpuAt && cue) {
+      const pull = 1 - (this.cpuAt - now) / CPU_SHOW_AIM_MS;
+      this.aim(slot, {
+        dx: shot.dx,
+        dy: shot.dy,
+        power: shot.power * pull,
+        cx: cue[0],
+        cy: cue[1],
+      });
+    }
+    if (now < this.cpuAt) return true;
+    this.cpuAt = 0;
+    this.cpuShot = null;
+    const res = this.shoot(
+      slot,
+      {
+        furniId: '',
+        dx: shot.dx,
+        dy: shot.dy,
+        power: shot.power,
+        sx: shot.sx,
+        sy: shot.sy,
+        ...(shot.cue ? { cx: shot.cue[0], cy: shot.cue[1] } : {}),
+        ...(shot.call !== undefined ? { call: shot.call } : {}),
+      },
+      now,
+    );
+    // A branca que ele escolheu não cabia (não deveria acontecer): taca de onde ela está.
+    if (!res.ok) {
+      const fallback = this.balls[0] ? undefined : cueSpot(this.balls, this.rules.breakShot);
+      this.shoot(
+        slot,
+        {
+          furniId: '',
+          dx: shot.dx,
+          dy: shot.dy,
+          power: shot.power,
+          sx: 0,
+          sy: 0,
+          ...(fallback ? { cx: fallback[0], cy: fallback[1] } : {}),
+          ...(shot.call !== undefined ? { call: shot.call } : {}),
+        },
+        now,
+      );
+    }
+    return true;
+  }
+
   private addLog(entry: PoolLogEntry): void {
     this.log = [entry, ...this.log].slice(0, LOG_MAX);
     this.game.log = JSON.stringify(this.log);
@@ -243,6 +418,21 @@ export class PoolMatch {
       const group = side === 'a' ? g : g ? otherGroup(g) : '';
       return group ? 7 - remaining(this.balls, group) : 0;
     };
+    if (this.practice) {
+      // Treino: a branca sempre na mão, sem relógio, e o placar conta as bolas que caíram.
+      Object.assign(this.game, {
+        balls: JSON.stringify(this.balls),
+        groupA: '',
+        inHand: true,
+        breakShot: false,
+        turn: this.shooter,
+        phase: 'aim',
+        deadline: 0,
+        scoreA: this.rules.turn === 'a' ? this.sunk : 0,
+        scoreB: this.rules.turn === 'b' ? this.sunk : 0,
+      });
+      return;
+    }
     Object.assign(this.game, {
       balls: JSON.stringify(this.balls),
       groupA: g,

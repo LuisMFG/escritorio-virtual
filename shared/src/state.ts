@@ -172,6 +172,14 @@ export const ArcadeGame = schema(
     detail: t.string(),
     /** Sinuca: as últimas tacadas, a mais nova primeiro (JSON de `PoolLogEntry[]`). */
     log: t.string(),
+    /** Jogar sozinho: '' (entre pessoas) | 'practice' (treino) | 'cpu' (contra o computador). */
+    solo: t.string(),
+    /** Dificuldade do computador ou da máquina de bolas: '' | 'facil' | 'medio' | 'dificil'. */
+    level: t.string(),
+    /** Alguém pediu a mesa a quem joga sozinho: quem e até quando (depois, libera sozinho). */
+    askSession: t.string(),
+    askName: t.string(),
+    askUntil: t.float64(),
     /** '' | 'a' | 'b' */
     winner: t.string(),
     /** '' | 'points' | 'forfeit' | 'wo' */

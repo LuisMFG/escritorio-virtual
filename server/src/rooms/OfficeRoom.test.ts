@@ -9,6 +9,7 @@ import {
   MEETING,
   RECEPTION,
   ServerMessage,
+  type ArcadeAskResult,
   type ArcadeCheerMessage,
   type ArcadeRanking,
   STEP_MS,
@@ -1827,6 +1828,101 @@ describe('OfficeRoom', () => {
         { wins: 1, losses: 0 },
         { wins: 0, losses: 1 },
       ]);
+    }, 20_000);
+
+    it('jogar sozinho: contra o computador não vai para o ranking; pedir a mesa vira partida', async () => {
+      const { roomId, table } = hall();
+      const ana = await enter('Ana', roomId);
+      const beto = await enter('Beto', roomId);
+      const carla = await enter('Carla', roomId);
+      const game = () => ana.room.state.arcade.get(table);
+      await ask(ana.room, ClientMessage.ArcadeJoin, { furniId: table, slot: 'a1' });
+      expect(
+        await ask(ana.room, ClientMessage.ArcadeSolo, {
+          furniId: table,
+          solo: 'cpu',
+          level: 'facil',
+        }),
+      ).toEqual({ ok: true });
+      await waitFor(() => game()?.b1Name === 'Computador (fácil)' && game()?.status === 'playing');
+      // Desistir contra o computador: acaba, mas não conta no placar nem vai para o chat.
+      const chats: ChatMessage[] = [];
+      beto.room.onMessage(ServerMessage.Chat, (m: ChatMessage) => chats.push(m));
+      expect(await ask(ana.room, ClientMessage.ArcadeForfeit, { furniId: table })).toEqual({
+        ok: true,
+      });
+      await waitFor(() => game()?.status === 'ended');
+      expect(game()).toMatchObject({ winner: 'b', solo: 'cpu' });
+      await wait(200);
+      expect(chats).toHaveLength(0);
+      expect(svc.games.of('pingpong', [ana.user.id])[0]).toMatchObject({ wins: 0, losses: 0 });
+
+      // Treino com a máquina; o Beto pede a mesa e a Ana recusa: ele fica sabendo.
+      await ask(ana.room, ClientMessage.ArcadeSolo, {
+        furniId: table,
+        solo: 'practice',
+        level: 'medio',
+      });
+      await waitFor(() => game()?.solo === 'practice');
+      // Entrar direto não dá: a mesa está em uso; pedir, sim.
+      expect(
+        await ask(beto.room, ClientMessage.ArcadeJoin, { furniId: table, slot: 'b1' }),
+      ).toMatchObject({ ok: false });
+      const declined = beto.room.waitForMessage(
+        ServerMessage.ArcadeAskResult,
+      ) as Promise<ArcadeAskResult>;
+      expect(await ask(beto.room, ClientMessage.ArcadeAsk, { furniId: table })).toEqual({
+        ok: true,
+      });
+      await waitFor(() => game()?.askName === 'Beto');
+      expect(
+        await ask(carla.room, ClientMessage.ArcadeAnswer, { furniId: table, accept: true }),
+      ).toMatchObject({ ok: false });
+      expect(
+        await ask(ana.room, ClientMessage.ArcadeAnswer, { furniId: table, accept: false }),
+      ).toEqual({ ok: true });
+      expect(await declined).toMatchObject({ furniId: table, accepted: false, name: 'Ana' });
+      await waitFor(() => game()?.askSession === '');
+      expect(game()).toMatchObject({ solo: 'practice', status: 'playing' });
+
+      // A Carla pede e a Ana aceita: viram adversárias, a Carla com a vaga do outro lado.
+      const accepted = carla.room.waitForMessage(
+        ServerMessage.ArcadeAskResult,
+      ) as Promise<ArcadeAskResult>;
+      await ask(carla.room, ClientMessage.ArcadeAsk, { furniId: table });
+      await waitFor(() => game()?.askName === 'Carla');
+      await ask(ana.room, ClientMessage.ArcadeAnswer, { furniId: table, accept: true });
+      expect(await accepted).toMatchObject({ accepted: true });
+      await waitFor(() => game()?.b1Name === 'Carla');
+      expect(game()).toMatchObject({ status: 'waiting', solo: '', a1Name: 'Ana' });
+    }, 30_000);
+
+    it('pedido sem resposta: depois do prazo, a mesa é de quem pediu', async () => {
+      const saved = arcadeTiming.askMs;
+      arcadeTiming.askMs = 400;
+      try {
+        const { roomId, table } = hall();
+        const ana = await enter('Ana', roomId);
+        const beto = await enter('Beto', roomId);
+        const game = () => ana.room.state.arcade.get(table);
+        await ask(ana.room, ClientMessage.ArcadeJoin, { furniId: table, slot: 'a1' });
+        await ask(ana.room, ClientMessage.ArcadeSolo, {
+          furniId: table,
+          solo: 'cpu',
+          level: 'medio',
+        });
+        await waitFor(() => game()?.solo === 'cpu');
+        await ask(beto.room, ClientMessage.ArcadeAsk, { furniId: table });
+        await waitFor(() => game()?.b1Name === 'Beto', 3000);
+        expect(game()).toMatchObject({
+          status: 'waiting',
+          solo: '',
+          a1Name: 'Ana',
+          askSession: '',
+        });
+      } finally {
+        arcadeTiming.askMs = saved;
+      }
     }, 20_000);
 
     it('ranking com sequência de vitórias, conquistas do Salão e torcida', async () => {

@@ -4,11 +4,13 @@ import {
   arcadeJoinSchema,
   arcadeKindOf,
   arcadeModeSchema,
+  arcadeSoloSchema,
   arcadeView,
   scoreboardText,
   sideNames,
   slotSpot,
   slotsOf,
+  soloOpponentName,
   type ArcadeFields,
 } from './arcade.js';
 import { rackBalls } from './pool.js';
@@ -49,6 +51,12 @@ function fields(over: Partial<ArcadeFields> = {}): ArcadeFields {
     aim: '',
     ...paddles,
     detail: '',
+    log: '',
+    solo: '',
+    level: '',
+    askSession: '',
+    askName: '',
+    askUntil: 0,
     winner: '',
     end: '',
     ...seats,
@@ -156,6 +164,31 @@ describe('Salão de Jogos: base das mesas (Fase 57)', () => {
     const log = [{ kind: 'foul', text: 'Falta de Ana: branca na caçapa.', help: 'A branca…' }];
     expect(arcadeView({ ...game, log: JSON.stringify(log) }).pool.log).toEqual(log);
     expect(arcadeView({ ...game, log: '{quebrado' }).pool.log).toEqual([]);
+  });
+
+  it('jogando sozinho: a vista lê o modo, o nível e o pedido; o placar diz quem treina', () => {
+    const cpu = { b1Session: 'cpu', b1Name: 'Máquina de bolas (difícil)' };
+    const game = fields({ ...ana, ...cpu, status: 'playing', solo: 'practice', level: 'dificil' });
+    const v = arcadeView({ ...game, scoreA: 4, scoreB: 2 });
+    expect(v).toMatchObject({ solo: 'practice', level: 'dificil', ask: null });
+    expect(scoreboardText(v, 0)).toBe('🏓 Ana treinando\nDevolvidas: 4');
+    const pool = fields({ kind: 'pool', ...ana, status: 'playing', solo: 'practice' });
+    expect(scoreboardText(arcadeView(pool), 0)).toBe('🎱 Ana treinando\nTreino livre');
+    const asked = arcadeView({ ...game, askSession: 's9', askName: 'Beto', askUntil: 5000 });
+    expect(asked.ask).toEqual({ session: 's9', name: 'Beto', until: 5000 });
+    // Valores estranhos no estado viram o padrão.
+    expect(arcadeView({ ...game, solo: 'xadrez', level: '?' })).toMatchObject({
+      solo: '',
+      level: 'medio',
+    });
+    expect(soloOpponentName('pool', 'cpu', 'facil')).toBe('Computador (fácil)');
+    expect(soloOpponentName('pool', 'practice', 'facil')).toBe('');
+    expect(
+      arcadeSoloSchema.safeParse({ furniId: 'm', solo: 'cpu', level: 'dificil' }).success,
+    ).toBe(true);
+    expect(
+      arcadeSoloSchema.safeParse({ furniId: 'm', solo: 'bot', level: 'dificil' }).success,
+    ).toBe(false);
   });
 
   it('os pedidos só aceitam vagas e modos que existem', () => {

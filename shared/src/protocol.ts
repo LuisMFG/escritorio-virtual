@@ -101,6 +101,18 @@ export const ClientMessage = {
   ArcadeCheer: 'arcade.cheer',
   /** Requisição `{ kind }`: ranking do jogo (`ArcadeRanking`). */
   ArcadeRanking: 'arcade.ranking',
+  /** Requisição `{ furniId, solo, level }`: jogar sozinho (treino ou contra o computador). */
+  ArcadeSolo: 'arcade.solo',
+  /** Requisição `{ furniId }`: pedir a mesa a quem está jogando sozinho. */
+  ArcadeAsk: 'arcade.ask',
+  /** Requisição `{ furniId, accept }`: quem joga sozinho responde ao pedido. */
+  ArcadeAnswer: 'arcade.answer',
+  /** Sinuca no treino: `{ furniId, ball, x, y }` muda uma bola de lugar. */
+  PoolPlace: 'pool.place',
+  /** Sinuca no treino: `{ furniId }` volta a mesa para antes da última tacada. */
+  PoolUndo: 'pool.undo',
+  /** Sinuca no treino: `{ furniId }` arruma o triângulo de novo. */
+  PoolReset: 'pool.reset',
   /** Ping-pong (Fase 58). `{ furniId, x, y }`: onde está a raquete (até 20 vezes por segundo). */
   PongPaddle: 'pong.paddle',
   /** Requisição `{ furniId, t, x, y }`: saque de quem tem a vez (`ArcadeReply`). */
@@ -146,6 +158,8 @@ export const ServerMessage = {
   Replaced: 'session.replaced',
   /** A torcida reagiu numa mesa do Salão (`ArcadeCheerMessage`). */
   ArcadeCheer: 'arcade.cheered',
+  /** Resposta ao meu pedido da mesa (`ArcadeAskResult`). */
+  ArcadeAskResult: 'arcade.askResult',
   /** A sala foi editada: o cliente pede o layout de novo e remonta a cena. */
   LayoutChanged: 'room.layoutChanged',
   /** `{ furniId }`: os recados de um mural mudaram. */

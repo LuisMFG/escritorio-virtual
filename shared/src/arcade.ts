@@ -46,6 +46,29 @@ export type ArcadeEnd = '' | 'points' | 'forfeit' | 'wo';
 /** Quem sai da sala no meio da partida tem este tempo para voltar; depois, W.O. */
 export const ARCADE_WO_MS = 15_000;
 
+/**
+ * Jogar sozinho: treino (na sinuca, sem adversário; no ping-pong, contra a máquina de bolas) ou
+ * contra o computador, em três níveis. O computador e a máquina ocupam a vaga do outro lado com
+ * esta sessão (não é ninguém da sala). Nada disso conta no placar, no ranking nem nas conquistas.
+ */
+export const ARCADE_CPU_SESSION = 'cpu';
+export const ARCADE_SOLOS = ['practice', 'cpu'] as const;
+export type ArcadeSolo = (typeof ARCADE_SOLOS)[number];
+export const ARCADE_LEVELS = ['facil', 'medio', 'dificil'] as const;
+export type ArcadeLevel = (typeof ARCADE_LEVELS)[number];
+export const LEVEL_NAMES: Record<ArcadeLevel, string> = {
+  facil: 'fácil',
+  medio: 'médio',
+  dificil: 'difícil',
+};
+/** Nome de quem ocupa a vaga do outro lado. */
+export function soloOpponentName(kind: ArcadeKind, solo: ArcadeSolo, level: ArcadeLevel): string {
+  if (solo === 'cpu') return `Computador (${LEVEL_NAMES[level]})`;
+  return kind === 'pingpong' ? `Máquina de bolas (${LEVEL_NAMES[level]})` : '';
+}
+/** Quem pede a mesa espera a resposta por esse tempo; sem resposta, a mesa é liberada. */
+export const ARCADE_ASK_MS = 20_000;
+
 export const sideOf = (slot: ArcadeSlot): ArcadeSide => slot[0] as ArcadeSide;
 export const otherSide = (side: ArcadeSide): ArcadeSide => (side === 'a' ? 'b' : 'a');
 
@@ -112,6 +135,11 @@ export interface ArcadeFields {
   aim: string;
   detail: string;
   log: string;
+  solo: string;
+  level: string;
+  askSession: string;
+  askName: string;
+  askUntil: number;
   winner: string;
   end: string;
 }
@@ -160,6 +188,11 @@ export interface ArcadeView {
   detail: string;
   winner: '' | ArcadeSide;
   end: ArcadeEnd;
+  /** Jogando sozinho (treino ou contra o computador), e em que nível. */
+  solo: '' | ArcadeSolo;
+  level: ArcadeLevel;
+  /** Pedido da mesa a quem joga sozinho: quem pediu e até quando. */
+  ask: { session: string; name: string; until: number } | null;
 }
 
 export function seatOf(g: ArcadeFields, slot: ArcadeSlot): ArcadeSeat {
@@ -203,6 +236,11 @@ export function arcadeView(g: ArcadeFields): ArcadeView {
     detail: g.detail,
     winner: g.winner === 'a' || g.winner === 'b' ? g.winner : '',
     end: (['points', 'forfeit', 'wo'] as const).find((e) => e === g.end) ?? '',
+    solo: ARCADE_SOLOS.find((s) => s === g.solo) ?? '',
+    level: ARCADE_LEVELS.find((l) => l === g.level) ?? 'medio',
+    ask: g.askSession
+      ? { session: g.askSession, name: g.askName ?? '', until: g.askUntil ?? 0 }
+      : null,
   };
 }
 
@@ -250,6 +288,14 @@ export function scoreboardText(v: ArcadeView, now: number): string | null {
     v.status === 'playing'
       ? `${icon} ${names('a')} ${v.scoreA} × ${v.scoreB} ${names('b')}`
       : `${icon} ${names('a')} × ${names('b')}`;
+  // Treino: quem treina (e, no ping-pong, as devolvidas); pedido da mesa em andamento.
+  if (v.status === 'playing' && v.solo === 'practice') {
+    const slot = seated.find((s) => v.seats[s].session !== ARCADE_CPU_SESSION);
+    const name = slot ? short(v.seats[slot].name) : '';
+    const ok = slot && sideOf(slot) === 'a' ? v.scoreA : v.scoreB;
+    const extra = v.kind === 'pingpong' ? `Devolvidas: ${ok}` : 'Treino livre';
+    return `${icon} ${name} treinando\n${extra}`;
+  }
   const away = seated.find((s) => v.seats[s].awayUntil > now);
   if (v.status === 'playing' && away) {
     const left = Math.ceil((v.seats[away].awayUntil - now) / 1000);
@@ -321,6 +367,22 @@ export interface ArcadeRanking {
   kind: ArcadeKind;
   top: GameScore[];
   me: GameScore;
+}
+
+/** Jogar sozinho numa mesa em que só eu estou. */
+export const arcadeSoloSchema = z.object({
+  furniId,
+  solo: z.enum(ARCADE_SOLOS),
+  level: z.enum(ARCADE_LEVELS),
+});
+export type ArcadeSoloMessage = z.infer<typeof arcadeSoloSchema>;
+/** Resposta de quem joga sozinho ao pedido da mesa. */
+export const arcadeAnswerSchema = z.object({ furniId, accept: z.boolean() });
+/** Quem pediu a mesa fica sabendo se a pessoa aceitou. */
+export interface ArcadeAskResult {
+  furniId: string;
+  accepted: boolean;
+  name: string;
 }
 
 /** Resposta dos pedidos das mesas: aceito, ou o motivo da recusa. */

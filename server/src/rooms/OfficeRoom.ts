@@ -121,6 +121,11 @@ import {
   type ReplacedMessage,
   arcadeCheerSchema,
   arcadeRankingSchema,
+  arcadeSoloSchema,
+  arcadeAnswerSchema,
+  poolPlaceSchema,
+  ARCADE_SLOTS,
+  type ArcadeAskResult,
   ARCADE_RANKING_TOP,
   type ArcadeCheerMessage,
   type ArcadeRanking,
@@ -524,13 +529,62 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     ),
     [ClientMessage.ArcadeForfeit]: validate(arcadeRefSchema, (client, msg) =>
       this.handleArcade(client as OfficeClient, msg.furniId, (game, session) => {
+        const solo = Boolean(game.solo);
         const res = arcade.forfeit(game, session);
-        if (res.ok) this.arcadeFinished(game.kind, res.outcome);
+        if (res.ok && res.outcome) this.arcadeFinished(game.kind, res.outcome, '', solo);
         return res.ok ? { ok: true } : res;
       }),
     ),
     [ClientMessage.ArcadeMode]: validate(arcadeModeSchema, (client, msg) =>
       this.handleArcadeMode(client as OfficeClient, msg.furniId, msg.mode),
+    ),
+    // ---------- Jogar sozinho ----------
+    [ClientMessage.ArcadeSolo]: validate(arcadeSoloSchema, (client, msg) =>
+      this.handleArcade(client as OfficeClient, msg.furniId, (game, session) => {
+        const res = arcade.startSolo(game, session, msg.solo, msg.level);
+        if (res.ok && game.kind === 'pingpong') this.startPong(msg.furniId, game);
+        if (res.ok && game.kind === 'pool') this.startPool(msg.furniId, game);
+        return res;
+      }),
+    ),
+    [ClientMessage.ArcadeAsk]: validate(arcadeRefSchema, (client, msg) => {
+      const c = client as OfficeClient;
+      const game = this.state.arcade.get(msg.furniId);
+      const player = this.state.players.get(c.sessionId);
+      if (!game || !player || !c.auth) return this.arcadeRefuse(c, 'Essa mesa está livre.');
+      if (!this.gameLimiter.tryTake(c.sessionId)) {
+        return this.arcadeRefuse(c, ERROR_MESSAGES[ErrorCode.RateLimit]);
+      }
+      if (this.atOtherTable(c.sessionId, msg.furniId)) {
+        return this.arcadeRefuse(c, 'Você já está em outra mesa.');
+      }
+      const res = arcade.ask(
+        game,
+        { session: c.sessionId, user: c.auth.id, name: player.name },
+        Date.now(),
+      );
+      return res.ok ? res : this.arcadeRefuse(c, res.reason);
+    }),
+    [ClientMessage.ArcadeAnswer]: validate(arcadeAnswerSchema, (client, msg) => {
+      const c = client as OfficeClient;
+      const game = this.state.arcade.get(msg.furniId);
+      if (!game) return this.arcadeRefuse(c, 'Ninguém pediu a mesa.');
+      const res = arcade.answer(game, c.sessionId, msg.accept);
+      if (!res.ok) return this.arcadeRefuse(c, res.reason);
+      this.askAnswered(msg.furniId, game, res.asker, msg.accept);
+      return { ok: true };
+    }),
+    // Treino de sinuca: mudar bola de lugar, repetir a última tacada e arrumar o triângulo.
+    [ClientMessage.PoolPlace]: validate(poolPlaceSchema, (client, msg) =>
+      this.poolPractice(client as OfficeClient, msg.furniId, (m, slot) =>
+        m.place(slot, msg.ball, [msg.x, msg.y]),
+      ),
+    ),
+    [ClientMessage.PoolUndo]: validate(arcadeRefSchema, (client, msg) =>
+      this.poolPractice(client as OfficeClient, msg.furniId, (m, slot) => m.undo(slot)),
+    ),
+    [ClientMessage.PoolReset]: validate(arcadeRefSchema, (client, msg) =>
+      this.poolPractice(client as OfficeClient, msg.furniId, (m, slot) => m.reset(slot)),
     ),
     // Torcida: quem não está jogando naquela mesa reage, e a sala toda vê sobre a mesa.
     [ClientMessage.ArcadeCheer]: validate(arcadeCheerSchema, (client, msg) => {
@@ -1003,6 +1057,12 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     this.handTimers.delete(client.sessionId);
     for (const furniId of [...this.state.games.keys()]) this.leaveGame(furniId, client.sessionId);
     // Mesas do Salão de Jogos: antes da partida a vaga fica livre; no meio, conta o prazo.
+    for (const game of this.state.arcade.values()) {
+      // Quem tinha pedido a mesa foi embora: o pedido cai (o treino continua).
+      if (game.askSession === client.sessionId) {
+        Object.assign(game, { askSession: '', askName: '', askUntil: 0 });
+      }
+    }
     for (const [furniId, game] of [...this.state.arcade.entries()]) {
       if (!arcade.gone(game, client.sessionId, Date.now())) continue;
       if (game.status === 'playing') this.pongMatches.get(furniId)?.suspend();
@@ -1819,8 +1879,55 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     if (at) this.intents.set(sessionId, { kind: 'arcade', furniId: table.id, at });
   }
 
-  /** Fim de partida: placar de cada um e aviso no chat da sala. */
-  private arcadeFinished(kind: string, outcome: arcade.ArcadeOutcome, score = ''): void {
+  /** Quem pediu a mesa recebe a resposta; aceitando, fica com a vaga do outro lado e anda até lá. */
+  private askAnswered(furniId: string, game: ArcadeGame, asker: string, accepted: boolean): void {
+    const client = this.clients.find((c) => c.sessionId === asker) as OfficeClient | undefined;
+    const trainee = ARCADE_SLOTS.find((s) => game[`${s}Session`]);
+    const name = trainee ? game[`${trainee}Name`] : '';
+    client?.send(ServerMessage.ArcadeAskResult, {
+      furniId,
+      accepted,
+      name,
+    } satisfies ArcadeAskResult);
+    const player = this.state.players.get(asker);
+    const found = this.arcadeTable(furniId);
+    if (!accepted || !client?.auth || !player || !found || !trainee) return;
+    const slot = `${trainee.startsWith('a') ? 'b' : 'a'}1` as ArcadeSlot;
+    const res = arcade.join(game, slot, {
+      session: asker,
+      user: client.auth.id,
+      name: player.name,
+    });
+    if (res.ok) this.walkToSlot(asker, player, found.table, found.def, slot);
+  }
+
+  /** Pedido do treino de sinuca (só quem treina, na mesa em treino). */
+  private poolPractice(
+    client: OfficeClient,
+    furniId: string,
+    run: (match: PoolMatch, slot: ArcadeSlot) => ArcadeReply,
+  ): ArcadeReply {
+    const match = this.poolMatches.get(furniId);
+    const game = this.state.arcade.get(furniId);
+    const slot = game && arcade.slotOf(game, client.sessionId);
+    if (!match || !slot || game.solo !== 'practice') {
+      return this.arcadeRefuse(client, 'Você não está treinando nesta mesa.');
+    }
+    const res = run(match, slot);
+    return res.ok ? res : this.arcadeRefuse(client, res.reason);
+  }
+
+  /**
+   * Fim de partida: placar de cada um e aviso no chat da sala. Jogando sozinho (contra o
+   * computador), não conta no placar, no ranking nem nas conquistas, e não vai para o chat.
+   */
+  private arcadeFinished(
+    kind: string,
+    outcome: arcade.ArcadeOutcome,
+    score = '',
+    solo = false,
+  ): void {
+    if (solo) return;
     const info = ARCADE_INFO[(arcadeKindOf(kind) ?? 'pingpong') as ArcadeKind];
     const streaks = services().games.recordTeams(
       kind,
@@ -1867,8 +1974,14 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       if (!end) continue;
       this.pongMatches.delete(furniId);
       const loser = end.winner === 'a' ? 'b' : 'a';
+      const solo = Boolean(game.solo);
       const outcome = arcade.finishPoints(game, end.winner);
-      this.arcadeFinished(game.kind, outcome, ` (${end.sets[end.winner]} × ${end.sets[loser]})`);
+      this.arcadeFinished(
+        game.kind,
+        outcome,
+        ` (${end.sets[end.winner]} × ${end.sets[loser]})`,
+        solo,
+      );
     }
     if (!this.pongMatches.size) {
       this.pongLoop?.clear();
@@ -1896,9 +2009,10 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       const end = match.tick(now);
       if (!end) continue;
       this.poolMatches.delete(furniId);
+      const solo = Boolean(game.solo);
       const outcome = arcade.finishPoints(game, end.winner);
       game.detail = end.reason;
-      this.arcadeFinished(game.kind, outcome, ` (${end.reason})`);
+      this.arcadeFinished(game.kind, outcome, ` (${end.reason})`, solo);
     }
     if (!this.poolMatches.size) {
       this.poolLoop?.clear();
@@ -1923,9 +2037,16 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
   private expireArcade(): void {
     const now = Date.now();
     for (const [furniId, game] of [...this.state.arcade.entries()]) {
+      // Pedido da mesa sem resposta: libera para quem pediu.
+      if (arcade.askExpired(game, now)) {
+        const asker = game.askSession;
+        arcade.releaseSolo(game);
+        this.askAnswered(furniId, game, asker, true);
+      }
+      const solo = Boolean(game.solo);
       const outcome = arcade.expire(game, now);
       if (!outcome) continue;
-      this.arcadeFinished(game.kind, outcome);
+      this.arcadeFinished(game.kind, outcome, '', solo);
       if (arcade.isEmpty(game)) this.state.arcade.delete(furniId);
     }
   }

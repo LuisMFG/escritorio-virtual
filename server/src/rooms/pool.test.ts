@@ -8,7 +8,7 @@ import {
   type PoolShotRecord,
 } from '@office/shared';
 import { describe, expect, it } from 'vitest';
-import { join, newArcade, setMode, start } from './arcade.js';
+import { join, newArcade, setMode, start, startSolo } from './arcade.js';
 import { PoolMatch } from './pool.js';
 
 const ana = { session: 's-ana', user: 'u-ana', name: 'Ana' };
@@ -208,5 +208,81 @@ describe('sinuca no servidor (Fase 59)', () => {
     expect(game.detail).toBe(
       'Falta de Ana: a branca não acertou nenhuma bola. Bola na mão para Beto.',
     );
+  });
+});
+
+describe('sinuca sozinho', () => {
+  /** Ana treinando (ou contra o computador) no lado B, com o triângulo perfeito. */
+  function solo(kind: 'practice' | 'cpu', level: 'facil' | 'medio' | 'dificil' = 'medio') {
+    const game = newArcade('pool');
+    join(game, 'b1', ana);
+    startSolo(game, ana.session, kind, level);
+    let seed = 5;
+    const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const match = new PoolMatch(game, names, 0, kind === 'practice' ? () => 0.5 : random);
+    return { game, match };
+  }
+
+  it('treino: a vez é sempre de quem treina, sem relógio e sem falta mudando nada', () => {
+    const { game, match } = solo('practice');
+    expect(game).toMatchObject({ turn: 'b1', inHand: true, deadline: 0, breakShot: false });
+    // Errar tudo (falta numa partida de verdade): continua a vez, sem falta no histórico.
+    expect(match.shoot('b1', { ...miss, cx: 0.4, cy: 0.5 }, 0)).toEqual({ ok: true });
+    settle(game, match);
+    expect(game).toMatchObject({ turn: 'b1', inHand: true, phase: 'aim' });
+    const log = JSON.parse(game.log) as PoolLogEntry[];
+    expect(log[0]).toEqual({ kind: 'info', text: 'Nenhuma bola caiu.' });
+    // O tempo passa e nada acontece (sem relógio).
+    expect(match.tick(10 * 60_000)).toBeNull();
+    expect(game.turn).toBe('b1');
+  });
+
+  it('treino: muda bolas de lugar, repete a última tacada e arruma o triângulo', () => {
+    const { game, match } = solo('practice');
+    const balls = () => JSON.parse(game.balls) as PoolBalls;
+    // A 5 vai para perto da caçapa; não dá para pôr em cima de outra bola.
+    expect(match.place('b1', 5, [2.0, 0.9])).toEqual({ ok: true });
+    expect(balls()[5]).toEqual([2.0, 0.9]);
+    expect(match.place('b1', 5, balls()[1]!)).toEqual({ ok: false, reason: 'A bola não cabe aí.' });
+    expect(match.place('a1', 5, [1.0, 0.5])).toMatchObject({ ok: false });
+    // Tacada forte no triângulo; repetir volta tudo como estava antes dela.
+    const before = balls();
+    match.shoot('b1', { ...shot, dx: 1, dy: 0.01, power: 1, cx: 0.5, cy: 0.56 }, 0);
+    settle(game, match);
+    expect(balls()).not.toEqual(before);
+    expect(match.undo('b1')).toEqual({ ok: true });
+    const back = before.slice();
+    back[0] = [0.5, 0.56];
+    expect(balls()).toEqual(back);
+    expect(match.undo('b1')).toEqual({ ok: false, reason: 'Ainda não teve tacada para repetir.' });
+    // Arrumar de novo: o triângulo da abertura.
+    expect(match.reset('b1')).toEqual({ ok: true });
+    expect(balls()).toEqual(rackBalls());
+  });
+
+  it('fora do treino, nada de mexer nas bolas', () => {
+    const { match } = setup();
+    expect(match.place('a1', 5, [2.0, 0.9])).toEqual({ ok: false, reason: 'Só no treino.' });
+    expect(match.undo('a1')).toEqual({ ok: false, reason: 'Só no treino.' });
+    expect(match.reset('a1')).toEqual({ ok: false, reason: 'Só no treino.' });
+  });
+
+  it('contra o computador: ele pensa, mostra o taco mirando e taca sozinho', () => {
+    const { game, match } = solo('cpu', 'dificil');
+    // A Ana (B) abre? Não: o lado A abre, e o A é o computador.
+    expect(game.turn).toBe('a1');
+    expect(match.tick(100)).toBeNull();
+    expect(game.phase).toBe('aim');
+    // Uns instantes antes de tacar, o taco dele aparece na mesa para todo mundo.
+    let t = 100;
+    while (!game.aim && t < 4000) match.tick((t += 100));
+    expect(game.aim).not.toBe('');
+    while (game.phase === 'aim' && t < 6000) match.tick((t += 100));
+    expect(game.phase).toBe('shot');
+    const rec = decodeJson<PoolShotRecord>(game.shot)!;
+    expect(rec.power).toBeGreaterThan(0.8); // abertura forte
+    // Na vez da Ana, ele espera (e o relógio dela corre normalmente).
+    settle(game, match);
+    if (game.turn === 'b1') expect(game.deadline).toBeGreaterThan(0);
   });
 });
