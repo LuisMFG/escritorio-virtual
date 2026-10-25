@@ -1063,6 +1063,8 @@ async function start(): Promise<void> {
       });
       const g = room.state.arcade.get(furniId);
       arcadePanel.update(g ? arcadeView(g.toJSON() as ArcadeFields) : null);
+      // Testes: mostrar no painel uma situação da partida (a vez da 8, por exemplo).
+      if (E2E_MODE) (window as unknown as { __e2eArcade: ArcadeHandle }).__e2eArcade = arcadePanel;
     };
     const s = new RoomScene(
       app,

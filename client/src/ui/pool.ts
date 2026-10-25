@@ -2,6 +2,8 @@ import {
   aimGuide,
   canPlaceCue,
   cueSpot,
+  firstHitFoul,
+  shotGoal,
   groupOf,
   HEAD_X,
   onEight,
@@ -54,6 +56,11 @@ export interface PoolViewOptions {
   hint: HTMLElement;
   /** Relógio da tacada. */
   clock: HTMLElement;
+  /** Faixa da vez: de quem é e o objetivo da tacada. */
+  turnTitle: HTMLElement;
+  turnGoal: HTMLElement;
+  /** Histórico das últimas tacadas (com o porquê de cada falta). */
+  log: HTMLElement;
   /** Hora do servidor. */
   now: () => number;
   mySlot: () => ArcadeSlot | null;
@@ -86,6 +93,14 @@ export function poolLeft(v: ArcadeView, side: ArcadeSide): number[] {
   const group = side === 'a' ? groupA : otherGroup(groupA);
   const left = balls.flatMap((b, i) => (b && groupOf(i) === group ? [i] : []));
   return left.length || !balls[8] ? left : [8];
+}
+
+/** Na vez da 8, as caçapas viram botões grandes (raio de toque, m). */
+const CALL_TAP_R = 0.13;
+
+/** Força em palavras, para a barra. */
+export function powerWord(power: number): string {
+  return power < 0.35 ? 'fraca' : power < 0.7 ? 'média' : 'forte';
 }
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
@@ -159,6 +174,7 @@ export class PoolView {
 
   update(view: ArcadeView): void {
     this.view = view;
+    this.renderLog(view);
     const shot = view.pool.shot;
     if (shot && shot.t0 !== this.framesFor) {
       // A tacada nova: a mesma simulação do servidor, gravada para animar.
@@ -181,6 +197,31 @@ export class PoolView {
         this.cuePos = cueSpot(balls, view.pool.breakShot);
       }
     }
+  }
+
+  private logKey = '';
+
+  /** O histórico das tacadas, a mais nova primeiro (a falta com a explicação da regra). */
+  private renderLog(view: ArcadeView): void {
+    const key = JSON.stringify(view.pool.log);
+    if (key === this.logKey) return;
+    this.logKey = key;
+    this.opts.log.replaceChildren(
+      ...view.pool.log.map((e) => {
+        const li = document.createElement('li');
+        li.className = `pool-log-${e.kind}`;
+        li.append(Object.assign(document.createElement('span'), { textContent: e.text }));
+        if (e.help) {
+          li.append(
+            Object.assign(document.createElement('small'), {
+              className: 'pool-log-help',
+              textContent: e.help,
+            }),
+          );
+        }
+        return li;
+      }),
+    );
   }
 
   // ---------- Estado ----------
@@ -234,7 +275,15 @@ export class PoolView {
     const { tr, px, py, p } = this.point(e);
     const bar = tr.bar;
     const cue = this.restBalls()?.[0] ?? null;
-    const pocket = POCKETS.findIndex((k) => dist(p, [k.x, k.y]) < k.r + 0.04);
+    const calling = this.onEightNow();
+    const pocket = POCKETS.findIndex(
+      (k) => dist(p, [k.x, k.y]) < (calling ? CALL_TAP_R : k.r + 0.04),
+    );
+    // Na vez da 8, primeiro escolhe a caçapa: até lá, só os toques nas caçapas valem.
+    if (calling && this.call === null && pocket < 0) {
+      this.say('Primeiro escolha a caçapa da 8: toque numa caçapa.');
+      return;
+    }
     if (px >= bar.x - 8 && px <= bar.x + bar.w + 8 && py >= bar.y - 8 && py <= bar.y + bar.h + 8) {
       this.drag = 'power';
       this.power = 0;
@@ -244,7 +293,7 @@ export class PoolView {
     ) {
       this.drag = 'cue';
       this.placeCue(p);
-    } else if (this.onEightNow() && pocket >= 0) {
+    } else if (calling && pocket >= 0) {
       // Na vez da 8, tocar na caçapa canta; arrastar dali ainda mira.
       this.drag = 'aim';
       this.tap = { pocket, px, py };
@@ -419,12 +468,29 @@ export class PoolView {
     const moving = Boolean(shot && now < shot.t0 + shot.ms);
     const mine = this.myTurn && !moving;
     const calling = mine && this.onEightNow();
-    drawTable(ctx, tr, this.call, calling && this.call === null);
+    const picking = calling && this.call === null;
+    drawTable(ctx, tr, this.call, picking);
     const balls = this.positions(now);
+    let warning = '';
     // Linha-guia e taco de quem tem a vez; os outros veem o taco pela mira ao vivo.
     if (balls?.[0] && v?.phase === 'aim' && !moving) {
-      if (mine) {
-        drawGuide(ctx, tr, balls, this.aimDir);
+      if (mine && !picking) {
+        const guide = aimGuide(balls, this.aimDir);
+        const foul =
+          guide?.kind === 'ball' && v.turn
+            ? firstHitFoul(
+                { groupA: v.pool.groupA, breakShot: v.pool.breakShot },
+                balls,
+                sideOf(v.turn),
+                guide.ball,
+              )
+            : null;
+        if (foul) {
+          warning = foul.startsWith('era a vez da 8')
+            ? 'Cuidado: agora a primeira bola tem que ser a 8.'
+            : `Cuidado: ${foul.replace(/^acertou/, 'acertar')} é falta.`;
+        }
+        drawGuide(ctx, tr, balls, this.aimDir, Boolean(foul));
         drawCue(ctx, tr, balls[0], this.aimDir, this.power);
       } else if (v.pool.aim) {
         const a = v.pool.aim;
@@ -432,6 +498,22 @@ export class PoolView {
       }
     }
     balls?.forEach((p, i) => p && drawBall(ctx, tr, p, i));
+    // Bola na mão: uma mãozinha sobre a branca e um anel pulsando.
+    if (mine && v?.pool.inHand && balls?.[0]) {
+      const c = tr.toPx(balls[0]);
+      const pulse = 3 + 2 * Math.sin(performance.now() / 200);
+      ctx.strokeStyle = 'rgba(242,193,78,0.85)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, POOL.ballR * tr.s + pulse, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.font = `${Math.round(Math.max(14, POOL.ballR * tr.s * 1.6))}px system-ui, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText('✋', c.x, c.y - POOL.ballR * tr.s - 4);
+    }
+    // Na vez da 8, antes de escolher: a mesa escurece e as caçapas viram botões.
+    if (picking) drawCallPicker(ctx, tr);
     // Bola na mão num lugar que não dá: um anel vermelho em volta da branca.
     if (mine && this.cuePos && balls && !canPlaceCue(balls, this.cuePos, v!.pool.breakShot)) {
       const c = tr.toPx(this.cuePos);
@@ -442,29 +524,54 @@ export class PoolView {
       ctx.stroke();
     }
     drawPowerBar(ctx, tr, mine ? this.power : (v?.pool.aim?.power ?? 0), mine);
+    this.drawBanner(v);
     this.dot.style.left = `${50 + this.spin.x * 40}%`;
     this.dot.style.top = `${50 - this.spin.y * 40}%`;
     this.opts.spin.classList.toggle('active', mine);
     const flash = this.flash.until > performance.now() ? this.flash.text : '';
-    setText(this.opts.hint, mine ? flash || this.hintText(calling) : '');
+    setText(this.opts.hint, mine ? flash || warning || this.hintText(calling) : '');
+    this.opts.hint.classList.toggle('warn', mine && !flash && Boolean(warning));
     const left = Math.max(0, Math.ceil(((v?.pool.deadline ?? 0) - now) / 1000));
     const ticking = v?.status === 'playing' && v.phase === 'aim' && v.pool.deadline > 0;
     setText(this.opts.clock, ticking ? `⏱ ${left} s` : '');
     this.opts.clock.classList.toggle('low', ticking && left <= 10);
   }
 
+  /** Faixa da vez: "Sua vez" ou "Vez de Fulano", com o objetivo da tacada. */
+  private drawBanner(v: ArcadeView | null): void {
+    if (!v?.pool.balls || !v.turn || v.status !== 'playing') return;
+    const side = sideOf(v.turn);
+    const mine = v.turn === this.opts.mySlot();
+    const name = v.seats[v.turn].name;
+    const title =
+      v.phase === 'shot'
+        ? `🎱 Tacada de ${mine ? 'você' : name}…`
+        : mine
+          ? 'Sua vez'
+          : `Vez de ${name}`;
+    const goal = shotGoal(
+      { groupA: v.pool.groupA, breakShot: v.pool.breakShot, inHand: v.pool.inHand },
+      v.pool.balls,
+      side,
+      mine && this.call !== null,
+    );
+    setText(this.opts.turnTitle, title);
+    setText(this.opts.turnGoal, v.phase === 'shot' ? '' : goal);
+    this.opts.turnTitle.parentElement?.classList.toggle('mine', mine);
+  }
+
   private hintText(calling: boolean): string {
     if (calling) {
       return this.call === null
-        ? 'É a 8! Toque na caçapa onde ela vai cair; depois mire e puxe a barra.'
-        : 'Caçapa cantada. Mire e puxe a barra para tacar.';
+        ? 'É a 8! Toque na caçapa onde ela vai cair.'
+        : 'Caçapa escolhida (dá para trocar tocando em outra). Mire e puxe a barra de Força.';
     }
     if (this.view?.pool.inHand) {
       return this.view.pool.breakShot
-        ? 'Abertura: arraste a branca (atrás da linha), mire e puxe a barra.'
-        : 'Bola na mão: arraste a branca, mire e puxe a barra.';
+        ? 'Arraste a branca (atrás da linha), mire e puxe a barra de Força para baixo.'
+        : 'Arraste a branca para onde quiser, mire e puxe a barra de Força para baixo.';
     }
-    return 'Arraste na mesa para mirar, escolha o efeito e puxe a barra para tacar.';
+    return 'Arraste na mesa para mirar e puxe a barra de Força para baixo; solte para tacar.';
   }
 }
 
@@ -567,12 +674,20 @@ function drawBall(ctx: CanvasRenderingContext2D, tr: Tr, pos: PoolPos, ball: num
 }
 
 /** Linha-guia: até a bola-fantasma, o caminho da bola acertada e o desvio da branca; ou o rebote. */
-function drawGuide(ctx: CanvasRenderingContext2D, tr: Tr, balls: PoolBalls, dir: PoolPos): void {
+function drawGuide(
+  ctx: CanvasRenderingContext2D,
+  tr: Tr,
+  balls: PoolBalls,
+  dir: PoolPos,
+  bad = false,
+): void {
   const guide = aimGuide(balls, dir);
   if (!guide) return;
   const cue = tr.toPx(balls[0]!);
   const end = tr.toPx(guide.kind === 'ball' ? guide.ghost : guide.point);
-  ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+  // Vermelha: a primeira bola acertada não é a certa (daria falta). Verde: é uma bola sua.
+  const rgb = bad ? '255,90,90' : guide.kind === 'ball' ? '120,230,150' : '255,255,255';
+  ctx.strokeStyle = `rgba(${rgb},0.85)`;
   ctx.lineWidth = 1.5;
   ctx.setLineDash([6, 5]);
   ctx.beginPath();
@@ -581,14 +696,14 @@ function drawGuide(ctx: CanvasRenderingContext2D, tr: Tr, balls: PoolBalls, dir:
   ctx.stroke();
   ctx.setLineDash([]);
   const line = (from: { x: number; y: number }, d: PoolPos, len: number, alpha: number) => {
-    ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
+    ctx.strokeStyle = `rgba(${rgb},${alpha})`;
     ctx.beginPath();
     ctx.moveTo(from.x, from.y);
     ctx.lineTo(from.x + d[0] * len * tr.s, from.y + d[1] * len * tr.s);
     ctx.stroke();
   };
   if (guide.kind === 'ball') {
-    ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+    ctx.strokeStyle = `rgba(${rgb},0.85)`;
     ctx.beginPath();
     ctx.arc(end.x, end.y, POOL.ballR * tr.s, 0, Math.PI * 2);
     ctx.stroke();
@@ -644,6 +759,40 @@ function drawPowerBar(ctx: CanvasRenderingContext2D, tr: Tr, power: number, acti
   ctx.strokeStyle = active ? '#f2c14e' : 'rgba(255,255,255,0.3)';
   ctx.lineWidth = active ? 2 : 1;
   ctx.strokeRect(b.x + 0.5, b.y + 0.5, b.w - 1, b.h - 1);
+  // O nome em pé ao longo da barra e, puxando, a força em palavras.
+  ctx.save();
+  ctx.fillStyle = active ? '#f4f6f8' : 'rgba(255,255,255,0.55)';
+  ctx.font = '700 10px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.translate(b.x + b.w / 2, b.y + b.h / 2);
+  ctx.rotate(Math.PI / 2);
+  ctx.fillText(power > 0.02 ? `FORÇA ${powerWord(power).toUpperCase()}` : 'FORÇA ↓', 0, 0);
+  ctx.restore();
+}
+
+/** Escolher a caçapa da 8: a mesa escurece e cada caçapa vira um botão dourado. */
+function drawCallPicker(ctx: CanvasRenderingContext2D, tr: Tr): void {
+  const a = tr.toPx([0, 0]);
+  const b = tr.toPx([POOL.tableL, POOL.tableW]);
+  ctx.fillStyle = 'rgba(0,0,0,0.45)';
+  ctx.fillRect(a.x, a.y, b.x - a.x, b.y - a.y);
+  const pulse = 1 + 0.08 * Math.sin(performance.now() / 180);
+  for (const k of POCKETS) {
+    const p = tr.toPx([k.x, k.y]);
+    ctx.fillStyle = 'rgba(242,193,78,0.35)';
+    ctx.strokeStyle = '#f2c14e';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, CALL_TAP_R * tr.s * 0.75 * pulse, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '700 15px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('Toque na caçapa onde a 8 vai cair', (a.x + b.x) / 2, (a.y + b.y) / 2);
 }
 
 function roundRect(

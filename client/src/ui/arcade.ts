@@ -6,6 +6,7 @@ import {
   GROUP_NAMES,
   otherGroup,
   sideNames,
+  sideOf,
   sideSlots,
   slotsOf,
   type ArcadeCheer,
@@ -70,8 +71,10 @@ export function openArcade(opts: ArcadeOptions): ArcadeHandle {
   panel.innerHTML = `
     <header class="arcade-head">
       <h2 id="arcade-title"></h2>
+      <button type="button" class="btn-secondary arcade-rules-btn" aria-expanded="false" hidden>Regras</button>
       <button type="button" class="sheet-close" aria-label="Fechar">✕</button>
     </header>
+    <section class="pool-rules" aria-label="Regras da sinuca" hidden>${POOL_RULES_HTML}</section>
     <div class="arcade-score" aria-live="polite">
       <span class="arcade-names a"></span>
       <strong class="arcade-points"></strong>
@@ -79,6 +82,10 @@ export function openArcade(opts: ArcadeOptions): ArcadeHandle {
     </div>
     <p class="arcade-sets muted" hidden></p>
     <p class="arcade-status"></p>
+    <div class="pool-turn" role="status" hidden>
+      <strong class="pool-turn-title"></strong>
+      <span class="pool-turn-goal"></span>
+    </div>
     <div class="pool-info" hidden>
       <div class="pool-left a"></div>
       <span class="pool-clock"></span>
@@ -86,10 +93,14 @@ export function openArcade(opts: ArcadeOptions): ArcadeHandle {
     </div>
     <canvas class="arcade-court" aria-hidden="true"></canvas>
     <div class="pool-controls" hidden>
-      <div class="pool-spin" role="img" aria-label="Efeito na branca"
-        title="Efeito: clique onde o taco bate na branca (em cima segue, embaixo volta, no meio sem efeito)"></div>
+      <div class="pool-spin-box">
+        <div class="pool-spin" role="img" aria-label="Efeito na branca"
+          title="Efeito: clique onde o taco bate na branca (em cima segue, embaixo volta, no meio sem efeito)"></div>
+        <span class="pool-spin-label">Efeito</span>
+      </div>
       <p class="pool-hint"></p>
     </div>
+    <ol class="pool-log" aria-label="Últimas tacadas" hidden></ol>
     <div class="arcade-cheers" role="group" aria-label="Torcida" hidden></div>
     <div class="arcade-mode" role="group" aria-label="Modo de jogo"></div>
     <div class="arcade-slots"></div>
@@ -113,6 +124,18 @@ export function openArcade(opts: ArcadeOptions): ArcadeHandle {
   const modeEl = $<HTMLElement>('.arcade-mode');
   const slotsEl = $<HTMLElement>('.arcade-slots');
   const actions = $<HTMLElement>('.arcade-actions');
+  const scoreEl = $<HTMLElement>('.arcade-score');
+  const poolTurn = $<HTMLElement>('.pool-turn');
+  const poolLog = $<HTMLElement>('.pool-log');
+  const rulesBtn = $<HTMLButtonElement>('.arcade-rules-btn');
+  const rulesEl = $<HTMLElement>('.pool-rules');
+  rulesBtn.hidden = opts.kind !== 'pool';
+  rulesBtn.addEventListener('click', () => {
+    rulesEl.hidden = !rulesEl.hidden;
+    rulesBtn.setAttribute('aria-expanded', String(!rulesEl.hidden));
+  });
+  /** Tutorial da sinuca: na primeira vez que a pessoa senta numa mesa. */
+  let tutorialShown = false;
   const cheersEl = $<HTMLElement>('.arcade-cheers');
   const rankingEl = $<HTMLDetailsElement>('.arcade-ranking');
   $<HTMLElement>('.arcade-ranking summary').textContent =
@@ -275,6 +298,9 @@ export function openArcade(opts: ArcadeOptions): ArcadeHandle {
         spin: $<HTMLElement>('.pool-spin'),
         hint: $<HTMLElement>('.pool-hint'),
         clock: $<HTMLElement>('.pool-clock'),
+        turnTitle: $<HTMLElement>('.pool-turn-title'),
+        turnGoal: $<HTMLElement>('.pool-turn-goal'),
+        log: poolLog,
         now: opts.now,
         mySlot,
         ...opts.pool!,
@@ -285,9 +311,24 @@ export function openArcade(opts: ArcadeOptions): ArcadeHandle {
     }
     poolInfo.hidden = !pool;
     poolControls.hidden = !(pool && mine && v?.status === 'playing');
+    // Sinuca ao vivo: a faixa da vez e os cartões de cada lado no lugar do placar e do status.
+    poolTurn.hidden = !pool || v?.status !== 'playing';
+    poolLog.hidden = !pool || !v?.pool.log.length;
+    scoreEl.hidden = Boolean(pool);
+    // Partida em andamento na mesa ao vivo: as vagas e o modo já estão nos cartões; a mesa cresce.
+    const busy = live && v?.status === 'playing';
+    modeEl.hidden = busy;
+    slotsEl.hidden = busy;
+    // O detalhe da última tacada já está no histórico.
+    if (pool) setsEl.hidden = true;
+    status.hidden = Boolean(pool) && v?.status === 'playing';
+    if (opts.kind === 'pool' && mine && !tutorialShown) {
+      tutorialShown = true;
+      showPoolTutorial(panel);
+    }
     if (pool && v) {
       pool.update(v);
-      renderLeft(poolInfo, v);
+      renderLeft(poolInfo, v, opts.mySessionId());
     }
     if (pong && v) pong.update(v);
     else if (!pool) {
@@ -429,7 +470,7 @@ function pongStatus(v: ArcadeView, mine: ArcadeSlot | undefined): string {
   if (v.phase === 'point') return v.detail;
   if (v.phase === 'serve' && v.turn) {
     return v.turn === mine
-      ? `Seu saque: clique na mesa.${deuce}`
+      ? `Seu saque: clique, aperte espaço ou espere.${deuce}`
       : `Saque de ${v.seats[v.turn].name}.${deuce}`;
   }
   return mine ? `Valendo!${deuce}` : `👀 Você está assistindo.${deuce}`;
@@ -447,15 +488,25 @@ function poolStatus(v: ArcadeView, mine: ArcadeSlot | undefined): string {
   return `${mine ? '' : '👀 '}Vez de ${name}${v.pool.inHand ? ' (bola na mão)' : ''}.`;
 }
 
-/** Bolas que faltam de cada lado (o grupo e as bolinhas), em cima da mesa. */
-function renderLeft(info: HTMLElement, v: ArcadeView): void {
+/**
+ * Cartão de cada lado, em cima da mesa: quem joga, o grupo (ou mesa aberta), quantas faltam e as
+ * bolinhas. O lado da vez fica destacado.
+ */
+function renderLeft(info: HTMLElement, v: ArcadeView, me: string): void {
   const g = v.pool.groupA;
+  const turnSide = v.turn ? sideOf(v.turn) : null;
   for (const side of ['a', 'b'] as const) {
     const el = info.querySelector<HTMLElement>(`.pool-left.${side}`)!;
     const left = poolLeft(v, side);
     const group = g ? GROUP_NAMES[side === 'a' ? g : otherGroup(g)] : '';
-    const label = !g ? 'mesa aberta' : left[0] === 8 ? 'falta a 8' : group;
-    const key = `${label}|${left.join(',')}`;
+    const eight = left[0] === 8;
+    const label = !g ? 'mesa aberta' : group;
+    const count = !g ? 'grupo a definir' : eight ? 'só falta a 8' : `faltam ${left.length}`;
+    const names = sideNames(v, side) || SIDE_LABEL[side];
+    const you = sideSlots(side, v.mode).some((s) => v.seats[s].session === me);
+    const isTurn = v.status === 'playing' && turnSide === side;
+    el.classList.toggle('turn', isTurn);
+    const key = `${names}|${you}|${label}|${count}|${left.join(',')}`;
     if (el.dataset.key === key) continue;
     el.dataset.key = key;
     const chips = left.map((ball) => {
@@ -465,16 +516,106 @@ function renderLeft(info: HTMLElement, v: ArcadeView): void {
       chip.title = String(ball);
       return chip;
     });
+    const who = Object.assign(document.createElement('strong'), {
+      className: 'pool-who',
+      textContent: you ? `${names} (você)` : names,
+    });
     const text = Object.assign(document.createElement('span'), {
       className: 'pool-group',
-      textContent: label,
+      textContent: `${label} · ${count}`,
     });
-    el.replaceChildren(...(side === 'a' ? [text, ...chips] : [...chips, text]));
-    el.setAttribute(
-      'aria-label',
-      `${SIDE_LABEL[side]}: ${label}${g && left[0] !== 8 ? `, faltam ${left.length}` : ''}`,
-    );
+    const balls = Object.assign(document.createElement('span'), { className: 'pool-chips' });
+    balls.append(...chips);
+    el.replaceChildren(who, text, balls);
+    el.setAttribute('aria-label', `${names}${you ? ' (você)' : ''}: ${label}, ${count}`);
   }
+}
+
+/** Regras da sinuca em poucas linhas (botão Regras). */
+const POOL_RULES_HTML = `
+  <h3>Como se joga</h3>
+  <ol>
+    <li><strong>Objetivo:</strong> encaçapar as 7 bolas do seu grupo (lisas, de 1 a 7, ou listradas, de 9 a 15) e depois a 8.</li>
+    <li><strong>Mesa aberta:</strong> no começo ninguém tem grupo. A primeira bola que você encaçapar (fora da abertura) define o seu.</li>
+    <li><strong>Sua vez continua</strong> enquanto você encaçapar bolas do seu grupo.</li>
+    <li><strong>Faltas:</strong> a branca cair, não acertar nenhuma bola, acertar primeiro uma bola que não é sua (ou a 8 antes da hora), ou nenhuma bola cair nem encostar na tabela depois do choque.</li>
+    <li><strong>Bola na mão:</strong> depois de uma falta, o adversário põe a branca onde quiser.</li>
+    <li><strong>A 8:</strong> com o seu grupo todo encaçapado, escolha a caçapa e encaçape a 8 nela. Ganha quem acertar. Perde quem derrubar a 8 antes da hora, em outra caçapa ou com falta.</li>
+  </ol>
+  <h3>Controles</h3>
+  <p>Arraste na mesa para mirar (as setas afinam). Puxe a barra de <strong>Força</strong> para baixo e solte para tacar. No círculo de <strong>Efeito</strong>, em cima a branca segue, embaixo ela volta.</p>`;
+
+const TUTORIAL_KEY = 'ev-sinuca-tutorial';
+const TUTORIAL_STEPS: { title: string; text: string }[] = [
+  {
+    title: 'O objetivo',
+    text: 'Encaçape as 7 bolas do seu grupo (lisas ou listradas) e depois a 8. A primeira bola que cair define o seu grupo.',
+  },
+  {
+    title: 'Mirar',
+    text: 'Arraste na mesa para mirar. A linha mostra onde a branca bate e para onde a bola vai. Vermelha quer dizer que essa bola não é sua: daria falta.',
+  },
+  {
+    title: 'Força e efeito',
+    text: 'Puxe a barra de Força para baixo e solte para tacar. No meio da barra, a branca anda mais ou menos uma mesa. No círculo de Efeito, em cima ela segue e embaixo ela volta.',
+  },
+  {
+    title: 'Faltas e a 8',
+    text: 'Falta dá bola na mão ao adversário. No fim, escolha a caçapa da 8 antes de tacar. O histórico embaixo da mesa explica cada falta, e o botão Regras fica sempre à mão.',
+  },
+];
+
+/** Tutorial rápido da sinuca, na primeira mesa em que a pessoa senta (dá para pular). */
+function showPoolTutorial(panel: HTMLElement): void {
+  try {
+    if (localStorage.getItem(TUTORIAL_KEY)) return;
+  } catch {
+    return;
+  }
+  const box = document.createElement('div');
+  box.className = 'pool-tutorial';
+  box.setAttribute('role', 'dialog');
+  box.setAttribute('aria-label', 'Como jogar sinuca');
+  let step = 0;
+  const done = () => {
+    try {
+      localStorage.setItem(TUTORIAL_KEY, '1');
+    } catch {
+      // sem armazenamento: aparece de novo na próxima vez
+    }
+    box.remove();
+  };
+  const render = () => {
+    const s = TUTORIAL_STEPS[step]!;
+    const title = Object.assign(document.createElement('h3'), {
+      textContent: `${step + 1}/${TUTORIAL_STEPS.length} · ${s.title}`,
+    });
+    const text = Object.assign(document.createElement('p'), { textContent: s.text });
+    const actions = Object.assign(document.createElement('div'), { className: 'confirm-actions' });
+    const skip = Object.assign(document.createElement('button'), {
+      type: 'button',
+      className: 'btn-secondary',
+      textContent: 'Pular',
+    });
+    skip.addEventListener('click', done);
+    const last = step === TUTORIAL_STEPS.length - 1;
+    const next = Object.assign(document.createElement('button'), {
+      type: 'button',
+      className: 'btn-primary',
+      textContent: last ? 'Entendi' : 'Próximo',
+    });
+    next.addEventListener('click', () => {
+      if (last) return done();
+      step++;
+      render();
+    });
+    actions.append(...(last ? [next] : [skip, next]));
+    box.replaceChildren(title, text, actions);
+    next.focus();
+  };
+  // Entra no fluxo do painel (antes das vagas), sem cobrir a mesa nem os botões.
+  (panel.querySelector('.arcade-mode') ?? panel).before(box);
+  render();
 }
 
 /** Largura e altura da vista de cima (px de CSS). */

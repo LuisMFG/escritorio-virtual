@@ -3575,6 +3575,13 @@ button.reply-quote:hover {
   font-size: calc(15px * var(--font-scale, 1));
 }
 
+.arcade-score[hidden],
+.arcade-sets[hidden],
+.arcade-mode[hidden],
+.arcade-slots[hidden] {
+  display: none;
+}
+
 .arcade-score {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
@@ -3626,7 +3633,143 @@ button.reply-quote:hover {
 
 /* Sinuca ao vivo (Fase 59): painel mais largo, bolas que faltam, relógio, efeito e dica. */
 .arcade-panel.live.pool {
-  width: min(720px, calc(100vw - 32px));
+  /* Maior para as bolas e os números ficarem legíveis, sem passar da altura da tela. */
+  top: 16px;
+  width: min(880px, calc(100vw - 32px), calc((100vh - 420px) * 1.85 + 46px));
+  min-width: min(520px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+}
+
+/* Junto do título (o meio do alto da tela é dos avisos da diretoria). */
+.arcade-head .arcade-rules-btn {
+  margin-left: 10px;
+  margin-right: auto;
+  padding: 3px 10px;
+  font-size: calc(12px * var(--font-scale, 1));
+}
+
+/* Regras da sinuca (botão Regras). */
+.pool-rules {
+  margin: 0 0 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  font-size: calc(12.5px * var(--font-scale, 1));
+  line-height: 1.45;
+}
+
+.pool-rules h3 {
+  margin: 4px 0;
+  font-size: calc(13px * var(--font-scale, 1));
+}
+
+.pool-rules ol {
+  margin: 0 0 6px;
+  padding-left: 18px;
+}
+
+.pool-rules p {
+  margin: 0 0 4px;
+}
+
+/* Faixa da vez: de quem é e o objetivo da tacada. */
+.pool-turn {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  margin: 0 0 8px;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  border: 1px solid var(--card-border);
+}
+
+.pool-turn[hidden] {
+  display: none;
+}
+
+.pool-turn.mine {
+  border-color: var(--warn);
+  background: var(--warn-soft);
+}
+
+.pool-turn-title {
+  font-size: calc(14px * var(--font-scale, 1));
+}
+
+.pool-turn-goal {
+  font-size: calc(12.5px * var(--font-scale, 1));
+  color: var(--text);
+}
+
+/* Histórico das tacadas (a mais nova primeiro). */
+.pool-log {
+  display: grid;
+  gap: 4px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: calc(12px * var(--font-scale, 1));
+}
+
+.pool-log[hidden] {
+  display: none;
+}
+
+.pool-log li {
+  padding: 4px 8px;
+  border-left: 3px solid var(--card-border);
+  border-radius: 4px;
+  background: var(--surface-2);
+}
+
+.pool-log li:not(:first-child) {
+  opacity: 0.7;
+}
+
+/* As 3 últimas bastam (o painel não passa da altura da tela). */
+.pool-log li:nth-child(n + 4) {
+  display: none;
+}
+
+.pool-log-foul {
+  border-left-color: var(--danger) !important;
+}
+
+.pool-log-good {
+  border-left-color: var(--ok, #3fbf6f) !important;
+}
+
+.pool-log-end {
+  border-left-color: var(--warn) !important;
+  font-weight: 600;
+}
+
+.pool-log-help {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+}
+
+/* Tutorial da primeira mesa. */
+.pool-tutorial {
+  margin: 8px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--warn);
+  border-radius: var(--radius-lg);
+  background: var(--warn-soft);
+}
+
+.pool-tutorial h3 {
+  margin: 0 0 6px;
+  font-size: calc(14px * var(--font-scale, 1));
+}
+
+.pool-tutorial p {
+  margin: 0 0 10px;
+  line-height: 1.45;
 }
 
 .pool-info {
@@ -3645,20 +3788,42 @@ button.reply-quote:hover {
 }
 
 .pool-left {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 3px;
+  display: grid;
+  gap: 2px;
   min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-md);
+}
+
+.pool-left.turn {
+  border-color: var(--warn);
+  box-shadow: 0 0 0 1px var(--warn);
 }
 
 .pool-left.b {
-  justify-content: flex-end;
+  text-align: right;
+}
+
+.pool-who {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pool-group {
-  margin: 0 4px;
   color: var(--muted);
+}
+
+.pool-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  min-height: 12px;
+}
+
+.pool-left.b .pool-chips {
+  justify-content: flex-end;
 }
 
 .pool-chip {
@@ -3721,6 +3886,22 @@ button.reply-quote:hover {
   margin: 0;
   color: var(--muted);
   font-size: calc(12px * var(--font-scale, 1));
+}
+
+.pool-hint.warn {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.pool-spin-box {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+}
+
+.pool-spin-label {
+  color: var(--muted);
+  font-size: calc(11px * var(--font-scale, 1));
 }
 
 .arcade-sets {

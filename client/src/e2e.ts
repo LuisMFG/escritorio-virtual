@@ -13,7 +13,7 @@ import {
   type PoolBalls,
   type PoolShotRecord,
 } from '@office/shared';
-import { courtTransform } from './ui/pong.js';
+import { pongViews } from './ui/pong.js';
 import { poolTransform } from './ui/pool.js';
 import { Point as PixiPoint } from 'pixi.js';
 import type { OfficeRoomClient } from './net/OfficeConnection.js';
@@ -91,9 +91,11 @@ export interface E2EHook {
     setsA: number;
     setsB: number;
     ball: { x: number; y: number; h: number; by: string; na: number; nb: number } | null;
+    /** Onde está a raquete de cada vaga (a última posição que chegou ao servidor). */
+    paddles: Record<string, { x: number; y: number }>;
   } | null;
-  /** Ponto da mesa de ping-pong (metros) na tela, no painel aberto. */
-  pongPoint(x: number, y: number): Point | null;
+  /** Ponto da mesa de ping-pong (metros, e a altura) na tela, como a pessoa vê no painel aberto. */
+  pongPoint(x: number, y: number, h?: number): Point | null;
   /**
    * Sinuca (Fase 59): a vez, as regras, as bolas paradas e a última tacada; `final` é onde a
    * simulação desta página põe as bolas com a tacada gravada (tem que bater com `balls`).
@@ -209,14 +211,15 @@ export function exposeForTests(
         setsA: g.setsA,
         setsB: g.setsB,
         ball: at && sim ? { x: at.x, y: at.y, h: at.h, by: sim.by, na: sim.na, nb: sim.nb } : null,
+        paddles: Object.fromEntries(
+          (['a1', 'a2', 'b1', 'b2'] as const).map((s) => [s, { x: g[`${s}Px`], y: g[`${s}Py`] }]),
+        ),
       };
     },
-    pongPoint: (x, y) => {
+    pongPoint: (x, y, h) => {
       const c = document.querySelector<HTMLCanvasElement>('.arcade-panel.live .arcade-court');
-      if (!c) return null;
-      const r = c.getBoundingClientRect();
-      const p = courtTransform(r.width).toPx({ x, y });
-      return { x: Math.round(r.left + p.x), y: Math.round(r.top + p.y) };
+      const view = c && pongViews.get(c);
+      return view ? view.screenPoint(x, y, h ?? 0) : null;
     },
     pool: (id) => {
       const g = room.state.arcade.get(id);
