@@ -1713,6 +1713,29 @@ As fases 52 e 53 vêm primeiro porque corrigem o que já existe e é usado todo 
   3. Pare perto de alguém e peça para a pessoa falar no chat: a cabeça do seu avatar vira para ela.
   4. No Salão de Jogos, jogue uma partida, abra **🏅 Ranking** na mesa e peça para quem assiste torcer.
 
+### Sinuca e ping-pong mais fáceis de jogar (25/10/2026) ✅ implementada
+- **Pedido:** a sinuca não explica nada para quem nunca jogou (a vez, o grupo, a falta, a bola na mão, cantar a 8) e a tacada parece forte demais; o ping-pong obriga a clicar o tempo todo. Medir a física contra uma sinuca de verdade antes de mexer, escolher o melhor controle do ping-pong e avaliar 3D.
+- **Diagnóstico (medido):**
+  - Sinuca: nenhum bug de verdade (choques, caçapas e efeitos corretos). Mas o pano freava de 6 a 8 vezes mais que o real, sem a fase em que a bola desliza, e a barra era linear: metade dela mandava a branca duas mesas, e as tacadas normais (menos de uma mesa) ficavam espremidas nos primeiros 30%. A abertura derrubava a mesma bola em 15 de 16. Na tela, a explicação da falta sumia na tacada seguinte, o placar "1 × 2" não dizia o que contava, e cantar a 8 era só um texto pequeno.
+  - Ping-pong: a rebatida já era automática, mas a raquete tinha que ficar a ±11 cm da linha da bola (14% da mesa, uns ±12 px na tela), e cada cm fora do centro desviava a bola 4 cm (direção quase aleatória). Com ping alto, a rebatida do outro aparecia adiantada.
+  - 3D: three.js daria pouco ganho de jogabilidade com muito custo; a perspectiva desenhada no canvas dá a leitura da altura e da hora certa sem biblioteca. Escolhida a perspectiva (decisão de 25/10).
+- **Feito — sinuca:**
+  - **Física** (`shared/src/pool.ts`): atrito em duas fases (desliza a 2 m/s² até 5/7 da velocidade, depois rola a 0,35 m/s²), força em curva (`shotSpeed`: o meio da barra manda a branca uma mesa, o fim quase cinco, a abertura para em uns 4 s) e o triângulo com um desalinhamento de até 0,6 mm sorteado pelo servidor (`rackBalls(random)`). Os navegadores continuam animando a mesma simulação a partir das posições que o servidor manda.
+  - **Tela:** painel maior (até 880 px, sem passar da altura da tela; durante a partida as vagas e o modo saem do caminho), faixa da vez ("Sua vez" / "Vez de Fulano") com o objetivo da tacada (`shotGoal`), cartões de cada lado (quem, grupo, quantas faltam, a vez destacada) no lugar do placar ambíguo, histórico das últimas tacadas no estado da mesa (`log`, com a explicação de cada falta por `foulHelp`), linha-guia verde ou vermelha (`firstHitFoul`: "Cuidado: acertar primeiro uma lisa é falta"), mãozinha e anel pulsando na bola na mão, passo próprio para cantar a 8 (a mesa escurece e as caçapas viram botões; sem escolher, não dá para mirar), "Força" e "Efeito" com nome (a força em palavras: fraca, média, forte), botão **Regras** e tutorial de 4 passos na primeira mesa (fica guardado no navegador). Relógio de 45 s por tacada.
+- **Feito — ping-pong** (`client/src/ui/pong.ts`, `shared/src/pong.ts`):
+  - **Controle:** só para os lados (mouse em qualquer lugar da tela, dedo arrastando em qualquer lugar ou ←/→ e A/D); a raquete espera atrás da linha de fundo e avança sozinha até onde a bola dá para rebater (`interceptX`). Raquete de 15 cm e um ímã de 20 cm que só age com a bola já quicada e perto (`magnetY`). Pegar no centro manda mais forte e fundo; a beirada desvia e sai mais fraca; mexendo para o lado na hora do toque, a bola vai para esse lado. Saque sozinho em 2,5 s (ou clique, espaço, Enter). Parado, não devolve nada: medido contra o robô, 0 devoluções em 40 s.
+  - **Perspectiva** para quem joga (`perspective`): a mesa vista do próprio lado, a bola subindo com sombra no tampo, a rede e o adversário lá no fundo, a minha raquete meio transparente. Quem assiste continua com a vista de cima.
+  - **Ping alto:** a rebatida do outro que chega atrasada sai de onde a bola estava na tela e alcança o caminho certo em 0,25 s (`catchupTime`); a conferência do servidor não mudou.
+  - Dica nas primeiras partidas (até a terceira rebatida).
+- **Testes:**
+  - unidade: força em curva e distâncias, atrito em duas fases, triângulo sorteado, primeira bola que daria falta, objetivo da tacada, explicação das faltas, histórico no servidor (`pool.test.ts`), alcance, centro e beirada, direção pelo movimento (`pong.test.ts`), perspectiva, ponto de espera em que toda bola passa ao alcance, ímã e o alcance do atraso (`client/src/ui/pong.test.ts`);
+  - ponta a ponta: `sinuca.spec.ts` (tutorial, faixa da vez, Regras, cartões, histórico com a explicação) e `pingpong.spec.ts` (raquete só para os lados com o mouse, uma devolução só com o teclado e saque sozinho, com 150 ms de atraso; a bola vista por quem assiste agora é conferida a cada quadro, o que tirou a instabilidade antiga do teste).
+- **Jogado de verdade** contra um robô temporário, com 150 ms de atraso, nos dois jogos.
+- **Como testar:**
+  1. Sente numa mesa de sinuca pela primeira vez: o tutorial aparece. Mire numa bola do outro grupo e veja a linha ficar vermelha.
+  2. Faça uma falta: o histórico embaixo da mesa explica a regra.
+  3. No ping-pong, mexa o mouse só para os lados (ou use ←/→) e deixe a raquete rebater.
+
 ### Extras sugeridos (fora do pedido; dá para encaixar depois)
 
 | Código | Ideia | Impacto | Esforço |
