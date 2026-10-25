@@ -130,6 +130,21 @@ describe('ping-pong: a bola (Fase 58)', () => {
     expect(pointOf(wide)).toMatchObject({ side: 'a' });
   });
 
+  it('no centro da raquete sai mais forte; na beirada, mais fraca e desviada; mexendo, vai para o lado', () => {
+    const at = { x: 3, y: 0.7, h: 0.2, vx: 2, vy: 0, vh: 0 };
+    const center = hitBall(at, { x: 3, y: 0.7 }, { x: 0, y: 0 }, 'b', 0, 0);
+    const edge = hitBall(at, { x: 3, y: 0.85 }, { x: 0, y: 0 }, 'b', 0, 0);
+    const landX = (b: typeof center) => b.x + b.vx * ((nextEvent(b).t - b.t0) / 1000);
+    const landY = (b: typeof center) => b.y + b.vy * ((nextEvent(b).t - b.t0) / 1000);
+    expect(landX(center)).toBeLessThan(landX(edge)); // mais fundo (o lado A é x pequeno)
+    expect(nextEvent(center).t).toBeLessThan(nextEvent(edge).t);
+    expect(landY(edge)).toBeLessThan(0.7); // a bola pegou acima do centro: desvia para cima
+    // Mexendo a raquete para o lado (y crescendo), a bola vai para esse lado; parada, reto.
+    const moving = hitBall(at, { x: 3, y: 0.7 }, { x: 0, y: 2 }, 'b', 0, 0);
+    expect(landY(moving)).toBeGreaterThan(landY(center) + 0.3);
+    expect(landY(center)).toBeCloseTo(0.7, 5);
+  });
+
   it('mais forte cai mais fundo e chega mais rápido; a bola acelera ao longo do ponto', () => {
     const at = { x: 3, y: 0.7, h: 0.2, vx: 2, vy: 0, vh: 0 };
     const soft = hitBall(at, { x: 3, y: 0.7 }, { x: 0, y: 0 }, 'b', 0, 0);
@@ -198,7 +213,10 @@ describe('ping-pong: a bola (Fase 58)', () => {
     const at = ballAt(b, t);
     expect(canHit(b, at, 'a', at)).toBe(false); // quem sacou não rebate a própria bola
     expect(canHit(b, at, 'b', { x: at.x + 0.3, y: at.y })).toBe(false); // longe
-    expect(canHit(b, at, 'b', { x: at.x + 0.12, y: at.y }, PONG.reachSlack)).toBe(true); // folga
+    // Alcance: a raquete (raio 15 cm) mais a bola; com a folga do servidor, um pouco mais.
+    expect(canHit(b, at, 'b', { x: at.x + 0.16, y: at.y })).toBe(true);
+    expect(canHit(b, at, 'b', { x: at.x + 0.2, y: at.y })).toBe(false);
+    expect(canHit(b, at, 'b', { x: at.x + 0.2, y: at.y }, PONG.reachSlack)).toBe(true); // folga
   });
 
   it('a raquete fica no seu lado da mesa', () => {

@@ -21,7 +21,22 @@ export const PONG = {
   bounce: 0.8,
   bounceKeep: 0.95,
   ballR: 0.02,
-  paddleR: 0.09,
+  /** Raquete generosa (a de verdade tem uns 8 cm): o jogo pede só para se pôr na frente da bola. */
+  paddleR: 0.15,
+  /**
+   * Ajuda de quem joga: a raquete fica parada atrás da linha de fundo (a esta distância) e só vai
+   * para os lados com o mouse, o dedo ou as setas; perto da bola (`magnetR`), ela é puxada até
+   * ela. Saque sozinho depois de `autoServeMs`. A rebatida do outro que chega atrasada (ping) sai
+   * de onde a bola estava na tela e alcança o caminho certo em `catchupMs`.
+   */
+  homeBack: 0.25,
+  magnetR: 0.2,
+  magnetSpeed: 1.2,
+  /** O ímã só age com a bola já quicada do meu lado e a menos disto (m) da raquete. */
+  magnetNear: 0.8,
+  lateralSpeed: 2.4,
+  autoServeMs: 2500,
+  catchupMs: 250,
   /** Folga do servidor ao conferir uma rebatida (o navegador manda o toque já com o atraso). */
   reachSlack: 0.05,
   /** Alturas em que ainda dá para rebater. */
@@ -272,9 +287,10 @@ export function serveBall(side: PongSide, paddle: PongPoint, t: number): PongBal
 }
 
 /**
- * Rebatida: a bola volta para o outro lado. Mais forte (raquete indo para a frente) cai mais fundo e
- * mais rápido; pegar com a beirada da raquete ou mexendo para o lado manda a bola na diagonal, e
- * diagonal demais sai da mesa. Cada rebatida do ponto deixa a bola um pouco mais rápida.
+ * Rebatida: a bola volta para o outro lado. Pegar no centro da raquete (ou ir para a frente) manda
+ * mais fundo e mais rápido; pegar com a beirada desvia um pouco e sai mais fraca. A direção vem de
+ * para onde a raquete está indo na hora do toque: mexendo para o lado, a bola vai para aquele lado,
+ * e demais sai da mesa. Cada rebatida do ponto deixa a bola um pouco mais rápida.
  */
 export function hitBall(
   ball: BallState,
@@ -285,11 +301,14 @@ export function hitBall(
   t: number,
 ): PongBall {
   const dir = side === 'a' ? 1 : -1;
-  const swing = clamp((dir * clamp(velocity.x, -6, 6)) / 3, 0, 1);
+  // Onde a bola pegou na raquete: 0 no centro, ±1 na beirada.
+  const off = clamp((ball.y - paddle.y) / (PONG.paddleR + PONG.ballR), -1, 1);
+  const push = clamp((dir * clamp(velocity.x, -6, 6)) / 3, 0, 1);
+  const swing = clamp((1 - Math.abs(off)) * 0.8 + push * 0.5, 0, 1);
   const depth = 0.35 + 0.45 * swing;
   const to = {
     x: NET_X + dir * depth * NET_X,
-    y: ball.y + (ball.y - paddle.y) * 4 + clamp(velocity.y, -6, 6) * 0.3,
+    y: clamp(ball.y + off * 0.35 + clamp(velocity.y, -3, 3) * 0.22, -0.2, PONG.tableW + 0.2),
   };
   const flight = clamp(
     PONG.slowFlight - 0.02 * hits - 0.3 * swing,
