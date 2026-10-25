@@ -1736,6 +1736,24 @@ As fases 52 e 53 vêm primeiro porque corrigem o que já existe e é usado todo 
   2. Faça uma falta: o histórico embaixo da mesa explica a regra.
   3. No ping-pong, mexa o mouse só para os lados (ou use ←/→) e deixe a raquete rebater.
 
+### Jogar sozinho: treino e contra o computador (25/10/2026) ✅ implementada
+- **Pedido:** jogar sozinho, principalmente na sinuca (treino livre e contra o computador em três níveis, com todas as regras e cantando a 8); no ping-pong, máquina de bolas ou computador. Quem está na sala assiste, e a mesa fica liberada se alguém quiser jogar de verdade (quem treina aceita ou recusa).
+- **Decisões (25/10):** contra o computador não conta no placar, no ranking nem nas conquistas (nem vai para o chat); aceitando o pedido, os dois viram adversários (quem treinava fica na vaga, quem pediu entra na outra); sem resposta em 20 s, a mesa é liberada.
+- **Feito:**
+  - **Base** (`shared/src/arcade.ts`, `server/src/rooms/arcade.ts`): a mesa ganhou `solo` ('practice' | 'cpu'), `level` (fácil, médio, difícil) e o pedido (`askSession`, `askName`, `askUntil`). O computador e a máquina de bolas ocupam a vaga do outro lado com a sessão `cpu` (`soloOpponentName`), e o resto (vez, saque, placar, W.O.) funciona como numa partida entre pessoas. Só dá para jogar sozinho com a mesa só sua, no 1×1. Sair da vaga, parar o treino ou sair da sala libera a mesa na hora, sem vencedor; depois de jogar contra o computador, a vaga dele fica livre para quem chegar.
+  - **Pedir a mesa:** quem assiste vê "Fulano está treinando" e **Pedir a mesa**; quem treina recebe aviso com som e, no painel, **Jogar contra Fulano** ou **Continuar sozinho**, com a contagem. Aceitando (ou sem resposta em 20 s), o treino acaba e quem pediu entra na vaga do outro lado e anda até a mesa; recusando, ele é avisado. Se quem pediu sair da sala, o pedido cai.
+  - **Treino de sinuca** (`server/src/rooms/pool.ts`): a vez é sempre de quem treina, sem relógio e sem falta mudando nada; a branca vai onde a pessoa quiser. Dá para **arrastar qualquer bola** (`PoolPlace`, sem sobrepor), **repetir a última tacada** (as bolas voltam e a mira e o efeito também, com a marca da força na barra) e **arrumar de novo**. O histórico diz o que caiu.
+  - **Computador da sinuca** (`server/src/rooms/poolCpu.ts`): procura as tacadas diretas com caminho livre (bola certa, caçapa e corte possível), confere as melhores simulando a tacada de verdade e erra a mira e a força conforme o nível; com bola na mão, testa lugares para a branca; sem tacada direta, encosta numa bola certa para não fazer falta; na vez da 8, canta a caçapa. Ele "pensa" 1,4–2,6 s e o taco aparece mirando antes de tacar. Medido em 80 mesas sorteadas: fácil encaçapa ~25% (falta ~28%), médio ~60%, difícil ~90% (falta ~3%), em menos de 1 ms por decisão.
+  - **Ping-pong** (`server/src/rooms/pong.ts`): a **máquina de bolas** lança sozinha (no difícil, mais rápida, mais funda e mais aberta) e o placar vira devolvidas × perdidas, sem fim; o **computador** saca sozinho e rebate com o tempo de reação, a velocidade da raquete e a chance de errar do nível, mandando a bola para longe de quem joga (no difícil). A raquete dele anda na mesa para todo mundo ver; a máquina aparece como uma caixa cinza.
+  - **Painel:** só você na mesa, aparece **Jogar sozinho** (Treino livre ou Máquina de bolas, Contra o computador, e o nível, guardado no navegador). Jogando sozinho, **Parar treino** ou **Desistir**; no treino de sinuca, **Repetir a última tacada** e **Arrumar de novo**. A placa sobre a mesa diz "Fulano treinando".
+- **Testes:**
+  - unidade: regras de jogar sozinho, pedido aceito, recusado e vencido, e o computador saindo da vaga (`arcade.test.ts`); computador da sinuca por nível, bola fácil, a 8 cantada, abertura e bola na mão (`poolCpu.test.ts`); treino de sinuca e a vez do computador (`pool.test.ts`); máquina de bolas e computador do ping-pong, com os níveis (`pong.test.ts`); vista e placa (`shared/src/arcade.test.ts`); na sala, contra o computador sem ranking nem chat, pedido recusado e aceito, e o prazo vencendo (`OfficeRoom.test.ts`);
+  - ponta a ponta: `jogar-sozinho.spec.ts` (treino de sinuca arrastando bola, repetindo e arrumando; pedido da mesa aceito; ping-pong contra o computador devolvendo e a máquina de bolas).
+- **Como testar:**
+  1. Sente sozinho numa mesa de sinuca e clique em **Treino livre**: arraste bolas, taque, **Repetir a última tacada**.
+  2. Outra pessoa abre a mesa e clica em **Pedir a mesa**: responda no painel.
+  3. Numa mesa de ping-pong, escolha o nível e **Contra o computador** ou **Máquina de bolas**.
+
 ### Extras sugeridos (fora do pedido; dá para encaixar depois)
 
 | Código | Ideia | Impacto | Esforço |
