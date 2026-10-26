@@ -1,5 +1,5 @@
 import type { Locator } from '@playwright/test';
-import { expect, newPerson, test } from '../helpers.js';
+import { adminPerson, expect, newPerson, test } from '../helpers.js';
 
 const PHONE = { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true };
 
@@ -13,7 +13,7 @@ test('celular: começa perto de você e acompanha; aviso sem cobrir o topo; barr
   browser,
 }) => {
   test.setTimeout(120_000);
-  const admin = await newPerson(browser, 'Diretora', { username: 'admin.e2e' });
+  const admin = await adminPerson(browser);
   const ana = await newPerson(browser, 'Ana', { context: PHONE });
   const page = ana.page;
   const me = await page.evaluate(() => window.__e2e!.mySessionId());

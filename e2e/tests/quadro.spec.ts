@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { clickFurni, expect, newPerson, test } from '../helpers.js';
+import { adminPerson, clickFurni, expect, newPerson, test } from '../helpers.js';
 
 /** Quantos pixels escuros (tinta) há no canvas. */
 const ink = (page: Page, selector: string) =>
@@ -46,7 +46,7 @@ test('quadro: quem está com ele aberto vê o traço ao vivo, e o traço pronto 
 test('editar a sala (cor do piso) não fecha o quadro aberto de quem está nela', async ({
   browser,
 }) => {
-  const admin = await newPerson(browser, 'Diretora', { username: 'admin.e2e' });
+  const admin = await adminPerson(browser);
   const beto = await newPerson(browser, 'Beto');
   await clickFurni(beto.page, 'r-quadro');
   const panel = beto.page.locator('.wb-canvas');

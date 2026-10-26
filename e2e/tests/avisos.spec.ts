@@ -1,9 +1,9 @@
-import { expect, newPerson, test, waitRoom } from '../helpers.js';
+import { adminPerson, expect, newPerson, test, waitRoom } from '../helpers.js';
 
 test('avisos: admin publica, quem está online recebe, "Li" some, quem chega depois vê', async ({
   browser,
 }) => {
-  const admin = await newPerson(browser, 'Diretora', { username: 'admin.e2e' });
+  const admin = await adminPerson(browser);
   const beto = await newPerson(browser, 'Beto');
   const title = `Ponto facultativo ${Date.now().toString(36)}`;
 

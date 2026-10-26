@@ -167,6 +167,40 @@ export async function newPerson(
   return { page, name, username };
 }
 
+/**
+ * O admin dos testes (`admin.e2e`): entra na conta se ela já existe (outro teste criou antes,
+ * no mesmo banco) ou cria na primeira vez.
+ */
+export async function adminPerson(
+  browser: Browser,
+  opts: { context?: BrowserContextOptions } = {},
+): Promise<Person> {
+  const username = 'admin.e2e';
+  const context = await browser.newContext(opts.context);
+  openContexts.push(context);
+  const page = await context.newPage();
+  await page.goto(APP);
+  await page.getByRole('tab', { name: 'Entrar' }).click();
+  await page.locator('input[name=username]').fill(username);
+  await page.locator('input[name=password]').fill(PASSWORD);
+  await page.locator('form.login-card button[type=submit]').click();
+  const entered = await Promise.race([
+    waitRoom(page, 'reception').then(() => true),
+    page
+      .getByText(/incorretos/)
+      .waitFor({ timeout: 20_000 })
+      .then(() => false),
+  ]);
+  if (!entered) {
+    await context.close();
+    return newPerson(browser, 'Diretora', { ...opts, username });
+  }
+  const name = await page.evaluate(
+    () => window.__e2e!.players().find((p) => p.id === window.__e2e!.mySessionId())?.name ?? '',
+  );
+  return { page, name, username };
+}
+
 export async function waitRoom(page: Page, roomId: string): Promise<void> {
   await page.waitForFunction((id) => window.__e2e?.roomId() === id, roomId, { timeout: 20_000 });
 }

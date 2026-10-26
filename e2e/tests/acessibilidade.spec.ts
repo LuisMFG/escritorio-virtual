@@ -36,7 +36,7 @@ test('acessibilidade: telas principais sem problemas graves (axe)', async ({ bro
     ['equipe', () => page.getByRole('button', { name: 'Equipe' }).click()],
     ['mensagens', () => page.getByRole('button', { name: 'Mensagens' }).click()],
     ['configurações', () => page.getByRole('button', { name: 'Configurações' }).click()],
-    ['agenda', () => page.getByRole('button', { name: 'Agenda' }).click()],
+    ['agenda', () => page.getByRole('button', { name: 'Agenda', exact: true }).click()],
     ['mapa', () => page.getByRole('button', { name: 'Mapa' }).click()],
   ];
   for (const [label, open] of screens) {
