@@ -34,6 +34,16 @@ test('avisos: admin publica, quem está online recebe, "Li" some, quem chega dep
   // Caio cria a conta depois: vê o aviso ao entrar.
   const caio = await newPerson(browser, 'Caio');
   await expect(caio.page.locator('.announcement-banner')).toContainText(title);
+  // No tema claro, a faixa fica clara também (o texto escuro continua legível).
+  await caio.page.evaluate(() => (document.documentElement.dataset.theme = 'light'));
+  const bg = await caio.page
+    .locator('.announcement-banner')
+    .evaluate((el) => getComputedStyle(el).backgroundColor);
+  // `color-mix` pode voltar como `color(srgb 0.9 …)` (0–1) em vez de `rgb(230, …)`.
+  const scale = bg.startsWith('color(') ? 255 : 1;
+  const [r, g, b] = (bg.match(/[\d.]+/g) ?? []).map((v) => Number(v) * scale);
+  expect(((r ?? 0) + (g ?? 0) + (b ?? 0)) / 3).toBeGreaterThan(200);
+  await caio.page.screenshot({ path: test.info().outputPath('faixa-do-aviso-tema-claro.png') });
 
   // O admin vê quantos já leram.
   await admin.page.getByRole('button', { name: 'Avisos' }).click();

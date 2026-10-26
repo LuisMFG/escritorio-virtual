@@ -2416,7 +2416,7 @@ body.dm-open .hud-status {
   padding: 0 7px;
   border: 1px solid var(--border);
   border-radius: var(--radius-pill);
-  background: #22252f;
+  background: var(--surface-2);
   color: var(--text);
   font: inherit;
   font-size: calc(12px * var(--font-scale, 1));
@@ -3371,7 +3371,8 @@ button.reply-quote:hover {
   padding: 10px 12px 10px 16px;
   border-radius: var(--radius-lg);
   border: 1px solid var(--warn);
-  background: #2b2a20;
+  /* Tingido pelo tema (no claro, fundo escuro fixo deixava o texto ilegível). */
+  background: color-mix(in srgb, var(--warn) 12%, var(--surface-1));
   box-shadow: 0 10px 30px var(--backdrop);
   animation: reminder-in 0.3s ease-out;
 }
@@ -4620,14 +4621,14 @@ button.reply-quote:hover {
   padding: 12px 14px 12px 16px;
   border: 1px solid var(--accent);
   border-radius: var(--radius-lg);
-  background: #1c2433;
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface-1));
   box-shadow: 0 12px 40px var(--backdrop);
   animation: reminder-in 0.3s ease-out;
 }
 
 .announcement-banner.urgent {
   border-color: var(--danger);
-  background: #351c1f;
+  background: color-mix(in srgb, var(--danger) 14%, var(--surface-1));
 }
 
 .announcement-text {
@@ -5467,7 +5468,7 @@ button.reply-quote:hover {
   min-width: 0;
   padding: 8px;
   border-radius: var(--radius-lg);
-  background: #1a1d25;
+  background: var(--surface-sunken);
   border-top: 3px solid #94a3b8;
 }
 
