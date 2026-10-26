@@ -1783,6 +1783,18 @@ As fases 52 e 53 vêm primeiro porque corrigem o que já existe e é usado todo 
   - unidade: menu da pessoa por situação (`personMenu.test.ts`); limpar e desfazer só por quem limpou, com o Registro, e móvel tirado no Registro (`OfficeRoom.test.ts`); Recepção nova mantendo traços e recados (`db/client.test.ts`);
   - ponta a ponta: `pessoas.spec.ts` (chamar quem está em outra sala pelo menu; status na barra e menção com Responder; busca da Nova conversa), `celular.spec.ts` (câmera perto e acompanhando, aviso sem cobrir o topo, barra com nomes), `quadro.spec.ts` (desfazer a limpeza; editar a sala com o quadro aberto), `reconexao.spec.ts` (queda curta) e os ajustes em `elogios`, `mapa` e `mesa` para o menu.
 
+### Revisão do escritório, grupo C: desempenho (26/10/2026) ✅ implementada
+- **Pedido:** os itens 15 a 18 da revisão, medindo antes e depois.
+- **Como foi medido:** servidor local com 36 robôs andando na Recepção (perfil de CPU do Node por ~40 s) e o navegador com a sala cheia, a CPU desacelerada 4× (Chromium sem tela, versão de produção).
+- **Feito:**
+  - **Grade da sala em cache** (`GridBase` em `shared/src/grid.ts`): o servidor montava o piso e todos os móveis a cada passo de cada pessoa (e duas vezes). Agora a base só é refeita quando um móvel ou o piso muda; quem está onde é calculado só quando se pede um destino. O assento sob a pessoa vem da própria grade. **CPU do servidor: 7,9% → 5,2%** (montar a grade: 500 ms → 24 ms; movimento: 595 ms → 111 ms, no mesmo intervalo). O buffer do estado do Colyseus subiu para 128 KB (o estado de uma sala cheia passava dos 8 KB e gerava o aviso "buffer overflow" a cada entrada).
+  - **Navegador:** a lista de pessoas juntava as mudanças e só redesenha quando algo que ela mostra muda (antes, a cada passo de qualquer avatar); a ordem de profundidade usa um número em vez de montar um texto com todas as caixas a cada quadro, e reordena no máximo a cada 50 ms (um passo leva 500 ms). **Script com 36 pessoas e CPU 4× mais lenta: ~143 → ~90 ms por segundo (−37%)**; layout 18 → 2 ms/s.
+  - **Carregamento:** o cliente do servidor de mídia (LiveKit) virou um arquivo à parte, baixado só quando alguém usa a chamada (`loadLivekit`). **Código inicial: 1,64 MB → 1,11 MB (comprimido: 473 → 339 KB, −28%)**. O código com hash no nome é guardado pelo navegador de vez (`immutable`, 1 ano). O catálogo de avatares (604 KB) ficou: comprimido em produção são ~40 KB e ele é usado já na tela de entrada.
+  - **Banco e afins:** SQLite em gravação `NORMAL` (com WAL não corrompe; não força o disco a cada mensagem); conquistas já conhecidas não vão ao banco de novo (várias eram pedidas a cada traço ou mensagem); a lista da equipe é reaproveitada por um minuto (era baixada a cada cartão de avatar aberto). O quadro do Jira já vinha de um cache no servidor, então ficou como estava.
+- **Testes:**
+  - unidade: base reaproveitada e ocupados só quando se pede destino (`grid.test.ts`); móvel posto depois bloqueia o caminho com a grade em cache (`OfficeRoom.test.ts`); conquista conhecida sem ir ao banco (`AchievementService.test.ts`); banco em WAL e NORMAL (`db/client.test.ts`); quais arquivos ficam guardados de vez (`csp.test.ts`);
+  - ponta a ponta: `carregamento.spec.ts` (o LiveKit não é baixado ao abrir o escritório e é baixado ao entrar numa chamada) e todos os testes de chamada passando com ele sob demanda.
+
 ### Extras sugeridos (fora do pedido; dá para encaixar depois)
 
 | Código | Ideia | Impacto | Esforço |
