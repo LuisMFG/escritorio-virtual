@@ -285,7 +285,9 @@ rsync -avz usuario@IP-DA-VM:~/escritorio-virtual/data/backups/ ./backups-escrito
 
 ### Segurança
 
-- Contas criadas só com o código de convite; senhas com `scrypt` (sal por senha); limite de 10 tentativas de entrada/cadastro por minuto por IP. Cada aparelho tem seu token de sessão, e o banco guarda só o hash. Trocar a senha desconecta os outros aparelhos.
+- Contas criadas só com o código de convite; senhas com `scrypt` (sal por senha). Limites: 60 tentativas de entrada/cadastro por minuto por rede (IP, a equipe toda entra junto) e, por conta, 10 senhas erradas em 15 minutos. Cada aparelho tem seu token de sessão, e o banco guarda só o hash; a sessão vence depois de 90 dias sem uso. Trocar a senha (ou sair de todos os aparelhos) desconecta os outros em até um minuto, inclusive abas abertas.
+- Anexos: até 10 MB por arquivo e 500 MB por pessoa. O cache de imagens do HabboAssets tem teto de 1 GB (os menos usados saem).
+- Atualizar o servidor (`docker compose up -d --build`) não derruba nada: modo foco, filas e vídeos das TVs e chamadas em andamento são guardados ao desligar e voltam ao subir (quem estava numa chamada volta para ela ao reconectar).
 - Em produção: CSP restrita (sem `eval`), `X-Frame-Options: DENY`, `nosniff`; mensagens WebSocket de no máximo 4 KB; limites por ação (andar, chat, decorar, trocar visual).
 - Anexos: só tipos da lista, com o conteúdo conferido; baixar exige login (e, numa DM, ser uma das duas pessoas); arquivos que não são imagem sempre baixam, nunca abrem como página. A prévia de link nunca acessa endereços internos (rede da VM, metadados da nuvem).
 - Texto do chat sempre exibido como texto puro; visuais e colocações de móveis validados no servidor.
