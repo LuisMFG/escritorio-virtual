@@ -56,6 +56,16 @@ export class FocusService {
     }
   }
 
+  /** Para guardar ao desligar o servidor (atualização): quem está em foco ou pausa. */
+  snapshot(): [string, FocusState][] {
+    return [...this.states].map(([id, s]) => [id, { ...s }]);
+  }
+
+  /** Volta o que foi guardado; o que passou do prazo enquanto desligado muda de fase no tick. */
+  restore(list: readonly [string, FocusState][]): void {
+    for (const [id, s] of list) this.states.set(id, { ...s });
+  }
+
   startTimer(everyMs = 2000): void {
     this.timer = setInterval(
       guarded('foco', () => this.tick()),

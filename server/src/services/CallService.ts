@@ -21,10 +21,19 @@ export interface CallDirectory {
   isQuiet(userId: string): boolean;
 }
 
+type Member = { name: string; figure: string; away: boolean } & CallMedia;
+
 interface Call {
   id: string;
   startedAt: number;
-  members: Map<string, { name: string; figure: string; away: boolean } & CallMedia>;
+  members: Map<string, Member>;
+}
+
+/** Uma chamada guardada ao desligar o servidor. */
+export interface CallSnapshot {
+  id: string;
+  startedAt: number;
+  members: [userId: string, member: Member][];
 }
 
 interface PendingInvite {
@@ -169,6 +178,36 @@ export class CallService {
     me.away = false;
     this.events.emit('changed', [...this.callFor(userId)!.members.keys()]);
     return true;
+  }
+
+  /** Para guardar ao desligar o servidor (atualização): as chamadas e quem está nelas. */
+  snapshot(): CallSnapshot[] {
+    return [...this.calls.values()].map((c) => ({
+      id: c.id,
+      startedAt: c.startedAt,
+      members: [...c.members].map(([id, m]) => [id, { ...m }]),
+    }));
+  }
+
+  /**
+   * Volta as chamadas guardadas com todo mundo "reconectando": quem voltar em `CALL_REJOIN_MS`
+   * (o canal global reconecta sozinho) continua na chamada, como numa queda de rede; quem não
+   * voltar sai. A mídia nem para (o servidor de mídia não reinicia junto).
+   */
+  restore(list: readonly CallSnapshot[]): void {
+    for (const s of list) {
+      const call: Call = { id: s.id, startedAt: s.startedAt, members: new Map() };
+      for (const [userId, m] of s.members) {
+        if (this.userCall.has(userId)) continue;
+        call.members.set(userId, { ...m, away: true, cam: false, screen: false });
+        this.userCall.set(userId, call.id);
+        const timer = this.timers.set(() => {
+          if (this.holds.get(userId) === timer) this.leave(userId);
+        }, CALL_REJOIN_MS);
+        this.holds.set(userId, timer);
+      }
+      if (call.members.size) this.calls.set(call.id, call);
+    }
   }
 
   /** Está na chamada, mas caiu e ainda não voltou. */

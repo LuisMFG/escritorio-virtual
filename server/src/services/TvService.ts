@@ -24,6 +24,13 @@ const END_GRACE_MS = 1500;
 /** "Acabou" vindo de um player só vale perto do fim (s), contra relógio adiantado. */
 const ENDED_SLACK_S = 5;
 
+/** Uma TV guardada ao desligar o servidor. */
+export interface TvSnapshot {
+  furniId: string;
+  queue: TvItem[];
+  playing: TvPlayback | null;
+}
+
 interface Tv {
   queue: TvItem[];
   playing: TvPlayback | null;
@@ -257,6 +264,26 @@ export class TvService {
     // Mesmo vídeo duas vezes seguidas: a tela não muda, mas recomeça.
     if (after !== before || next) this.events.emit('screen', furniId, after);
     this.forgetIfIdle(furniId, tv);
+  }
+
+  /** Para guardar ao desligar o servidor (atualização): fila e vídeo de cada TV. */
+  snapshot(): TvSnapshot[] {
+    return [...this.tvs]
+      .filter(([, tv]) => tv.playing || tv.queue.length)
+      .map(([furniId, tv]) => ({ furniId, queue: tv.queue, playing: tv.playing }));
+  }
+
+  /**
+   * Volta o que foi guardado. O vídeo segue no ponto em que estaria (a posição vem da hora de
+   * início); se acabou enquanto o servidor estava desligado, passa para o próximo.
+   */
+  restore(list: readonly TvSnapshot[]): void {
+    for (const s of list) {
+      const tv = this.tv(s.furniId);
+      tv.queue = [...s.queue];
+      tv.playing = s.playing;
+      this.schedule(s.furniId, tv);
+    }
   }
 
   /** Marca a passagem para o próximo vídeo no fim do atual (se a duração é conhecida). */

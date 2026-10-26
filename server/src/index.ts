@@ -13,6 +13,7 @@ import { loadSecretKey } from './util/secretBox.js';
 import { guarded, logError } from './util/guard.js';
 import { HabboAssetsClient } from './assets/HabboAssetsClient.js';
 import { pruneAssetCache } from './assets/cachePrune.js';
+import { restoreRestartSnapshot, saveRestartSnapshot } from './services/RestartSnapshot.js';
 import { imagerMeasure, offlineMeasure } from './services/FurniDefService.js';
 import { OfflineTvMeta } from './services/TvService.js';
 
@@ -50,6 +51,13 @@ console.log(
     : '[chamadas] sem servidor de mídia (defina LIVEKIT_API_KEY e LIVEKIT_API_SECRET)',
 );
 setServices(services);
+// Atualização: foco, TVs e chamadas guardados ao desligar voltam (se o retrato for recente).
+const restored = restoreRestartSnapshot(services);
+if (restored) {
+  console.log(
+    `[servidor] de volta: ${restored.focus} em foco, ${restored.tv} TVs, ${restored.calls} chamadas`,
+  );
+}
 
 // Promessa rejeitada sem tratamento em algum canto: registra, sem derrubar todas as salas.
 process.on('unhandledRejection', (err) => logError('servidor', err));
@@ -66,6 +74,8 @@ const server = defineServer({
   ...({ maxPayload: WS_MAX_PAYLOAD } as object),
 });
 
+// Desligando (deploy): guarda o que só existe na memória antes de as salas fecharem.
+server.onBeforeShutdown(() => saveRestartSnapshot(services));
 await server.listen(config.port);
 // Lembretes de reunião e placas "Em reunião" (a cada 30 s).
 new MeetingScheduler(services.meetings, services.dms).start();
