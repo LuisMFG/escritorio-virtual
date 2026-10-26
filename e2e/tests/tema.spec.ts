@@ -28,11 +28,13 @@ test('configurações: tema claro e texto maior ficam salvos; perfil em abas', a
   expect(await page.evaluate(() => localStorage.getItem('ev-dia-noite'))).toBe('1');
   await daylight.click();
   expect(await page.evaluate(() => localStorage.getItem('ev-dia-noite'))).toBe('0');
-  // Som de mensagem: o sino da coluna acompanha.
-  await settings.getByRole('switch', { name: 'Som de mensagem e menções' }).click();
+  // Som de mensagem: começa ligado; desligar aqui, o sino da coluna acompanha.
+  const msgSound = settings.getByRole('switch', { name: 'Som de mensagem e menções' });
+  await expect(msgSound).toBeChecked();
+  await msgSound.click();
   await page.keyboard.press('Escape');
   await expect(settings).toBeHidden();
-  await expect(page.getByRole('button', { name: /Som de mensagem ligado/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Som de mensagem desligado/ })).toBeVisible();
 
   await page.reload();
   await expect(page.locator('.hud-card')).toBeVisible();
