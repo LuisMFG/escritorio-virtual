@@ -297,6 +297,11 @@ export class OfficeConnection {
     this.room?.send(ClientMessage.WbDraft, draft);
   }
 
+  /** Abriu (ou fechou, com `''`) um quadro: os rascunhos ao vivo só vêm para quem está vendo. */
+  wbWatch(furniId: string): void {
+    this.room?.send(ClientMessage.WbWatch, { furniId });
+  }
+
   wbUndo(furniId: string): void {
     this.room?.send(ClientMessage.WbUndo, { furniId });
   }

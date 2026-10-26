@@ -1087,6 +1087,7 @@ async function start(): Promise<void> {
           const def = f && deps.furniDefs.get(f.defId);
           if (!def) return;
           whiteboard?.close();
+          connection.wbWatch(furniId);
           whiteboard = openWhiteboard({
             furniId,
             title: def.name,
@@ -1096,6 +1097,7 @@ async function start(): Promise<void> {
             draft: (d) => connection.wbDraft({ ...d, furniId }),
             undo: () => connection.wbUndo(furniId),
             clear: () => connection.wbClear(furniId),
+            onClose: () => connection.wbWatch(''),
           });
         },
         openTv: (furniId) => {

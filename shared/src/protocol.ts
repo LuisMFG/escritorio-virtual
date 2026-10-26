@@ -71,8 +71,10 @@ export const ClientMessage = {
   WbLoad: 'wb.load',
   /** `{ furniId, stroke }`: traço terminado. */
   WbStroke: 'wb.stroke',
-  /** Traço em andamento (só repassado aos outros). */
+  /** Traço em andamento (só repassado a quem está com o quadro aberto). */
   WbDraft: 'wb.draft',
+  /** `{ furniId }`: abriu um quadro (`''` = fechou). */
+  WbWatch: 'wb.watch',
   /** `{ furniId }`: desfaz o último traço seu. */
   WbUndo: 'wb.undo',
   /** `{ furniId }`: apaga o quadro todo. */

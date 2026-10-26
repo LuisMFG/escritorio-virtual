@@ -822,14 +822,21 @@ describe('OfficeRoom', () => {
     }
     const pen = { tool: 'pen', color: '#1f2937', width: 3, points: [10, 10, 50, 60, 90, 80] };
 
-    it('traço é salvo e vai para todos; rascunho só para os outros', async () => {
+    it('traço é salvo e vai para todos; rascunho só para quem está com o quadro aberto', async () => {
       const { roomId, wb } = await boardRoom();
       const a = await join(newUser('Ana').token, roomId);
       const b = await join(newUser('Beto').token, roomId);
+      const c = await join(newUser('Caio').token, roomId);
+      // Ana desenha com o quadro aberto; Beto está vendo; Caio não abriu.
+      a.send(ClientMessage.WbWatch, { furniId: wb.id });
+      b.send(ClientMessage.WbWatch, { furniId: wb.id });
+      await wait(80);
 
       const draft = b.waitForMessage(ServerMessage.WbDraft);
       const aDrafts: unknown[] = [];
+      const cDrafts: unknown[] = [];
       a.onMessage(ServerMessage.WbDraft, (m) => aDrafts.push(m));
+      c.onMessage(ServerMessage.WbDraft, (m) => cDrafts.push(m));
       a.send(ClientMessage.WbDraft, {
         furniId: wb.id,
         draftId: 'd1',
@@ -844,6 +851,22 @@ describe('OfficeRoom', () => {
       a.send(ClientMessage.WbStroke, { furniId: wb.id, stroke: pen, draftId: 'd1' });
       expect(await stroke).toMatchObject({ furniId: wb.id, draftId: 'd1', stroke: pen });
       expect(aDrafts).toEqual([]);
+      expect(cDrafts).toEqual([]);
+      // Beto fechou o quadro: não recebe mais os rascunhos.
+      b.send(ClientMessage.WbWatch, { furniId: '' });
+      await wait(80);
+      const bDrafts: unknown[] = [];
+      b.onMessage(ServerMessage.WbDraft, (m) => bDrafts.push(m));
+      a.send(ClientMessage.WbDraft, {
+        furniId: wb.id,
+        draftId: 'd2',
+        tool: 'pen',
+        color: '#1f2937',
+        width: 3,
+        points: [1, 1, 2, 2],
+      });
+      await wait(150);
+      expect(bDrafts).toEqual([]);
       const loaded = (await b.request(ClientMessage.WbLoad, { furniId: wb.id })) as unknown[];
       expect(loaded).toHaveLength(1);
     });

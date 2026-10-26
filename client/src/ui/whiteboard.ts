@@ -23,6 +23,8 @@ export interface WhiteboardOptions {
   draft(d: Omit<WbDraft, 'sessionId' | 'furniId'>): void;
   undo(): void;
   clear(): void;
+  /** O painel fechou. */
+  onClose?(): void;
 }
 
 export interface WhiteboardHandle {
@@ -304,6 +306,7 @@ export function openWhiteboard(opts: WhiteboardOptions): WhiteboardHandle {
     backdrop.remove();
     document.removeEventListener('keydown', onKey);
     window.removeEventListener('resize', fit);
+    opts.onClose?.();
   };
   const onKey = (e: KeyboardEvent) => {
     if (document.querySelector('.confirm-backdrop')) return;

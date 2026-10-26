@@ -67,6 +67,7 @@ import {
   WB_MAX_STROKES,
   wbDraftSchema,
   wbRefSchema,
+  wbWatchSchema,
   wbStrokeSchema,
   type WbDraft,
   type WbRemovedMessage,
@@ -249,6 +250,8 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
   /** Quadro branco: traços e desfazer (40 seguidos, 20/s) e rascunhos (40, 25/s). */
   private readonly wbLimiter = new KeyedRateLimiter(40, 20);
   private readonly draftLimiter = new KeyedRateLimiter(40, 25);
+  /** Quadro que cada conexão tem aberto na tela (recebe os rascunhos ao vivo). */
+  private readonly wbWatching = new Map<string, string>();
   /** Jogo da velha: 10 ações seguidas, recarregando 4 por segundo. */
   private readonly gameLimiter = new KeyedRateLimiter(10, 4);
   /** Torcida: 3 seguidas, depois 1 por segundo. */
@@ -441,11 +444,17 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     [ClientMessage.WbDraft]: validate(wbDraftSchema, (client, msg) => {
       // Prévia efêmera: excesso é descartado em silêncio.
       if (!this.isWhiteboard(msg.furniId) || !this.draftLimiter.tryTake(client.sessionId)) return;
-      this.broadcast(
-        ServerMessage.WbDraft,
-        { ...msg, sessionId: client.sessionId } satisfies WbDraft,
-        { except: client },
-      );
+      // Só para quem está com este quadro aberto (o resto só precisa do traço pronto).
+      const draft = { ...msg, sessionId: client.sessionId } satisfies WbDraft;
+      for (const c of this.clients) {
+        if (c !== client && this.wbWatching.get(c.sessionId) === msg.furniId) {
+          c.send(ServerMessage.WbDraft, draft);
+        }
+      }
+    }),
+    [ClientMessage.WbWatch]: validate(wbWatchSchema, (client, msg) => {
+      if (msg.furniId) this.wbWatching.set(client.sessionId, msg.furniId);
+      else this.wbWatching.delete(client.sessionId);
     }),
     [ClientMessage.WbUndo]: validate(wbRefSchema, (client, msg) => {
       const c = client as OfficeClient;
@@ -1068,6 +1077,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     this.boardLimiter.delete(client.sessionId);
     this.wbLimiter.delete(client.sessionId);
     this.draftLimiter.delete(client.sessionId);
+    this.wbWatching.delete(client.sessionId);
     this.gameLimiter.delete(client.sessionId);
     this.cheerLimiter.delete(client.sessionId);
     this.tvLimiter.delete(client.sessionId);
