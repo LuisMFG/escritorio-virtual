@@ -5,6 +5,7 @@ import {
   SpotifyRevokedError,
   type SpotifyService,
 } from './SpotifyService.js';
+import { guarded } from '../util/guard.js';
 
 /**
  * Consulta a música de quem está online e ligou o Spotify (a cada 20 s, uma pessoa por vez,
@@ -25,7 +26,10 @@ export class SpotifyPoller {
 
   start(everyMs = 20_000): void {
     if (!this.spotify.configured) return;
-    this.timer = setInterval(() => void this.tick(), everyMs);
+    this.timer = setInterval(
+      guarded('spotify', () => this.tick()),
+      everyMs,
+    );
     this.timer.unref();
   }
 

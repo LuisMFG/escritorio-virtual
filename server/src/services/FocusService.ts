@@ -1,5 +1,6 @@
 import type { FocusKind } from '@office/shared';
 import { EventEmitter } from 'node:events';
+import { guarded } from '../util/guard.js';
 
 export interface FocusState {
   kind: FocusKind;
@@ -56,7 +57,10 @@ export class FocusService {
   }
 
   startTimer(everyMs = 2000): void {
-    this.timer = setInterval(() => this.tick(), everyMs);
+    this.timer = setInterval(
+      guarded('foco', () => this.tick()),
+      everyMs,
+    );
     this.timer.unref();
   }
 

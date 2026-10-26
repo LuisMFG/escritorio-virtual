@@ -44,6 +44,7 @@ import { z } from 'zod';
 import type { UserRow } from '../db/schema.js';
 import { services, type ModerationEvents } from '../services/index.js';
 import { KeyedRateLimiter } from '../util/rateLimiter.js';
+import { logError } from '../util/guard.js';
 
 type LobbyClient = Client<{ auth: UserRow }>;
 
@@ -340,6 +341,13 @@ export class LobbyRoom extends Room<{ state: LobbyState; client: LobbyClient }> 
     calls.on('inviteGone', this.onCallInviteGone);
     calls.on('result', this.onCallResult);
     calls.on('changed', this.onCallChanged);
+  }
+
+  /** Erro num cronômetro ou numa mensagem: registra e segue (sem derrubar o servidor). */
+  override onUncaughtException(err: Error, method: string): void {
+    const cause = err.cause ?? err;
+    if (cause instanceof ServerError) return;
+    logError(`lobby ${method}`, cause);
   }
 
   override onDispose(): void {

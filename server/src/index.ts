@@ -9,6 +9,7 @@ import { createServices, setServices } from './services/index.js';
 import { MeetingScheduler } from './services/MeetingScheduler.js';
 import { BackupScheduler } from './services/BackupService.js';
 import { loadSecretKey } from './util/secretBox.js';
+import { guarded, logError } from './util/guard.js';
 import { HabboAssetsClient } from './assets/HabboAssetsClient.js';
 import { imagerMeasure, offlineMeasure } from './services/FurniDefService.js';
 import { OfflineTvMeta } from './services/TvService.js';
@@ -44,6 +45,9 @@ console.log(
 );
 setServices(services);
 
+// Promessa rejeitada sem tratamento em algum canto: registra, sem derrubar todas as salas.
+process.on('unhandledRejection', (err) => logError('servidor', err));
+
 const server = defineServer({
   rooms: {
     [OFFICE_ROOM]: defineRoom(OfficeRoom).filterBy(['officeRoomId']),
@@ -65,7 +69,10 @@ services.jiraPoller.start();
 services.focus.startTimer();
 new BackupScheduler(services.backups).start();
 // Anexos enviados e nunca mandados (ou de mensagens que saíram do histórico): limpa a cada hora.
-setInterval(() => services.uploads.cleanup(), 60 * 60_000).unref();
+setInterval(
+  guarded('anexos', () => services.uploads.cleanup()),
+  60 * 60_000,
+).unref();
 console.log(`[servidor] escritório no ar em http://localhost:${config.port}`);
 console.log(`[servidor] banco: ${config.databasePath}`);
 console.log(

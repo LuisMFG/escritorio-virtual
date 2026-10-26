@@ -1,6 +1,7 @@
 import { MEETING_REMINDER_MIN } from '@office/shared';
 import type { DmService } from './DmService.js';
 import type { MeetingService } from './MeetingService.js';
+import { guarded } from '../util/guard.js';
 
 /**
  * Roda a cada 30 s: manda os lembretes de 5 minutos (aviso ao vivo pelo lobby + mensagem
@@ -17,7 +18,10 @@ export class MeetingScheduler {
 
   start(intervalMs = 30_000): void {
     this.stop();
-    this.timer = setInterval(() => this.tick(), intervalMs);
+    this.timer = setInterval(
+      guarded('lembretes', () => this.tick()),
+      intervalMs,
+    );
     this.tick();
   }
 

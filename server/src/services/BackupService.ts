@@ -2,6 +2,7 @@ import { OFFICE_TIME_ZONE, type BackupInfo } from '@office/shared';
 import { mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { sqliteOf, type Db } from '../db/client.js';
+import { guarded } from '../util/guard.js';
 
 /** `escritorio-2026-10-17-0300.db` (com `-2`, `-3`… se cair no mesmo minuto). */
 const NAME = /^escritorio-(\d{4}-\d{2}-\d{2})-(\d{4})(?:-\d+)?\.db$/;
@@ -97,7 +98,10 @@ export class BackupScheduler {
   ) {}
 
   start(everyMs = 10 * 60_000): void {
-    this.timer = setInterval(() => void this.tick(), everyMs);
+    this.timer = setInterval(
+      guarded('backup', () => this.tick()),
+      everyMs,
+    );
     this.timer.unref();
     void this.tick();
   }

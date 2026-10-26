@@ -171,6 +171,7 @@ import * as arcade from './arcade.js';
 import { PongMatch } from './pong.js';
 import { PoolMatch } from './pool.js';
 import { PetKeeper } from './PetKeeper.js';
+import { logError } from '../util/guard.js';
 
 const TICK_MS = 50;
 /** Segundos que um avatar desconectado espera por reconexão antes de sair da sala. */
@@ -921,6 +922,14 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     for (const [id, f] of this.state.furni.entries()) {
       if (this.isTv(id) && services().tv.screen(id)) this.setTvOn(f, true);
     }
+  }
+
+  /** Erro num cronômetro, no loop ou numa mensagem: registra e segue (sem derrubar o servidor). */
+  override onUncaughtException(err: Error, method: string): void {
+    const cause = err.cause ?? err;
+    // Recusas esperadas (sessão inválida, sala lotada…) já voltam para quem pediu.
+    if (cause instanceof ServerError) return;
+    logError(`sala ${this.roomName} ${method}`, cause);
   }
 
   override onDispose(): void {

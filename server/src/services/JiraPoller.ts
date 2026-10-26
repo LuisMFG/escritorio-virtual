@@ -2,6 +2,7 @@ import { JIRA_POLL_MS, jiraText, type JiraBoard, type JiraIssue } from '@office/
 import type { ActivityService } from './ActivityService.js';
 import { JiraAuthError, type JiraService } from './JiraService.js';
 import type { UserService } from './UserService.js';
+import { guarded } from '../util/guard.js';
 
 /**
  * Consulta o Jira de quem conectou (a cada minuto, uma pessoa por vez): guarda as demandas para
@@ -22,7 +23,10 @@ export class JiraPoller {
 
   start(everyMs = JIRA_POLL_MS): void {
     void this.tick();
-    this.timer = setInterval(() => void this.tick(), everyMs);
+    this.timer = setInterval(
+      guarded('jira', () => this.tick()),
+      everyMs,
+    );
     this.timer.unref();
   }
 

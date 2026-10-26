@@ -11,6 +11,7 @@ import {
 } from '@office/shared';
 import { EventEmitter } from 'node:events';
 import type { UserService } from './UserService.js';
+import { guarded } from '../util/guard.js';
 
 interface Coding extends CodingActivity {
   at: number;
@@ -110,7 +111,10 @@ export class ActivityService {
   }
 
   start(everyMs = 30_000): void {
-    this.timer = setInterval(() => this.sweep(), everyMs);
+    this.timer = setInterval(
+      guarded('atividade', () => this.sweep()),
+      everyMs,
+    );
     this.timer.unref();
   }
 

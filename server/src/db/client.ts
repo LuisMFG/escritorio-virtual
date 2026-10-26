@@ -25,6 +25,17 @@ const MIGRATIONS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..', '.
  * Abre o SQLite (arquivo ou `:memory:` nos testes), aplica as migrations pendentes e
  * garante as salas iniciais.
  */
+/** O banco responde a uma consulta (para o `/healthz`)? */
+export function dbHealthy(db: Db): boolean {
+  try {
+    sqliteOf(db).prepare('select 1').get();
+    return true;
+  } catch (err) {
+    console.error('[healthz] banco sem resposta:', err);
+    return false;
+  }
+}
+
 export function openDatabase(path: string): Db {
   if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
   const sqlite = new Database(path);

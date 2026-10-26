@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import express, { type Application, type Request, type Response } from 'express';
 import { createAssetRouter } from '../assets/AssetProxy.js';
+import { dbHealthy } from '../db/client.js';
 import { HabboAssetsClient } from '../assets/HabboAssetsClient.js';
 import { createTvThumbRouter } from './tvThumbs.js';
 import type { Config } from '../config.js';
@@ -577,7 +578,11 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
     withCaller((c, req, res) => send(res, admin.deleteCargo(c, Number(id(req)), auth))),
   );
 
-  app.get('/healthz', (_req, res) => void res.json({ ok: true }));
+  // Saúde de verdade: o banco responde (o healthcheck do Docker marca o contêiner como doente).
+  app.get('/healthz', (_req, res) => {
+    if (dbHealthy(svc.db)) res.json({ ok: true });
+    else res.status(503).json({ ok: false });
+  });
 
   // Quem está em cada sala (para a lista de pessoas). Só para quem tem sessão válida.
   app.get('/api/presence', (req, res) => {
