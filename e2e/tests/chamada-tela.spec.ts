@@ -78,6 +78,8 @@ test('tela de chamada: rostos que falam, efeitos, dispositivos, tela cheia e min
     context: { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true },
   });
   await walk(beto.page, 6, 17);
+  // No celular a câmera começa perto do avatar: leva a vista até o destino antes de tocar.
+  await caio.page.evaluate(() => window.__e2e!.look(9, 17, 1));
   await walk(caio.page, 9, 17);
   await invite(ana.page, beto, false);
   await invite(ana.page, caio, true);
