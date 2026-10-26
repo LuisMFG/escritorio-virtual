@@ -31,7 +31,9 @@ test('minha mesa: escolher a estação, voltar de outra sala direto para ela e a
     timeout: 15_000,
   });
   await beto.page.locator('.people').evaluate((d) => ((d as HTMLDetailsElement).open = true));
-  await beto.page.getByRole('button', { name: `Ir até ${ana.name} (Copa)` }).isVisible();
+  await expect(
+    beto.page.getByRole('button', { name: `Opções para ${ana.name} (Copa)` }),
+  ).toBeVisible();
   await clickFurni(beto.page, 'r-sofa');
   await expect.poll(() => me(beto.page), { timeout: 20_000 }).not.toMatchObject({ x: 8, y: 3 });
 
@@ -42,8 +44,9 @@ test('minha mesa: escolher a estação, voltar de outra sala direto para ela e a
     .poll(() => me(page), { timeout: 20_000 })
     .toMatchObject({ action: 'sit', x: 8, y: 3 });
 
-  // Beto acha a Ana pela lista (câmera vai até ela).
-  await beto.page.getByRole('button', { name: `Achar ${ana.name} na sala` }).click();
+  // Beto acha a Ana pela lista (menu da pessoa; a câmera vai até ela).
+  await beto.page.getByRole('button', { name: `Opções para ${ana.name}`, exact: true }).click();
+  await beto.page.getByRole('menuitem', { name: /Achar na sala/ }).click();
 
   // Ao recarregar, convite para ir à mesa; depois larga a mesa.
   await page.reload();

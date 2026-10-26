@@ -2,6 +2,7 @@ import { layoutMap, type MapRoom } from '@office/shared';
 import type { OnlineInfo } from '../net/LobbyConnection.js';
 import { mapApi } from '../net/api.js';
 import { skeletonHtml } from './skeleton.js';
+import { openPersonMenu, type PersonActions } from './personMenu.js';
 
 const el = <K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -22,7 +23,8 @@ export interface MinimapOptions {
   /** Título da reunião acontecendo em cada sala (vazio = livre). */
   meetingOf(roomId: string): string;
   goToRoom(roomId: string): void;
-  goToPerson(person: OnlineInfo): void;
+  /** Ligar, mensagem, ir até e elogiar (o mesmo menu das outras listas). */
+  actions: PersonActions;
 }
 
 /**
@@ -137,12 +139,17 @@ export function openMinimap(opts: MinimapOptions): { refresh(): void; close(): v
         b.disabled = person.userId === opts.myUserId;
         b.setAttribute(
           'aria-label',
-          person.userId === opts.myUserId ? `${person.name} (você)` : `Ir até ${person.name}`,
+          person.userId === opts.myUserId ? `${person.name} (você)` : `Opções para ${person.name}`,
         );
-        b.addEventListener('click', () => {
-          close();
-          opts.goToPerson(person);
-        });
+        b.setAttribute('aria-haspopup', 'menu');
+        b.addEventListener('click', () =>
+          openPersonMenu(
+            b,
+            { userId: person.userId, name: person.name, roomId: r.id, roomName: r.name },
+            opts.actions,
+            close,
+          ),
+        );
         li.append(b);
         list.append(li);
       }

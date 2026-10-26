@@ -8,7 +8,8 @@ test('elogios: elogiar pela Equipe, aviso para quem recebeu, mural no quadro', a
   const msg = `Resolveu o problema do servidor ${Date.now().toString(36)}`;
 
   await ana.page.getByRole('button', { name: 'Equipe' }).click();
-  await ana.page.getByRole('button', { name: `Elogiar ${beto.name}` }).click();
+  await ana.page.getByRole('button', { name: `Mais opções para ${beto.name}` }).click();
+  await ana.page.getByRole('menuitem', { name: /Elogiar/ }).click();
   await ana.page.getByRole('radio', { name: /Ajudou muito/ }).click();
   await ana.page.getByLabel('Mensagem do elogio').fill(msg);
   await ana.page.getByRole('button', { name: 'Enviar elogio' }).click();

@@ -9,6 +9,7 @@ import {
 } from '@office/shared';
 import { api } from '../net/api.js';
 import { setAvatarPreview } from './login.js';
+import { openPersonMenu, type PersonActions } from './personMenu.js';
 import { cargoPill } from './profile.js';
 import { skeletonHtml } from './skeleton.js';
 
@@ -18,10 +19,8 @@ export interface TeamOptions {
   isAdmin: boolean;
   /** roomId → nome da sala. */
   roomName(roomId: string): string;
-  /** Abrir conversa privada com alguém. */
-  message(userId: string, name: string): void;
-  /** Elogiar alguém. */
-  praise(userId: string, name: string): void;
+  /** Ligar, mensagem, ir até e elogiar (o mesmo menu das outras listas). */
+  actions: PersonActions;
   /** Recebeu a lista (para o cartão do avatar reaproveitar bio e aniversário). */
   loaded(team: TeamResponse): void;
 }
@@ -156,20 +155,30 @@ export function openTeam(opts: TeamOptions): void {
       dm.setAttribute('aria-label', `Mensagem para ${m.name}`);
       dm.addEventListener('click', () => {
         close();
-        opts.message(m.userId, m.name);
+        opts.actions.message(m.userId, m.name);
       });
-      const praise = Object.assign(document.createElement('button'), {
+      const more = Object.assign(document.createElement('button'), {
         type: 'button',
-        className: 'btn-secondary btn-small team-praise',
-        textContent: '🙌',
-        title: `Elogiar ${m.name}`,
+        className: 'btn-secondary btn-small team-more',
+        textContent: '⋯',
+        title: `Mais opções para ${m.name}`,
       });
-      praise.setAttribute('aria-label', `Elogiar ${m.name}`);
-      praise.addEventListener('click', () => {
-        close();
-        opts.praise(m.userId, m.name);
-      });
-      li.append(dm, praise);
+      more.setAttribute('aria-label', `Mais opções para ${m.name}`);
+      more.setAttribute('aria-haspopup', 'menu');
+      more.addEventListener('click', () =>
+        openPersonMenu(
+          more,
+          {
+            userId: m.userId,
+            name: m.name,
+            roomId: m.roomId ?? undefined,
+            roomName: m.roomId ? opts.roomName(m.roomId) : undefined,
+          },
+          opts.actions,
+          close,
+        ),
+      );
+      li.append(dm, more);
     }
 
     if (opts.isAdmin) {

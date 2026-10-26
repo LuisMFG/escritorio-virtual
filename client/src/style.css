@@ -8942,3 +8942,93 @@ kbd {
   display: flex;
   justify-content: flex-end;
 }
+
+/* ---------- Revisão do escritório, grupo B (25/10/2026) ---------- */
+
+/* Menu de uma pessoa (Pessoas online, Equipe, Mapa): o mesmo em todas as listas. */
+.person-menu {
+  position: fixed;
+  z-index: 65;
+  display: grid;
+  min-width: 190px;
+  padding: 6px;
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+  box-shadow: var(--shadow-2);
+}
+
+.person-menu p {
+  margin: 2px 8px 6px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.person-menu button {
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.person-menu button:hover,
+.person-menu button:focus-visible {
+  background: var(--hover-tint);
+  outline: none;
+}
+
+/* Pessoas online: busca e salas recolhíveis. */
+.people-search {
+  display: block;
+  width: calc(100% - 24px);
+  margin: 0 12px 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+  color: var(--text);
+  font: inherit;
+}
+
+.people-search[hidden] {
+  display: none;
+}
+
+.people-room {
+  width: 100%;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: left;
+  text-transform: inherit;
+  cursor: pointer;
+}
+
+.people-room::before {
+  content: '▾ ';
+}
+
+.people-room[aria-expanded='false']::before {
+  content: '▸ ';
+}
+
+.people-empty {
+  margin: 4px 0 8px;
+}
+
+/* No computador, a lista para antes da coluna de botões do canto de baixo. */
+@media (min-width: 701px) {
+  .people {
+    max-height: calc(100dvh - 16px - 300px);
+  }
+}

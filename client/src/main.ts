@@ -87,6 +87,7 @@ import { openRoomEditor } from './ui/roomEditor.js';
 import { AmbientSound } from './ui/ambient.js';
 import { openBoard } from './ui/board.js';
 import { openWhiteboard, type WhiteboardHandle } from './ui/whiteboard.js';
+import { openPersonMenu, type PersonActions } from './ui/personMenu.js';
 import { TvPanel } from './ui/tv.js';
 import { drawTvCover } from './tv/cover.js';
 import { fakePlayer, youTubePlayer, youTubePlaylist } from './tv/player.js';
@@ -617,15 +618,10 @@ async function start(): Promise<void> {
     if (e.key === 'Alt') scene?.setAllNames(false);
   });
   window.addEventListener('blur', () => scene?.setAllNames(false));
-  // Clique na lista de pessoas: câmera até a pessoa (ou vai até a sala dela).
-  overlay.onPick((t) => {
-    if (t.sessionId) {
-      scene?.focusAvatar(t.sessionId);
-      return;
-    }
-    if (!t.userId || !t.roomId || !connection) return;
-    approach = t.userId;
-    connection.goTo(t.roomId);
+  // Clique na lista de pessoas: o menu da pessoa (você: a câmera vai até seu avatar).
+  overlay.onPick((t, anchor) => {
+    if (t.isLocal && t.sessionId) return scene?.focusAvatar(t.sessionId);
+    openPersonMenu(anchor, t, personActions);
   });
   /** Minha mesa (Fase 42): ir até ela depois de chegar na Recepção; convite só ao entrar. */
   let pendingDesk = false;
@@ -652,11 +648,7 @@ async function start(): Promise<void> {
       people: () => online,
       meetingOf: (id) => roomList.find((r) => r.id === id)?.meeting ?? '',
       goToRoom: (id) => conn.goTo(id),
-      goToPerson: (p) => {
-        if (p.roomId === conn.currentRoomId) return approachPerson(p.userId);
-        approach = p.userId;
-        conn.goTo(p.roomId);
-      },
+      actions: personActions,
     });
   }
   /** Anda até perto de alguém da sala atual (o servidor escolhe o tile livre mais perto). */
@@ -936,8 +928,7 @@ async function start(): Promise<void> {
       isAdmin: session.role === 'admin',
       roomName,
       loaded: (t) => (team = t),
-      message: openDm,
-      praise: (userId, name) => praise(userId, name),
+      actions: personActions,
     });
   }
   async function logout(all: boolean): Promise<void> {
@@ -975,18 +966,8 @@ async function start(): Promise<void> {
       saveSession({ ...(loadSession() ?? { name: session.name }), ...choice });
     }
   }
-  const avatarCard = new AvatarCard({
-    highFive: (sessionId) => connection?.highFive(sessionId),
-    goTo: (sessionId) => {
-      const info = scene?.avatarInfo(sessionId);
-      // O servidor leva até o tile livre mais perto da pessoa.
-      if (info) connection?.move(info.tile);
-    },
-    mention: (name) => chat.insertMention(name),
-    editAvatar: () => void editAvatar(),
-    openProfile: () => showProfile(),
-    message: openDm,
-    praise: (userId, name) => praise(userId, name),
+  /** O que dá para fazer com alguém, igual na lista, na Equipe, no Mapa e no cartão do avatar. */
+  const personActions: PersonActions = {
     callMode: (userId) => {
       if (!calls) return 'none';
       if (calls.hasMember(userId)) return 'with';
@@ -1000,6 +981,30 @@ async function start(): Promise<void> {
         overlay.notify(`Chamando ${name}…`);
       });
     },
+    message: (userId, name) => openDm(userId, name),
+    praise: (userId, name) => praise(userId, name),
+    find: (sessionId) => scene?.focusAvatar(sessionId),
+    goTo: (userId, roomId) => {
+      if (!connection) return;
+      if (roomId === connection.currentRoomId) return approachPerson(userId);
+      approach = userId;
+      connection.goTo(roomId);
+    },
+  };
+  const avatarCard = new AvatarCard({
+    highFive: (sessionId) => connection?.highFive(sessionId),
+    goTo: (sessionId) => {
+      const info = scene?.avatarInfo(sessionId);
+      // O servidor leva até o tile livre mais perto da pessoa.
+      if (info) connection?.move(info.tile);
+    },
+    mention: (name) => chat.insertMention(name),
+    editAvatar: () => void editAvatar(),
+    openProfile: () => showProfile(),
+    message: openDm,
+    praise: (userId, name) => praise(userId, name),
+    callMode: personActions.callMode,
+    call: personActions.call,
     kick: async (userId, name, scope) => {
       if (!session) return;
       if (scope === 'office') {
@@ -1327,6 +1332,7 @@ async function start(): Promise<void> {
       overlay.setPeople(
         players.map(([id, p]) => ({
           id,
+          userId: p.userId,
           name: p.name,
           away: p.away,
           isLocal: id === room.sessionId,
@@ -1521,7 +1527,12 @@ async function start(): Promise<void> {
         name: r.meeting ? `${r.name} · 🔴 em reunião` : r.name,
         people: online
           .filter((p) => p.roomId === r.id)
-          .map((p) => ({ name: p.name, userId: p.userId, activity: p.activity })),
+          .map((p) => ({
+            name: p.name,
+            userId: p.userId,
+            status: p.status,
+            activity: p.activity,
+          })),
       })),
       connection.currentRoomId,
     );

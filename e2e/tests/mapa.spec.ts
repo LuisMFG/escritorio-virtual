@@ -16,7 +16,8 @@ test('mapa: ver quem está em cada sala e ir até alguém de outra sala', async 
   expect(copaBox!.y).toBeLessThan(recepcao!.y);
 
   // Ir até o Beto: troca de sala e anda até perto dele.
-  await copa.getByRole('button', { name: `Ir até ${beto.name}` }).click();
+  await copa.getByRole('button', { name: `Opções para ${beto.name}` }).click();
+  await ana.page.getByRole('menuitem', { name: /Ir até lá/ }).click();
   await waitRoom(ana.page, 'pantry');
   await expect
     .poll(
