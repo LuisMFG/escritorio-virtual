@@ -9032,3 +9032,38 @@ kbd {
     max-height: calc(100dvh - 16px - 300px);
   }
 }
+
+@media (max-width: 700px) {
+  /* Celular: a faixa de aviso e o lembrete ficam abaixo do topo (nome da sala, Pessoas online)
+     e ao lado da coluna de botões, sem cobrir nada que se usa. */
+  .announcement-banner,
+  .reminder {
+    top: 112px;
+    left: 16px;
+    right: 64px;
+    width: auto;
+    max-width: none;
+    transform: none;
+    animation-name: banner-drop;
+  }
+
+  /* Barra de baixo: ícone com o nome embaixo (só o ícone não dizia o que era). */
+  .hud-actions .hud-action {
+    flex-direction: column;
+    gap: 2px;
+    padding: 4px 2px;
+  }
+
+  .hud-actions .hud-action .lbl {
+    display: block;
+    font-size: 10px;
+    line-height: 1.1;
+  }
+}
+
+@keyframes banner-drop {
+  from {
+    transform: translateY(-12px);
+    opacity: 0;
+  }
+}

@@ -49,6 +49,8 @@ export class Camera {
   private zoomValue = DEFAULT_ZOOM;
   /** A pessoa escolheu o zoom (botões/roda): o enquadramento automático não mexe mais. */
   private userZoomed = false;
+  /** Quantas vezes a pessoa mexeu na câmera (arrastar, zoom, pinça): quem segue alguém para. */
+  private gestures = 0;
   private pointerDown: {
     x: number;
     y: number;
@@ -208,6 +210,24 @@ export class Camera {
     );
   }
 
+  /** Mexidas da pessoa na câmera até agora. */
+  get gestureCount(): number {
+    return this.gestures;
+  }
+
+  /** O ponto do mundo saiu do miolo da área livre (`margin` = fração de cada borda)? Volta a ele. */
+  keepInView(x: number, y: number, margin = 0.2): void {
+    const a = this.area();
+    const sx = this.world.position.x + x * this.zoom;
+    const sy = this.world.position.y + y * this.zoom;
+    const inside =
+      sx > a.x + a.w * margin &&
+      sx < a.x + a.w * (1 - margin) &&
+      sy > a.y + a.h * margin &&
+      sy < a.y + a.h * (1 - margin);
+    if (!inside) this.lookAt(x, y);
+  }
+
   /** Centraliza num ponto do mundo (ex.: o próprio avatar); se estiver longe, aproxima até 1×. */
   focusOn(x: number, y: number): void {
     if (this.zoom < 1) {
@@ -221,11 +241,13 @@ export class Camera {
 
   zoomIn(): void {
     this.userZoomed = true;
+    this.gestures++;
     this.step(1);
   }
 
   zoomOut(): void {
     this.userZoomed = true;
+    this.gestures++;
     this.step(-1);
   }
 
@@ -284,6 +306,7 @@ export class Camera {
     const dy = e.global.y - d.y;
     if (!this.dragging && Math.hypot(dx, dy) > DRAG_THRESHOLD) {
       this.dragging = true;
+      this.gestures++;
       clearTimeout(this.longPressTimer);
     }
     if (this.dragging) {
@@ -313,6 +336,7 @@ export class Camera {
     const rect = this.app.canvas.getBoundingClientRect();
     const focus = { x: e.clientX - rect.left, y: e.clientY - rect.top };
     this.userZoomed = true;
+    this.gestures++;
     this.step(this.wheelAccum < 0 ? 1 : -1, focus);
     this.wheelAccum = 0;
     this.userMoved = true;
@@ -342,6 +366,7 @@ export class Camera {
     const focus = { x: (p!.x + q!.x) / 2 - rect.left, y: (p!.y + q!.y) / 2 - rect.top };
     this.userZoomed = true;
     this.userMoved = true;
+    this.gestures++;
     this.step(ratio > 1 ? 1 : -1, focus);
     this.pinchBase = this.touchDistance();
   };

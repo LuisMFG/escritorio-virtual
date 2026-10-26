@@ -63,6 +63,9 @@ import {
 import { FurniPending } from './FurniPending.js';
 import { drawRoom } from './RoomRenderer.js';
 
+/** Até esta largura (px) a tela é de celular: a câmera começa perto de você. */
+const PHONE_MAX_W = 600;
+
 /** Destaque ao achar a pessoa pela lista (ms). */
 const SPOTLIGHT_MS = 1800;
 
@@ -751,6 +754,32 @@ export class RoomScene implements DecorHost {
 
   // ---------- Avatares ----------
 
+  /**
+   * Celular: a sala inteira deixaria avatares e balões minúsculos. Começa em 1× no próprio
+   * avatar e acompanha a pessoa andando até ela mexer na câmera (arrastar, zoom ou pinça).
+   */
+  private phoneFollow: 'pending' | number | null = 'pending';
+
+  private followSelf(): void {
+    const view = this.localId ? this.avatars.get(this.localId) : undefined;
+    if (!view || this.phoneFollow === null) return;
+    if (this.phoneFollow === 'pending') {
+      if (this.app.screen.width >= PHONE_MAX_W || this.camera.zoom >= 1) {
+        this.phoneFollow = null;
+        return;
+      }
+      this.centerOnSelf();
+      this.phoneFollow = this.camera.gestureCount;
+      return;
+    }
+    if (this.camera.gestureCount !== this.phoneFollow) {
+      this.phoneFollow = null;
+      return;
+    }
+    const p = this.world.toLocal(view.getGlobalPosition());
+    this.camera.keepInView(p.x, p.y - 40);
+  }
+
   /** Câmera no próprio avatar (botão "centralizar em mim"). */
   centerOnSelf(): void {
     const view = this.localId ? this.avatars.get(this.localId) : undefined;
@@ -948,6 +977,7 @@ export class RoomScene implements DecorHost {
     }
     for (const a of this.avatars.values()) a.update(dtMs);
     for (const p of this.pets.values()) p.update(dtMs);
+    this.followSelf();
     // Alguém entrou, andou ou saiu: o fantasma verde/vermelho do Decorar se atualiza (DE15).
     if (this.avatarsDirty) {
       this.avatarsDirty = false;
