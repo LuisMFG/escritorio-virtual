@@ -122,6 +122,8 @@ import {
   REPLACED_CODE,
   REPLACED_TEXT,
   ROOM_FULL_CODE,
+  isBirthdayToday,
+  officeDate,
   ROOM_MAX_PEOPLE,
   roomFullText,
   type ReplacedMessage,
@@ -943,6 +945,8 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     }, TICK_MS);
     // Salão de Jogos: quem saiu no meio da partida e não voltou a tempo perde por W.O.
     this.clock.setInterval(() => this.expireArcade(), 500);
+    // Meia-noite em Brasília: o 🎂 acende (e apaga) para quem já está na sala.
+    this.clock.setInterval(() => this.refreshBirthdays(), 60_000);
     services().users.events.on('updated', this.onUserUpdated);
     services().moderation.on('kick', this.onKick);
     services().presence.events.on('claimed', this.onClaimed);
@@ -986,6 +990,24 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     services().tv.events.off('changed', this.onTvChanged);
     services().tv.events.off('screen', this.onTvScreen);
     for (const t of this.handTimers.values()) t.clear();
+  }
+
+  /** Corações de aniversário, uma vez por dia (o dia de Brasília, não o UTC). */
+  private birthdayHearts(userId: string, delayMs = 0): void {
+    const key = `${userId}:${officeDate(new Date())}`;
+    if (BIRTHDAY_SHOWN.has(key)) return;
+    BIRTHDAY_SHOWN.add(key);
+    this.clock.setTimeout(() => this.celebrate(userId, 'birthday'), delayMs);
+  }
+
+  /** Recalcula o "aniversário hoje" de quem está na sala (o dia virou desde que entraram). */
+  private refreshBirthdays(): void {
+    for (const p of this.state.players.values()) {
+      const today = isBirthdayToday(services().users.findById(p.userId)?.birthday);
+      if (p.birthday === today) continue;
+      p.birthday = today;
+      if (today) this.birthdayHearts(p.userId);
+    }
   }
 
   /** Aviso de sala lotada, com o nome dela. */
@@ -1056,11 +1078,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     const held = HELD.get(user.id);
     if (held) this.giveHandItem(client.sessionId, held.item, held.until);
     // Aniversário: corações na primeira entrada do dia.
-    const today = new Date().toISOString().slice(0, 10);
-    if (player.birthday && !BIRTHDAY_SHOWN.has(`${user.id}:${today}`)) {
-      BIRTHDAY_SHOWN.add(`${user.id}:${today}`);
-      this.clock.setTimeout(() => this.celebrate(user.id, 'birthday'), 1500);
-    }
+    if (player.birthday) this.birthdayHearts(user.id, 1500);
     const pet = services().pets.get(user.id);
     if (pet && !this.state.pets.has(user.id)) {
       this.pets.set(user.id, pet, client.sessionId, player.name);

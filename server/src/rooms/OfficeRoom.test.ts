@@ -21,6 +21,7 @@ import {
   type RoomTransferMessage,
   type ErrorMessage,
   ROOM_FULL_CODE,
+  monthDay,
   roomFullText,
   type RoomLayoutMessage,
   type FurniManifestEntry,
@@ -42,7 +43,7 @@ import {
 } from '@office/shared';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import type { Config } from '../config.js';
-import { openDatabase } from '../db/client.js';
+import { openDatabase, sqliteOf } from '../db/client.js';
 import { configureApp } from '../http/app.js';
 import { createServices, setServices, type Services } from '../services/index.js';
 import { OfficeRoom } from './OfficeRoom.js';
@@ -153,6 +154,19 @@ describe('OfficeRoom', () => {
     await wait(STEP_MS * 12);
     const seenByB = b.state.players.get(a.sessionId)!;
     expect(seenByB).toMatchObject({ x: 4, y: 4, nextX: 4, nextY: 4, action: 'idle' });
+  });
+
+  it('aniversário: o 🎂 acende para quem já está na sala quando o dia vira', async () => {
+    const ana = newUser('Ana');
+    const a = await join(ana.token);
+    expect(a.state.players.get(a.sessionId)!.birthday).toBe(false);
+    // O dia virou (a data muda no banco sem avisar a sala, como à meia-noite).
+    sqliteOf(svc.db)
+      .prepare('update users set birthday = ? where id = ?')
+      .run(monthDay(new Date()), ana.user.id);
+    const server = colyseus.getRoomById(a.roomId) as unknown as { refreshBirthdays(): void };
+    server.refreshBirthdays();
+    await waitFor(() => a.state.players.get(a.sessionId)!.birthday === true);
   });
 
   it('grade em cache: um móvel posto depois bloqueia o caminho na hora', async () => {

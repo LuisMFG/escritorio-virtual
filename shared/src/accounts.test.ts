@@ -5,6 +5,7 @@ import {
   formatLastSeen,
   isBirthdayToday,
   monthDay,
+  officeDate,
   profileUpdateSchema,
   registerSchema,
   usernameSchema,
@@ -50,6 +51,8 @@ describe('datas', () => {
     expect(isBirthdayToday('10-15', d)).toBe(true);
     expect(isBirthdayToday('10-16', d)).toBe(false);
     expect(isBirthdayToday(null, d)).toBe(false);
+    // O "hoje" do escritório (corações uma vez por dia) também é o de Brasília.
+    expect(officeDate(d)).toBe('2026-10-15');
   });
 
   it('visto por último em português', () => {

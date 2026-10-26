@@ -154,6 +154,16 @@ export function monthDay(date: Date, timeZone = OFFICE_TIME_ZONE): string {
   return `${parts.month}-${parts.day}`;
 }
 
+/** `AAAA-MM-DD` de uma data no fuso do escritório (o "hoje" de quem está em Brasília). */
+export function officeDate(date: Date, timeZone = OFFICE_TIME_ZONE): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
+}
+
 export function isBirthdayToday(birthday: string | null | undefined, now = new Date()): boolean {
   return Boolean(birthday) && birthday === monthDay(now);
 }
