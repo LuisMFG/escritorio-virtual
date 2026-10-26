@@ -37,8 +37,11 @@ export function tileHeight(map: Heightmap, x: number, y: number): number | null 
 }
 
 export interface RoomGridOptions {
-  /** Tiles que não podem ser pisados (ex.: posição de outros avatares parados). */
-  occupied?: readonly TilePoint[];
+  /**
+   * Tiles que não podem ser pisados (ex.: posição de outros avatares parados). Pode ser uma
+   * função: só é chamada quando alguém pergunta por um destino (andar um passo não precisa).
+   */
+  occupied?: readonly TilePoint[] | (() => readonly TilePoint[]);
   /** Permite usar assentos como destino (para sentar). Padrão: true. */
   seatsAsGoal?: boolean;
   /**
@@ -61,22 +64,18 @@ export interface TileInfo {
 }
 
 /**
- * Grade da sala pronta para o pathfinding e para a validação de posições.
- * É reconstruída quando móveis mudam — barato para salas de ~20×20.
+ * A parte fixa da grade: o piso e os móveis. Só muda quando eles mudam, então dá para montar
+ * uma vez e reaproveitar em cada pedido (o servidor perguntava a cada passo de cada pessoa).
  */
-export class RoomGrid implements PathGrid {
+export class GridBase {
   readonly width: number;
   readonly height: number;
   private readonly tiles: TileInfo[];
-  private readonly occupied = new Set<string>();
-  private readonly passable = new Set<string>();
-  private readonly seatsAsGoal: boolean;
 
   constructor(
     readonly map: Heightmap,
     furni: readonly PlacedFurni[],
     defs: ReadonlyMap<string, FurniDef>,
-    options: RoomGridOptions = {},
   ) {
     this.width = map.width;
     this.height = map.height;
@@ -105,14 +104,57 @@ export class RoomGrid implements PathGrid {
         }
       }
     }
-    for (const p of options.occupied ?? []) this.occupied.add(key(p.x, p.y));
-    for (const p of options.passable ?? []) this.passable.add(key(p.x, p.y));
-    this.seatsAsGoal = options.seatsAsGoal ?? true;
   }
 
   tile(x: number, y: number): TileInfo | undefined {
     if (x < 0 || y < 0 || x >= this.width || y >= this.height) return undefined;
     return this.tiles[y * this.width + x];
+  }
+}
+
+/**
+ * Grade da sala pronta para o pathfinding e para a validação de posições: a base (piso e
+ * móveis) mais o que é de cada pedido (quem está onde, o que dá para atravessar).
+ */
+export class RoomGrid implements PathGrid {
+  readonly width: number;
+  readonly height: number;
+  readonly map: Heightmap;
+  readonly base: GridBase;
+  private occupiedSet: Set<string> | null = null;
+  private readonly occupiedSource: RoomGridOptions['occupied'];
+  private readonly passable = new Set<string>();
+  private readonly seatsAsGoal: boolean;
+
+  constructor(
+    map: Heightmap,
+    furni: readonly PlacedFurni[],
+    defs: ReadonlyMap<string, FurniDef>,
+    options?: RoomGridOptions,
+  );
+  constructor(base: GridBase, options?: RoomGridOptions);
+  constructor(
+    mapOrBase: Heightmap | GridBase,
+    furniOrOptions?: readonly PlacedFurni[] | RoomGridOptions,
+    defs?: ReadonlyMap<string, FurniDef>,
+    options: RoomGridOptions = {},
+  ) {
+    if (mapOrBase instanceof GridBase) {
+      this.base = mapOrBase;
+      options = (furniOrOptions as RoomGridOptions | undefined) ?? {};
+    } else {
+      this.base = new GridBase(mapOrBase, furniOrOptions as readonly PlacedFurni[], defs!);
+    }
+    this.map = this.base.map;
+    this.width = this.base.width;
+    this.height = this.base.height;
+    this.occupiedSource = options.occupied;
+    for (const p of options.passable ?? []) this.passable.add(key(p.x, p.y));
+    this.seatsAsGoal = options.seatsAsGoal ?? true;
+  }
+
+  tile(x: number, y: number): TileInfo | undefined {
+    return this.base.tile(x, y);
   }
 
   heightAt(x: number, y: number): number {
@@ -125,8 +167,17 @@ export class RoomGrid implements PathGrid {
     if (!t || t.floor === null) return false;
     if (t.blocked && !isGoal && this.passable.has(key(x, y))) return true;
     if (t.blocked && !(isGoal && t.seat && this.seatsAsGoal)) return false;
-    if (isGoal && this.occupied.has(key(x, y))) return false;
+    if (isGoal && this.occupied().has(key(x, y))) return false;
     return true;
+  }
+
+  private occupied(): Set<string> {
+    if (!this.occupiedSet) {
+      const src = this.occupiedSource;
+      const list = typeof src === 'function' ? src() : (src ?? []);
+      this.occupiedSet = new Set(list.map((p) => key(p.x, p.y)));
+    }
+    return this.occupiedSet;
   }
 }
 

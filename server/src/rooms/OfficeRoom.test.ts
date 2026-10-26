@@ -155,6 +155,27 @@ describe('OfficeRoom', () => {
     expect(seenByB).toMatchObject({ x: 4, y: 4, nextX: 4, nextY: 4, action: 'idle' });
   });
 
+  it('grade em cache: um móvel posto depois bloqueia o caminho na hora', async () => {
+    const a = await join(newUser('Ana').token);
+    const b = await join(newUser('Beto').token);
+    const server = colyseus.getRoomById(a.roomId) as unknown as {
+      movement: { destinationOf(id: string, p: unknown): { x: number; y: number } };
+      state: { players: Map<string, unknown> };
+    };
+    const dest = () =>
+      server.movement.destinationOf(a.sessionId, server.state.players.get(a.sessionId));
+    // A Ana pede para ir até lá (a grade é montada e guardada)...
+    a.send(ClientMessage.Move, { x: 15, y: 18 });
+    await wait(150);
+    expect(dest()).toEqual({ x: 15, y: 18 });
+    // ...o Beto põe uma planta no tile, e o próximo pedido já vê o móvel.
+    b.send(ClientMessage.FurniPlace, { defId: 'plant_yukka', x: 15, y: 18, rot: 0 });
+    await wait(200);
+    a.send(ClientMessage.Move, { x: 15, y: 18 });
+    await wait(150);
+    expect(dest()).not.toEqual({ x: 15, y: 18 });
+  });
+
   it('destino impossível devolve erro e o avatar não sai do lugar', async () => {
     const a = await join(newUser('Ana').token);
     const before = { ...a.state.players.get(a.sessionId)!.toJSON() };

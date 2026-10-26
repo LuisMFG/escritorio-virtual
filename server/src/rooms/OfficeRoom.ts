@@ -142,6 +142,7 @@ import {
   OfficeState,
   parseHeightmap,
   Player,
+  GridBase,
   RoomGrid,
   type TttGame,
   ServerMessage,
@@ -260,6 +261,8 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
   >();
   /** Quadro que cada conexão tem aberto na tela (recebe os rascunhos ao vivo). */
   private readonly wbWatching = new Map<string, string>();
+  /** Piso e móveis em grade (`grid()`); `null` = refazer na próxima consulta. */
+  private gridBase: GridBase | null = null;
   /** Jogo da velha: 10 ações seguidas, recarregando 4 por segundo. */
   private readonly gameLimiter = new KeyedRateLimiter(10, 4);
   /** Torcida: 3 seguidas, depois 1 por segundo. */
@@ -860,6 +863,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       this.state.arcade.delete(id);
     }
     this.refreshDesks();
+    this.gridBase = null;
     // Quem ficou fora do piso (ou numa porta) volta para perto da entrada. Quem está sentado ou
     // deitado num móvel que continua lá fica (antes todo mundo era levantado e levado à entrada).
     for (const [sessionId, p] of this.state.players.entries()) {
@@ -2229,6 +2233,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       client.auth.id,
     );
     this.state.furni.set(placed.id, toFurni(placed));
+    this.gridBase = null;
     services().achievements.bump(client.auth.id, 'furni');
     return { ok: true, furni: toPlaced(this.state.furni.get(placed.id)!) };
   }
@@ -2271,6 +2276,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     services().furni.setDef(this.layout.roomId, f.id, msg.defId, state);
     f.defId = msg.defId;
     f.state = state;
+    this.gridBase = null;
     return { ok: true, furni: toPlaced(f) };
   }
 
@@ -2317,6 +2323,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       services().furni.update(this.layout.roomId, m.id, { x: m.x, y: m.y, z: m.z, rot: m.rot });
       Object.assign(f, { x: m.x, y: m.y, z: m.z, rot: m.rot });
     }
+    this.gridBase = null;
   }
 
   private handleRemove(client: OfficeClient, furniId: string): FurniResult {
@@ -2335,6 +2342,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       services().audit.log(client.auth.id, 'furni.remove', null, this.furniWhere(furniId));
     services().furni.remove(this.layout.roomId, furniId);
     this.state.furni.delete(furniId);
+    this.gridBase = null;
     this.state.games.delete(furniId);
     this.state.arcade.delete(furniId);
     this.refreshDesks();
@@ -2696,14 +2704,26 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
   }
 
   /** Grade vista por um jogador: os destinos dos outros avatares contam como ocupados. */
+  /**
+   * Piso e móveis já montados em grade. Refeita só quando um móvel ou o piso muda (antes era
+   * montada do zero a cada passo de cada pessoa: a maior fatia da CPU com a sala cheia).
+   */
+  private grid(): GridBase {
+    this.gridBase ??= new GridBase(this.map, this.furniList(), services().furniDefs);
+    return this.gridBase;
+  }
+
   private gridFor(sessionId: string, opts: { seatsAsGoal?: boolean } = {}): RoomGrid {
-    const occupied: TilePoint[] = [];
-    for (const [id, p] of this.state.players.entries()) {
-      if (id !== sessionId) occupied.push(this.movement.destinationOf(id, p));
-    }
     const seat = this.seatUnder(sessionId);
-    return new RoomGrid(this.map, this.furniList(), services().furniDefs, {
-      occupied,
+    return new RoomGrid(this.grid(), {
+      // Só calculado se alguém perguntar por um destino (andar um passo não precisa).
+      occupied: () => {
+        const occupied: TilePoint[] = [];
+        for (const [id, p] of this.state.players.entries()) {
+          if (id !== sessionId) occupied.push(this.movement.destinationOf(id, p));
+        }
+        return occupied;
+      },
       // Assento só vale como destino para quem está indo sentar (`interact`).
       seatsAsGoal: opts.seatsAsGoal ?? this.intents.get(sessionId)?.kind === 'sit',
       // Quem está numa cama (ou sofá) sai andando por cima dela, como no Habbo.
@@ -2712,16 +2732,11 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
   }
 
   /** Assento (cadeira, sofá, cama) em cujo tile a pessoa está agora, se houver. */
-  private seatUnder(sessionId: string): { f: Furni; def: FurniManifestEntry } | null {
+  private seatUnder(sessionId: string): { f: PlacedFurni; def: FurniManifestEntry } | null {
     const p = this.state.players.get(sessionId);
-    if (!p) return null;
-    for (const f of this.state.furni.values()) {
-      const def = services().furniDefs.get(f.defId);
-      if (!def || def.wall || def.canWalk || !(def.canSit || def.canLay)) continue;
-      const fp = footprint(def, f.x, f.y, f.rot);
-      if (p.x >= fp.minX && p.x <= fp.maxX && p.y >= fp.minY && p.y <= fp.maxY) return { f, def };
-    }
-    return null;
+    const f = p && this.grid().tile(p.x, p.y)?.seat;
+    const def = f && services().furniDefs.get(f.defId);
+    return f && def ? { f, def } : null;
   }
 
   /** Grade dos pets: não param em portas, em gente parada nem em cima de outro pet. */
@@ -2734,7 +2749,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       if (id !== petId) occupied.push({ x: p.nextX, y: p.nextY });
     }
     // Pets não sentam em cadeiras nem deitam em camas (ocupavam o lugar das pessoas).
-    return new RoomGrid(this.map, this.furniList(), services().furniDefs, {
+    return new RoomGrid(this.grid(), {
       occupied,
       seatsAsGoal: false,
     });

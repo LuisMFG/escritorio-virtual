@@ -1,4 +1,5 @@
 import { defineRoom, defineServer } from '@colyseus/core';
+import { Encoder } from '@colyseus/schema';
 import { LOBBY_ROOM, OFFICE_ROOM } from '@office/shared';
 import { config } from './config.js';
 import { openDatabase } from './db/client.js';
@@ -13,6 +14,10 @@ import { guarded, logError } from './util/guard.js';
 import { HabboAssetsClient } from './assets/HabboAssetsClient.js';
 import { imagerMeasure, offlineMeasure } from './services/FurniDefService.js';
 import { OfflineTvMeta } from './services/TvService.js';
+
+// Estado inteiro de uma sala cheia (36 pessoas, mais de 100 móveis) passa dos 8 KB padrão: o
+// Colyseus avisava "buffer overflow" e refazia o buffer a cada entrada.
+Encoder.BUFFER_SIZE = 128 * 1024;
 
 /** Tamanho máximo de uma mensagem do WebSocket. */
 const WS_MAX_PAYLOAD = 32 * 1024;
