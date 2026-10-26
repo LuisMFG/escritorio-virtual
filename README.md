@@ -215,7 +215,7 @@ docker build -t escritorio-virtual .
 docker run -d --name escritorio -p 2567:2567 -e INVITE_CODE=troque-isto -v escritorio-dados:/app/data escritorio-virtual
 ```
 
-A imagem roda como usuário `node`, tem healthcheck em `GET /healthz` e encerra com elegância no `SIGTERM`.
+A imagem roda como usuário `node`, tem healthcheck em `GET /healthz` (consulta o banco: 503 se ele não responder) e encerra com elegância no `SIGTERM`. Cada sala aceita até 100 pessoas; cheia, quem chega recebe o aviso de sala lotada. No `docker-compose.yml`, os logs de cada contêiner ficam limitados a 3 arquivos de 10 MB.
 
 ### VPS (Oracle Cloud grátis, DigitalOcean, Hetzner…)
 

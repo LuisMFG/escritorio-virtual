@@ -1754,6 +1754,20 @@ As fases 52 e 53 vêm primeiro porque corrigem o que já existe e é usado todo 
   2. Outra pessoa abre a mesa e clica em **Pedir a mesa**: responda no painel.
   3. Numa mesa de ping-pong, escolha o nível e **Contra o computador** ou **Máquina de bolas**.
 
+### Revisão do escritório, grupo A: estabilidade (25/10/2026) ✅ implementada
+- **Pedido:** análise crítica do escritório testando de verdade (36 pessoas e robôs, computador e celular), lista priorizada por impacto e esforço; o grupo A (crítico e rápido) foi escolhido primeiro.
+- **Decisão (25/10):** sem backup fora da VPS por enquanto (o item 2 do grupo ficou de fora).
+- **Feito:**
+  - **Sala sem divisão** (`OfficeRoom.ts`, `shared/src/protocol.ts`): até 100 pessoas por sala (`ROOM_MAX_PEOPLE`; com 36 o servidor ficou em 7,5% de CPU). Antes, da 31ª pessoa em diante o Colyseus abria uma cópia vazia da sala e ela não via ninguém. Agora cada sala física tem uma instância só: cheia, quem chega é recusado (`ROOM_FULL_CODE` 423) e o aviso diz que está lotada; pela porta ou teleporte, a pessoa fica onde está; pelo link, vai para a Recepção; trocando de sala, volta para a de antes.
+  - **Lista de salas e mensagens reconectam sozinhas** (`LobbyConnection.start`): se a primeira conexão do canal global falhasse (rede oscilando), ele ficava morto até recarregar a página.
+  - **Faixas legíveis no tema claro** (`style.css`): aviso da diretoria, aviso urgente, lembrete de reunião, chips de reação e colunas do Jira tinham fundo escuro fixo; agora seguem o tema.
+  - **Desenho ao vivo só para quem vê o quadro** (`WbWatch`): o rascunho do traço (até 25 por segundo) ia para a sala inteira; agora só para quem está com aquele quadro aberto. O traço pronto continua indo para todos (a miniatura na sala).
+  - **Servidor resistente a erros** (`util/guard.ts`, `onUncaughtException`): um erro num cronômetro (lembretes, foco, backup, Jira, Spotify, atividade, anexos), no loop de uma sala ou numa promessa sem tratamento vira log em vez de derrubar todas as salas. O `/healthz` consulta o banco de verdade (503 se não responder).
+  - **Logs do Docker com limite** (`docker-compose.yml`): até 3 arquivos de 10 MB por contêiner.
+- **Testes:**
+  - unidade: sala lotada recusa (sem cópia), a porta avisa e, com vaga, entra na mesma instância; rascunho só para quem está com o quadro aberto e para de chegar ao fechar (`OfficeRoom.test.ts`); canal global tenta de novo até conectar (`LobbyConnection.test.ts`); cronômetro com erro e `/healthz` com o banco fechado (`guard.test.ts`);
+  - ponta a ponta: `quadro.spec.ts` (o traço chega ao vivo para quem está com o quadro aberto e fica) e `avisos.spec.ts` (a faixa fica clara no tema claro).
+
 ### Extras sugeridos (fora do pedido; dá para encaixar depois)
 
 | Código | Ideia | Impacto | Esforço |
