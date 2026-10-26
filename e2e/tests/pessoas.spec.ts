@@ -1,4 +1,4 @@
-import { expect, goThroughDoor, newPerson, test } from '../helpers.js';
+import { expect, goThroughDoor, newPerson, sendChat, test } from '../helpers.js';
 
 test('pessoas online: chamar para conversa quem está em outra sala, pelo menu da lista', async ({
   browser,
@@ -30,4 +30,27 @@ test('pessoas online: chamar para conversa quem está em outra sala, pelo menu d
   await expect(menu).toBeVisible();
   await ana.page.keyboard.press('Escape');
   await expect(menu).toHaveCount(0);
+});
+
+test('status na barra (os outros veem) e aviso de menção com "Responder"', async ({ browser }) => {
+  const ana = await newPerson(browser, 'Ana');
+  const beto = await newPerson(browser, 'Beto');
+
+  // A Ana fica ocupada pelo botão da barra; o Beto vê na lista.
+  await ana.page.getByRole('button', { name: 'Seu status: Disponível' }).click();
+  await ana.page.screenshot({ path: test.info().outputPath('status-na-barra.png') });
+  await ana.page.getByRole('menuitemradio', { name: 'Ocupado' }).click();
+  await expect(ana.page.getByRole('button', { name: 'Seu status: Ocupado' })).toBeVisible();
+  await beto.page.locator('.people').evaluate((d) => ((d as HTMLDetailsElement).open = true));
+  await expect(beto.page.locator('.people-list li', { hasText: ana.name })).toHaveAttribute(
+    'data-status',
+    'busy',
+  );
+
+  // O Beto menciona a Ana: o aviso dela tem "Responder", que abre a resposta no chat.
+  await sendChat(beto.page, `@${ana.name} pode olhar o PR?`);
+  const toast = ana.page.locator('.toast-item', { hasText: `${beto.name} mencionou você` });
+  await toast.getByRole('button', { name: 'Responder' }).click();
+  await expect(ana.page.locator('.reply-bar')).toContainText(beto.name);
+  await expect(ana.page.getByPlaceholder(/Diga algo/)).toBeFocused();
 });

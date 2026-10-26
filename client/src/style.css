@@ -1329,34 +1329,6 @@ mark.mention {
   box-shadow: inset 3px 0 0 var(--warn-text);
 }
 
-.status-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 0 12px 8px;
-  font-size: calc(12px * var(--font-scale, 1));
-  color: var(--muted);
-}
-
-.status-row select {
-  padding: 4px 8px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
-  background: var(--surface-sunken);
-  color: var(--text);
-  font: inherit;
-  font-size: calc(12px * var(--font-scale, 1));
-}
-
-.status-row select[data-status='busy'] {
-  border-color: var(--danger);
-}
-
-.status-row select[data-status='away'] {
-  border-color: var(--warn);
-}
-
 .people-list li[data-status='busy']::before {
   background: var(--danger);
 }
@@ -9065,5 +9037,75 @@ kbd {
   from {
     transform: translateY(-12px);
     opacity: 0;
+  }
+}
+
+/* Seu status na barra de baixo (antes ficava escondido dentro de Pessoas online). */
+.status-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--ok);
+  flex: none;
+}
+
+[data-status='busy'] > .status-dot {
+  background: var(--danger);
+}
+
+[data-status='away'] > .status-dot {
+  background: var(--warn);
+}
+
+.hud-mystatus {
+  gap: 6px;
+}
+
+.hud-mystatus .lbl {
+  display: inline;
+}
+
+.status-menu {
+  position: fixed;
+  z-index: 65;
+  display: grid;
+  min-width: 160px;
+  padding: 6px;
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+  box-shadow: var(--shadow-2);
+}
+
+.status-menu[hidden] {
+  display: none;
+}
+
+.status-menu button {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.status-menu button:hover,
+.status-menu button:focus-visible,
+.status-menu button[aria-checked='true'] {
+  background: var(--hover-tint);
+  outline: none;
+}
+
+@media (max-width: 700px) {
+  .hud-actions .hud-mystatus {
+    display: none;
   }
 }

@@ -1,5 +1,6 @@
 import type { AssetLoader, AssetStats } from '../assets/AssetLoader.js';
 import type { Camera } from '../scene/Camera.js';
+import { STATUS_LABELS, STATUSES, type Status } from '@office/shared';
 import { icon, setIcon, type IconName } from './icons.js';
 
 export interface Hud {
@@ -23,6 +24,8 @@ export interface Hud {
   setDesk(on: boolean): void;
   /** Sala com decoração travada para você: o botão fica desabilitado. */
   setDecorLocked(locked: boolean): void;
+  /** Mostra o seu status no botão (inclusive o ausente automático). */
+  setStatus(status: Status): void;
 }
 
 /** Nome da sala, barra de baixo em grupos e a coluna de câmera e som (agem sobre a cena atual). */
@@ -30,6 +33,8 @@ export function mountHud(opts: {
   getCamera: () => Camera | undefined;
   loader: AssetLoader;
   onOpenProfile: () => void;
+  /** Escolheu um status no botão de status. */
+  onStatusChange: (status: Status) => void;
   onOpenTeam: () => void;
   onOpenAdmin: () => void;
   onOpenMessages: () => void;
@@ -91,6 +96,61 @@ export function mountHud(opts: {
   zoom.prepend(settingsBtn);
 
   const profileBtn = actionButton('hud-avatar', 'user', 'Perfil', opts.onOpenProfile);
+  // Status (disponível, ocupado, ausente): na barra, à vista e com um clique.
+  const statusBtn = document.createElement('button');
+  statusBtn.type = 'button';
+  statusBtn.className = 'hud-action hud-mystatus';
+  statusBtn.setAttribute('aria-haspopup', 'menu');
+  const statusDot = Object.assign(document.createElement('span'), { className: 'status-dot' });
+  const statusLbl = Object.assign(document.createElement('span'), { className: 'lbl' });
+  statusBtn.append(statusDot, statusLbl);
+  const statusMenu = document.createElement('div');
+  statusMenu.className = 'status-menu';
+  statusMenu.setAttribute('role', 'menu');
+  statusMenu.setAttribute('aria-label', 'Seu status');
+  statusMenu.hidden = true;
+  for (const st of STATUSES) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.setAttribute('role', 'menuitemradio');
+    b.dataset.status = st;
+    b.append(
+      Object.assign(document.createElement('span'), { className: 'status-dot' }),
+      STATUS_LABELS[st],
+    );
+    b.addEventListener('click', () => {
+      closeStatus();
+      opts.onStatusChange(st);
+    });
+    statusMenu.append(b);
+  }
+  const closeStatus = () => {
+    statusMenu.hidden = true;
+    statusBtn.setAttribute('aria-expanded', 'false');
+  };
+  /** Abre a escolha de status acima do botão (no celular, acima do "Mais"). */
+  const openStatus = (anchor: HTMLElement) => {
+    statusMenu.hidden = false;
+    statusBtn.setAttribute('aria-expanded', 'true');
+    const r = anchor.getBoundingClientRect();
+    const m = statusMenu.getBoundingClientRect();
+    statusMenu.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - m.width - 8))}px`;
+    statusMenu.style.top = `${Math.max(8, r.top - m.height - 6)}px`;
+    statusMenu.querySelector<HTMLButtonElement>('[aria-checked="true"]')?.focus();
+  };
+  statusBtn.addEventListener('click', () =>
+    statusMenu.hidden ? openStatus(statusBtn) : closeStatus(),
+  );
+  statusMenu.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      closeStatus();
+      statusBtn.focus();
+    }
+  });
+  document.addEventListener('pointerdown', (e) => {
+    const t = e.target as Node;
+    if (!statusMenu.hidden && !statusMenu.contains(t) && !statusBtn.contains(t)) closeStatus();
+  });
   const teamBtn = actionButton('hud-team', 'users', 'Equipe', opts.onOpenTeam);
   const agendaBtn = actionButton('hud-agenda', 'calendar', 'Agenda', opts.onOpenAgenda);
   const decorBtn = actionButton('hud-decor', 'armchair', 'Decorar', opts.onToggleDecor);
@@ -146,12 +206,23 @@ export function mountHud(opts: {
     b.classList.add('mobile-only');
     return b;
   };
+  const statusItem = menuItem('user', 'Status', () => openStatus(moreBtn));
+  statusItem.classList.add('mobile-only');
   const deskItem = mobileItem('monitor', 'Minha mesa', deskBtn);
   deskItem.hidden = true;
   const annItem = mobileItem('megaphone', 'Avisos', annBtn);
   const agendaItem = mobileItem('calendar', 'Agenda', agendaBtn);
   const decorItem = mobileItem('armchair', 'Decorar', decorBtn);
-  moreMenu.append(deskItem, annItem, agendaItem, decorItem, helpBtn, editRoomBtn, adminBtn);
+  moreMenu.append(
+    statusItem,
+    deskItem,
+    annItem,
+    agendaItem,
+    decorItem,
+    helpBtn,
+    editRoomBtn,
+    adminBtn,
+  );
   const moreWrap = Object.assign(document.createElement('div'), { className: 'hud-more' });
   moreWrap.append(moreBtn, moreMenu);
   const renderMore = () => undefined;
@@ -175,13 +246,13 @@ export function mountHud(opts: {
   actions.className = 'hud-actions';
   actions.setAttribute('aria-label', 'Menu do escritório');
   actions.append(
-    group('Eu', profileBtn, deskBtn, focusBtn),
+    group('Eu', profileBtn, statusBtn, deskBtn, focusBtn),
     group('Pessoas', teamBtn, mapBtn),
     group('Conversas', dmBtn, annBtn),
     group('Escritório', agendaBtn, decorBtn),
     moreWrap,
   );
-  document.body.append(card, zoom, actions);
+  document.body.append(card, zoom, actions, statusMenu);
   return {
     focusButton: focusBtn,
     setUnreadDms(n) {
@@ -207,6 +278,16 @@ export function mountHud(opts: {
     setAdmin(on) {
       adminBtn.hidden = !on;
       renderMore();
+    },
+    setStatus(status) {
+      statusBtn.dataset.status = status;
+      statusLbl.textContent = STATUS_LABELS[status];
+      statusBtn.title = `Seu status: ${STATUS_LABELS[status]}`;
+      statusBtn.setAttribute('aria-label', `Seu status: ${STATUS_LABELS[status]}`);
+      statusItem.lastChild!.textContent = `Status: ${STATUS_LABELS[status]}`;
+      for (const b of statusMenu.querySelectorAll<HTMLElement>('[role="menuitemradio"]')) {
+        b.setAttribute('aria-checked', String(b.dataset.status === status));
+      }
     },
     setDecorLocked(locked) {
       decorBtn.disabled = locked;

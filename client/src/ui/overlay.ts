@@ -1,4 +1,4 @@
-import { nameKey, STATUS_LABELS, STATUSES, type Status } from '@office/shared';
+import { nameKey, STATUS_LABELS, type Status } from '@office/shared';
 import type { ConnectionStatus } from '../net/OfficeConnection.js';
 import { cargoPill } from './profile.js';
 import { mountToasts, toast, type ToastOptions } from './toasts.js';
@@ -55,7 +55,6 @@ export class Overlay {
   private readonly people = document.createElement('details');
   private readonly peopleSummary = document.createElement('summary');
   private readonly peopleBody = document.createElement('div');
-  private readonly statusSelect = document.createElement('select');
   private readonly search = document.createElement('input');
   /** Salas recolhidas na lista (a atual é `''`). */
   private readonly collapsed = new Set<string>();
@@ -67,21 +66,11 @@ export class Overlay {
   private lastStatus: ConnectionStatus = 'connecting';
   private pick: ((target: PersonPick, anchor: HTMLElement) => void) | null = null;
 
-  constructor(onStatusChange: (status: Status) => void) {
+  constructor() {
     this.people.className = 'people';
     this.people.open = window.innerWidth > 600 && window.innerHeight > 500;
     this.peopleBody.className = 'people-body';
 
-    // Seletor do próprio status (fica fora da lista para não perder o foco ao re-renderizar).
-    const statusRow = Object.assign(document.createElement('label'), { className: 'status-row' });
-    statusRow.append(Object.assign(document.createElement('span'), { textContent: 'Seu status' }));
-    for (const st of STATUSES) {
-      this.statusSelect.append(new Option(STATUS_LABELS[st], st));
-    }
-    this.statusSelect.addEventListener('change', () =>
-      onStatusChange(this.statusSelect.value as Status),
-    );
-    statusRow.append(this.statusSelect);
     // Busca (com muita gente, a lista vira uma coluna sem fim).
     Object.assign(this.search, {
       type: 'search',
@@ -90,7 +79,7 @@ export class Overlay {
     });
     this.search.setAttribute('aria-label', 'Buscar pessoa online');
     this.search.addEventListener('input', () => this.render());
-    this.people.append(this.peopleSummary, statusRow, this.search, this.peopleBody);
+    this.people.append(this.peopleSummary, this.search, this.peopleBody);
 
     this.banner.className = 'conn-banner';
     this.banner.setAttribute('role', 'status');
@@ -114,12 +103,6 @@ export class Overlay {
     );
     this.roomName = roomName;
     this.render();
-  }
-
-  /** Mostra no seletor o status atual (inclusive o ausente automático). */
-  setOwnStatus(status: Status): void {
-    this.statusSelect.value = status;
-    this.statusSelect.dataset.status = status;
   }
 
   /** Outras salas (a atual é ignorada: ela vem do estado ao vivo). */

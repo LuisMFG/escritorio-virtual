@@ -360,7 +360,14 @@ async function start(): Promise<void> {
   const effectiveStatus = (): Status => (autoAway ? 'away' : manualStatus);
   const applyStatus = () => {
     connection?.setStatus(effectiveStatus());
-    overlay.setOwnStatus(effectiveStatus());
+    hud.setStatus(effectiveStatus());
+  };
+  /** A pessoa escolheu o status (botão de status da barra). */
+  const chooseStatus = (status: Status) => {
+    manualStatus = status;
+    saveStatus(status);
+    autoAway = false;
+    applyStatus();
   };
   // Voltando da página do Spotify (?spotify=ok|erro|cancelado): avisa e limpa o endereço.
   const spotifyResult = new URLSearchParams(location.search).get('spotify');
@@ -376,12 +383,7 @@ async function start(): Promise<void> {
       );
     }, 1500);
   }
-  const overlay = new Overlay((status) => {
-    manualStatus = status;
-    saveStatus(status);
-    autoAway = false;
-    applyStatus();
-  });
+  const overlay = new Overlay();
   new IdleWatcher(
     () => {
       if (manualStatus === 'away') return;
@@ -547,6 +549,23 @@ async function start(): Promise<void> {
         return team?.members ?? [];
       },
       praise: (to) => praise(to.userId, to.name),
+    });
+  }
+  function showAgenda(): void {
+    if (!session || !connection) return;
+    const conn = connection;
+    agenda?.close();
+    agenda = openAgenda({
+      token: session.token,
+      userId: session.userId,
+      isAdmin: session.role === 'admin',
+      rooms: () => roomList,
+      loadTeam: async () => {
+        await loadTeam();
+        return team?.members ?? [];
+      },
+      goTo: (id) => conn.goTo(id),
+      currentRoomId: conn.currentRoomId,
     });
   }
   function praise(userId: string, name: string): void {
@@ -809,6 +828,7 @@ async function start(): Promise<void> {
   });
 
   const hud = mountHud({
+    onStatusChange: (status) => chooseStatus(status),
     getCamera: () => scene?.camera,
     onCenterSelf: () => scene?.centerOnSelf(),
     onGoToDesk: () => goToMyDesk(),
@@ -822,23 +842,7 @@ async function start(): Promise<void> {
     onOpenMessages: () => messages.toggle(),
     onOpenAnnouncements: () => showAnnouncements(),
     onOpenMap: () => showMap(),
-    onOpenAgenda: () => {
-      if (!session || !connection) return;
-      const conn = connection;
-      agenda?.close();
-      agenda = openAgenda({
-        token: session.token,
-        userId: session.userId,
-        isAdmin: session.role === 'admin',
-        rooms: () => roomList,
-        loadTeam: async () => {
-          await loadTeam();
-          return team?.members ?? [];
-        },
-        goTo: (id) => conn.goTo(id),
-        currentRoomId: conn.currentRoomId,
-      });
-    },
+    onOpenAgenda: () => showAgenda(),
     onOpenHelp: () => showHelp(),
     onOpenSettings: () =>
       openSettings({
@@ -861,6 +865,7 @@ async function start(): Promise<void> {
       });
     },
   });
+  hud.setStatus(effectiveStatus());
   // Modo foco (Pomodoro): botão 🍅 do HUD, contagem e avisos segurados.
   const focus = new FocusController(hud.focusButton, {
     start: (minutes, breakMinutes) => connection?.focusStart(minutes, breakMinutes),
@@ -1316,7 +1321,7 @@ async function start(): Promise<void> {
     updateTitle();
     // Cada sala começa como "Disponível": reaplica o status atual.
     if (effectiveStatus() !== 'available') connection.setStatus(effectiveStatus());
-    overlay.setOwnStatus(effectiveStatus());
+    hud.setStatus(effectiveStatus());
 
     let lastPos: { x: number; y: number } | null = null;
     /** Faixa da mesa, botão "Minha mesa" e plaquinhas, a partir do estado da sala. */
@@ -1665,7 +1670,11 @@ async function start(): Promise<void> {
         // Em foco: sem som nem aviso (entra no resumo do fim).
         if (focus.focusing) return focus.hold('dms');
         sound.mention();
-        if (!messages.isOpen) overlay.notify(`Mensagem de ${name}`);
+        if (!messages.isOpen) {
+          overlay.notify(`Mensagem de ${name}`, {
+            action: { label: 'Responder', run: () => openDm(m.fromUserId, name) },
+          });
+        }
         notifier.notify(`Mensagem de ${name}`, m.text, {
           tag: `dm-${m.fromUserId}`,
           onClick: () => openDm(m.fromUserId, name),
@@ -1697,8 +1706,11 @@ async function start(): Promise<void> {
         });
         const text = `${meeting.createdByName} convidou você para “${meeting.title}” (${when}).`;
         sound.mention();
-        overlay.notify(text);
-        notifier.notify('Convite de reunião', text, { tag: `meeting-${meeting.id}` });
+        overlay.notify(text, { action: { label: 'Ver na agenda', run: () => showAgenda() } });
+        notifier.notify('Convite de reunião', text, {
+          tag: `meeting-${meeting.id}`,
+          onClick: () => showAgenda(),
+        });
       },
       meetingReminder: ({ meeting }) => {
         sound.mention();
@@ -1733,9 +1745,12 @@ async function start(): Promise<void> {
         const info = KUDOS_INFO[k.type];
         if (focus.focusing) return focus.hold('kudos');
         sound.mention();
-        overlay.notify(`${info.emoji} ${k.fromName} te elogiou: “${k.message}”`);
+        overlay.notify(`${info.emoji} ${k.fromName} te elogiou: “${k.message}”`, {
+          action: { label: 'Responder', run: () => openDm(k.fromUserId, k.fromName) },
+        });
         notifier.notify(`${info.emoji} ${k.fromName} te elogiou`, k.message, {
           tag: `kudos-${k.id}`,
+          onClick: () => openDm(k.fromUserId, k.fromName),
         });
       },
       kudosChanged: () => kudosWall?.refresh(),
@@ -1776,8 +1791,13 @@ async function start(): Promise<void> {
         } else if (mentioned) {
           const what = repliedToMe ? 'respondeu você' : 'mencionou você';
           sound.mention();
-          overlay.notify(`${msg.name} ${what}`);
-          notifier.notify(`${msg.name} ${what}`, msg.text, { tag: 'mencao' });
+          overlay.notify(`${msg.name} ${what}`, {
+            action: { label: 'Responder', run: () => chat.replyTo(msg) },
+          });
+          notifier.notify(`${msg.name} ${what}`, msg.text, {
+            tag: 'mencao',
+            onClick: () => chat.replyTo(msg),
+          });
           if (document.visibilityState === 'hidden') {
             unseenMentions++;
             updateTitle();
