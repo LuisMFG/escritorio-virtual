@@ -398,6 +398,8 @@ async function start(): Promise<void> {
   );
 
   const sound = new ChatSound();
+  // Em foco ou Ocupado, os avisos chegam só na tela, sem som.
+  sound.quiet = () => focus.focusing || effectiveStatus() === 'busy';
   const chat = new ChatPanel({
     send: (text, replyToId, attachmentId) => {
       connection?.say(text, replyToId, attachmentId);
@@ -872,7 +874,8 @@ async function start(): Promise<void> {
     stop: () => connection?.focusStop(),
     notify: (m) => overlay.notify(m),
     systemNotify: (title, body) => notifier.notify(title, body, { tag: 'foco' }),
-    sound: () => sound.mention(),
+    // Fim do foco ou da pausa: toca mesmo em foco (é o aviso que a pessoa pediu).
+    sound: () => sound.mention(true),
     title: (prefix) => {
       focusTitle = prefix ?? '';
       updateTitle();

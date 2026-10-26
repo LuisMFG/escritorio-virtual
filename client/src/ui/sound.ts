@@ -1,21 +1,27 @@
-const KEY = 'escritorio.som';
+/**
+ * Chave da escolha no navegador. A `.v2` (26/10/2026) faz todo mundo começar com o som ligado,
+ * inclusive quem ficou com ele desligado quando o padrão era desligado.
+ */
+const KEY = 'escritorio.som.v2';
 
 /**
  * Som curto de mensagem, sintetizado com Web Audio (sem arquivo de áudio para licenciar).
- * Começa desligado; a escolha fica salva no navegador.
+ * Começa ligado (para todo mundo ouvir os avisos); o sino desliga e a escolha fica salva.
  */
 export class ChatSound {
   private ctx: AudioContext | null = null;
   enabled: boolean;
+  /** Em silêncio agora (modo foco ou status Ocupado): os avisos só aparecem na tela. */
+  quiet: () => boolean = () => false;
 
   constructor() {
     let saved: string | null = null;
     try {
       saved = localStorage.getItem(KEY);
     } catch {
-      // Sem armazenamento: fica desligado.
+      // Sem armazenamento: fica ligado.
     }
-    this.enabled = saved === '1';
+    this.enabled = saved !== '0';
   }
 
   toggle(): boolean {
@@ -31,11 +37,16 @@ export class ChatSound {
 
   /** "Plim" de duas notas, baixinho. */
   play(): void {
+    if (this.quiet()) return;
     this.tones([880, 1320]);
   }
 
-  /** Menção: três notas subindo, um pouco mais alto. */
-  mention(): void {
+  /**
+   * Menção (e os outros avisos): três notas subindo, um pouco mais alto. `always` toca mesmo
+   * em foco ou ocupado (o fim do próprio Pomodoro, que a pessoa quer ouvir).
+   */
+  mention(always = false): void {
+    if (!always && this.quiet()) return;
     this.tones([660, 990, 1320], 0.09);
   }
 
