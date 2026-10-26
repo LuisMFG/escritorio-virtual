@@ -4,6 +4,9 @@ import {
   changePassword,
   claim,
   login,
+  LOGIN_FAILURE_WINDOW_MS,
+  LOGIN_FAILURES_PER_ACCOUNT,
+  loginFailureLimiter,
   logout,
   me,
   register,
@@ -91,6 +94,27 @@ describe('entrar', () => {
     const nobody = await login({ username: 'ninguem', password: 'outra-senha' }, deps);
     expect(wrong).toMatchObject({ status: 401, body: { error: 'INVALID_CREDENTIALS' } });
     expect(nobody).toEqual(wrong);
+  });
+
+  it('10 senhas erradas seguram a conta por um tempo (mesmo a senha certa), e passam sozinhas', async () => {
+    let now = 0;
+    deps = { ...deps, loginFailures: loginFailureLimiter(() => now) };
+    await registered();
+    for (let i = 0; i < LOGIN_FAILURES_PER_ACCOUNT; i++) {
+      expect((await login({ username: 'ana', password: 'errada' }, deps)).status).toBe(401);
+    }
+    const held = await login({ username: 'Ana', password: 'senha-boa-1' }, deps);
+    expect(held).toMatchObject({ status: 429, body: { error: 'RATE_LIMIT' } });
+    expect(held.ok ? '' : held.body.message).toMatch(/Tente de novo em 2 min/);
+    // Outras contas (e quem nem existe) não são afetadas pelas tentativas da Ana.
+    expect((await login({ username: 'beto', password: 'x' }, deps)).status).toBe(401);
+    // Passado o tempo de uma tentativa, entra; e acertar zera a contagem.
+    now += LOGIN_FAILURE_WINDOW_MS / LOGIN_FAILURES_PER_ACCOUNT;
+    expect((await login({ username: 'ana', password: 'senha-boa-1' }, deps)).ok).toBe(true);
+    for (let i = 0; i < LOGIN_FAILURES_PER_ACCOUNT - 1; i++) {
+      await login({ username: 'ana', password: 'errada' }, deps);
+    }
+    expect((await login({ username: 'ana', password: 'senha-boa-1' }, deps)).ok).toBe(true);
   });
 
   it('quem entra na lista de admins vira admin no próximo login', async () => {

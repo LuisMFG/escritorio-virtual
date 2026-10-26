@@ -18,6 +18,7 @@ import { DUMMY_HASH, hashPassword, verifyPassword } from '../auth/passwords.js';
 import type { UserRow } from '../db/schema.js';
 import type { PresenceRegistry } from '../services/PresenceRegistry.js';
 import type { UserService } from '../services/UserService.js';
+import { KeyedRateLimiter } from '../util/rateLimiter.js';
 
 export type HttpStatus = 200 | 400 | 401 | 403 | 404 | 409 | 429 | 502;
 export type Result<T> =
@@ -31,6 +32,25 @@ export interface AuthDeps {
   avatarManifest: AvatarManifest;
   users: UserService;
   presence: PresenceRegistry;
+  /**
+   * Senhas erradas por conta (`LOGIN_FAILURES_PER_ACCOUNT` em `LOGIN_FAILURE_WINDOW_MS`): protege
+   * a senha de quem tenta adivinhar, mesmo trocando de rede. Sem ele, não há limite por conta.
+   */
+  loginFailures?: KeyedRateLimiter;
+}
+
+/** Senhas erradas seguidas que uma conta aceita antes de esperar. */
+export const LOGIN_FAILURES_PER_ACCOUNT = 10;
+/** Janela das senhas erradas (as tentativas voltam aos poucos ao longo dela). */
+export const LOGIN_FAILURE_WINDOW_MS = 15 * 60_000;
+
+/** O limitador de senhas erradas por conta, com a janela padrão. */
+export function loginFailureLimiter(now?: () => number): KeyedRateLimiter {
+  return new KeyedRateLimiter(
+    LOGIN_FAILURES_PER_ACCOUNT,
+    LOGIN_FAILURES_PER_ACCOUNT / (LOGIN_FAILURE_WINDOW_MS / 1000),
+    now,
+  );
 }
 
 /** Quem está fazendo a requisição (token válido do header). */
@@ -115,10 +135,23 @@ export async function register(input: unknown, deps: AuthDeps): Promise<Result<S
 export async function login(input: unknown, deps: AuthDeps): Promise<Result<SessionResponse>> {
   const p = parse(loginSchema, input);
   if ('error' in p) return p.error;
+  // Conta com senhas erradas demais: espera (vale para usuários que nem existem, para não revelar).
+  const account = p.data.username.trim().toLowerCase();
+  const wait = deps.loginFailures?.msUntil(account) ?? 0;
+  if (wait > 0) {
+    const min = Math.max(1, Math.ceil(wait / 60_000));
+    return fail(429, ErrorCode.RateLimit, {
+      message: `Muitas senhas erradas para essa conta. Tente de novo em ${min} min.`,
+    });
+  }
   const user = deps.users.findByUsername(p.data.username);
   // Confere mesmo sem usuário, para o tempo de resposta não revelar quem existe.
   const valid = await verifyPassword(p.data.password, user?.passwordHash ?? DUMMY_HASH);
-  if (!user || !valid) return fail(401, ErrorCode.InvalidCredentials);
+  if (!user || !valid) {
+    deps.loginFailures?.tryTake(account);
+    return fail(401, ErrorCode.InvalidCredentials);
+  }
+  deps.loginFailures?.delete(account);
   if (user.disabled) return fail(403, ErrorCode.AccountDisabled);
   const role = roleFor(user.username!, user, deps);
   const current = role === user.role ? user : deps.users.update(user.id, { role });

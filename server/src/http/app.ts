@@ -31,6 +31,7 @@ import {
   changePassword,
   claim,
   login,
+  loginFailureLimiter,
   logout,
   me,
   register,
@@ -115,6 +116,7 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
     avatarManifest: svc.avatarManifest,
     users: svc.users,
     presence: svc.presence,
+    loginFailures: loginFailureLimiter(),
     audit: svc.audit,
     settings: svc.settings,
     rooms: svc.rooms,
@@ -142,8 +144,9 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
   const send = <T>(res: Response, result: Result<T>) =>
     void res.status(result.status).json(result.body);
 
-  // LOGIN_RATE_LIMIT (padrão 10) tentativas de entrada/cadastro por minuto por IP: evita adivinhar
-  // convite e senhas.
+  // LOGIN_RATE_LIMIT (padrão 60) tentativas de entrada/cadastro por minuto por IP: evita adivinhar
+  // o convite. Alto o bastante para a equipe toda entrar junto da mesma rede; a senha de cada conta
+  // tem o próprio limite (`loginFailures`).
   const loginLimiter = new KeyedRateLimiter(cfg.loginRateLimit, cfg.loginRateLimit / 60);
   const limited = (req: Request, res: Response): boolean => {
     if (loginLimiter.tryTake(req.ip ?? 'desconhecido')) return false;

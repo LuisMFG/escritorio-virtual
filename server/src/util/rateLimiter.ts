@@ -54,6 +54,11 @@ export class KeyedRateLimiter {
     return b.tryTake(cost);
   }
 
+  /** Milissegundos até a chave ter `cost` fichas (0 = pode agora). */
+  msUntil(key: string, cost = 1): number {
+    return this.buckets.get(key)?.msUntil(cost) ?? 0;
+  }
+
   delete(key: string): void {
     this.buckets.delete(key);
   }

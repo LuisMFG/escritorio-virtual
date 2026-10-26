@@ -94,7 +94,7 @@ export const config: Config = {
   secretKeyFile: fromRoot(process.env.SECRET_KEY_FILE ?? './data/secret.key'),
   uploadDir: fromRoot(process.env.UPLOAD_DIR ?? './data/uploads'),
   backupKeep: Math.max(1, Number(process.env.BACKUP_KEEP ?? 7) || 7),
-  loginRateLimit: Math.max(1, Number(process.env.LOGIN_RATE_LIMIT ?? 10) || 10),
+  loginRateLimit: Math.max(1, Number(process.env.LOGIN_RATE_LIMIT ?? 60) || 60),
   turn: turnConfig(),
   media: mediaConfig(),
 };
