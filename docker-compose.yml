@@ -11,11 +11,20 @@
 #                 https://….trycloudflare.com muda a cada vez que o túnel reinicia.
 #   tunel         Cloudflare Tunnel fixo (precisa de conta e domínio na Cloudflare e do
 #                 TUNNEL_TOKEN no .env).
+
+# Logs de cada contêiner: até 3 arquivos de 10 MB (sem isso crescem até encher o disco).
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: '10m'
+    max-file: '3'
+
 services:
   escritorio:
     build: .
     image: escritorio-virtual
     restart: unless-stopped
+    logging: *logging
     init: true
     env_file: .env
     environment:
@@ -28,6 +37,7 @@ services:
   livekit:
     image: livekit/livekit-server:v1.13.9
     restart: unless-stopped
+    logging: *logging
     command: --config /etc/livekit.yaml
     environment:
       LIVEKIT_KEYS: '${LIVEKIT_API_KEY:-}: ${LIVEKIT_API_SECRET:-}'
@@ -41,6 +51,7 @@ services:
     image: caddy:2-alpine
     profiles: [caddy]
     restart: unless-stopped
+    logging: *logging
     depends_on:
       - escritorio
       - livekit
@@ -59,6 +70,7 @@ services:
     image: cloudflare/cloudflared:2024.12.2
     profiles: [tunel-rapido]
     restart: unless-stopped
+    logging: *logging
     depends_on:
       - escritorio
     command: tunnel --no-autoupdate --url http://escritorio:2567
@@ -67,6 +79,7 @@ services:
     image: cloudflare/cloudflared:2024.12.2
     profiles: [tunel]
     restart: unless-stopped
+    logging: *logging
     depends_on:
       - escritorio
     command: tunnel --no-autoupdate run
