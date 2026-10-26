@@ -759,6 +759,8 @@ export class RoomScene implements DecorHost {
    * avatar e acompanha a pessoa andando até ela mexer na câmera (arrastar, zoom ou pinça).
    */
   private phoneFollow: 'pending' | number | null = 'pending';
+  /** Onde o avatar estava no último quadro: só acompanha quando ele anda. */
+  private followFrom: { x: number; y: number } | null = null;
 
   private followSelf(): void {
     const view = this.localId ? this.avatars.get(this.localId) : undefined;
@@ -777,7 +779,10 @@ export class RoomScene implements DecorHost {
       return;
     }
     const p = this.world.toLocal(view.getGlobalPosition());
-    this.camera.keepInView(p.x, p.y - 40);
+    const moved = !this.followFrom || this.followFrom.x !== p.x || this.followFrom.y !== p.y;
+    this.followFrom = { x: p.x, y: p.y };
+    // Parado, não puxa a câmera de volta (quem a moveu por outro caminho continua vendo o lugar).
+    if (moved) this.camera.keepInView(p.x, p.y - 40);
   }
 
   /** Câmera no próprio avatar (botão "centralizar em mim"). */

@@ -75,9 +75,9 @@ export class Overlay {
     Object.assign(this.search, {
       type: 'search',
       className: 'people-search',
-      placeholder: 'Buscar pessoa',
+      placeholder: 'Filtrar por nome',
     });
-    this.search.setAttribute('aria-label', 'Buscar pessoa online');
+    this.search.setAttribute('aria-label', 'Filtrar pessoas online');
     this.search.addEventListener('input', () => this.render());
     this.people.append(this.peopleSummary, this.search, this.peopleBody);
 
