@@ -1768,6 +1768,21 @@ As fases 52 e 53 vêm primeiro porque corrigem o que já existe e é usado todo 
   - unidade: sala lotada recusa (sem cópia), a porta avisa e, com vaga, entra na mesma instância; rascunho só para quem está com o quadro aberto e para de chegar ao fechar (`OfficeRoom.test.ts`); canal global tenta de novo até conectar (`LobbyConnection.test.ts`); cronômetro com erro e `/healthz` com o banco fechado (`guard.test.ts`);
   - ponta a ponta: `quadro.spec.ts` (o traço chega ao vivo para quem está com o quadro aberto e fica) e `avisos.spec.ts` (a faixa fica clara no tema claro).
 
+### Revisão do escritório, grupo B: dia a dia (26/10/2026) ✅ implementada
+- **Pedido:** os itens 8 a 14 da revisão (dia a dia no computador e no celular).
+- **Decisões (25/10):** menu ao clicar na pessoa, igual em todas as listas; "Desfazer" + Registro para apagar (qualquer um continua decorando); status no avatar e na barra; avisos com ação e menos repetição.
+- **Feito:**
+  - **Menu da pessoa** (`ui/personMenu.ts`): **Chamar para conversa** (ou **Adicionar à chamada**), **Mensagem**, **Achar na sala** ou **Ir até lá (sala)** e **Elogiar**, em Pessoas online, na Equipe (⋯) e no Mapa. A chamada entre salas já funcionava no servidor; faltava o botão fora do cartão do avatar.
+  - **Pessoas online:** busca (a partir de 8 pessoas), salas que recolhem com a contagem, bolinha de status também para quem está em outras salas, e a lista para antes da coluna de botões do canto.
+  - **Celular:** em sala que não cabe em 1×, a câmera começa em 1× no seu avatar e acompanha enquanto você anda, até você arrastar ou dar zoom (`Camera.keepInView`, `gestureCount`). Antes a sala inteira aparecia miudinha (avatares e balões ilegíveis). A faixa de aviso e o lembrete ficam abaixo do topo, sem cobrir o nome da sala, a lista nem a coluna de botões; a barra de baixo mostra o nome de cada botão.
+  - **Editar a sala sem fechar nada:** remontar a mesma sala (piso, portas, cores) mantém a TV, o quadro e os jogos abertos, se o móvel continua lá.
+  - **Apagar com proteção:** **Limpar** o quadro guarda os traços por 15 s (`WB_UNDO_MS`) e quem limpou tem **Desfazer limpeza** (`WbRestore`), com os autores de antes. Tirar um móvel (que já tinha Desfazer) e limpar ou restaurar um quadro vão para o **Registro** (`furni.remove`, `whiteboard.clear`, `whiteboard.restore`). A Recepção nova aplicada pelo código não apaga mais os traços dos quadros e os recados dos murais que continuam no layout.
+  - **Status e avisos:** o seu status virou um botão na barra (no celular, em **Mais**), em vez de ficar dentro de Pessoas online; os avatares já mostravam o selo de ocupado e ausente. Avisos com ação: mensagem e elogio com **Responder**, menção com **Responder** (abre a resposta no chat), convite de reunião com **Ver na agenda**. A notificação do sistema já só aparecia com a aba em segundo plano.
+  - **Pequenas falhas:** a busca da Nova conversa não se apaga quando alguém entra ou sai; se a sala falhar ao abrir, tenta de novo e depois oferece **Recarregar** (antes ficava a tela escura). O chat numa queda curta **não se perdia** (o Colyseus reentrega o que passou): o teste novo derruba a conexão de verdade e confirma.
+- **Testes:**
+  - unidade: menu da pessoa por situação (`personMenu.test.ts`); limpar e desfazer só por quem limpou, com o Registro, e móvel tirado no Registro (`OfficeRoom.test.ts`); Recepção nova mantendo traços e recados (`db/client.test.ts`);
+  - ponta a ponta: `pessoas.spec.ts` (chamar quem está em outra sala pelo menu; status na barra e menção com Responder; busca da Nova conversa), `celular.spec.ts` (câmera perto e acompanhando, aviso sem cobrir o topo, barra com nomes), `quadro.spec.ts` (desfazer a limpeza; editar a sala com o quadro aberto), `reconexao.spec.ts` (queda curta) e os ajustes em `elogios`, `mapa` e `mesa` para o menu.
+
 ### Extras sugeridos (fora do pedido; dá para encaixar depois)
 
 | Código | Ideia | Impacto | Esforço |
