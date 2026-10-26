@@ -104,6 +104,8 @@ interface Handlers {
   wbDraft: (msg: WbDraft) => void;
   wbRemoved: (msg: WbRemovedMessage) => void;
   wbCleared: (furniId: string) => void;
+  /** Alguém desfez a limpeza do quadro: os traços voltaram (recarregar). */
+  wbRestored: (furniId: string) => void;
   /** TV (Fase 51): estado da TV aberta, o que passa nas telas da sala e erros. */
   tvState: (st: TvState) => void;
   tvScreens: (screens: TvScreens) => void;
@@ -308,6 +310,11 @@ export class OfficeConnection {
 
   wbClear(furniId: string): void {
     this.room?.send(ClientMessage.WbClear, { furniId });
+  }
+
+  /** Desfaz a limpeza do quadro (só quem limpou, logo depois). */
+  wbRestore(furniId: string): void {
+    this.room?.send(ClientMessage.WbRestore, { furniId });
   }
 
   // ---------- TV com YouTube (Fase 51) ----------
@@ -583,6 +590,9 @@ export class OfficeConnection {
     room.onMessage(ServerMessage.WbRemoved, (m: WbRemovedMessage) => this.on.wbRemoved(m));
     room.onMessage(ServerMessage.WbCleared, (m: { furniId: string }) =>
       this.on.wbCleared(m.furniId),
+    );
+    room.onMessage(ServerMessage.WbRestored, (m: { furniId: string }) =>
+      this.on.wbRestored(m.furniId),
     );
     room.onMessage(TvMessage.State, (st: TvState) => this.on.tvState(st));
     room.onMessage(TvMessage.Screens, (s: TvScreens) => this.on.tvScreens(s));

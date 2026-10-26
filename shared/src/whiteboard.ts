@@ -60,6 +60,9 @@ export type WbStrokeInput = z.infer<typeof wbStrokeInputSchema>;
 export type WbStroke = WbStrokeInput & { id: number; userId: string };
 
 export const wbRefSchema = z.object({ furniId });
+/** Por quanto tempo (ms) quem limpou o quadro pode desfazer. */
+export const WB_UNDO_MS = 15_000;
+
 /** Quadro aberto na tela (`''` = fechou): só quem está vendo recebe os rascunhos ao vivo. */
 export const wbWatchSchema = z.object({ furniId: z.union([furniId, z.literal('')]) });
 export const wbStrokeSchema = z.object({

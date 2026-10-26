@@ -109,6 +109,9 @@ export const AUDIT_LABELS: Record<string, string> = {
   'backup.download': 'baixou o backup',
   'announcement.create': 'publicou o aviso',
   'announcement.delete': 'apagou o aviso',
+  'furni.remove': 'tirou um móvel',
+  'whiteboard.clear': 'limpou um quadro',
+  'whiteboard.restore': 'desfez a limpeza de um quadro',
 };
 
 // ---------- Backups (Fase 22) ----------

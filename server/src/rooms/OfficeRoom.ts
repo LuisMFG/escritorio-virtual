@@ -65,11 +65,13 @@ import {
   boardRemoveSchema,
   NOTES_PER_BOARD,
   WB_MAX_STROKES,
+  WB_UNDO_MS,
   wbDraftSchema,
   wbRefSchema,
   wbWatchSchema,
   wbStrokeSchema,
   type WbDraft,
+  type WbStroke,
   type WbRemovedMessage,
   type WbStrokeMessage,
   reactSchema,
@@ -251,6 +253,11 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
   /** Quadro branco: traços e desfazer (40 seguidos, 20/s) e rascunhos (40, 25/s). */
   private readonly wbLimiter = new KeyedRateLimiter(40, 20);
   private readonly draftLimiter = new KeyedRateLimiter(40, 25);
+  /** Quadros limpos há pouco: os traços e quem limpou (pode desfazer por `WB_UNDO_MS`). */
+  private readonly wbCleared = new Map<
+    string,
+    { strokes: WbStroke[]; by: string; until: number }
+  >();
   /** Quadro que cada conexão tem aberto na tela (recebe os rascunhos ao vivo). */
   private readonly wbWatching = new Map<string, string>();
   /** Jogo da velha: 10 ações seguidas, recarregando 4 por segundo. */
@@ -472,8 +479,35 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     [ClientMessage.WbClear]: validate(wbRefSchema, (client, msg) => {
       const c = client as OfficeClient;
       if (!c.auth || !this.isWhiteboard(msg.furniId)) return;
+      const strokes = services().whiteboards.list(msg.furniId);
+      if (strokes.length === 0) return;
       services().whiteboards.clear(msg.furniId);
+      // Guarda por um tempo: quem limpou pode desfazer; e fica no Registro.
+      this.wbCleared.set(msg.furniId, { strokes, by: c.auth.id, until: Date.now() + WB_UNDO_MS });
+      this.clock.setTimeout(() => {
+        if ((this.wbCleared.get(msg.furniId)?.until ?? Infinity) <= Date.now()) {
+          this.wbCleared.delete(msg.furniId);
+        }
+      }, WB_UNDO_MS + 100);
+      services().audit.log(
+        c.auth.id,
+        'whiteboard.clear',
+        null,
+        this.furniWhere(msg.furniId, strokes.length),
+      );
       this.broadcast(ServerMessage.WbCleared, { furniId: msg.furniId });
+    }),
+    [ClientMessage.WbRestore]: validate(wbRefSchema, (client, msg) => {
+      const c = client as OfficeClient;
+      const saved = this.wbCleared.get(msg.furniId);
+      if (!c.auth || !saved) return;
+      if (saved.by !== c.auth.id || saved.until < Date.now() || !this.isWhiteboard(msg.furniId)) {
+        return this.sendError(c, ErrorCode.Forbidden, 'Não dá mais para desfazer a limpeza.');
+      }
+      this.wbCleared.delete(msg.furniId);
+      services().whiteboards.restore(msg.furniId, saved.strokes);
+      services().audit.log(c.auth.id, 'whiteboard.restore', null, this.furniWhere(msg.furniId));
+      this.broadcast(ServerMessage.WbRestored, { furniId: msg.furniId });
     }),
     [ClientMessage.FocusStart]: validate(focusStartSchema, (client, msg) => {
       const c = client as OfficeClient;
@@ -1261,6 +1295,15 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
   }
 
   /** O móvel é um quadro branco desta sala? */
+  /** "Quadro branco · Recepção (12 traços)": o móvel e a sala, para o Registro. */
+  private furniWhere(furniId: string, strokes?: number): string {
+    const f = this.state.furni.get(furniId);
+    const name = (f && services().furniDefs.get(f.defId)?.name) || 'Móvel';
+    const count =
+      strokes === undefined ? '' : ` (${strokes} ${strokes === 1 ? 'traço' : 'traços'})`;
+    return `${name} · ${this.layout.name}${count}`;
+  }
+
   private isWhiteboard(furniId: string): boolean {
     const f = this.state.furni.get(furniId);
     return Boolean(f && services().furniDefs.get(f.defId)?.interaction === 'whiteboard');
@@ -2288,6 +2331,8 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
       return this.refuse(client, 'Tire o que está em cima primeiro.');
     }
     if (this.isTv(furniId)) services().tv.drop(furniId);
+    if (client.auth)
+      services().audit.log(client.auth.id, 'furni.remove', null, this.furniWhere(furniId));
     services().furni.remove(this.layout.roomId, furniId);
     this.state.furni.delete(furniId);
     this.state.games.delete(furniId);

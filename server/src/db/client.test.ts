@@ -4,8 +4,17 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { UserService } from '../services/UserService.js';
 import { openDatabase, sqliteOf } from './client.js';
-import { roomDoors, roomFurni, rooms, settings, teleportLinks } from './schema.js';
+import {
+  boardNotes,
+  roomDoors,
+  roomFurni,
+  rooms,
+  settings,
+  teleportLinks,
+  whiteboardStrokes,
+} from './schema.js';
 
 describe('layout da Recepção (o escritório de verdade)', () => {
   it('banco com a Recepção antiga recebe a nova uma vez; o que o pessoal colocar depois fica', () => {
@@ -65,6 +74,27 @@ describe('layout da Recepção (o escritório de verdade)', () => {
     expect(
       db.select().from(settings).where(eq(settings.key, 'reception_layout')).get()?.value,
     ).toBe(RECEPTION_LAYOUT);
+    sqliteOf(db).close();
+  });
+
+  it('a Recepção nova não apaga os traços do quadro nem os recados dos móveis que continuam', () => {
+    const file = join(mkdtempSync(join(tmpdir(), 'escritorio-layout-')), 'db.sqlite');
+    let db = openDatabase(file);
+    const board = RECEPTION.furni.find((f) => f.defId === 'uni_c23_whiteboard')!;
+    const userId = new UserService(db).create('Ana', 'hd-180-1').user.id;
+    const data = { tool: 'pen', color: '#000000', width: 3, points: [1, 2, 3, 4] };
+    db.insert(whiteboardStrokes)
+      .values({ furniId: board.id, userId, data, createdAt: new Date() })
+      .run();
+    db.insert(boardNotes)
+      .values({ furniId: board.id, userId, text: 'oi', createdAt: new Date() })
+      .run();
+    db.update(settings).set({ value: 'antigo' }).where(eq(settings.key, 'reception_layout')).run();
+    sqliteOf(db).close();
+
+    db = openDatabase(file);
+    expect(db.select().from(whiteboardStrokes).all()).toHaveLength(1);
+    expect(db.select().from(boardNotes).all()).toMatchObject([{ text: 'oi' }]);
     sqliteOf(db).close();
   });
 });

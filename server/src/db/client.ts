@@ -66,6 +66,7 @@ function applyReceptionLayout(db: Db): void {
   if (flag?.value === RECEPTION_LAYOUT) return;
   const room = db.select().from(schema.rooms).where(eq(schema.rooms.id, RECEPTION.id)).get();
   db.transaction((tx) => {
+    let restore = () => {};
     if (room) {
       const old = tx
         .select({ id: schema.roomFurni.id })
@@ -73,6 +74,23 @@ function applyReceptionLayout(db: Db): void {
         .where(eq(schema.roomFurni.roomId, RECEPTION.id))
         .all()
         .map((r) => r.id);
+      // Traços dos quadros e recados dos murais que continuam no layout novo (mesmo id): saem
+      // junto com o móvel (cascata) e voltam depois, em vez de sumirem.
+      const kept = old.filter((id) => RECEPTION.furni.some((f) => f.id === id));
+      const strokes = kept.length
+        ? tx
+            .select()
+            .from(schema.whiteboardStrokes)
+            .where(inArray(schema.whiteboardStrokes.furniId, kept))
+            .all()
+        : [];
+      const notes = kept.length
+        ? tx.select().from(schema.boardNotes).where(inArray(schema.boardNotes.furniId, kept)).all()
+        : [];
+      restore = () => {
+        for (const s of strokes) tx.insert(schema.whiteboardStrokes).values(s).run();
+        for (const n of notes) tx.insert(schema.boardNotes).values(n).run();
+      };
       if (old.length > 0) {
         tx.delete(schema.teleportLinks)
           .where(
@@ -121,6 +139,7 @@ function applyReceptionLayout(db: Db): void {
           .values({ ...f, roomId: RECEPTION.id, updatedAt: new Date() })
           .run();
       }
+      restore();
     }
     tx.insert(schema.settings)
       .values({ key: RECEPTION_LAYOUT_KEY, value: RECEPTION_LAYOUT })

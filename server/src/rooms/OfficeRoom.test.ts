@@ -349,6 +349,11 @@ describe('OfficeRoom', () => {
       await wait(200);
       expect(b.state.furni.has(placed!.id)).toBe(false);
       expect(svc.furni.list(RECEPTION.id).some((f) => f.id === placed!.id)).toBe(false);
+      // Fica no Registro: quem tirou, o quê e de onde.
+      expect(svc.audit.list(1)[0]).toMatchObject({
+        action: 'furni.remove',
+        details: expect.stringContaining('Recepção'),
+      });
     });
 
     it('recusa colocações inválidas com o motivo', async () => {
@@ -889,6 +894,49 @@ describe('OfficeRoom', () => {
       b.send(ClientMessage.WbClear, { furniId: wb.id });
       expect(await cleared).toEqual({ furniId: wb.id });
       expect(svc.whiteboards.list(wb.id)).toEqual([]);
+    });
+
+    it('limpar: só quem limpou desfaz (os traços voltam com os autores) e tudo vai para o Registro', async () => {
+      const { roomId, wb } = await boardRoom();
+      const ana = newUser('Ana');
+      const beto = newUser('Beto');
+      const a = await join(ana.token, roomId);
+      const b = await join(beto.token, roomId);
+      a.send(ClientMessage.WbStroke, { furniId: wb.id, stroke: pen });
+      await wait(80);
+      b.send(ClientMessage.WbStroke, { furniId: wb.id, stroke: { ...pen, color: '#dc2626' } });
+      await wait(150);
+
+      const cleared = b.waitForMessage(ServerMessage.WbCleared);
+      a.send(ClientMessage.WbClear, { furniId: wb.id });
+      await cleared;
+      expect(svc.whiteboards.list(wb.id)).toEqual([]);
+      // Beto não limpou: não desfaz.
+      const refused = b.waitForMessage(ServerMessage.Error);
+      b.send(ClientMessage.WbRestore, { furniId: wb.id });
+      expect(((await refused) as ErrorMessage).message).toMatch(/desfazer/);
+      expect(svc.whiteboards.list(wb.id)).toEqual([]);
+
+      const restored = b.waitForMessage(ServerMessage.WbRestored);
+      a.send(ClientMessage.WbRestore, { furniId: wb.id });
+      expect(await restored).toEqual({ furniId: wb.id });
+      expect(svc.whiteboards.list(wb.id).map((x) => [x.userId, x.color])).toEqual([
+        [ana.user.id, '#1f2937'],
+        [beto.user.id, '#dc2626'],
+      ]);
+      // Uma vez só.
+      const again = a.waitForMessage(ServerMessage.Error, 1000).catch(() => null);
+      a.send(ClientMessage.WbRestore, { furniId: wb.id });
+      await again;
+      expect(svc.whiteboards.list(wb.id)).toHaveLength(2);
+
+      const log = svc.audit.list(5).map((e) => [e.actorName, e.action, e.details]);
+      expect(log).toContainEqual([
+        'Ana',
+        'whiteboard.clear',
+        expect.stringContaining('(2 traços)'),
+      ]);
+      expect(log).toContainEqual(['Ana', 'whiteboard.restore', expect.stringContaining('Quadro')]);
     });
 
     it('não desenha em móvel que não é quadro', async () => {

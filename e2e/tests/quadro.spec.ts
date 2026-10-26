@@ -34,6 +34,13 @@ test('quadro: quem está com ele aberto vê o traço ao vivo, e o traço pronto 
   // Soltou: o traço vai para o quadro de todos.
   await ana.page.mouse.up();
   await expect.poll(() => ink(beto.page, '.wb-canvas'), { timeout: 5000 }).toBeGreaterThan(before);
+
+  // A Ana limpa o quadro e se arrepende: "Desfazer" traz o traço de volta para todos.
+  await ana.page.locator('.wb-clear').click();
+  await ana.page.locator('.confirm-backdrop').getByRole('button', { name: 'Limpar' }).click();
+  await expect.poll(() => ink(beto.page, '.wb-canvas')).toBe(before);
+  await ana.page.getByRole('button', { name: 'Desfazer limpeza' }).click();
+  await expect.poll(() => ink(beto.page, '.wb-canvas'), { timeout: 5000 }).toBeGreaterThan(before);
 });
 
 test('editar a sala (cor do piso) não fecha o quadro aberto de quem está nela', async ({

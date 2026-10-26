@@ -50,6 +50,18 @@ export class WhiteboardService {
     return last.id;
   }
 
+  /** Põe de volta traços apagados (desfazer a limpeza), na ordem e com os autores de antes. */
+  restore(furniId: string, strokes: readonly WbStroke[]): void {
+    this.db.transaction(() => {
+      for (const s of strokes) {
+        const data: Partial<WbStroke> = { ...s };
+        delete data.id;
+        delete data.userId;
+        this.add(furniId, s.userId, data as WbStrokeInput);
+      }
+    });
+  }
+
   clear(furniId: string): void {
     this.db.delete(whiteboardStrokes).where(eq(whiteboardStrokes.furniId, furniId)).run();
   }

@@ -79,6 +79,8 @@ export const ClientMessage = {
   WbUndo: 'wb.undo',
   /** `{ furniId }`: apaga o quadro todo. */
   WbClear: 'wb.clear',
+  /** `{ furniId }`: desfaz a limpeza (só quem limpou, por `WB_UNDO_MS`). */
+  WbRestore: 'wb.restore',
   /** `{ furniId }`: pega um lugar na mesa de jogo da velha (anda e senta ao lado). */
   TttJoin: 'ttt.join',
   /** `{ furniId }`: sai da mesa (no meio da partida, o outro vence). */
@@ -174,6 +176,8 @@ export const ServerMessage = {
   WbRemoved: 'wb.removed',
   /** `{ furniId }`: quadro limpo. */
   WbCleared: 'wb.cleared',
+  /** Os traços de um quadro voltaram (desfez a limpeza): `{ furniId }`, recarregue. */
+  WbRestored: 'wb.restored',
   /** Votos ou estado de uma enquete mudaram (`PollUpdated`). */
   PollUpdated: 'poll.updated',
   /** Para a própria pessoa: fase do foco mudou (`FocusPhase`). */

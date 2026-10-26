@@ -37,6 +37,7 @@ import {
   findPersonByName,
   HIGH_FIVE_RANGE,
   CALL_MAX_PEOPLE,
+  WB_UNDO_MS,
 } from '@office/shared';
 import { Application, Container, Rectangle, Sprite, TextureSource, type Texture } from 'pixi.js';
 import { AssetLoader } from './assets/AssetLoader.js';
@@ -1109,7 +1110,13 @@ async function start(): Promise<void> {
             stroke: (stroke, draftId) => connection.wbStroke(furniId, stroke, draftId),
             draft: (d) => connection.wbDraft({ ...d, furniId }),
             undo: () => connection.wbUndo(furniId),
-            clear: () => connection.wbClear(furniId),
+            clear: () => {
+              connection.wbClear(furniId);
+              overlay.notify('Quadro limpo.', {
+                durationMs: WB_UNDO_MS,
+                action: { label: 'Desfazer limpeza', run: () => connection.wbRestore(furniId) },
+              });
+            },
             onClose: () => connection.wbWatch(''),
           });
         },
@@ -1822,6 +1829,7 @@ async function start(): Promise<void> {
         updateThumb(furniId);
         if (whiteboard?.furniId === furniId) whiteboard.redraw();
       },
+      wbRestored: (furniId) => void loadWhiteboard(furniId),
       boardChanged: (furniId) => {
         if (board?.furniId === furniId) board.refresh();
       },
