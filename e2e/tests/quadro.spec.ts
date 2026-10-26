@@ -35,3 +35,38 @@ test('quadro: quem está com ele aberto vê o traço ao vivo, e o traço pronto 
   await ana.page.mouse.up();
   await expect.poll(() => ink(beto.page, '.wb-canvas'), { timeout: 5000 }).toBeGreaterThan(before);
 });
+
+test('editar a sala (cor do piso) não fecha o quadro aberto de quem está nela', async ({
+  browser,
+}) => {
+  const admin = await newPerson(browser, 'Diretora', { username: 'admin.e2e' });
+  const beto = await newPerson(browser, 'Beto');
+  await clickFurni(beto.page, 'r-quadro');
+  const panel = beto.page.locator('.wb-canvas');
+  await expect(panel).toBeVisible();
+
+  // A diretora muda a cor do piso da Recepção (a sala é remontada para todos).
+  const status = await admin.page.evaluate(async () => {
+    const { token } = JSON.parse(localStorage.getItem('escritorio.sessao')!) as { token: string };
+    const headers = { authorization: `Bearer ${token}`, 'content-type': 'application/json' };
+    const room = await (await fetch('/api/rooms/reception', { headers })).json();
+    const { name, heightmap, spawn, wallColor, ambient, doors } = room;
+    const res = await fetch('/api/rooms/reception', {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({
+        name,
+        heightmap,
+        spawn,
+        wallColor,
+        ambient,
+        doors,
+        floorColor: '#7a5c3e',
+      }),
+    });
+    return res.status;
+  });
+  expect(status).toBe(200);
+  await beto.page.waitForTimeout(1500);
+  await expect(panel).toBeVisible();
+});

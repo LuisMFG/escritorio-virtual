@@ -515,6 +515,8 @@ async function start(): Promise<void> {
   let whiteboard: WhiteboardHandle | null = null;
   /** Jogo da velha aberto (mesa de jogos). */
   let ttt: TicTacToeHandle | null = null;
+  /** Sala montada na tela (remontar a mesma não fecha os painéis). */
+  let mountedRoom: OfficeRoomClient | null = null;
   /** Painel aberto de uma mesa do Salão de Jogos (Fase 57). */
   let arcadePanel: ArcadeHandle | null = null;
   /** Abre o painel de uma mesa da sala atual (para quando a mesa que pedi foi liberada). */
@@ -1039,6 +1041,12 @@ async function start(): Promise<void> {
     for (const off of detachRoom) off();
     detachRoom = [];
     scene?.destroy();
+    // A mesma sala remontada (alguém editou o piso, as portas ou as cores): os painéis abertos
+    // (TV, quadro, jogos) continuam, se o móvel deles ainda existe. Trocando de sala, fecham.
+    const sameRoom = mountedRoom === room;
+    mountedRoom = room;
+    const stays = (furniId: string | undefined) =>
+      sameRoom && furniId !== undefined && room.state.furni.has(furniId);
     /** Painel de uma mesa do Salão de Jogos (Fase 57; ping-pong e sinuca ao vivo, Fases 58–59). */
     const openArcadePanel = (furniId: string) => {
       const f = room.state.furni.get(furniId);
@@ -1397,9 +1405,9 @@ async function start(): Promise<void> {
     wbStrokes.clear();
     decorHistory.clear();
     jiraFurni.clear();
-    whiteboard?.close();
+    if (!stays(whiteboard?.furniId)) whiteboard?.close();
     // TVs: a janela é da sala anterior; as telas desta sala vêm do servidor.
-    closeTv();
+    if (!stays(tvPanel?.furniId)) closeTv();
     tvScreens.clear();
     void connection.tvScreens().then((screens) => {
       if (scene !== s) return;
@@ -1435,7 +1443,7 @@ async function start(): Promise<void> {
       }),
     );
     // Jogo da velha: tabuleiro no tampo da mesa e painel aberto, ao vivo.
-    ttt?.close();
+    if (!stays(ttt?.furniId)) ttt?.close();
     const syncGame = (id: string, g: TttView | null) => {
       s.setGame(id, g && { board: g.board, line: g.line ? g.line.split(',').map(Number) : [] });
       if (ttt?.furniId === id) ttt.update(g);
@@ -1448,8 +1456,10 @@ async function start(): Promise<void> {
     );
     keep(cb.onRemove('games', (_g, id) => syncGame(id, null)));
     // Mesas do Salão de Jogos (Fase 57): placar sobre a mesa e painel aberto, ao vivo.
-    arcadePanel?.close();
-    arcadePanel = null;
+    if (!stays(arcadePanel?.furniId)) {
+      arcadePanel?.close();
+      arcadePanel = null;
+    }
     const asked = new Map<string, string>();
     const syncArcade = (id: string, g: ArcadeFields | null) => {
       const view = g ? arcadeView(g) : null;
