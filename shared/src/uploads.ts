@@ -1,6 +1,8 @@
 /** Anexos no chat e nas DMs, prévia de links e busca (Fase 29). */
 
 export const UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
+/** Quanto cada pessoa pode ter guardado em anexos, somando tudo. */
+export const UPLOAD_QUOTA_BYTES = 500 * 1024 * 1024;
 
 /** Tipos aceitos: tipo MIME → extensões e se é imagem (mostrada com miniatura). */
 export const UPLOAD_TYPES: Record<string, { ext: string[]; image?: boolean }> = {

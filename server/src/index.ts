@@ -12,6 +12,7 @@ import { BackupScheduler } from './services/BackupService.js';
 import { loadSecretKey } from './util/secretBox.js';
 import { guarded, logError } from './util/guard.js';
 import { HabboAssetsClient } from './assets/HabboAssetsClient.js';
+import { pruneAssetCache } from './assets/cachePrune.js';
 import { imagerMeasure, offlineMeasure } from './services/FurniDefService.js';
 import { OfflineTvMeta } from './services/TvService.js';
 
@@ -78,6 +79,13 @@ setInterval(
   guarded('anexos', () => services.uploads.cleanup()),
   60 * 60_000,
 ).unref();
+// Cache de imagens com teto de 1 GB (os menos usados saem): ao subir e de hora em hora.
+const pruneCache = guarded('cache', () => {
+  const freed = pruneAssetCache(config.assetCacheDir);
+  if (freed) console.log(`[cache] ${Math.round(freed / 1048576)} MB de imagens antigas apagados`);
+});
+pruneCache();
+setInterval(pruneCache, 60 * 60_000).unref();
 // Sessões sem uso há 90 dias: saem do banco (já não valiam).
 setInterval(
   guarded('sessões', () => services.users.deleteExpiredSessions()),

@@ -1,9 +1,10 @@
-import { RECEPTION } from '@office/shared';
+import { RECEPTION, UPLOAD_QUOTA_BYTES } from '@office/shared';
 import { existsSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { openDatabase } from '../db/client.js';
+import { uploads } from '../db/schema.js';
 import { createServices } from './index.js';
 import { LinkPreviewService, isPrivateAddress, parsePreview } from './LinkPreviewService.js';
 import { likePattern } from './SearchService.js';
@@ -55,6 +56,29 @@ describe('anexos', () => {
       svc.uploads.save(ana.id, '../../etc/passwd.txt', 'text/plain', Buffer.from('oi')),
     ).toMatchObject({
       name: expect.not.stringMatching(/[/\\]/),
+    });
+  });
+
+  it('cota de 500 MB por pessoa: passando, o envio é recusado (os outros seguem enviando)', () => {
+    const { svc, ana, beto } = setup();
+    // A Ana já tem quase tudo usado (só a linha no banco; o arquivo não importa aqui).
+    svc.db
+      .insert(uploads)
+      .values({
+        id: 'grandao',
+        userId: ana.id,
+        name: 'video.zip',
+        mime: 'application/zip',
+        size: UPLOAD_QUOTA_BYTES - 5,
+        createdAt: new Date(),
+      })
+      .run();
+    expect(svc.uploads.usedBy(ana.id)).toBe(UPLOAD_QUOTA_BYTES - 5);
+    expect(svc.uploads.save(ana.id, 'foto.png', 'image/png', PNG)).toBe(
+      'Você chegou ao limite de 500 MB em anexos.',
+    );
+    expect(svc.uploads.save(beto.id, 'foto.png', 'image/png', PNG)).toMatchObject({
+      size: PNG.length,
     });
   });
 

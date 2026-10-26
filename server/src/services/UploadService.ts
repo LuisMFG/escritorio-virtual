@@ -1,11 +1,12 @@
 import {
   UPLOAD_MAX_BYTES,
+  UPLOAD_QUOTA_BYTES,
   UPLOAD_TYPES,
   cleanFileName,
   mimeFromName,
   type Attachment,
 } from '@office/shared';
-import { and, eq, inArray, isNotNull, lt, or } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, lt, or, sql } from 'drizzle-orm';
 import { randomBytes } from 'node:crypto';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -72,6 +73,9 @@ export class UploadService {
     if (!mime)
       return 'Esse tipo de arquivo não é aceito (imagens, PDF, documentos, planilhas, texto ou zip).';
     if (!signatureOk(mime, data)) return 'O conteúdo não confere com o tipo do arquivo.';
+    if (this.usedBy(userId) + data.length > UPLOAD_QUOTA_BYTES) {
+      return 'Você chegou ao limite de 500 MB em anexos.';
+    }
     const id = randomBytes(18).toString('base64url');
     mkdirSync(this.dir, { recursive: true });
     writeFileSync(join(this.dir, id), data);
@@ -81,6 +85,17 @@ export class UploadService {
       .returning()
       .get();
     return toAttachment(row);
+  }
+
+  /** Bytes que a pessoa tem guardados em anexos. */
+  usedBy(userId: string): number {
+    return (
+      this.db
+        .select({ total: sql<number>`coalesce(sum(${uploads.size}), 0)` })
+        .from(uploads)
+        .where(eq(uploads.userId, userId))
+        .get()?.total ?? 0
+    );
   }
 
   find(id: string): UploadRow | undefined {
