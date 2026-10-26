@@ -66,7 +66,6 @@ function applyReceptionLayout(db: Db): void {
   if (flag?.value === RECEPTION_LAYOUT) return;
   const room = db.select().from(schema.rooms).where(eq(schema.rooms.id, RECEPTION.id)).get();
   db.transaction((tx) => {
-    let restore = () => {};
     if (room) {
       const old = tx
         .select({ id: schema.roomFurni.id })
@@ -87,7 +86,7 @@ function applyReceptionLayout(db: Db): void {
       const notes = kept.length
         ? tx.select().from(schema.boardNotes).where(inArray(schema.boardNotes.furniId, kept)).all()
         : [];
-      restore = () => {
+      const restore = () => {
         for (const s of strokes) tx.insert(schema.whiteboardStrokes).values(s).run();
         for (const n of notes) tx.insert(schema.boardNotes).values(n).run();
       };
