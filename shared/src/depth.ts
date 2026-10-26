@@ -84,6 +84,8 @@ export function depthOrder(boxes: readonly DepthBox[]): string[] {
   }
 
   const done = new Array<boolean>(n).fill(false);
+  // Calculado uma vez por caixa (antes, a cada comparação: a maior parte do tempo).
+  const front = boxes.map(frontness);
   const result: string[] = [];
   for (let k = 0; k < n; k++) {
     let pick = -1;
@@ -91,8 +93,8 @@ export function depthOrder(boxes: readonly DepthBox[]): string[] {
     for (let i = 0; i < n; i++) {
       if (done[i]) continue;
       if (behindCount[i] === 0) {
-        if (pick < 0 || frontness(boxes[i]!) < frontness(boxes[pick]!)) pick = i;
-      } else if (pickCycle < 0 || frontness(boxes[i]!) < frontness(boxes[pickCycle]!)) {
+        if (pick < 0 || front[i]! < front[pick]!) pick = i;
+      } else if (pickCycle < 0 || front[i]! < front[pickCycle]!) {
         pickCycle = i;
       }
     }

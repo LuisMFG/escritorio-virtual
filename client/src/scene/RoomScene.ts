@@ -65,6 +65,8 @@ import { drawRoom } from './RoomRenderer.js';
 
 /** Até esta largura (px) a tela é de celular: a câmera começa perto de você. */
 const PHONE_MAX_W = 600;
+/** Intervalo mínimo (ms) entre duas reordenações de profundidade. */
+const DEPTH_SORT_MS = 50;
 
 /** Destaque ao achar a pessoa pela lista (ms). */
 const SPOTLIGHT_MS = 1800;
@@ -201,7 +203,12 @@ export class RoomScene implements DecorHost {
   private readonly avatars = new Map<string, AvatarView>();
   private readonly pets = new Map<string, PetView>();
   private hoveredPet: PetView | null = null;
-  private depthKey = '';
+  /** Resumo numérico das caixas da última ordenação (mudou = reordenar). */
+  private depthHash = 0;
+  /** Quando a última ordenação rodou (no máximo `DEPTH_SORT_MS` entre uma e outra). */
+  private depthSortedAt = -Infinity;
+  /** Hash de cada id de caixa (não muda; calculado uma vez). */
+  private readonly idHashes = new Map<string, number>();
   private targetFade = 0;
   private localId: string | null = null;
   private hoveredAvatar: AvatarView | null = null;
@@ -1030,11 +1037,15 @@ export class RoomScene implements DecorHost {
     }
     for (const a of this.avatars.values()) boxes.push(a.depthBox);
     for (const p of this.pets.values()) boxes.push(p.depthBox);
-    const key = boxes
-      .map((b) => `${b.id}:${b.minX},${b.minY},${b.maxX},${b.maxY},${b.z}`)
-      .join('|');
-    if (key === this.depthKey) return;
-    this.depthKey = key;
+    // Rodava a cada quadro montando um texto com todas as caixas: agora um número.
+    const hash = this.depthHashOf(boxes);
+    if (hash === this.depthHash) return;
+    // Com muita gente andando, alguém troca de tile quase todo quadro: no máximo a cada
+    // `DEPTH_SORT_MS` (um passo leva 500 ms; o atraso não aparece).
+    const now = performance.now();
+    if (now - this.depthSortedAt < DEPTH_SORT_MS) return;
+    this.depthSortedAt = now;
+    this.depthHash = hash;
 
     for (const [id, a] of this.avatars) views.set(id, a);
     for (const p of this.pets.values()) views.set(p.label, p);
@@ -1043,6 +1054,28 @@ export class RoomScene implements DecorHost {
       if (v) v.zIndex = i;
     });
     if (DEBUG) this.drawDebug(boxes);
+  }
+
+  private depthHashOf(boxes: readonly DepthBox[]): number {
+    let h = 2166136261;
+    const mix = (v: number) => {
+      h = Math.imul(h ^ v, 16777619);
+    };
+    for (const b of boxes) {
+      let id = this.idHashes.get(b.id);
+      if (id === undefined) {
+        id = 0;
+        for (let i = 0; i < b.id.length; i++) id = Math.imul(id ^ b.id.charCodeAt(i), 16777619);
+        this.idHashes.set(b.id, id);
+      }
+      mix(id);
+      mix(b.minX);
+      mix(b.minY);
+      mix(b.maxX);
+      mix(b.maxY);
+      mix(Math.round(b.z * 1000));
+    }
+    return h;
   }
 
   // ---------- Entrada ----------

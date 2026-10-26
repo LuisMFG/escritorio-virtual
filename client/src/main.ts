@@ -1376,23 +1376,37 @@ async function start(): Promise<void> {
         if (myDesk && seat !== myDesk) deskChip.offerGo();
       }
     };
+    // A lista mudava a cada passo de qualquer avatar (x e y mudam): agora junta as mudanças e
+    // só redesenha quando algo que ela mostra mudou.
+    let peopleKey = '';
+    let peopleTimer = 0;
+    detachRoom.push(() => window.clearTimeout(peopleTimer));
     const refreshPeople = () => {
+      if (peopleTimer) return;
+      peopleTimer = window.setTimeout(() => {
+        peopleTimer = 0;
+        if (scene === s) refreshPeopleNow();
+      }, 150);
+    };
+    const refreshPeopleNow = () => {
       const players = [...room.state.players.entries()];
-      overlay.setPeople(
-        players.map(([id, p]) => ({
-          id,
-          userId: p.userId,
-          name: p.name,
-          away: p.away,
-          isLocal: id === room.sessionId,
-          status: p.status,
-          cargo: p.cargo,
-          cargoColor: p.cargoColor,
-          birthday: p.birthday,
-          activity: p.activity,
-          focusKind: p.focusUntil > Date.now() ? p.focusKind : '',
-        })),
-      );
+      const entries = players.map(([id, p]) => ({
+        id,
+        userId: p.userId,
+        name: p.name,
+        away: p.away,
+        isLocal: id === room.sessionId,
+        status: p.status,
+        cargo: p.cargo,
+        cargoColor: p.cargoColor,
+        birthday: p.birthday,
+        activity: p.activity,
+        focusKind: p.focusUntil > Date.now() ? p.focusKind : '',
+      }));
+      const key = JSON.stringify(entries);
+      if (key === peopleKey) return;
+      peopleKey = key;
+      overlay.setPeople(entries);
       chat.setPeople(
         players.map(([, p]) => p.name),
         room.state.players.get(room.sessionId)?.name ?? session?.name ?? '',
