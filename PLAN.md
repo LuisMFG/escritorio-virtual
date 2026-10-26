@@ -1795,6 +1795,12 @@ As fases 52 e 53 vêm primeiro porque corrigem o que já existe e é usado todo 
   - unidade: base reaproveitada e ocupados só quando se pede destino (`grid.test.ts`); móvel posto depois bloqueia o caminho com a grade em cache (`OfficeRoom.test.ts`); conquista conhecida sem ir ao banco (`AchievementService.test.ts`); banco em WAL e NORMAL (`db/client.test.ts`); quais arquivos ficam guardados de vez (`csp.test.ts`);
   - ponta a ponta: `carregamento.spec.ts` (o LiveKit não é baixado ao abrir o escritório e é baixado ao entrar numa chamada) e todos os testes de chamada passando com ele sob demanda.
 
+### Revisão do escritório, grupo D: simplificar (26/10/2026) ✅ implementada
+- **Pedido:** itens 19 e 20 (tirar o que não é usado, arrumar o menu 😊 e as opções repetidas).
+- **Decisões (26/10):** não tirar nada (enquetes, recados, teletransporte, Spotify e VS Code ficam), o menu 😊 fica como está e o sino fica. Pedido novo no lugar: o som dos avisos ligado por padrão para todos, menos para quem está em foco ou ocupado.
+- **Feito** (`client/src/ui/sound.ts`): o som começava desligado e só tocava para quem ligava o sino, então quase ninguém ouvia os avisos. Agora começa ligado (chave nova no navegador, `escritorio.som.v2`: quem tinha ficado com ele desligado também volta a ouvir uma vez) e o sino continua desligando. Em **Foco** ou com o status **Ocupado**, nenhum som de aviso (mensagem, menção, convite, lembrete, elogio, pedido de mesa); os avisos aparecem na tela do mesmo jeito. O fim do próprio Pomodoro continua tocando. O toque de chamada já respeitava foco e ocupado.
+- **Testes:** `sound.test.ts` (começa ligado, inclusive para quem tinha desligado; o sino desliga e lembra; em foco ou ocupado não toca, menos o fim do foco).
+
 ### Extras sugeridos (fora do pedido; dá para encaixar depois)
 
 | Código | Ideia | Impacto | Esforço |
