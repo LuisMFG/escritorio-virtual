@@ -280,6 +280,18 @@ export const REPLACED_TEXT = 'Você abriu o escritório em outra aba ou aparelho
 /** Código da recusa quando uma aba substituída tenta reconectar sozinha. */
 export const REPLACED_CODE = 4409;
 
+/**
+ * Lotação de uma sala. Cada sala física tem uma instância só: quem chega com ela cheia é
+ * recusado (em vez de cair numa cópia vazia dela, sem ver ninguém).
+ */
+export const ROOM_MAX_PEOPLE = 100;
+/** Código da recusa ao entrar numa sala lotada (vira o status HTTP do matchmaking: 423, "Locked"). */
+export const ROOM_FULL_CODE = 423;
+/** Aviso de sala lotada. */
+export function roomFullText(name: string): string {
+  return `${name} está lotada (${ROOM_MAX_PEOPLE} pessoas). Tente de novo daqui a pouco.`;
+}
+
 /** Opções enviadas no `joinOrCreate`. */
 export const joinOptionsSchema = z.object({
   /**

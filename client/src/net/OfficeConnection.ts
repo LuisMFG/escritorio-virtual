@@ -1,5 +1,6 @@
 import { Client, CloseCode, type Room } from '@colyseus/sdk';
 import {
+  ErrorCode,
   ClientMessage,
   OFFICE_ROOM,
   OfficeState,
@@ -11,6 +12,7 @@ import {
   type ChatDeletedMessage,
   type KickedMessage,
   REPLACED_CODE,
+  ROOM_FULL_CODE,
   REPLACED_TEXT,
   type ReplacedMessage,
   type ArcadeAskResult,
@@ -143,8 +145,10 @@ export class OfficeConnection {
     try {
       await this.connectOnce();
     } catch (err) {
-      // Sala da URL não existe mais (excluída): vai para a Recepção.
-      if (isSessionError(err) || !isMissingRoom(err)) throw err;
+      // Sala da URL não existe mais (excluída) ou está lotada: vai para a Recepção.
+      const full = isFullRoom(err) && roomId !== RECEPTION.id;
+      if (isSessionError(err) || !(isMissingRoom(err) || full)) throw err;
+      if (full) this.on.serverError({ code: ErrorCode.Unavailable, message: errorText(err) });
       this.roomId = RECEPTION.id;
       await this.connectOnce();
     }
@@ -620,11 +624,17 @@ export class OfficeConnection {
     } catch {
       // A sala antiga já pode ter caído; seguimos para a nova.
     }
+    const from = this.roomId;
     this.roomId = msg.targetRoomId;
     this.ticket = msg.ticket || undefined;
     try {
       await this.connectOnce();
-    } catch {
+    } catch (err) {
+      // Lotou no caminho: volta para a sala de onde veio.
+      if (isFullRoom(err) && from !== msg.targetRoomId) {
+        this.on.serverError({ code: ErrorCode.Unavailable, message: errorText(err) });
+        this.roomId = from;
+      }
       void this.rejoinLoop();
     } finally {
       this.switching = false;
@@ -647,6 +657,11 @@ export class OfficeConnection {
         break;
       } catch (err) {
         if (isMissingRoom(err)) this.roomId = RECEPTION.id;
+        // Lotou enquanto esta aba estava fora: espera na Recepção.
+        if (isFullRoom(err) && this.roomId !== RECEPTION.id) {
+          this.on.serverError({ code: ErrorCode.Unavailable, message: errorText(err) });
+          this.roomId = RECEPTION.id;
+        }
         if (isSessionError(err)) {
           this.on.status('offline');
           this.on.sessionInvalid();
@@ -668,6 +683,15 @@ export class OfficeConnection {
 /** A sala pedida não existe (foi excluída no editor). */
 function isMissingRoom(err: unknown): boolean {
   return /sala inexistente/i.test((err as { message?: string }).message ?? '');
+}
+
+/** A sala pedida está lotada. */
+export function isFullRoom(err: unknown): boolean {
+  return (err as { code?: number }).code === ROOM_FULL_CODE;
+}
+
+function errorText(err: unknown): string {
+  return (err as { message?: string }).message ?? 'Sala lotada.';
 }
 
 /** A conta já entrou por outra aba ou aparelho depois que esta caiu. */

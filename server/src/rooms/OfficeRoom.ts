@@ -118,6 +118,9 @@ import {
   ErrorCode,
   REPLACED_CODE,
   REPLACED_TEXT,
+  ROOM_FULL_CODE,
+  ROOM_MAX_PEOPLE,
+  roomFullText,
   type ReplacedMessage,
   arcadeCheerSchema,
   arcadeRankingSchema,
@@ -211,7 +214,15 @@ type Intent =
   | { kind: 'arcade'; furniId: string; at: TilePoint };
 
 export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient }> {
-  override maxClients = 30;
+  override maxClients = ROOM_MAX_PEOPLE;
+  /** A instância de cada sala física: com ela cheia, o Colyseus criaria uma cópia vazia. */
+  private static readonly live = new Map<string, OfficeRoom>();
+
+  /** A sala física está lotada (quem tentar entrar é recusado)? */
+  static isFull(roomId: string): boolean {
+    const room = OfficeRoom.live.get(roomId);
+    return !!room && room.clients.length > 0 && room.hasReachedMaxClients();
+  }
   /** Proteção geral contra flood; limites específicos por ação ficam nos handlers. */
   /** Desenhar no quadro manda ~12 rascunhos/s; o resto cabe com folga. */
   override maxMessagesPerSecond = 40;
@@ -845,6 +856,11 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
   override onCreate(options: { officeRoomId: string }): void {
     const layout = services().rooms.getLayout(options.officeRoomId);
     if (!layout) throw new ServerError(404, `Sala inexistente: ${options.officeRoomId}`);
+    // Lotada: recusa em vez de abrir outra instância (uma sala vazia, sem ninguém dos outros).
+    if (OfficeRoom.isFull(layout.roomId)) {
+      throw new ServerError(ROOM_FULL_CODE, roomFullText(layout.name));
+    }
+    OfficeRoom.live.set(layout.roomId, this);
     this.layout = layout;
     this.map = parseHeightmap(layout.heightmap);
     this.movement = new MovementSystem(
@@ -899,6 +915,8 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
   }
 
   override onDispose(): void {
+    if (OfficeRoom.live.get(this.layout.roomId) === this)
+      OfficeRoom.live.delete(this.layout.roomId);
     services().users.events.off('updated', this.onUserUpdated);
     services().moderation.off('kick', this.onKick);
     services().presence.events.off('claimed', this.onClaimed);
@@ -912,6 +930,11 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     services().tv.events.off('changed', this.onTvChanged);
     services().tv.events.off('screen', this.onTvScreen);
     for (const t of this.handTimers.values()) t.clear();
+  }
+
+  /** Aviso de sala lotada, com o nome dela. */
+  private fullText(roomId: string): string {
+    return roomFullText(services().rooms.getLayout(roomId)?.name ?? 'A sala');
   }
 
   override onAuth(client: Client, options: unknown): UserRow {
@@ -1121,6 +1144,10 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     const door = this.layout.doors.find((d) => d.x === m.x && d.y === m.y);
     const client = door && this.clients.getById(sessionId);
     if (!door || !client?.auth) return false;
+    if (OfficeRoom.isFull(door.targetRoomId)) {
+      this.sendError(client, ErrorCode.Unavailable, this.fullText(door.targetRoomId));
+      return true;
+    }
     const ticket = services().transfers.issue({
       userId: client.auth.id,
       roomId: door.targetRoomId,
@@ -1453,6 +1480,10 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
           action: 'idle',
           z: this.gridFor(sessionId).heightAt(spot.x, spot.y),
         });
+        return;
+      }
+      if (OfficeRoom.isFull(target.roomId)) {
+        this.sendError(client, ErrorCode.Unavailable, this.fullText(target.roomId));
         return;
       }
       const ticket = services().transfers.issue({

@@ -20,6 +20,8 @@ import {
   type PresenceResponse,
   type RoomTransferMessage,
   type ErrorMessage,
+  ROOM_FULL_CODE,
+  roomFullText,
   type RoomLayoutMessage,
   type FurniManifestEntry,
   type FurniResult,
@@ -261,6 +263,36 @@ describe('OfficeRoom', () => {
         x: MEETING.spawn.x,
         y: MEETING.spawn.y,
       });
+    },
+  );
+
+  it(
+    'sala lotada: recusa quem chega (sem abrir uma cópia vazia) e a porta avisa',
+    { timeout: 20_000 },
+    async () => {
+      const a = await join(newUser('Ana').token, MEETING.id);
+      // Lotação pequena só para o teste (a de verdade é ROOM_MAX_PEOPLE).
+      const server = colyseus.getRoomById(a.roomId) as unknown as { maxClients: number };
+      server.maxClients = 2;
+      await join(newUser('Beto').token, MEETING.id);
+      await expect(join(newUser('Caio').token, MEETING.id)).rejects.toMatchObject({
+        code: ROOM_FULL_CODE,
+        message: roomFullText(MEETING.name),
+      });
+      // Da Recepção, pisar na porta da sala cheia não manda para lá: avisa e fica.
+      const d = await join(newUser('Duda').token);
+      let moved = false;
+      d.onMessage(ServerMessage.RoomTransfer, () => (moved = true));
+      const door = RECEPTION.doors.find((x) => x.targetRoomId === MEETING.id)!;
+      const error = d.waitForMessage(ServerMessage.Error, 10_000);
+      d.send(ClientMessage.Move, { x: door.x, y: door.y });
+      expect(((await error) as ErrorMessage).message).toBe(roomFullText(MEETING.name));
+      expect(moved).toBe(false);
+      // Abriu vaga: entra na mesma instância de antes.
+      await a.leave();
+      await waitFor(() => !OfficeRoom.isFull(MEETING.id));
+      const c = await join(newUser('Caio').token, MEETING.id);
+      expect(c.roomId).toBe(a.roomId);
     },
   );
 
