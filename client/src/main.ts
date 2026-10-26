@@ -1728,11 +1728,7 @@ async function start(): Promise<void> {
     lobby = l;
     setupCalls(l);
     if (E2E_MODE) (window as unknown as { __e2eLobby: LobbyConnection }).__e2eLobby = l;
-    try {
-      await l.connect();
-    } catch (err) {
-      console.warn('[lobby] sem canal global por enquanto', err);
-    }
+    await l.start();
   }
 
   async function enter(current: SessionResponse): Promise<void> {

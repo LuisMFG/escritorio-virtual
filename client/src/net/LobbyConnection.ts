@@ -98,6 +98,16 @@ export class LobbyConnection {
     for (let i = 0; i < 150; i++) this.room?.send('e2e.flood', {});
   }
 
+  /** Conecta; se falhar (rede oscilando, servidor reiniciando), segue tentando sozinha. */
+  async start(): Promise<void> {
+    try {
+      await this.connect();
+    } catch (err) {
+      console.warn('[lobby] sem canal global por enquanto; tentando de novo', err);
+      void this.rejoinLoop();
+    }
+  }
+
   async connect(): Promise<void> {
     const room: Room<unknown, LobbyState> = await this.client.joinOrCreate(
       LOBBY_ROOM,
