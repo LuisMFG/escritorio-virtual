@@ -46,6 +46,9 @@ import {
  * Estilos inline são usados nas amostras de cor do editor; scripts só os do build e o player
  * do YouTube da TV.
  */
+/** Arquivo gerado pelo Vite com hash no nome (`index-BqX2_k9a.js`): o conteúdo nunca muda. */
+export const HASHED_ASSET = /[\\/]assets[\\/][^\\/]+-[A-Za-z0-9_-]{8}\.(?:js|css)$/;
+
 export function contentSecurityPolicy(mediaUrl?: string): string {
   return [
     "default-src 'self'",
@@ -611,7 +614,18 @@ export function configureApp(app: Application, cfg: Config, svc: Services): void
   );
 
   if (cfg.isProduction && existsSync(cfg.clientDistDir)) {
-    app.use(express.static(cfg.clientDistDir, { index: false, maxAge: '1h' }));
+    app.use(
+      express.static(cfg.clientDistDir, {
+        index: false,
+        maxAge: '1h',
+        // Código com hash no nome (o Vite troca o nome a cada mudança): guardado de vez.
+        setHeaders: (res, path) => {
+          if (HASHED_ASSET.test(path)) {
+            res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+          }
+        },
+      }),
+    );
     app.get('/{*path}', (_req, res) => res.sendFile(join(cfg.clientDistDir, 'index.html')));
   }
 }

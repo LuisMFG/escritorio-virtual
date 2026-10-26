@@ -6,24 +6,20 @@ import type {
   CallToken,
   IceServer,
 } from '@office/shared';
-import {
+import type * as Livekit from 'livekit-client';
+import type {
   ConnectionQuality,
   DisconnectReason,
   LocalAudioTrack,
-  LocalVideoTrack,
-  RemoteVideoTrack,
+  LocalTrackPublication,
+  Participant,
+  RemoteParticipant,
+  RemoteTrack,
+  RemoteTrackPublication,
   Room,
-  RoomEvent,
-  setLogLevel,
-  Track,
+  TrackPublishOptions,
   VideoPreset,
   VideoQuality,
-  type LocalTrackPublication,
-  type Participant,
-  type RemoteParticipant,
-  type RemoteTrack,
-  type RemoteTrackPublication,
-  type TrackPublishOptions,
 } from 'livekit-client';
 import { SPEAKING_LEVEL } from '../ui/callFace.js';
 import { BackgroundBlur } from './backgroundBlur.js';
@@ -36,8 +32,26 @@ import {
 } from './callPrefs.js';
 import type { LobbyConnection } from './LobbyConnection.js';
 
-// Só avisos e erros do servidor de mídia no console (o resto é detalhe interno da conexão).
-setLogLevel('warn');
+/**
+ * O cliente do servidor de mídia é um terço do código da página: baixado só quando alguém usa
+ * a chamada (conectar, câmera, tela), não ao abrir o escritório.
+ */
+let lk: typeof Livekit | null = null;
+let lkLoading: Promise<typeof Livekit> | null = null;
+export function loadLivekit(): Promise<typeof Livekit> {
+  lkLoading ??= import('livekit-client').then((m) => {
+    // Só avisos e erros do servidor de mídia no console (o resto é detalhe interno da conexão).
+    m.setLogLevel('warn');
+    lk = m;
+    return m;
+  });
+  return lkLoading;
+}
+/** O módulo já carregado (quem chama passou antes por `loadLivekit`, ou há uma sala). */
+function L(): typeof Livekit {
+  if (!lk) throw new Error('Servidor de mídia ainda não carregado.');
+  return lk;
+}
 
 /** De quanto em quanto medir o volume (ms): o anel de quem fala e a boca do avatar. */
 const LEVEL_EVERY_MS = 100;
@@ -64,67 +78,77 @@ interface QualityPlan {
 }
 
 const cam = (w: number, h: number, kbps: number, fps: number) =>
-  new VideoPreset(w, h, kbps * 1000, fps, 'low');
+  new (L().VideoPreset)(w, h, kbps * 1000, fps, 'low');
 
-export const QUALITY_PLANS: Record<CallQuality, QualityPlan> = {
-  auto: {
-    cam: {
-      capture: cam(1920, 1080, 3000, 30),
-      layers: [cam(320, 180, 160, 15), cam(960, 540, 900, 30)],
-    },
-    screen: {
-      nitidez: {
-        maxBitrate: 3_000_000,
-        fps: 15,
-        layers: [new VideoPreset(1280, 720, 800_000, 5, 'high')],
+let plans: Record<CallQuality, QualityPlan> | null = null;
+/** Câmera e tela em cada qualidade (montado depois que o servidor de mídia carrega). */
+export function qualityPlans(): Record<CallQuality, QualityPlan> {
+  plans ??= buildPlans();
+  return plans;
+}
+
+function buildPlans(): Record<CallQuality, QualityPlan> {
+  const { VideoPreset, VideoQuality } = L();
+  return {
+    auto: {
+      cam: {
+        capture: cam(1920, 1080, 3000, 30),
+        layers: [cam(320, 180, 160, 15), cam(960, 540, 900, 30)],
       },
-      fluidez: {
-        maxBitrate: 4_000_000,
-        fps: 30,
-        layers: [new VideoPreset(1280, 720, 1_200_000, 15, 'high')],
+      screen: {
+        nitidez: {
+          maxBitrate: 3_000_000,
+          fps: 15,
+          layers: [new VideoPreset(1280, 720, 800_000, 5, 'high')],
+        },
+        fluidez: {
+          maxBitrate: 4_000_000,
+          fps: 30,
+          layers: [new VideoPreset(1280, 720, 1_200_000, 15, 'high')],
+        },
       },
+      receive: { cam: VideoQuality.HIGH, screen: VideoQuality.HIGH },
     },
-    receive: { cam: VideoQuality.HIGH, screen: VideoQuality.HIGH },
-  },
-  alta: {
-    cam: {
-      capture: cam(1920, 1080, 5000, 30),
-      layers: [cam(320, 180, 200, 15), cam(960, 540, 1500, 30)],
-    },
-    screen: {
-      nitidez: {
-        maxBitrate: 5_000_000,
-        fps: 30,
-        layers: [new VideoPreset(1280, 720, 1_200_000, 15, 'high')],
+    alta: {
+      cam: {
+        capture: cam(1920, 1080, 5000, 30),
+        layers: [cam(320, 180, 200, 15), cam(960, 540, 1500, 30)],
       },
-      fluidez: {
-        maxBitrate: 6_000_000,
-        fps: 60,
-        layers: [new VideoPreset(1280, 720, 1_500_000, 30, 'high')],
+      screen: {
+        nitidez: {
+          maxBitrate: 5_000_000,
+          fps: 30,
+          layers: [new VideoPreset(1280, 720, 1_200_000, 15, 'high')],
+        },
+        fluidez: {
+          maxBitrate: 6_000_000,
+          fps: 60,
+          layers: [new VideoPreset(1280, 720, 1_500_000, 30, 'high')],
+        },
       },
+      receive: { cam: VideoQuality.HIGH, screen: VideoQuality.HIGH },
     },
-    receive: { cam: VideoQuality.HIGH, screen: VideoQuality.HIGH },
-  },
-  economia: {
-    cam: {
-      capture: cam(640, 360, 400, 24),
-      layers: [cam(320, 180, 120, 15)],
-    },
-    screen: {
-      nitidez: {
-        maxBitrate: 900_000,
-        fps: 5,
-        layers: [new VideoPreset(1280, 720, 300_000, 3, 'high')],
+    economia: {
+      cam: {
+        capture: cam(640, 360, 400, 24),
+        layers: [cam(320, 180, 120, 15)],
       },
-      fluidez: {
-        maxBitrate: 1_200_000,
-        fps: 15,
-        layers: [new VideoPreset(1280, 720, 500_000, 10, 'high')],
+      screen: {
+        nitidez: {
+          maxBitrate: 900_000,
+          fps: 5,
+          layers: [new VideoPreset(1280, 720, 300_000, 3, 'high')],
+        },
+        fluidez: {
+          maxBitrate: 1_200_000,
+          fps: 15,
+          layers: [new VideoPreset(1280, 720, 500_000, 10, 'high')],
+        },
       },
+      receive: { cam: VideoQuality.LOW, screen: VideoQuality.MEDIUM },
     },
-    receive: { cam: VideoQuality.LOW, screen: VideoQuality.MEDIUM },
-  },
-};
+  };
+}
 
 /** Um vídeo para mostrar: o painel liga e desliga nos elementos (o servidor sabe o tamanho). */
 export interface VideoRef {
@@ -195,13 +219,13 @@ type SinkAudio = HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> 
 const canPickSpeaker = () =>
   typeof (HTMLMediaElement.prototype as SinkAudio).setSinkId === 'function';
 
-const LINK: Record<ConnectionQuality, LinkQuality | null> = {
-  [ConnectionQuality.Excellent]: 'bom',
-  [ConnectionQuality.Good]: 'medio',
-  [ConnectionQuality.Poor]: 'ruim',
-  [ConnectionQuality.Lost]: 'ruim',
-  [ConnectionQuality.Unknown]: null,
-};
+function linkOf(q: ConnectionQuality): LinkQuality | null {
+  const { ConnectionQuality: Q } = L();
+  if (q === Q.Excellent) return 'bom';
+  if (q === Q.Good) return 'medio';
+  if (q === Q.Poor || q === Q.Lost) return 'ruim';
+  return null;
+}
 
 /** Vídeo meu (prévia): é só pôr o fluxo no elemento. */
 function localRef(id: string, stream: MediaStream): VideoRef {
@@ -395,7 +419,8 @@ export class CallManager {
    * (o fundo nunca aparece sem querer). Se o navegador não roda o desfoque, manda sem e avisa.
    */
   private async openCamera(): Promise<boolean> {
-    const { capture } = QUALITY_PLANS[this.prefs.quality].cam;
+    await loadLivekit();
+    const { capture } = qualityPlans()[this.prefs.quality].cam;
     let raw: MediaStream;
     try {
       const deviceId = this.prefs.cam;
@@ -435,11 +460,12 @@ export class CallManager {
   }
 
   private async publishCamera(): Promise<void> {
+    await loadLivekit();
     const track = this.cam?.getVideoTracks()[0];
     if (!track || !this.room || this.camPub) return;
-    const plan = QUALITY_PLANS[this.prefs.quality].cam;
+    const plan = qualityPlans()[this.prefs.quality].cam;
     const opts: TrackPublishOptions = {
-      source: Track.Source.Camera,
+      source: L().Track.Source.Camera,
       simulcast: true,
       videoEncoding: plan.capture.encoding,
       videoSimulcastLayers: plan.layers,
@@ -493,6 +519,7 @@ export class CallManager {
    * continua ligada: os outros veem a tela em destaque e a câmera em miniatura.
    */
   async setScreen(on: boolean, mode: ScreenMode = this.prefs.screenMode): Promise<boolean> {
+    await loadLivekit();
     if (!on) {
       await this.stopScreen();
       this.afterVideoChange();
@@ -506,7 +533,7 @@ export class CallManager {
       await this.republishScreen();
       return true;
     }
-    const plan = QUALITY_PLANS[this.prefs.quality].screen[mode];
+    const plan = qualityPlans()[this.prefs.quality].screen[mode];
     try {
       this.screen = await navigator.mediaDevices.getDisplayMedia({
         video: { frameRate: { ideal: plan.fps, max: plan.fps } },
@@ -523,10 +550,11 @@ export class CallManager {
   }
 
   private async publishScreen(): Promise<void> {
+    await loadLivekit();
     const track = this.screen?.getVideoTracks()[0];
     if (!track || !this.room || this.screenPub) return;
     const mode = this.prefs.screenMode;
-    const plan = QUALITY_PLANS[this.prefs.quality].screen[mode];
+    const plan = qualityPlans()[this.prefs.quality].screen[mode];
     // Nitidez: o navegador guarda a resolução (texto legível) e cede fps quando mexe muito.
     // Fluidez: guarda o fps (vídeo, rolagem) e cede resolução.
     track.contentHint = mode === 'nitidez' ? 'text' : 'motion';
@@ -535,7 +563,7 @@ export class CallManager {
     const height = settings.height ?? 1080;
     try {
       this.screenPub = await this.room.localParticipant.publishTrack(track, {
-        source: Track.Source.ScreenShare,
+        source: L().Track.Source.ScreenShare,
         simulcast: true,
         screenShareEncoding: {
           maxBitrate: plan.maxBitrate,
@@ -553,9 +581,10 @@ export class CallManager {
 
   /** Troca o jeito de mandar a tela (nitidez/fluidez ou qualidade) sem pedir a tela de novo. */
   private async republishScreen(): Promise<void> {
+    await loadLivekit();
     const track = this.screen?.getVideoTracks()[0];
     if (!track) return;
-    const plan = QUALITY_PLANS[this.prefs.quality].screen[this.prefs.screenMode];
+    const plan = qualityPlans()[this.prefs.quality].screen[this.prefs.screenMode];
     await track
       .applyConstraints({ frameRate: { ideal: plan.fps, max: plan.fps } })
       .catch(() => undefined);
@@ -653,12 +682,12 @@ export class CallManager {
     const out: VideoStat[] = [];
     for (const pub of room.localParticipant.videoTrackPublications.values()) {
       const track = pub.track;
-      if (!(track instanceof LocalVideoTrack)) continue;
+      if (!(track instanceof L().LocalVideoTrack)) continue;
       const layers = await track.getSenderStats().catch(() => []);
       const limit = layers.map((l) => l.qualityLimitationReason).find((r) => r && r !== 'none');
       out.push({
         userId: this.myUserId,
-        kind: pub.source === Track.Source.ScreenShare ? 'screen' : 'cam',
+        kind: pub.source === L().Track.Source.ScreenShare ? 'screen' : 'cam',
         direction: 'envio',
         layers: layers
           .filter((l) => l.frameWidth)
@@ -676,7 +705,7 @@ export class CallManager {
     for (const p of room.remoteParticipants.values()) {
       for (const pub of p.videoTrackPublications.values()) {
         const track = pub.videoTrack;
-        if (!(track instanceof RemoteVideoTrack) || !pub.isSubscribed) continue;
+        if (!(track instanceof L().RemoteVideoTrack) || !pub.isSubscribed) continue;
         const s = await track.getReceiverStats().catch(() => undefined);
         const report = await track.getRTCStatsReport().catch(() => undefined);
         let rtt: number | undefined;
@@ -697,7 +726,7 @@ export class CallManager {
         const got = s?.packetsReceived ?? 0;
         out.push({
           userId: p.identity,
-          kind: pub.source === Track.Source.ScreenShare ? 'screen' : 'cam',
+          kind: pub.source === L().Track.Source.ScreenShare ? 'screen' : 'cam',
           direction: 'recebe',
           layers: s?.frameWidth
             ? [
@@ -742,7 +771,8 @@ export class CallManager {
     if (this.connecting && this.roomCall === callId) return this.connecting;
     this.roomCall = callId;
     const attempt = (async () => {
-      const [mic, token] = await Promise.all([
+      const [, mic, token] = await Promise.all([
+        loadLivekit(),
         this.micTrack ? Promise.resolve(this.micTrack.mediaStreamTrack) : this.openMic(),
         this.lobby.callToken().catch(() => null),
       ]);
@@ -779,11 +809,11 @@ export class CallManager {
       this.room = room;
       this.reconnectTry = 0;
       if (!this.micTrack) {
-        this.micTrack = new LocalAudioTrack(mic, undefined, true);
+        this.micTrack = new (L().LocalAudioTrack)(mic, undefined, true);
         this.localLevel = this.meter(new MediaStream([mic]));
       }
       this.micPub = await room.localParticipant
-        .publishTrack(this.micTrack, { source: Track.Source.Microphone, dtx: true, red: true })
+        .publishTrack(this.micTrack, { source: L().Track.Source.Microphone, dtx: true, red: true })
         .catch(() => null);
       if (this.muted) await this.micTrack.mute();
       // Voltando de uma queda: manda de novo o que estava ligado.
@@ -800,7 +830,7 @@ export class CallManager {
   }
 
   private createRoom(): Room {
-    const room = new Room({
+    const room = new (L().Room)({
       // Cada vídeo chega no tamanho do quadro onde aparece (na tela de alta densidade, em
       // dobro); quadro escondido não recebe vídeo.
       adaptiveStream: { pixelDensity: 'screen' },
@@ -810,17 +840,17 @@ export class CallManager {
       disconnectOnPageLeave: true,
     });
     room
-      .on(RoomEvent.TrackSubscribed, (track, pub, p) => this.onTrack(track, pub, p))
-      .on(RoomEvent.TrackUnsubscribed, (track, _pub, p) => this.offTrack(track, p))
-      .on(RoomEvent.TrackMuted, () => this.emitVideos())
-      .on(RoomEvent.TrackUnmuted, () => this.emitVideos())
-      .on(RoomEvent.TrackPublished, (pub) => this.applyReceiveQuality(pub))
+      .on(L().RoomEvent.TrackSubscribed, (track, pub, p) => this.onTrack(track, pub, p))
+      .on(L().RoomEvent.TrackUnsubscribed, (track, _pub, p) => this.offTrack(track, p))
+      .on(L().RoomEvent.TrackMuted, () => this.emitVideos())
+      .on(L().RoomEvent.TrackUnmuted, () => this.emitVideos())
+      .on(L().RoomEvent.TrackPublished, (pub) => this.applyReceiveQuality(pub))
       // A publicação só sai da lista depois do aviso: redesenha logo em seguida.
-      .on(RoomEvent.TrackUnpublished, () => setTimeout(() => this.emitVideos(), 0))
-      .on(RoomEvent.ParticipantConnected, (p) => this.addParticipant(p))
-      .on(RoomEvent.ParticipantDisconnected, (p) => this.removeAudio(p.identity))
-      .on(RoomEvent.ConnectionQualityChanged, () => this.updateLinks())
-      .on(RoomEvent.Disconnected, (reason) => this.onDisconnected(room, reason));
+      .on(L().RoomEvent.TrackUnpublished, () => setTimeout(() => this.emitVideos(), 0))
+      .on(L().RoomEvent.ParticipantConnected, (p) => this.addParticipant(p))
+      .on(L().RoomEvent.ParticipantDisconnected, (p) => this.removeAudio(p.identity))
+      .on(L().RoomEvent.ConnectionQualityChanged, () => this.updateLinks())
+      .on(L().RoomEvent.Disconnected, (reason) => this.onDisconnected(room, reason));
     return room;
   }
 
@@ -834,9 +864,9 @@ export class CallManager {
     const st = this.current;
     const callId = this.roomCall;
     this.roomCall = null;
-    if (!st?.here || st.id !== callId || reason === DisconnectReason.CLIENT_INITIATED) return;
+    if (!st?.here || st.id !== callId || reason === L().DisconnectReason.CLIENT_INITIATED) return;
     // Entrou a mesma conta por outra aba: esta para de falar sem insistir.
-    if (reason === DisconnectReason.DUPLICATE_IDENTITY) return;
+    if (reason === L().DisconnectReason.DUPLICATE_IDENTITY) return;
     const wait = RECONNECT_MS[Math.min(this.reconnectTry++, RECONNECT_MS.length - 1)]!;
     clearTimeout(this.reconnectTimer);
     this.reconnectTimer = window.setTimeout(() => {
@@ -853,7 +883,7 @@ export class CallManager {
   }
 
   private onTrack(track: RemoteTrack, pub: RemoteTrackPublication, p: RemoteParticipant): void {
-    if (track.kind === Track.Kind.Audio) {
+    if (track.kind === L().Track.Kind.Audio) {
       this.removeAudio(p.identity);
       const el = document.createElement('audio');
       el.autoplay = true;
@@ -873,7 +903,7 @@ export class CallManager {
   }
 
   private offTrack(track: RemoteTrack, p: RemoteParticipant): void {
-    if (track.kind === Track.Kind.Audio) this.removeAudio(p.identity);
+    if (track.kind === L().Track.Kind.Audio) this.removeAudio(p.identity);
     else setTimeout(() => this.emitVideos(), 0);
   }
 
@@ -887,15 +917,17 @@ export class CallManager {
 
   /** Camada máxima que peço ao servidor (na economia, as menores). */
   private applyReceiveQuality(only?: RemoteTrackPublication): void {
-    const want = QUALITY_PLANS[this.prefs.quality].receive;
+    // Sem o servidor de mídia carregado não há sala nem vídeo dos outros.
+    if (!lk) return;
+    const want = qualityPlans()[this.prefs.quality].receive;
     const pubs = only
       ? [only]
       : [...(this.room?.remoteParticipants.values() ?? [])].flatMap((p) => [
           ...p.videoTrackPublications.values(),
         ]);
     for (const pub of pubs) {
-      if (pub.kind !== Track.Kind.Video) continue;
-      pub.setVideoQuality(pub.source === Track.Source.ScreenShare ? want.screen : want.cam);
+      if (pub.kind !== L().Track.Kind.Video) continue;
+      pub.setVideoQuality(pub.source === L().Track.Source.ScreenShare ? want.screen : want.cam);
     }
   }
 
@@ -903,7 +935,7 @@ export class CallManager {
     const room = this.room;
     const links = new Map<string, LinkQuality>();
     const add = (p: Participant) => {
-      const q = LINK[p.connectionQuality];
+      const q = linkOf(p.connectionQuality);
       if (q)
         links.set(p.identity === room?.localParticipant.identity ? this.myUserId : p.identity, q);
     };
@@ -971,9 +1003,10 @@ export class CallManager {
         const v: CallVideo = {};
         for (const pub of p.videoTrackPublications.values()) {
           const track = pub.videoTrack;
-          if (!(track instanceof RemoteVideoTrack) || !pub.isSubscribed || pub.isMuted) continue;
-          if (pub.source === Track.Source.ScreenShare) v.screen = remoteRef(track);
-          else if (pub.source === Track.Source.Camera) v.cam = remoteRef(track);
+          if (!(track instanceof L().RemoteVideoTrack) || !pub.isSubscribed || pub.isMuted)
+            continue;
+          if (pub.source === L().Track.Source.ScreenShare) v.screen = remoteRef(track);
+          else if (pub.source === L().Track.Source.Camera) v.cam = remoteRef(track);
         }
         if (v.cam || v.screen) out.set(p.identity, v);
       }
