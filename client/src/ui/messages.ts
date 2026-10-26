@@ -61,6 +61,8 @@ export class MessagesPanel {
   private readonly back = document.createElement('button');
   private readonly notifyBtn = document.createElement('button');
   private view: View = { kind: 'list' };
+  /** Redesenha a lista da "Nova conversa" sem refazer a busca. */
+  private redrawNew: (() => void) | null = null;
   private conversations: DmConversation[] = [];
   private online = new Map<string, OnlineInfo>();
   /** Mensagens da conversa aberta. */
@@ -153,7 +155,9 @@ export class MessagesPanel {
 
   setOnline(list: OnlineInfo[]): void {
     this.online = new Map(list.map((p) => [p.userId, p]));
-    if (this.isOpen && this.view.kind !== 'chat') this.render();
+    // Nova conversa: só redesenha a lista (refazer a tela apagaria o que se digitou na busca).
+    if (this.isOpen && this.view.kind === 'new') this.redrawNew?.();
+    if (this.isOpen && this.view.kind === 'list') this.render();
     if (this.isOpen && this.view.kind === 'chat') this.renderChatSubtitle();
   }
 
@@ -218,6 +222,7 @@ export class MessagesPanel {
   private async show(view: View): Promise<void> {
     if (this.view.kind === 'chat') this.saveDraft();
     this.view = view;
+    this.redrawNew = null;
     this.back.hidden = view.kind === 'list';
     if (view.kind === 'chat') {
       this.title.textContent = view.name;
@@ -333,6 +338,7 @@ export class MessagesPanel {
     };
     search.addEventListener('input', draw);
     draw();
+    this.redrawNew = draw;
     this.body.replaceChildren(search, ul);
     search.focus();
   }

@@ -1039,6 +1039,35 @@ async function start(): Promise<void> {
   // Dia e noite acompanham o relógio (de minuto em minuto).
   setInterval(() => scene?.setDayLight(currentLight()), 60_000);
 
+  /**
+   * Monta a sala sem deixar a tela escura se der erro (arte que não carregou, rede): tenta de
+   * novo uma vez e, se falhar de novo, avisa com o botão de recarregar.
+   */
+  async function safeMount(
+    conn: OfficeConnection,
+    room: OfficeRoomClient,
+    layout: RoomLayoutMessage,
+  ): Promise<void> {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await mountRoom(conn, room, layout);
+      } catch (err) {
+        console.error('[sala] erro ao montar', err);
+        overlay.setFading(false);
+        boot.hide();
+        if (attempt >= 1) {
+          overlay.notify('Não deu para abrir a sala.', {
+            kind: 'error',
+            durationMs: 60_000,
+            action: { label: 'Recarregar', run: () => location.reload() },
+          });
+          return;
+        }
+        await new Promise((r) => setTimeout(r, 1500));
+      }
+    }
+  }
+
   async function mountRoom(
     connection: OfficeConnection,
     room: OfficeRoomClient,
@@ -1887,8 +1916,8 @@ async function start(): Promise<void> {
         location.reload();
       },
       transferStart: () => overlay.setFading(true),
-      joined: (room, layout) => void mountRoom(conn, room, layout),
-      layoutChanged: (room, layout) => void mountRoom(conn, room, layout),
+      joined: (room, layout) => void safeMount(conn, room, layout),
+      layoutChanged: (room, layout) => void safeMount(conn, room, layout),
     });
     session = current;
     setUploadToken(current.token);

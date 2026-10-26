@@ -141,13 +141,20 @@ export interface Person {
 export async function newPerson(
   browser: Browser,
   base: string,
-  opts: { username?: string; tour?: boolean; context?: BrowserContextOptions } = {},
+  opts: {
+    username?: string;
+    tour?: boolean;
+    context?: BrowserContextOptions;
+    /** Script que roda antes da página (ex.: espiar os WebSockets). */
+    initScript?: string;
+  } = {},
 ): Promise<Person> {
   const id = uniq();
   const name = `${base} ${id}`;
   const username = opts.username ?? `${base.toLowerCase()}.${id}`;
   const context = await browser.newContext(opts.context);
   openContexts.push(context);
+  if (opts.initScript) await context.addInitScript(opts.initScript);
   const page = await context.newPage();
   await page.goto(opts.tour ? `${APP}&tour=1` : APP);
   await page.getByRole('tab', { name: 'Criar conta' }).click();

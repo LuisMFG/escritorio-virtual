@@ -54,3 +54,22 @@ test('status na barra (os outros veem) e aviso de menção com "Responder"', asy
   await expect(ana.page.locator('.reply-bar')).toContainText(beto.name);
   await expect(ana.page.getByPlaceholder(/Diga algo/)).toBeFocused();
 });
+
+test('mensagens: a busca da "Nova conversa" não se apaga quando alguém entra', async ({
+  browser,
+}) => {
+  const ana = await newPerson(browser, 'Ana');
+  const beto = await newPerson(browser, 'Beto');
+  await ana.page.getByRole('button', { name: 'Mensagens', exact: true }).click();
+  await ana.page.getByRole('button', { name: 'Nova conversa' }).click();
+  const search = ana.page.getByRole('searchbox', { name: 'Buscar pessoa', exact: true });
+  await search.fill(beto.name.slice(0, 4));
+  await expect(ana.page.locator('.dm-list .dm-conv-name')).toHaveText([beto.name]);
+
+  // Alguém entra no escritório (a lista de quem está online muda): a busca continua.
+  await newPerson(browser, 'Caio');
+  await ana.page.waitForTimeout(1000);
+  await expect(search).toHaveValue(beto.name.slice(0, 4));
+  await expect(search).toBeFocused();
+  await expect(ana.page.locator('.dm-list .dm-conv-name')).toHaveText([beto.name]);
+});
