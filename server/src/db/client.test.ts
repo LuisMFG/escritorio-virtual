@@ -97,4 +97,11 @@ describe('layout da Recepção (o escritório de verdade)', () => {
     expect(db.select().from(boardNotes).all()).toMatchObject([{ text: 'oi' }]);
     sqliteOf(db).close();
   });
+
+  it('banco em WAL com gravação NORMAL (sem forçar o disco a cada mensagem)', () => {
+    const db = openDatabase(join(mkdtempSync(join(tmpdir(), 'escritorio-sync-')), 'db.sqlite'));
+    expect(sqliteOf(db).pragma('journal_mode', { simple: true })).toBe('wal');
+    expect(sqliteOf(db).pragma('synchronous', { simple: true })).toBe(1);
+    sqliteOf(db).close();
+  });
 });

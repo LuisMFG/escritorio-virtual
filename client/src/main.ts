@@ -908,10 +908,14 @@ async function start(): Promise<void> {
   }
   /** Última lista da Equipe (bio e aniversário no cartão do avatar). */
   let team: TeamResponse | undefined;
+  let teamAt = 0;
+  /** Lista da equipe (bio, aniversário, cargo); reaproveitada por um minuto. */
   const loadTeam = async () => {
     if (!session) return;
+    if (team && Date.now() - teamAt < 60_000) return;
     try {
       team = await api.team(session.token);
+      teamAt = Date.now();
     } catch {
       // Sem a lista, o cartão mostra só o que vem do estado da sala.
     }
@@ -923,6 +927,8 @@ async function start(): Promise<void> {
       saved: (updated) => {
         session = updated;
         rememberSession(updated);
+        // Bio ou aniversário podem ter mudado: a próxima consulta busca a equipe de novo.
+        teamAt = 0;
       },
       editAvatar: () => void editAvatar(),
       logout: (all) => void logout(all),
@@ -935,7 +941,10 @@ async function start(): Promise<void> {
       userId: session.userId,
       isAdmin: session.role === 'admin',
       roomName,
-      loaded: (t) => (team = t),
+      loaded: (t) => {
+        team = t;
+        teamAt = Date.now();
+      },
       actions: personActions,
     });
   }

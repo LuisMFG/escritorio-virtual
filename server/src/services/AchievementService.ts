@@ -30,6 +30,11 @@ export function officeDay(date: Date, timeZone = OFFICE_TIME_ZONE): number {
  */
 export class AchievementService {
   readonly events = new EventEmitter<{ unlocked: [userId: string, def: AchievementDef] }>();
+  /**
+   * Conquistas que já se sabe que a pessoa tem (`usuário:conquista`). Várias são pedidas a cada
+   * ação (cada traço no quadro, cada mensagem): sem isso, uma gravação no banco por ação.
+   */
+  private readonly known = new Set<string>();
 
   constructor(
     private readonly db: Db,
@@ -43,6 +48,9 @@ export class AchievementService {
   unlock(userId: string, id: string): boolean {
     const def = findAchievement(id);
     if (!def) return false;
+    const key = `${userId}:${id}`;
+    if (this.known.has(key)) return false;
+    this.known.add(key);
     const res = this.db
       .insert(userAchievements)
       .values({ userId, achievementId: id, unlockedAt: this.now() })

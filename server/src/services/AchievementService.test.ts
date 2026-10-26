@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { openDatabase } from '../db/client.js';
+import { describe, expect, it, vi } from 'vitest';
+import { openDatabase, sqliteOf } from '../db/client.js';
 import { AchievementService, officeDay } from './AchievementService.js';
 import { createServices } from './index.js';
 
@@ -25,6 +25,20 @@ describe('AchievementService', () => {
     expect(ach.unlock(user.id, 'chatter')).toBe(false);
     expect(ach.unlock(user.id, 'nao-existe')).toBe(false);
     expect(ach.get(user.id).stats.chat).toBe(100);
+  });
+
+  it('conquista já conhecida não volta ao banco (várias são pedidas a cada ação)', () => {
+    const { svc, ach, user, unlocked } = setup();
+    const prepare = vi.spyOn(sqliteOf(svc.db), 'prepare');
+    expect(ach.unlock(user.id, 'artist')).toBe(true);
+    const calls = prepare.mock.calls.length;
+    for (let i = 0; i < 50; i++) expect(ach.unlock(user.id, 'artist')).toBe(false);
+    expect(prepare.mock.calls.length).toBe(calls);
+    expect(unlocked).toEqual(['artist']);
+    const rows = sqliteOf(svc.db)
+      .prepare('select count(*) as n from user_achievements where user_id = ?')
+      .get(user.id) as { n: number };
+    expect(rows.n).toBe(1);
   });
 
   it('dias seguidos no fuso do escritório; pular um dia recomeça', () => {

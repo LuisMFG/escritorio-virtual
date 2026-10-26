@@ -40,6 +40,9 @@ export function openDatabase(path: string): Db {
   if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
   const sqlite = new Database(path);
   sqlite.pragma('journal_mode = WAL');
+  // Com WAL, NORMAL não corrompe o banco: só deixa de forçar o disco a cada gravação (cada
+  // mensagem, cada contador). Numa queda de energia, perde no máximo as últimas transações.
+  sqlite.pragma('synchronous = NORMAL');
   sqlite.pragma('foreign_keys = ON');
   const db = drizzle(sqlite, { schema });
   connections.set(db, sqlite);
