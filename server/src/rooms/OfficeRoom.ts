@@ -122,6 +122,7 @@ import {
   REPLACED_CODE,
   REPLACED_TEXT,
   ROOM_FULL_CODE,
+  SESSION_ENDED_TEXT,
   isBirthdayToday,
   officeDate,
   ROOM_MAX_PEOPLE,
@@ -220,6 +221,9 @@ type Intent =
   /** Indo para a vaga numa mesa do Salão de Jogos (Fase 57): vira para a mesa ao chegar. */
   | { kind: 'arcade'; furniId: string; at: TilePoint };
 
+/** De quanto em quanto a sala confere se as sessões conectadas ainda valem (ms). */
+export const SESSION_CHECK_MS = 60_000;
+
 export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient }> {
   override maxClients = ROOM_MAX_PEOPLE;
   /** A instância de cada sala física: com ela cheia, o Colyseus criaria uma cópia vazia. */
@@ -256,6 +260,8 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
   /** Quadro branco: traços e desfazer (40 seguidos, 20/s) e rascunhos (40, 25/s). */
   private readonly wbLimiter = new KeyedRateLimiter(40, 20);
   private readonly draftLimiter = new KeyedRateLimiter(40, 25);
+  /** Token de cada conexão (para conferir se a sessão continua valendo). */
+  private readonly tokens = new Map<string, string>();
   /** Quadros limpos há pouco: os traços e quem limpou (pode desfazer por `WB_UNDO_MS`). */
   private readonly wbCleared = new Map<
     string,
@@ -947,6 +953,8 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     this.clock.setInterval(() => this.expireArcade(), 500);
     // Meia-noite em Brasília: o 🎂 acende (e apaga) para quem já está na sala.
     this.clock.setInterval(() => this.refreshBirthdays(), 60_000);
+    // Sessão que deixou de valer (senha trocada, saiu de todos os aparelhos, venceu): sai.
+    this.clock.setInterval(() => this.checkSessions(), SESSION_CHECK_MS);
     services().users.events.on('updated', this.onUserUpdated);
     services().moderation.on('kick', this.onKick);
     services().presence.events.on('claimed', this.onClaimed);
@@ -992,6 +1000,19 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     for (const t of this.handTimers.values()) t.clear();
   }
 
+  /** Desconecta quem está com uma sessão que deixou de valer (a aba volta para a entrada). */
+  private checkSessions(): void {
+    for (const client of this.clients) {
+      const token = this.tokens.get(client.sessionId);
+      if (!token || services().users.findByToken(token)) continue;
+      client.send(ServerMessage.Kicked, {
+        scope: 'office',
+        message: SESSION_ENDED_TEXT,
+      } satisfies KickedMessage);
+      client.leave(CloseCode.CONSENTED);
+    }
+  }
+
   /** Corações de aniversário, uma vez por dia (o dia de Brasília, não o UTC). */
   private birthdayHearts(userId: string, delayMs = 0): void {
     const key = `${userId}:${officeDate(new Date())}`;
@@ -1023,6 +1044,9 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
     const tab = parsed.data?.tab ?? client.sessionId;
     // A aba antiga tentando voltar sozinha não tira a nova (recarregar a página pode).
     this.tabs.set(client.sessionId, tab);
+    // Guarda o token para conferir depois (senha trocada, saiu de tudo, venceu) e conta o uso.
+    this.tokens.set(client.sessionId, parsed.data!.token);
+    services().users.touchSession(parsed.data!.token);
     if (!services().presence.claim(user.id, tab)) {
       this.tabs.delete(client.sessionId);
       throw new ServerError(REPLACED_CODE, REPLACED_TEXT);
@@ -1128,6 +1152,7 @@ export class OfficeRoom extends Room<{ state: OfficeState; client: OfficeClient 
   override onLeave(client: OfficeClient): void {
     this.pendingReconnects.delete(client.sessionId);
     this.tabs.delete(client.sessionId);
+    this.tokens.delete(client.sessionId);
     this.state.players.delete(client.sessionId);
     this.movement.remove(client.sessionId);
     this.moveLimiter.delete(client.sessionId);

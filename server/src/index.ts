@@ -78,6 +78,11 @@ setInterval(
   guarded('anexos', () => services.uploads.cleanup()),
   60 * 60_000,
 ).unref();
+// Sessões sem uso há 90 dias: saem do banco (já não valiam).
+setInterval(
+  guarded('sessões', () => services.users.deleteExpiredSessions()),
+  60 * 60_000,
+).unref();
 console.log(`[servidor] escritório no ar em http://localhost:${config.port}`);
 console.log(`[servidor] banco: ${config.databasePath}`);
 console.log(

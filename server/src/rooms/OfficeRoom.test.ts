@@ -21,6 +21,7 @@ import {
   type RoomTransferMessage,
   type ErrorMessage,
   ROOM_FULL_CODE,
+  SESSION_ENDED_TEXT,
   monthDay,
   roomFullText,
   type RoomLayoutMessage,
@@ -154,6 +155,21 @@ describe('OfficeRoom', () => {
     await wait(STEP_MS * 12);
     const seenByB = b.state.players.get(a.sessionId)!;
     expect(seenByB).toMatchObject({ x: 4, y: 4, nextX: 4, nextY: 4, action: 'idle' });
+  });
+
+  it('sessão que deixou de valer (senha trocada em outro aparelho) desconecta a aba aberta', async () => {
+    const ana = newUser('Ana');
+    const a = await join(ana.token);
+    const beto = await join(newUser('Beto').token);
+    // A Ana troca a senha em outro aparelho: as outras sessões dela são apagadas.
+    svc.users.deleteAllSessions(ana.user.id);
+    const kicked = a.waitForMessage(ServerMessage.Kicked, 5000);
+    const server = colyseus.getRoomById(a.roomId) as unknown as { checkSessions(): void };
+    server.checkSessions();
+    expect(await kicked).toEqual({ scope: 'office', message: SESSION_ENDED_TEXT });
+    await waitFor(() => !beto.state.players.has(a.sessionId));
+    // Quem continua com a sessão válida fica.
+    expect(beto.state.players.has(beto.sessionId)).toBe(true);
   });
 
   it('aniversário: o 🎂 acende para quem já está na sala quando o dia vira', async () => {

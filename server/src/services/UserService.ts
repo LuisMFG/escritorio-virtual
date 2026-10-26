@@ -5,11 +5,12 @@ import {
   DEFAULT_CARGOS,
   isBirthdayToday,
   parseShowcase,
+  SESSION_IDLE_MS,
   type CargoInfo,
   type Role,
   type SessionResponse,
 } from '@office/shared';
-import { and, asc, desc, eq, isNotNull, ne } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, isNotNull, lte, ne } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import { cargos, sessions, users, type UserRow } from '../db/schema.js';
 
@@ -82,9 +83,22 @@ export class UserService {
       .select({ user: users })
       .from(sessions)
       .innerJoin(users, eq(sessions.userId, users.id))
-      .where(and(eq(sessions.tokenHash, hashToken(token)), eq(users.disabled, false)))
+      .where(
+        and(
+          eq(sessions.tokenHash, hashToken(token)),
+          eq(users.disabled, false),
+          // Sem uso há `SESSION_IDLE_MS` (90 dias): vale como sessão inexistente.
+          gt(sessions.lastUsedAt, new Date(this.now().getTime() - SESSION_IDLE_MS)),
+        ),
+      )
       .get();
     return row?.user;
+  }
+
+  /** Apaga as sessões vencidas (sem uso há `SESSION_IDLE_MS`). Devolve quantas. */
+  deleteExpiredSessions(): number {
+    const limit = new Date(this.now().getTime() - SESSION_IDLE_MS);
+    return this.db.delete(sessions).where(lte(sessions.lastUsedAt, limit)).run().changes;
   }
 
   /** Abre uma sessão nova e devolve o token (em texto puro só aqui). */

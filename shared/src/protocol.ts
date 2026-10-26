@@ -276,6 +276,12 @@ export interface ApiError {
   field?: string;
 }
 
+/** Sessão que vence: tanto tempo sem uso (ms) pede usuário e senha de novo. */
+export const SESSION_IDLE_MS = 90 * 24 * 60 * 60_000;
+/** Aviso de quem foi desconectado porque a sessão acabou (senha trocada, saiu de tudo, venceu). */
+export const SESSION_ENDED_TEXT =
+  'Sua sessão terminou (senha trocada ou saída de todos os aparelhos). Entre de novo.';
+
 /** Esta aba saiu porque a conta entrou por outra aba ou aparelho. */
 export interface ReplacedMessage {
   message: string;
