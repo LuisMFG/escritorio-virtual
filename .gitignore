@@ -58,3 +58,7 @@ client/public/mediapipe/wasm/
 
 # Resultados da medição das chamadas (npm run medir:chamada)
 e2e/medicao/resultados/
+
+# Binário local do LiveKit para desenvolvimento
+livekit-server.exe
+LICENSE

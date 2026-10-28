@@ -71,6 +71,19 @@ import { DecorPanel } from './ui/decorPanel.js';
 import { FurniDefStore } from './assets/FurniDefStore.js';
 import { FurniVisualLibrary } from './assets/FurniVisualLibrary.js';
 import { mountHud } from './ui/hud.js';
+import {
+  attachAvatarCardToPip,
+  attachCallElementsToPip,
+  closePip,
+  getPipDocument,
+  isPipActive,
+  isPipSupported,
+  openPip,
+  removePipIncomingCall,
+  showPipIncomingCall,
+  updatePipCallUi,
+  updatePipRoomName,
+} from './ui/pip.js';
 import { IdleWatcher } from './ui/idle.js';
 import { showClaim, showLogin } from './ui/login.js';
 import { openProfile } from './ui/profile.js';
@@ -168,6 +181,9 @@ function currentLight() {
  * coluna de câmera à direita e o nome da sala em cima. A câmera enquadra a sala no que sobra.
  */
 function uiInsets() {
+  if (isPipActive()) {
+    return { top: 0, right: 0, bottom: 0, left: 0 };
+  }
   const rect = (sel: string) => document.querySelector(sel)?.getBoundingClientRect();
   const history = document.querySelector<HTMLDetailsElement>('.chat-history');
   const dock = rect('.hud-actions');
@@ -829,7 +845,85 @@ async function start(): Promise<void> {
     }
   });
 
+  let currentRoomTitle = RECEPTION.name;
   const hud = mountHud({
+    pipSupported: isPipSupported(),
+    onTogglePip: () => {
+      if (isPipActive()) {
+        closePip();
+        hud.setPipActive(false);
+      } else {
+        const hasPipApi = isPipSupported();
+        const appEl = document.getElementById('app')!;
+        void openPip({
+          app,
+          canvas: app.canvas,
+          container: appEl,
+          chatElement: chat.historyElement,
+          avatarCardElement: () => avatarCard?.element,
+          deskElement: () => deskChip?.element,
+          getCallElements: () => ({
+            panel: callPanel?.element,
+            mini: callPanel?.miniElement,
+          }),
+          getRoomName: () => currentRoomTitle,
+          onCenterSelf: () => scene?.centerOnSelf(),
+          onFit: () => scene?.camera.fit(),
+          onZoomIn: () => scene?.camera.zoomIn(),
+          onZoomOut: () => scene?.camera.zoomOut(),
+          onResize: () => {
+            if (!isPipActive()) {
+              app.resize();
+            }
+            refit();
+          },
+          onClose: () => {
+            hud.setPipActive(false);
+            app.resizeTo = window;
+            app.resize();
+            refit();
+          },
+          getCallStatus: () => ({
+            active: Boolean(calls?.state),
+            muted: calls?.isMuted ?? false,
+            members: calls?.state?.members.map((m) => m.name),
+            toggleMute: () => {
+              if (calls) {
+                calls.setMuted(!calls.isMuted);
+                updatePipCallUi();
+              }
+            },
+            leave: () => {
+              if (calls) {
+                calls.leave();
+                updatePipCallUi();
+              }
+            },
+          }),
+          onSendMessage: (text) => {
+            connection?.say(text);
+          },
+          onTurn: (dir) => {
+            connection?.turn(dir);
+          },
+        }).then((win) => {
+          if (win) {
+            hud.setPipActive(true);
+            if (win.innerWidth <= 480) {
+              scene?.centerOnSelf();
+            }
+            if (!hasPipApi) {
+              overlay.notify(
+                'Janela aberta! Para fixá-la Sempre no Topo (Always on Top) no Opera GX, ative: opera://flags/#document-picture-in-picture-api',
+                { kind: 'info', durationMs: 9000 },
+              );
+            }
+          } else {
+            overlay.notify('O navegador bloqueou a janela (verifique se popups estão permitidos).', { kind: 'error' });
+          }
+        });
+      }
+    },
     onStatusChange: (status) => chooseStatus(status),
     getCamera: () => scene?.camera,
     onCenterSelf: () => scene?.centerOnSelf(),
@@ -996,10 +1090,11 @@ async function start(): Promise<void> {
     call: (userId, name) => {
       const c = calls;
       if (!c) return;
+      const targetDoc = getPipDocument() ?? document;
       openCallInvite({ name }, Boolean(c.state), (reason) => {
         c.invite(userId, reason);
         overlay.notify(`Chamando ${name}…`);
-      });
+      }, targetDoc);
     },
     message: (userId, name) => openDm(userId, name),
     praise: (userId, name) => praise(userId, name),
@@ -1046,7 +1141,9 @@ async function start(): Promise<void> {
   });
   /** Avisos de aniversário: uma vez por pessoa por visita. */
   const birthdaysSeen = new Set<string>();
+  currentRoomTitle = RECEPTION.name;
   hud.setRoomName(RECEPTION.name);
+  updatePipRoomName(RECEPTION.name);
   app.ticker.add((ticker) => scene?.update(ticker.deltaMS));
   // Dia e noite acompanham o relógio (de minuto em minuto).
   setInterval(() => scene?.setDayLight(currentLight()), 60_000);
@@ -1302,6 +1399,14 @@ async function start(): Promise<void> {
           const info = s.avatarInfo(sessionId);
           const player = room.state.players.get(sessionId);
           if (!info || !player) return;
+          if (isPipActive()) {
+            attachAvatarCardToPip(avatarCard.element);
+          }
+          const canvasRect = app.canvas.getBoundingClientRect();
+          const screenAt = {
+            x: canvasRect.left + at.x,
+            y: canvasRect.top + at.y,
+          };
           const show = () => {
             const member = team?.members.find((m) => m.userId === player.userId);
             avatarCard.show(
@@ -1324,7 +1429,7 @@ async function start(): Promise<void> {
                 focusUntil: player.focusUntil,
                 focusKind: player.focusKind,
               },
-              at,
+              screenAt,
             );
           };
           show();
@@ -1346,7 +1451,9 @@ async function start(): Promise<void> {
     exposeForTests(s, room, () => connection.serverNow());
     s.decor.setActive(decorating);
     decorPanel.setPicked(null);
+    currentRoomTitle = layout.name;
     hud.setRoomName(layout.name);
+    updatePipRoomName(layout.name);
     history.replaceState(null, '', `#/${layout.roomId}`);
     overlay.setPeople([], layout.name);
     s.camera.setInsets(uiInsets());
@@ -1618,7 +1725,10 @@ async function start(): Promise<void> {
   /** Canal global: DMs e presença. Abre depois de entrar na primeira sala. */
   // ---------- Chamadas de áudio por convite (Fase 49) ----------
   let calls: CallManager | null = null;
-  const incomingCalls = new IncomingCalls((id, accept) => calls?.answer(id, accept));
+  const incomingCalls = new IncomingCalls((id, accept) => {
+    removePipIncomingCall(id);
+    calls?.answer(id, accept);
+  });
   let callPanel: CallPanel | null = null;
   const CALL_RESULTS: Record<string, (name: string) => [string, 'success' | 'info' | 'error']> = {
     accepted: (n) => [`${n} entrou na chamada.`, 'success'],
@@ -1662,17 +1772,33 @@ async function start(): Promise<void> {
         }),
     });
     const panel = callPanel;
+    if (isPipActive() && panel) {
+      attachCallElementsToPip(panel.element, panel.miniElement);
+    }
     // Testes: simular a qualidade da conexão (o aviso de internet fraca).
-    if (E2E_MODE) (window as unknown as { __e2eCallPanel: CallPanel }).__e2eCallPanel = panel;
+    if (E2E_MODE) {
+      (window as unknown as { __e2eCallPanel: CallPanel }).__e2eCallPanel = panel;
+      (window as unknown as { __e2eShowPipIncoming: typeof showPipIncomingCall }).__e2eShowPipIncoming = showPipIncomingCall;
+      (window as unknown as { __e2eNotify: typeof overlay.notify }).__e2eNotify = overlay.notify.bind(overlay);
+      (window as unknown as { __e2eAvatarCard: AvatarCard }).__e2eAvatarCard = avatarCard;
+    }
     calls = new CallManager(l, me, {
       state: (st) => {
         panel.set(st);
+        if (isPipActive() && panel) {
+          attachCallElementsToPip(panel.element, panel.miniElement);
+        }
+        updatePipCallUi();
         // Caiu ou recarregou no meio da chamada e voltou sozinho.
         if (st?.rejoined) overlay.notify('Você voltou para a chamada.', { kind: 'success' });
         if (!st) scene?.setSpeaking(new Set());
       },
       invited: (invite) => {
         incomingCalls.add(invite);
+        showPipIncomingCall(invite, (id, accept) => {
+          incomingCalls.remove(id);
+          calls?.answer(id, accept);
+        });
         if (!invite.quiet) sound.ring();
         notifier.notify(
           `${invite.fromName} está chamando você`,
@@ -1680,7 +1806,10 @@ async function start(): Promise<void> {
           { tag: `chamada-${invite.id}` },
         );
       },
-      inviteGone: (id) => incomingCalls.remove(id),
+      inviteGone: (id) => {
+        incomingCalls.remove(id);
+        removePipIncomingCall(id);
+      },
       result: (r) => {
         const make = CALL_RESULTS[r.outcome];
         if (!make) return;

@@ -46,8 +46,10 @@ export class Toaster {
     );
     let used = false;
     let timer = 0;
+    let pipClose: (() => void) | null = null;
     const close = () => {
       clearTimeout(timer);
+      if (pipClose) pipClose();
       if (!item.isConnected) return;
       item.classList.add('leaving');
       window.setTimeout(() => item.remove(), 180);
@@ -75,6 +77,54 @@ export class Toaster {
     x.addEventListener('click', close);
     item.append(x);
     this.box.append(item);
+    if (pipToasterBox && pipToasterBox.isConnected) {
+      const pDoc = pipToasterBox.ownerDocument;
+      const pItem = pDoc.createElement('div');
+      pItem.className = `toast-item ${kind}`;
+      if (kind === 'error') pItem.setAttribute('role', 'alert');
+      if (icon) {
+        const i = pDoc.createElement('span');
+        i.className = 'toast-icon';
+        i.innerHTML = iconHtml(icon, 14);
+        pItem.append(i);
+      }
+      pItem.append(
+        Object.assign(pDoc.createElement('span'), { className: 'toast-text', textContent: text }),
+      );
+      pipClose = () => {
+        if (!pItem.isConnected) return;
+        pItem.classList.add('leaving');
+        window.setTimeout(() => pItem.remove(), 180);
+      };
+      if (opts.action) {
+        const b = Object.assign(pDoc.createElement('button'), {
+          type: 'button',
+          className: 'toast-action',
+          textContent: opts.action.label,
+        });
+        b.addEventListener('click', () => {
+          used = true;
+          opts.action!.run();
+          close();
+        });
+        pItem.append(b);
+      }
+      const px = Object.assign(pDoc.createElement('button'), {
+        type: 'button',
+        className: 'toast-close',
+        innerHTML: iconHtml('x', 12),
+      });
+      px.setAttribute('aria-label', 'Fechar aviso');
+      px.addEventListener('click', close);
+      pItem.append(px);
+      pipToasterBox.append(pItem);
+      while (pipToasterBox.children.length > MAX_TOASTS) {
+        (pipToasterBox.firstElementChild as HTMLElement)
+          .querySelector<HTMLButtonElement>('.toast-close')
+          ?.click();
+        break;
+      }
+    }
     while (this.box.children.length > MAX_TOASTS) {
       (this.box.firstElementChild as HTMLElement)
         .querySelector<HTMLButtonElement>('.toast-close')!
@@ -87,6 +137,21 @@ export class Toaster {
 }
 
 let shared: Toaster | null = null;
+let pipToasterBox: HTMLElement | null = null;
+
+/** Anexa um container de avisos (toasts) à janela flutuante se ela estiver ativa. */
+export function attachToasterToPip(doc: Document): () => void {
+  const box = doc.createElement('div');
+  box.className = 'toasts pip-toasts';
+  box.setAttribute('role', 'status');
+  box.setAttribute('aria-live', 'polite');
+  doc.body.append(box);
+  pipToasterBox = box;
+  return () => {
+    box.remove();
+    if (pipToasterBox === box) pipToasterBox = null;
+  };
+}
 
 /** Cria a pilha de avisos da página (se ainda não existe). */
 export function mountToasts(): Toaster {

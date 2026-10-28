@@ -67,6 +67,8 @@ export function openPersonMenu(
   before?: () => void,
 ): void {
   closePersonMenu();
+  const doc = anchor.ownerDocument ?? document;
+  const win = doc.defaultView ?? window;
   const menu = Object.assign(document.createElement('div'), { className: 'person-menu' });
   menu.setAttribute('role', 'menu');
   menu.setAttribute('aria-label', p.name);
@@ -75,8 +77,8 @@ export function openPersonMenu(
     if (current !== close) return;
     current = null;
     menu.remove();
-    document.removeEventListener('pointerdown', onOutside, true);
-    document.removeEventListener('keydown', onKey, true);
+    doc.removeEventListener('pointerdown', onOutside, true);
+    doc.removeEventListener('keydown', onKey, true);
     anchor.focus({ preventScroll: true });
   };
   for (const item of personMenuItems(p, a)) {
@@ -107,16 +109,16 @@ export function openPersonMenu(
       buttons[(at + step + buttons.length) % buttons.length]?.focus();
     }
   };
-  document.body.append(menu);
+  doc.body.append(menu);
   // Do lado da pessoa clicada, sem sair da tela.
   const r = anchor.getBoundingClientRect();
   const m = menu.getBoundingClientRect();
-  const left = Math.min(Math.max(8, r.left), window.innerWidth - m.width - 8);
-  const below = r.bottom + 4 + m.height <= window.innerHeight - 8;
+  const left = Math.min(Math.max(8, r.left), win.innerWidth - m.width - 8);
+  const below = r.bottom + 4 + m.height <= win.innerHeight - 8;
   menu.style.left = `${left}px`;
   menu.style.top = `${below ? r.bottom + 4 : Math.max(8, r.top - m.height - 4)}px`;
   current = close;
-  document.addEventListener('pointerdown', onOutside, true);
-  document.addEventListener('keydown', onKey, true);
+  doc.addEventListener('pointerdown', onOutside, true);
+  doc.addEventListener('keydown', onKey, true);
   menu.querySelector('button')?.focus();
 }

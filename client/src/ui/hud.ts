@@ -26,6 +26,8 @@ export interface Hud {
   setDecorLocked(locked: boolean): void;
   /** Mostra o seu status no botão (inclusive o ausente automático). */
   setStatus(status: Status): void;
+  /** Estado da janela flutuante no Windows (Document PiP). */
+  setPipActive(on: boolean): void;
 }
 
 /** Nome da sala, barra de baixo em grupos e a coluna de câmera e som (agem sobre a cena atual). */
@@ -52,6 +54,9 @@ export function mountHud(opts: {
   /** Liga/desliga o som de mensagem; devolve o novo estado. */
   onToggleSound: () => boolean;
   soundOn: boolean;
+  /** Alterna a janela flutuante Always-on-Top no Windows. */
+  onTogglePip?: () => void;
+  pipSupported?: boolean;
 }): Hud {
   // Fase 41: só o nome da sala no canto (as dicas vão para a ajuda).
   const card = document.createElement('header');
@@ -89,6 +94,13 @@ export function mountHud(opts: {
   };
   renderSound(opts.soundOn);
   zoom.prepend(soundBtn);
+
+  let pipBtn: HTMLButtonElement | undefined;
+  if (opts.onTogglePip) {
+    pipBtn = button('pip', 'Janela flutuante no Windows (Always on Top)', opts.onTogglePip);
+    pipBtn.classList.add('hud-pip');
+    zoom.prepend(pipBtn);
+  }
 
   // Configurações (Fase 43): tema, texto, movimento, som ambiente e notificações.
   const settingsBtn = button('settings', 'Configurações', opts.onOpenSettings);
@@ -213,12 +225,16 @@ export function mountHud(opts: {
   const annItem = mobileItem('megaphone', 'Avisos', annBtn);
   const agendaItem = mobileItem('calendar', 'Agenda', agendaBtn);
   const decorItem = mobileItem('armchair', 'Decorar', decorBtn);
+  const pipMenuItem = opts.onTogglePip
+    ? menuItem('pip', 'Janela flutuante (PiP)', opts.onTogglePip)
+    : null;
   moreMenu.append(
     statusItem,
     deskItem,
     annItem,
     agendaItem,
     decorItem,
+    ...(pipMenuItem ? [pipMenuItem] : []),
     helpBtn,
     editRoomBtn,
     adminBtn,
@@ -305,6 +321,16 @@ export function mountHud(opts: {
     },
     setSoundOn(on) {
       renderSound(on);
+    },
+    setPipActive(on) {
+      if (!pipBtn) return;
+      pipBtn.classList.toggle('on', on);
+      const label = on
+        ? 'Janela flutuante ativa (clique para trazer de volta)'
+        : 'Janela flutuante no Windows (Always on Top)';
+      pipBtn.title = label;
+      pipBtn.setAttribute('aria-label', label);
+      pipBtn.setAttribute('aria-pressed', String(on));
     },
     setRoomName(name) {
       title.textContent = name;

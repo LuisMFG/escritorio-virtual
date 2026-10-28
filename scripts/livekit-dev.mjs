@@ -4,22 +4,30 @@
 // normal e só as chamadas ficam sem áudio e vídeo.
 import { spawn, spawnSync } from 'node:child_process';
 import console from 'node:console';
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
 import process from 'node:process';
 import { setInterval } from 'node:timers';
 
 const args = ['--dev', '--bind', process.env.LIVEKIT_BIND ?? '127.0.0.1'];
 if (process.env.LIVEKIT_NODE_IP) args.push('--node-ip', process.env.LIVEKIT_NODE_IP);
 
-const found = spawnSync('livekit-server', ['--version'], { stdio: 'ignore' }).status === 0;
-if (!found) {
+const localExe = resolve(process.cwd(), process.platform === 'win32' ? 'livekit-server.exe' : 'livekit-server');
+const cmd = existsSync(localExe)
+  ? localExe
+  : spawnSync('livekit-server', ['--version'], { stdio: 'ignore' }).status === 0
+    ? 'livekit-server'
+    : null;
+
+if (!cmd) {
   console.warn(
     '[livekit] livekit-server não encontrado: as chamadas não vão ligar áudio e vídeo. ' +
-      'Instale com `brew install livekit`.',
+      'Instale com `brew install livekit` ou mantenha livekit-server.exe na raiz.',
   );
   // Fica de pé para não derrubar os outros processos do `npm run dev`.
   setInterval(() => undefined, 1 << 30);
 } else {
-  const child = spawn('livekit-server', args, { stdio: ['ignore', 'inherit', 'inherit'] });
+  const child = spawn(cmd, args, { stdio: ['ignore', 'inherit', 'inherit'] });
   const stop = () => child.kill('SIGTERM');
   process.on('SIGINT', stop);
   process.on('SIGTERM', stop);

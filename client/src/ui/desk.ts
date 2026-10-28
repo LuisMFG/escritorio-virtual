@@ -36,6 +36,10 @@ export class DeskChip {
     document.body.append(this.el);
   }
 
+  get element(): HTMLElement {
+    return this.el;
+  }
+
   update(ctx: DeskContext): void {
     this.ctx = ctx;
     // Já sentou na própria mesa: o convite não faz mais sentido.

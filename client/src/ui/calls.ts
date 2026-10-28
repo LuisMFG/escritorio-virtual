@@ -23,10 +23,12 @@ export function openCallInvite(
   target: { name: string },
   adding: boolean,
   send: (reason: string) => void,
+  targetDoc: Document = document,
 ): void {
-  const backdrop = document.createElement('div');
+  const doc = targetDoc;
+  const backdrop = doc.createElement('div');
   backdrop.className = 'modal-backdrop';
-  const sheet = document.createElement('form');
+  const sheet = doc.createElement('form');
   sheet.className = 'sheet call-invite';
   sheet.setAttribute('role', 'dialog');
   sheet.setAttribute('aria-modal', 'true');
@@ -48,7 +50,7 @@ export function openCallInvite(
   const input = sheet.querySelector<HTMLInputElement>('input[name=reason]')!;
   const chips = sheet.querySelector('.call-reasons')!;
   for (const r of CALL_REASONS) {
-    const b = Object.assign(document.createElement('button'), {
+    const b = Object.assign(doc.createElement('button'), {
       type: 'button',
       className: 'decor-chip',
       textContent: r,
@@ -60,15 +62,15 @@ export function openCallInvite(
     chips.append(b);
   }
   backdrop.append(sheet);
-  document.body.append(backdrop);
+  doc.body.append(backdrop);
   const close = () => {
     backdrop.remove();
-    document.removeEventListener('keydown', onKey);
+    doc.removeEventListener('keydown', onKey);
   };
   const onKey = (e: KeyboardEvent) => {
     if (e.key === 'Escape') close();
   };
-  document.addEventListener('keydown', onKey);
+  doc.addEventListener('keydown', onKey);
   backdrop.addEventListener('pointerdown', (e) => {
     if (e.target === backdrop) close();
   });
@@ -436,6 +438,16 @@ export class CallPanel {
     if (this.state) this.syncTiles();
     this.renderHead();
     this.updateMini();
+  }
+
+  /** Elemento do painel da chamada para exibição na janela flutuante (Document PiP). */
+  get element(): HTMLElement {
+    return this.el;
+  }
+
+  /** Elemento do mini-player para exibição na janela flutuante (Document PiP). */
+  get miniElement(): HTMLElement {
+    return this.mini.element;
   }
 
   /** Qualidade da conexão de cada um (o pontinho no canto do quadro). */
@@ -1060,6 +1072,10 @@ class CallMini {
   hide(): void {
     this.el.hidden = true;
     this.videoRef = bind(this.video, this.videoRef, null);
+  }
+
+  get element(): HTMLElement {
+    return this.el;
   }
 
   update(info: MiniInfo): void {

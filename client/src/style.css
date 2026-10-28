@@ -9109,3 +9109,763 @@ kbd {
     display: none;
   }
 }
+
+
+/* ---------- Janela Flutuante no Windows (Document Picture-in-Picture) ---------- */
+
+.hud-zoom button.hud-pip.on {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+  color: var(--accent-text);
+}
+
+.pip-shell {
+  display: flex;
+  flex-direction: column;
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+.pip-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: var(--surface-1);
+  border-bottom: 1px solid var(--border);
+  user-select: none;
+  font-size: var(--font-sm);
+  font-weight: 500;
+  z-index: 10;
+  flex-shrink: 0;
+}
+
+.pip-room-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.pip-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--ok);
+  flex-shrink: 0;
+}
+
+.pip-room-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.pip-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.pip-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--card-border);
+  background: var(--surface-2);
+  color: var(--text);
+  cursor: pointer;
+  padding: 0;
+  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+
+.pip-btn:hover {
+  background: var(--surface-3);
+  border-color: var(--border);
+}
+
+.pip-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.pip-btn.pip-btn-mic.muted {
+  background: var(--danger-tint);
+  border-color: var(--danger);
+  color: var(--danger-text);
+}
+
+.pip-btn.pip-btn-restore:hover {
+  color: var(--accent-text);
+}
+
+.pip-btn.pip-btn-aspect.on {
+  color: var(--accent);
+}
+
+@media (max-width: 360px) {
+  .pip-topbar {
+    padding: 0 4px;
+    height: 32px;
+  }
+  .pip-topbar-actions {
+    gap: 2px;
+  }
+  .pip-btn {
+    width: 24px;
+    height: 24px;
+  }
+}
+
+@media (max-width: 290px) {
+  .pip-btn.pip-btn-zoom {
+    display: none;
+  }
+}
+
+.pip-main-view {
+  flex: 1;
+  display: flex;
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.pip-canvas-host {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  min-width: 0;
+  min-height: 0;
+}
+
+.pip-canvas-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  flex-shrink: 0;
+}
+
+.pip-canvas-box canvas,
+.pip-canvas-host canvas {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain;
+  display: block;
+  image-rendering: auto !important;
+  touch-action: none;
+}
+
+.pip-sidebar {
+  width: 230px;
+  height: 100%;
+  background: var(--surface-1);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex-shrink: 0;
+  z-index: 10;
+}
+
+.pip-sidebar[hidden] {
+  display: none !important;
+}
+
+.pip-btn.pip-btn-chat.on {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+  color: var(--accent-text);
+}
+
+.pip-body-window .pip-sidebar .chat-history {
+  position: static !important;
+  width: 100% !important;
+  height: 100% !important;
+  margin: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.pip-body-window .pip-sidebar .chat-history .chat-log {
+  flex: 1;
+  overflow-y: auto;
+  max-height: none !important;
+  padding: 6px 10px;
+}
+
+.pip-body-window .pip-sidebar .chat-history summary {
+  padding: 6px 10px;
+  font-size: 11px;
+}
+
+.pip-placeholder {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  z-index: 5;
+  text-align: center;
+  padding: 16px;
+}
+
+.pip-placeholder-content {
+  max-width: 380px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 28px 20px;
+  box-shadow: var(--shadow-2);
+}
+
+.pip-placeholder-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-tint);
+  color: var(--accent);
+}
+
+.pip-placeholder h2 {
+  margin: 0;
+  font-size: var(--font-lg);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.pip-placeholder p {
+  margin: 0;
+  font-size: var(--font-md);
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.pip-placeholder-btn {
+  margin-top: 6px;
+  padding: 10px 18px;
+  font-size: var(--font-md);
+  font-weight: 500;
+  border-radius: var(--radius-md);
+  border: none;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  cursor: pointer;
+  transition: opacity var(--dur) var(--ease);
+}
+
+.pip-placeholder-btn:hover {
+  opacity: 0.9;
+}
+
+
+.pip-bottombar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: var(--surface-1);
+  border-top: 1px solid var(--border);
+  z-index: 10;
+  flex-shrink: 0;
+}
+
+.pip-chat-input {
+  flex: 1;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--card-border);
+  background: var(--surface-sunken);
+  color: var(--text);
+  font-size: var(--font-sm);
+  outline: none;
+  font-family: inherit;
+  transition: border-color var(--dur) var(--ease);
+}
+
+.pip-chat-input:focus {
+  border-color: var(--accent);
+}
+
+.pip-chat-input::placeholder {
+  color: var(--muted);
+}
+
+.pip-btn.pip-btn-send {
+  color: var(--accent-text);
+}
+
+.pip-btn.pip-btn-send:hover {
+  background: var(--accent-tint);
+}
+
+
+/* Chamadas e Notificações na Janela Flutuante (PiP) */
+.pip-call-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--ok-tint, rgba(46, 204, 113, 0.15));
+  color: var(--ok, #2ecc71);
+  font-size: 11px;
+  font-weight: 600;
+  user-select: none;
+  animation: pip-fade-in 0.2s ease-out;
+}
+
+.pip-call-pill[hidden] {
+  display: none !important;
+}
+
+.pip-call-pill-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--ok, #2ecc71);
+  animation: pip-pulse 1.5s infinite;
+}
+
+.pip-btn.pip-btn-call-leave {
+  background: var(--danger-tint, rgba(231, 76, 60, 0.15));
+  border-color: var(--danger, #e74c3c);
+  color: var(--danger-text, #e74c3c);
+}
+
+.pip-btn.pip-btn-call-leave:hover {
+  background: var(--danger, #e74c3c);
+  color: #fff;
+}
+
+.pip-incoming-container {
+  position: absolute;
+  top: 40px;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  pointer-events: none;
+}
+
+.pip-incoming-call-card {
+  pointer-events: auto;
+  width: 100%;
+  max-width: 360px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: pip-slide-down 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes pip-slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pip-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.pip-call-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.pip-call-icon-wrap {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-pill);
+  background: var(--ok-tint, rgba(46, 204, 113, 0.15));
+  color: var(--ok, #2ecc71);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  animation: pip-pulse 1.5s infinite;
+}
+
+@keyframes pip-pulse {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(46, 204, 113, 0.4); }
+  70% { transform: scale(1.06); box-shadow: 0 0 0 6px rgba(46, 204, 113, 0); }
+  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(46, 204, 113, 0); }
+}
+
+.pip-call-text-wrap {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--font-sm);
+  line-height: 1.35;
+}
+
+.pip-call-caller {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.pip-call-prompt {
+  color: var(--text);
+}
+
+.pip-call-reason {
+  margin: 2px 0 0 0;
+  font-size: var(--font-xs);
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pip-call-members {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.pip-call-time-bar {
+  width: 100%;
+  height: 3px;
+  background: var(--surface-sunken);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+
+.pip-call-time-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.25s linear;
+}
+
+.pip-call-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.pip-btn-call-decline {
+  padding: 6px 12px;
+  font-size: var(--font-xs);
+  font-weight: 500;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  cursor: pointer;
+  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+
+.pip-btn-call-decline:hover {
+  background: var(--danger-tint, rgba(231, 76, 60, 0.15));
+  border-color: var(--danger, #e74c3c);
+  color: var(--danger-text, #e74c3c);
+}
+
+.pip-btn-call-accept {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  font-size: var(--font-xs);
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: var(--ok, #2ecc71);
+  color: #fff;
+  cursor: pointer;
+  transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease);
+}
+
+.pip-btn-call-accept:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+
+/* ---------- Painel e Mini-Player da Chamada dentro da Janela Flutuante (PiP) ---------- */
+.pip-body-window .call-panel {
+  position: absolute !important;
+  top: 40px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  width: auto !important;
+  min-width: 220px !important;
+  max-width: calc(100vw - 16px) !important;
+  max-height: calc(100vh - 84px) !important;
+  overflow-y: auto !important;
+  z-index: 35 !important;
+  padding: 8px 10px !important;
+  gap: 6px !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6) !important;
+}
+
+.pip-body-window .call-panel.expanded {
+  width: calc(100vw - 16px) !important;
+  max-height: calc(100vh - 44px) !important;
+  top: 40px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+}
+
+.pip-body-window .call-panel .call-grid {
+  max-height: calc(100vh - 160px);
+  overflow-y: auto;
+}
+
+.pip-body-window .call-panel .call-tile {
+  min-width: 80px;
+  min-height: 60px;
+}
+
+.pip-body-window .call-panel .call-controls {
+  padding-top: 4px;
+  gap: 4px;
+}
+
+.pip-body-window .call-panel .call-controls .btn-icon,
+.pip-body-window .call-panel .call-controls button {
+  padding: 6px 8px;
+  font-size: var(--font-xs);
+}
+
+.pip-body-window .call-mini {
+  position: absolute !important;
+  bottom: 46px !important;
+  right: 12px !important;
+  left: auto !important;
+  top: auto !important;
+  transform: none !important;
+  width: 170px !important;
+  z-index: 35 !important;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5) !important;
+}
+
+
+/* ---------- Cartão de Avatar / Menu do Personagem no PiP ---------- */
+.pip-body-window .avatar-card {
+  position: absolute !important;
+  z-index: 60 !important;
+  padding: 8px 10px 8px 6px !important;
+  gap: 8px !important;
+  max-width: calc(100vw - 16px) !important;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.7) !important;
+}
+
+.pip-body-window .avatar-card img {
+  width: 48px !important;
+  height: 82px !important;
+}
+
+.pip-body-window .avatar-card h3 {
+  font-size: 13px !important;
+}
+
+.pip-body-window .avatar-card p {
+  font-size: 11px !important;
+}
+
+.pip-body-window .avatar-card .btn-secondary,
+.pip-body-window .avatar-card .card-call {
+  padding: 4px 8px !important;
+  font-size: 11px !important;
+}
+
+/* ---------- Modal de Motivo da Chamada no PiP ---------- */
+.pip-body-window .modal-backdrop {
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 65 !important;
+  padding: 8px !important;
+  background: rgba(0, 0, 0, 0.65) !important;
+  display: grid !important;
+  place-items: center !important;
+}
+
+.pip-body-window .modal-backdrop > .sheet.call-invite {
+  width: min(340px, calc(100vw - 16px)) !important;
+  max-height: calc(100vh - 16px) !important;
+  font-size: 12px !important;
+  border-radius: var(--radius-lg) !important;
+}
+
+.pip-body-window .modal-backdrop > .sheet.call-invite .sheet-head {
+  padding: 8px 12px !important;
+}
+
+.pip-body-window .modal-backdrop > .sheet.call-invite .sheet-head h2 {
+  font-size: 13px !important;
+}
+
+.pip-body-window .modal-backdrop > .sheet.call-invite .sheet-body {
+  padding: 10px 12px !important;
+  gap: 8px !important;
+}
+
+.pip-body-window .modal-backdrop > .sheet.call-invite input {
+  padding: 6px 8px !important;
+  font-size: 12px !important;
+}
+
+.pip-body-window .modal-backdrop > .sheet.call-invite .call-reasons {
+  gap: 4px !important;
+}
+
+.pip-body-window .modal-backdrop > .sheet.call-invite .decor-chip {
+  padding: 3px 8px !important;
+  font-size: 11px !important;
+}
+
+.pip-body-window .modal-backdrop > .sheet.call-invite .call-send {
+  padding: 6px 12px !important;
+  font-size: 12px !important;
+}
+
+/* ---------- Avisos (Toasts) na Janela Flutuante (ex.: recusou chamada, chamando...) ---------- */
+.pip-body-window .toasts {
+  position: absolute !important;
+  bottom: 46px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  z-index: 55 !important;
+  max-width: calc(100vw - 16px) !important;
+}
+
+.pip-body-window .toast-item {
+  max-width: calc(100vw - 24px) !important;
+  padding: 6px 10px !important;
+  font-size: var(--font-xs) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* ---------- Desk Chip (Minha Mesa) na Janela Flutuante ---------- */
+.pip-shell .desk-chip {
+  position: absolute !important;
+  left: 50% !important;
+  bottom: 46px !important;
+  transform: translateX(-50%) !important;
+  max-width: calc(100% - 16px) !important;
+  z-index: 25 !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45) !important;
+  padding: 4px 10px !important;
+  font-size: 11px !important;
+  gap: 6px !important;
+  background: var(--surface-1) !important;
+  border: 1px solid var(--border) !important;
+}
+
+.pip-shell:has(.pip-bottombar[hidden]) .desk-chip,
+.pip-shell:not(:has(.pip-bottombar)) .desk-chip {
+  bottom: 12px !important;
+}
+
+.pip-shell .desk-chip .desk-chip-text {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  font-size: 11px !important;
+}
+
+.pip-shell .desk-chip .btn-small {
+  padding: 3px 8px !important;
+  font-size: 11px !important;
+  white-space: nowrap !important;
+}
+
+.pip-shell .desk-chip > svg {
+  width: 14px !important;
+  height: 14px !important;
+  flex-shrink: 0 !important;
+}
+
+/* ---------- Menus de Pessoas e Painéis no PiP ---------- */
+.pip-body-window .person-menu {
+  position: absolute !important;
+  z-index: 70 !important;
+  max-width: calc(100vw - 16px) !important;
+  font-size: 12px !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5) !important;
+}
+
+.pip-body-window .person-menu button {
+  min-height: 28px !important;
+  padding: 4px 8px !important;
+  font-size: 12px !important;
+}
+
+.pip-body-window .tv-panel,
+.pip-body-window .ttt-panel,
+.pip-body-window .arcade-panel {
+  position: absolute !important;
+  top: 36px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  max-width: calc(100vw - 16px) !important;
+  max-height: calc(100vh - 44px) !important;
+  z-index: 55 !important;
+  font-size: 12px !important;
+}
+
+.pip-body-window .modal-backdrop > .sheet:not(.call-invite),
+.pip-body-window .modal-backdrop > .editor {
+  max-width: min(380px, calc(100vw - 16px)) !important;
+  max-height: calc(100vh - 24px) !important;
+  font-size: 12px !important;
+  border-radius: var(--radius-lg) !important;
+}

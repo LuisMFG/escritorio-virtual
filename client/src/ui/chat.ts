@@ -745,6 +745,11 @@ export class ChatPanel {
     return this.history.open;
   }
 
+  /** Elemento do histórico lateral para uso em modo PiP/janela flutuante. */
+  get historyElement(): HTMLDetailsElement {
+    return this.history;
+  }
+
   private renderSummary(): void {
     const label = Object.assign(document.createElement('span'), {
       className: 'chat-summary-label',

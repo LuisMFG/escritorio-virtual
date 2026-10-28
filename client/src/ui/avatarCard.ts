@@ -51,6 +51,10 @@ export interface AvatarCardHandlers {
 export class AvatarCard {
   private readonly root = document.createElement('div');
 
+  get element(): HTMLElement {
+    return this.root;
+  }
+
   constructor(private readonly on: AvatarCardHandlers) {
     this.root.className = 'avatar-card';
     this.root.setAttribute('role', 'dialog');
@@ -209,10 +213,20 @@ export class AvatarCard {
     this.root.replaceChildren(img, text);
     this.root.hidden = false;
 
+    const doc = this.root.ownerDocument ?? document;
+    const win = doc.defaultView ?? window;
+    if (doc !== document) {
+      doc.addEventListener('pointerdown', (e) => {
+        if (!this.root.hidden && !this.root.contains(e.target as Node)) this.hide();
+      }, { capture: true, once: true });
+      win.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') this.hide();
+      }, { once: true });
+    }
     // Ao lado do clique, sem sair da tela.
     const { width, height } = this.root.getBoundingClientRect();
-    const x = Math.min(Math.max(8, at.x + 16), window.innerWidth - width - 8);
-    const y = Math.min(Math.max(8, at.y - height / 2), window.innerHeight - height - 8);
+    const x = Math.min(Math.max(8, at.x + 16), win.innerWidth - width - 8);
+    const y = Math.min(Math.max(8, at.y - height / 2), win.innerHeight - height - 8);
     this.root.style.left = `${x}px`;
     this.root.style.top = `${y}px`;
     actions.querySelector('button')?.focus();
