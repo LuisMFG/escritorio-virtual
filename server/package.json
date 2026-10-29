@@ -20,7 +20,7 @@
     "@colyseus/sdk": "0.18.5",
     "@colyseus/ws-transport": "0.18.4",
     "@office/shared": "*",
-    "better-sqlite3": "12.11.1",
+    "better-sqlite3": "^13.0.3",
     "drizzle-orm": "^0.45.4",
     "express": "^5.3.0",
     "livekit-server-sdk": "2.19.1",
