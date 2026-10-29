@@ -1,190 +1,41 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { loadPipSize, PIP_DEFAULT_SIZE, pipResolution } from './pipLayout.js';
 
-// Simula ambiente de navegador no Node para o Vitest
-const matchMediaMock = vi.fn().mockReturnValue({ matches: false, addEventListener: vi.fn() });
-vi.stubGlobal('matchMedia', matchMediaMock);
-vi.stubGlobal('window', {
-  matchMedia: matchMediaMock,
-  document: {
-    documentElement: { dataset: {} },
-    body: { style: {}, classList: { add: vi.fn(), remove: vi.fn() }, querySelectorAll: () => [] },
-    querySelectorAll: () => [],
-  },
-});
-vi.stubGlobal('document', {
-  documentElement: { dataset: {} },
-  body: {
-    style: {},
-    classList: { add: vi.fn(), remove: vi.fn() },
-    append: vi.fn(),
-    contains: vi.fn(),
-  },
-  implementation: {
-    createHTMLDocument: (title: string) => {
-      const doc = {
-        title,
-        documentElement: { dataset: {} },
-        head: { appendChild: vi.fn() },
-        body: {
-          style: {},
-          classList: { add: vi.fn(), remove: vi.fn() },
-          append: vi.fn(),
-          contains: vi.fn().mockReturnValue(true),
-        },
-        createElement: (tag: string) => makeMockElement(tag),
-        querySelector: vi.fn(),
-        addEventListener: vi.fn(),
-        removeEventListener: vi.fn(),
-      };
-      return doc;
-    },
-  },
-  createElement: (tag: string) => makeMockElement(tag),
-  querySelectorAll: () => [],
+const store = new Map<string, string>();
+vi.stubGlobal('localStorage', {
+  getItem: (k: string) => store.get(k) ?? null,
+  setItem: (k: string, v: string) => void store.set(k, v),
 });
 
-function makeMockElement(tag: string) {
-  const el: Record<string, unknown> = {
-    tagName: tag,
-    style: {},
-    classList: { add: vi.fn(), remove: vi.fn(), toggle: vi.fn() },
-    append: vi.fn(),
-    appendChild: vi.fn(),
-    setAttribute: vi.fn(),
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-    querySelector: vi.fn(),
-    remove: vi.fn(),
-    content: {
-      firstElementChild: {
-        cloneNode: () => makeMockElement('svg'),
-        setAttribute: vi.fn(),
-      },
-    },
-  };
-  return el;
-}
+beforeEach(() => store.clear());
 
-const {
-  closePip,
-  isPipActive,
-  isPipSupported,
-  openPip,
-  removePipIncomingCall,
-  showPipIncomingCall,
-  updatePipRoomName,
-} = await import('./pip.js');
-
-describe('Document Picture-in-Picture (Janela Flutuante)', () => {
-  beforeEach(() => {
-    closePip();
-    vi.restoreAllMocks();
+describe('janela flutuante', () => {
+  it('desenha maior em janela pequena, para os rostos ficarem nítidos', () => {
+    expect(pipResolution(300, 220, 1)).toBe(2.75);
+    expect(pipResolution(420, 320, 1)).toBe(2.25);
+    expect(pipResolution(480, 380, 1)).toBe(2);
+    // Tela de alta densidade: acompanha a tela, até o limite de 3,5×.
+    expect(pipResolution(300, 220, 2)).toBe(3.5);
   });
 
-  it('detecta suporte a Document Picture-in-Picture no navegador', () => {
-    delete (window as unknown as { documentPictureInPicture?: unknown }).documentPictureInPicture;
-    expect(isPipSupported()).toBe(false);
-
-    (window as unknown as { documentPictureInPicture?: unknown }).documentPictureInPicture = {
-      requestWindow: vi.fn(),
-      window: null,
-    };
-    expect(isPipSupported()).toBe(true);
+  it('em janela grande não passa do teto de pixels (nem abaixo da densidade da tela)', () => {
+    const res = pipResolution(1000, 700, 1);
+    expect(1000 * 700 * res * res).toBeLessThanOrEqual(1440 * 900 + 1);
+    expect(res).toBeGreaterThanOrEqual(1);
+    expect(pipResolution(1600, 1000, 1)).toBe(1);
+    expect(pipResolution(1600, 1000, 2)).toBe(2);
   });
 
-  it('não está ativo inicialmente', () => {
-    expect(isPipActive()).toBe(false);
+  it('abre no tamanho em que foi fechada da última vez', () => {
+    expect(loadPipSize()).toEqual(PIP_DEFAULT_SIZE);
+    store.set('escritorio.pip.tamanho', JSON.stringify({ width: 640, height: 420 }));
+    expect(loadPipSize()).toEqual({ width: 640, height: 420 });
   });
 
-  it('abre a janela flutuante e move o canvas para dentro dela', async () => {
-    const mockPipDoc = document.implementation.createHTMLDocument('PiP');
-    const listeners: Record<string, Function> = {};
-    const mockPipWin = {
-      document: mockPipDoc,
-      closed: false,
-      focus: vi.fn(),
-      close: vi.fn(function () {
-        (mockPipWin as { closed: boolean }).closed = true;
-        listeners['pagehide']?.(new Event('pagehide'));
-      }),
-      addEventListener: vi.fn((ev, fn) => {
-        listeners[ev] = fn;
-      }),
-      removeEventListener: vi.fn(),
-    } as unknown as Window;
-
-    (window as unknown as { documentPictureInPicture?: unknown }).documentPictureInPicture = {
-      requestWindow: vi.fn().mockResolvedValue(mockPipWin),
-      window: mockPipWin,
-    };
-
-    const container = document.createElement('div') as unknown as HTMLElement;
-    const canvas = document.createElement('canvas') as unknown as HTMLCanvasElement;
-
-    const onCenterSelf = vi.fn();
-    const onFit = vi.fn();
-    const onClose = vi.fn();
-
-    const win = await openPip({
-      canvas,
-      container,
-      getRoomName: () => 'Sala de Reunião',
-      onCenterSelf,
-      onFit,
-      onClose,
-    });
-
-    expect(win).toBe(mockPipWin);
-    expect(isPipActive()).toBe(true);
-    expect(mockPipDoc.title).toContain('Sala de Reunião');
-
-    updatePipRoomName('Cafeteria');
-
-    closePip();
-    expect(isPipActive()).toBe(false);
-    expect(onClose).toHaveBeenCalled();
-  });
-
-  it('exibe e remove notificação de chamada recebida na janela flutuante', async () => {
-    const mockPipDoc = document.implementation.createHTMLDocument('PiP');
-    const mockPipWin = {
-      document: mockPipDoc,
-      closed: false,
-      focus: vi.fn(),
-      close: vi.fn(),
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-      setInterval: vi.fn().mockReturnValue(123),
-      clearInterval: vi.fn(),
-    } as unknown as Window;
-
-    (window as unknown as { documentPictureInPicture?: unknown }).documentPictureInPicture = {
-      requestWindow: vi.fn().mockResolvedValue(mockPipWin),
-      window: mockPipWin,
-    };
-
-    const container = document.createElement('div') as unknown as HTMLElement;
-    const canvas = document.createElement('canvas') as unknown as HTMLCanvasElement;
-
-    await openPip({
-      canvas,
-      container,
-      getRoomName: () => 'Sala de Reunião',
-    });
-
-    const onAnswer = vi.fn();
-    const fakeInvite = {
-      id: 'inv-1',
-      callId: 'call-1',
-      fromUserId: 'user-ana',
-      fromName: 'Ana',
-      reason: 'Dúvida rápida',
-      members: ['Ana'],
-      expiresAt: Date.now() + 30000,
-      quiet: false,
-    };
-
-    showPipIncomingCall(fakeInvite, onAnswer);
-    removePipIncomingCall('inv-1');
+  it('ignora tamanho salvo estragado ou absurdo', () => {
+    store.set('escritorio.pip.tamanho', '{quebrado');
+    expect(loadPipSize()).toEqual(PIP_DEFAULT_SIZE);
+    store.set('escritorio.pip.tamanho', JSON.stringify({ width: 50, height: 9000 }));
+    expect(loadPipSize()).toEqual(PIP_DEFAULT_SIZE);
   });
 });

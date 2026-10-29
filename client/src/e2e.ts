@@ -136,7 +136,10 @@ export function exposeForTests(
   now: () => number = Date.now,
 ): void {
   if (!enabled) return;
-  const canvas = () => document.querySelector('canvas')!.getBoundingClientRect();
+  // Com a janela flutuante aberta, a sala está nela (e as coordenadas são as de lá).
+  const canvas = () =>
+    (window.documentPictureInPicture?.window?.document.querySelector('.pip-canvas-box canvas') ??
+      document.querySelector('canvas'))!.getBoundingClientRect();
   const toPage = (p: Point): Point => {
     const g = scene.world.toGlobal(p);
     const r = canvas();
