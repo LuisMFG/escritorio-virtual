@@ -1,7 +1,9 @@
+import type { Application } from 'pixi.js';
 import { icon, setIcon, type IconName } from './icons.js';
-import type { CallInvite } from '@office/shared';
+import { CHAT_MAX_LENGTH, type CallInvite } from '@office/shared';
 import { currentTheme, onThemeChange, THEME_BACKGROUND } from './theme.js';
 import { attachToasterToPip } from './toasts.js';
+import { isPipForwardable, loadPipSize, pipResolution, savePipSize } from './pipLayout.js';
 
 /**
  * Interface da API Document Picture-in-Picture nativa dos navegadores Chromium.
@@ -42,7 +44,7 @@ export interface PipCallStatus {
 }
 
 export interface OpenPipOptions {
-  app?: any;
+  app?: Application;
   canvas: HTMLCanvasElement;
   container: HTMLElement;
   chatElement?: HTMLElement;
@@ -61,11 +63,18 @@ export interface OpenPipOptions {
   onTurn?: (dir: 1 | -1) => void;
 }
 
+/** Handlers do EventSystem do Pixi 8 que tratam o arrastar e o soltar. */
+interface PixiPointerHandlers {
+  _onPointerMove(e: PointerEvent): void;
+  _onPointerUp(e: PointerEvent): void;
+}
+
 let activePipWindow: Window | null = null;
 let currentRoomTitleEl: HTMLElement | null = null;
 let micBtnEl: HTMLButtonElement | null = null;
 let leaveBtnEl: HTMLButtonElement | null = null;
 let callPillEl: HTMLElement | null = null;
+let callPillTextEl: HTMLElement | null = null;
 let currentGetCallStatus: (() => PipCallStatus) | null = null;
 
 interface PipIncomingInvite {
@@ -137,7 +146,9 @@ export function updatePipCallUi(): void {
     callPillEl.hidden = !status.active;
     if (status.active) {
       const count = status.members?.length ?? 0;
-      callPillEl.textContent = count > 1 ? `Em chamada (${count})` : 'Em chamada';
+      if (callPillTextEl) {
+        callPillTextEl.textContent = count > 1 ? `Em chamada (${count})` : 'Em chamada';
+      }
     }
   }
   if (!status.active) return;
@@ -270,13 +281,11 @@ export async function openPip(options: OpenPipOptions): Promise<Window | null> {
 
   currentGetCallStatus = options.getCallStatus ?? null;
 
+  const size = loadPipSize();
   let pipWin: Window | null = null;
   if (isPipSupported()) {
     try {
-      pipWin = await window.documentPictureInPicture!.requestWindow({
-        width: 480,
-        height: 380,
-      });
+      pipWin = await window.documentPictureInPicture!.requestWindow(size);
     } catch (err) {
       console.warn('Document Picture-in-Picture falhou, tentando fallback popup:', err);
       pipWin = null;
@@ -285,12 +294,12 @@ export async function openPip(options: OpenPipOptions): Promise<Window | null> {
 
   // Fallback para janela popup no Windows (ex.: Opera GX sem flag)
   if (!pipWin) {
-    const left = Math.max(0, (window.screen?.availWidth ?? 1200) - 500);
-    const top = Math.max(0, (window.screen?.availHeight ?? 800) - 420);
+    const left = Math.max(0, (window.screen?.availWidth ?? 1200) - size.width - 20);
+    const top = Math.max(0, (window.screen?.availHeight ?? 800) - size.height - 40);
     pipWin = window.open(
       '',
       'EscritorioVirtualFlutuante',
-      `width=480,height=380,left=${left},top=${top},resizable=yes,scrollbars=no,toolbar=no,menubar=no,location=no,status=no`,
+      `width=${size.width},height=${size.height},left=${left},top=${top},resizable=yes,scrollbars=no,toolbar=no,menubar=no,location=no,status=no`,
     );
     if (pipWin?.document) {
       pipWin.document.open();
@@ -307,33 +316,44 @@ export async function openPip(options: OpenPipOptions): Promise<Window | null> {
 
   activePipWindow = pipWin;
   if (options.app) {
-    options.app.resizeTo = null;
+    // Para de acompanhar o tamanho da aba (a janela cuida do tamanho); o Pixi aceita null,
+    // mas o tipo dele não declara.
+    (options.app as { resizeTo: Window | HTMLElement | null }).resizeTo = null;
   }
 
   const pipDoc = pipWin.document;
   pipDoc.title = `${options.getRoomName()} · Escritório Virtual (Flutuante)`;
 
-  // Copia o tema atual (dark/light) e background
+  // Copia as preferências do <html> (tema, animações, tamanho do texto) e acompanha as trocas.
+  const copyRoot = () => {
+    const from = document.documentElement;
+    const to = pipDoc.documentElement;
+    for (const { name } of [...to.attributes]) {
+      if (name.startsWith('data-') || name === 'style') to.removeAttribute(name);
+    }
+    for (const { name, value } of from.attributes) {
+      if (name.startsWith('data-') || name === 'style') to.setAttribute(name, value);
+    }
+  };
+  copyRoot();
+  const rootObserver =
+    typeof MutationObserver !== 'undefined' ? new MutationObserver(copyRoot) : null;
+  rootObserver?.observe(document.documentElement, { attributes: true });
   const theme = currentTheme();
-  pipDoc.documentElement.dataset.theme = theme;
   pipDoc.body.style.margin = '0';
   pipDoc.body.style.padding = '0';
   pipDoc.body.style.overflow = 'hidden';
   pipDoc.body.style.background = `#${THEME_BACKGROUND[theme].toString(16).padStart(6, '0')}`;
   pipDoc.body.classList.add('pip-body-window');
 
-  // Ajusta suavização durante downscaling no PiP
-  // (Pixi v8 gerencia roundPixels internamente no pipeline de shaders)
-
   // Copia estilos do documento pai para manter fontes, botões e cores idênticos
   for (const sheet of document.querySelectorAll('link[rel="stylesheet"], style')) {
     pipDoc.head.appendChild(sheet.cloneNode(true));
   }
 
-  // Sincroniza tema caso troque durante o uso do PiP
+  // O fundo acompanha o tema (o data-theme vem com as preferências do <html>).
   const stopTheme = onThemeChange((t) => {
     if (!pipWin.closed) {
-      pipDoc.documentElement.dataset.theme = t;
       pipDoc.body.style.background = `#${THEME_BACKGROUND[t].toString(16).padStart(6, '0')}`;
     }
   });
@@ -364,7 +384,8 @@ export async function openPip(options: OpenPipOptions): Promise<Window | null> {
   const callPillText = pipDoc.createElement('span');
   callPillText.textContent = 'Em chamada';
   callPill.append(callPillDot, callPillText);
-  callPillEl = callPillText;
+  callPillEl = callPill;
+  callPillTextEl = callPillText;
   roomInfo.append(callPill);
 
   const actions = pipDoc.createElement('div');
@@ -561,21 +582,8 @@ export async function openPip(options: OpenPipOptions): Promise<Window | null> {
     canvasBox.style.borderRadius = fillWindow ? '0' : 'var(--radius-sm)';
     canvasBox.style.boxShadow = fillWindow ? 'none' : '0 4px 16px rgba(0, 0, 0, 0.35)';
 
-    let targetResolution = 1;
-    if (options.app?.renderer) {
-      const pipDpr = activePipWindow.devicePixelRatio || window.devicePixelRatio || 1;
-      // Supersampling Anti-Aliasing (SSAA):
-      // Quando a janela flutuante estiver em dimensões reduzidas (ex: 240-450px), renderizamos
-      // o WebGL com resolução 2x a 3.5x superior e deixamos o CSS suavizar na saída (downsampling).
-      // Isso elimina o efeito serrilhado, restaura a integridade de olhos/bocas/roupas dos avatares
-      // e preserva a geometria das paredes/móveis mesmo em miniaturas de 280x210.
-      targetResolution = Math.min(3, Math.max(pipDpr, 2));
-      if (boxW < 360 || boxH < 280) {
-        targetResolution = Math.min(3.5, Math.max(pipDpr * 2, 2.75));
-      } else if (boxW < 480 || boxH < 360) {
-        targetResolution = Math.min(3, Math.max(pipDpr * 1.5, 2.25));
-      }
-    }
+    const pipDpr = activePipWindow.devicePixelRatio || window.devicePixelRatio || 1;
+    const targetResolution = pipResolution(boxW, boxH, pipDpr);
 
     if (!force && boxW === lastW && boxH === lastH && targetResolution === lastRes) {
       return;
@@ -647,7 +655,7 @@ export async function openPip(options: OpenPipOptions): Promise<Window | null> {
     chatInput.type = 'text';
     chatInput.className = 'pip-chat-input';
     chatInput.placeholder = 'Conversar na sala... (Enter)';
-    chatInput.maxLength = 140;
+    chatInput.maxLength = CHAT_MAX_LENGTH;
 
     const sendBtn = pipDoc.createElement('button');
     sendBtn.type = 'button';
@@ -682,38 +690,43 @@ export async function openPip(options: OpenPipOptions): Promise<Window | null> {
     if (mini) shell.append(mini);
   }
 
-  const cardEl = typeof options.avatarCardElement === 'function' ? options.avatarCardElement() : options.avatarCardElement;
+  const cardEl =
+    typeof options.avatarCardElement === 'function'
+      ? options.avatarCardElement()
+      : options.avatarCardElement;
   if (cardEl) {
     shell.append(cardEl);
   }
 
-  const deskEl = typeof options.deskElement === 'function' ? options.deskElement() : options.deskElement;
+  const deskEl =
+    typeof options.deskElement === 'function' ? options.deskElement() : options.deskElement;
   if (deskEl) {
     shell.append(deskEl);
   }
 
-  // Observa document.body para mover automaticamente modais, diálogos e menus interativos para dentro do PiP
+  // Painéis que abrem no document.body vão para a janela, a não ser que a pessoa esteja
+  // mexendo na aba (aí o painel que ela abriu ali, como Agenda ou Equipe, fica na aba).
   const forwardedNodes = new Set<HTMLElement>();
-  const isForwardable = (node: Node): node is HTMLElement => {
-    if (!(node instanceof HTMLElement)) return false;
-    return (
-      node.classList.contains('modal-backdrop') ||
-      node.classList.contains('person-menu') ||
-      node.classList.contains('tv-panel') ||
-      node.classList.contains('ttt-panel') ||
-      node.classList.contains('arcade-panel') ||
-      node.classList.contains('reaction-picker') ||
-      node.classList.contains('desk-chip')
-    );
+  let usingTab = false;
+  // Só conta o que veio da pessoa: as teclas repassadas da janela também chegam à aba.
+  const onTabInput = (e: Event) => {
+    if (e.isTrusted) usingTab = true;
   };
+  const onPipInput = () => {
+    usingTab = false;
+  };
+  document.addEventListener('pointerdown', onTabInput, true);
+  document.addEventListener('keydown', onTabInput, true);
+  pipDoc.addEventListener('pointerdown', onPipInput, true);
+  pipDoc.addEventListener('keydown', onPipInput, true);
 
   let forwardObserver: MutationObserver | null = null;
   if (typeof MutationObserver !== 'undefined') {
     forwardObserver = new MutationObserver((mutations) => {
-      if (!activePipWindow || activePipWindow.closed) return;
+      if (!activePipWindow || activePipWindow.closed || usingTab) return;
       for (const m of mutations) {
         for (const node of m.addedNodes) {
-          if (isForwardable(node) && !shell.contains(node)) {
+          if (isPipForwardable(node) && !shell.contains(node)) {
             forwardedNodes.add(node);
             shell.append(node);
           }
@@ -725,7 +738,7 @@ export async function openPip(options: OpenPipOptions): Promise<Window | null> {
 
   // Move nós que já estiverem abertos no document.body
   for (const node of Array.from(document.body.children || [])) {
-    if (isForwardable(node) && !shell.contains(node)) {
+    if (isPipForwardable(node) && !shell.contains(node)) {
       forwardedNodes.add(node);
       shell.append(node);
     }
@@ -773,13 +786,16 @@ export async function openPip(options: OpenPipOptions): Promise<Window | null> {
   placeholder.append(phContent);
   options.container.append(placeholder);
 
-  // Conecta diretamente ao EventSystem do Pixi para cliques, caminhada e arraste
-  const pixiEvents = (options.app?.renderer as any)?.events;
+  // O Pixi escuta o arrastar e o soltar no document e no window da aba, não no canvas; com o
+  // canvas aqui, esses eventos só acontecem na janela. Repassa aos mesmos handlers do Pixi
+  // (internos: o original precisa ir junto, para o Pixi saber que o soltar foi no canvas).
+  // O teste de ponta a ponta da janela flutuante anda clicando nela e pega se mudarem.
+  const pixiEvents = options.app?.renderer.events as unknown as Partial<PixiPointerHandlers>;
   const onPipPointerMove = (e: PointerEvent) => {
-    pixiEvents?._onPointerMove(e);
+    if (typeof pixiEvents?._onPointerMove === 'function') pixiEvents._onPointerMove(e);
   };
   const onPipPointerUp = (e: PointerEvent) => {
-    pixiEvents?._onPointerUp(e);
+    if (typeof pixiEvents?._onPointerUp === 'function') pixiEvents._onPointerUp(e);
   };
 
   pipDoc.addEventListener('pointermove', onPipPointerMove, true);
@@ -825,7 +841,11 @@ export async function openPip(options: OpenPipOptions): Promise<Window | null> {
   }
 
   // Restauração segura quando a janela flutuante for fechada (pelo usuário ou via closePip)
+  let restored = false;
   const onPageHide = () => {
+    // beforeunload e pagehide chegam os dois: restaura uma vez só.
+    if (restored) return;
+    restored = true;
     stopTheme();
     if (resizeRaf) {
       const cancelRaf =
@@ -835,6 +855,10 @@ export async function openPip(options: OpenPipOptions): Promise<Window | null> {
       resizeRaf = 0;
     }
     resizeObserver?.disconnect();
+    rootObserver?.disconnect();
+    document.removeEventListener('pointerdown', onTabInput, true);
+    document.removeEventListener('keydown', onTabInput, true);
+    if (pipWin.innerWidth && pipWin.innerHeight) savePipSize(pipWin.innerWidth, pipWin.innerHeight);
     pipDoc.removeEventListener('pointermove', onPipPointerMove, true);
     pipWin.removeEventListener('pointerup', onPipPointerUp, true);
     canvasHost.removeEventListener('wheel', onHostWheel);
@@ -855,7 +879,10 @@ export async function openPip(options: OpenPipOptions): Promise<Window | null> {
     }
     forwardedNodes.clear();
 
-    const cardEl = typeof options.avatarCardElement === 'function' ? options.avatarCardElement() : options.avatarCardElement;
+    const cardEl =
+      typeof options.avatarCardElement === 'function'
+        ? options.avatarCardElement()
+        : options.avatarCardElement;
     if (cardEl) {
       document.body.append(cardEl);
     }
@@ -872,6 +899,7 @@ export async function openPip(options: OpenPipOptions): Promise<Window | null> {
     pipIncomingContainer = null;
     leaveBtnEl = null;
     callPillEl = null;
+    callPillTextEl = null;
 
     activePipWindow = null;
     currentRoomTitleEl = null;

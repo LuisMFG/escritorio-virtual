@@ -50,6 +50,8 @@ export interface AvatarCardHandlers {
 /** Cartão que aparece ao clicar num avatar: nome, status, sala e ações rápidas. */
 export class AvatarCard {
   private readonly root = document.createElement('div');
+  /** Documentos (janela flutuante) onde já fecha ao clicar fora. */
+  private readonly docs = new WeakSet<Document>();
 
   get element(): HTMLElement {
     return this.root;
@@ -213,15 +215,14 @@ export class AvatarCard {
     this.root.replaceChildren(img, text);
     this.root.hidden = false;
 
-    const doc = this.root.ownerDocument ?? document;
+    // Na janela flutuante: clicar fora também fecha (o Esc de lá já chega à aba).
+    const doc = this.root.ownerDocument;
     const win = doc.defaultView ?? window;
-    if (doc !== document) {
+    if (doc !== document && !this.docs.has(doc)) {
+      this.docs.add(doc);
       doc.addEventListener('pointerdown', (e) => {
         if (!this.root.hidden && !this.root.contains(e.target as Node)) this.hide();
-      }, { capture: true, once: true });
-      win.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') this.hide();
-      }, { once: true });
+      });
     }
     // Ao lado do clique, sem sair da tela.
     const { width, height } = this.root.getBoundingClientRect();

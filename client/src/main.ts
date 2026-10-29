@@ -919,7 +919,10 @@ async function start(): Promise<void> {
               );
             }
           } else {
-            overlay.notify('O navegador bloqueou a janela (verifique se popups estão permitidos).', { kind: 'error' });
+            overlay.notify(
+              'O navegador bloqueou a janela (verifique se popups estão permitidos).',
+              { kind: 'error' },
+            );
           }
         });
       }
@@ -1091,10 +1094,15 @@ async function start(): Promise<void> {
       const c = calls;
       if (!c) return;
       const targetDoc = getPipDocument() ?? document;
-      openCallInvite({ name }, Boolean(c.state), (reason) => {
-        c.invite(userId, reason);
-        overlay.notify(`Chamando ${name}…`);
-      }, targetDoc);
+      openCallInvite(
+        { name },
+        Boolean(c.state),
+        (reason) => {
+          c.invite(userId, reason);
+          overlay.notify(`Chamando ${name}…`);
+        },
+        targetDoc,
+      );
     },
     message: (userId, name) => openDm(userId, name),
     praise: (userId, name) => praise(userId, name),
@@ -1776,12 +1784,7 @@ async function start(): Promise<void> {
       attachCallElementsToPip(panel.element, panel.miniElement);
     }
     // Testes: simular a qualidade da conexão (o aviso de internet fraca).
-    if (E2E_MODE) {
-      (window as unknown as { __e2eCallPanel: CallPanel }).__e2eCallPanel = panel;
-      (window as unknown as { __e2eShowPipIncoming: typeof showPipIncomingCall }).__e2eShowPipIncoming = showPipIncomingCall;
-      (window as unknown as { __e2eNotify: typeof overlay.notify }).__e2eNotify = overlay.notify.bind(overlay);
-      (window as unknown as { __e2eAvatarCard: AvatarCard }).__e2eAvatarCard = avatarCard;
-    }
+    if (E2E_MODE) (window as unknown as { __e2eCallPanel: CallPanel }).__e2eCallPanel = panel;
     calls = new CallManager(l, me, {
       state: (st) => {
         panel.set(st);

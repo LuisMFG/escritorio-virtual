@@ -12,7 +12,10 @@ import { setInterval } from 'node:timers';
 const args = ['--dev', '--bind', process.env.LIVEKIT_BIND ?? '127.0.0.1'];
 if (process.env.LIVEKIT_NODE_IP) args.push('--node-ip', process.env.LIVEKIT_NODE_IP);
 
-const localExe = resolve(process.cwd(), process.platform === 'win32' ? 'livekit-server.exe' : 'livekit-server');
+const localExe = resolve(
+  process.cwd(),
+  process.platform === 'win32' ? 'livekit-server.exe' : 'livekit-server',
+);
 const cmd = existsSync(localExe)
   ? localExe
   : spawnSync('livekit-server', ['--version'], { stdio: 'ignore' }).status === 0

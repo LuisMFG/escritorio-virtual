@@ -9110,8 +9110,12 @@ kbd {
   }
 }
 
-
 /* ---------- Janela Flutuante no Windows (Document Picture-in-Picture) ---------- */
+
+/* Os botões e etiquetas da janela têm display próprio: o hidden precisa vencer. */
+.pip-body-window [hidden] {
+  display: none !important;
+}
 
 .hud-zoom button.hud-pip.on {
   border-color: var(--accent);
@@ -9129,7 +9133,12 @@ kbd {
   overflow: hidden;
   background: var(--bg);
   color: var(--text);
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
 }
 
 .pip-topbar {
@@ -9187,7 +9196,9 @@ kbd {
   color: var(--text);
   cursor: pointer;
   padding: 0;
-  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease);
+  transition:
+    background var(--dur) var(--ease),
+    border-color var(--dur) var(--ease);
 }
 
 .pip-btn:hover {
@@ -9276,7 +9287,7 @@ kbd {
   height: 100% !important;
   object-fit: contain;
   display: block;
-  image-rendering: auto !important;
+  image-rendering: auto;
   touch-action: none;
 }
 
@@ -9306,13 +9317,13 @@ kbd {
   position: static !important;
   width: 100% !important;
   height: 100% !important;
-  margin: 0 !important;
-  border: 0 !important;
-  border-radius: 0 !important;
-  box-shadow: none !important;
-  background: transparent !important;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
   display: flex !important;
-  flex-direction: column !important;
+  flex-direction: column;
 }
 
 .pip-body-window .pip-sidebar .chat-history .chat-log {
@@ -9394,7 +9405,6 @@ kbd {
   opacity: 0.9;
 }
 
-
 .pip-bottombar {
   display: flex;
   align-items: center;
@@ -9436,11 +9446,12 @@ kbd {
   background: var(--accent-tint);
 }
 
-
 /* Chamadas e Notificações na Janela Flutuante (PiP) */
 .pip-call-pill {
   display: inline-flex;
   align-items: center;
+  flex-shrink: 0;
+  white-space: nowrap;
   gap: 6px;
   padding: 2px 8px;
   border-radius: var(--radius-pill);
@@ -9516,8 +9527,12 @@ kbd {
 }
 
 @keyframes pip-fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .pip-call-head {
@@ -9540,9 +9555,18 @@ kbd {
 }
 
 @keyframes pip-pulse {
-  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(46, 204, 113, 0.4); }
-  70% { transform: scale(1.06); box-shadow: 0 0 0 6px rgba(46, 204, 113, 0); }
-  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(46, 204, 113, 0); }
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(46, 204, 113, 0.4);
+  }
+  70% {
+    transform: scale(1.06);
+    box-shadow: 0 0 0 6px rgba(46, 204, 113, 0);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(46, 204, 113, 0);
+  }
 }
 
 .pip-call-text-wrap {
@@ -9608,7 +9632,9 @@ kbd {
   background: var(--surface-2);
   color: var(--text);
   cursor: pointer;
-  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease);
+  transition:
+    background var(--dur) var(--ease),
+    border-color var(--dur) var(--ease);
 }
 
 .pip-btn-call-decline:hover {
@@ -9629,14 +9655,15 @@ kbd {
   background: var(--ok, #2ecc71);
   color: #fff;
   cursor: pointer;
-  transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease);
+  transition:
+    opacity var(--dur) var(--ease),
+    transform var(--dur) var(--ease);
 }
 
 .pip-btn-call-accept:hover {
   opacity: 0.9;
   transform: translateY(-1px);
 }
-
 
 /* ---------- Painel e Mini-Player da Chamada dentro da Janela Flutuante (PiP) ---------- */
 .pip-body-window .call-panel {
@@ -9648,12 +9675,12 @@ kbd {
   min-width: 220px !important;
   max-width: calc(100vw - 16px) !important;
   max-height: calc(100vh - 84px) !important;
-  overflow-y: auto !important;
-  z-index: 35 !important;
-  padding: 8px 10px !important;
-  gap: 6px !important;
-  border-radius: var(--radius-md) !important;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6) !important;
+  overflow-y: auto;
+  z-index: 35;
+  padding: 8px 10px;
+  gap: 6px;
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
 }
 
 .pip-body-window .call-panel.expanded {
@@ -9693,19 +9720,18 @@ kbd {
   top: auto !important;
   transform: none !important;
   width: 170px !important;
-  z-index: 35 !important;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5) !important;
+  z-index: 35;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
 }
-
 
 /* ---------- Cartão de Avatar / Menu do Personagem no PiP ---------- */
 .pip-body-window .avatar-card {
   position: absolute !important;
-  z-index: 60 !important;
-  padding: 8px 10px 8px 6px !important;
-  gap: 8px !important;
+  z-index: 60;
+  padding: 8px 10px 8px 6px;
+  gap: 8px;
   max-width: calc(100vw - 16px) !important;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.7) !important;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.7);
 }
 
 .pip-body-window .avatar-card img {
@@ -9714,67 +9740,67 @@ kbd {
 }
 
 .pip-body-window .avatar-card h3 {
-  font-size: 13px !important;
+  font-size: 13px;
 }
 
 .pip-body-window .avatar-card p {
-  font-size: 11px !important;
+  font-size: 11px;
 }
 
 .pip-body-window .avatar-card .btn-secondary,
 .pip-body-window .avatar-card .card-call {
-  padding: 4px 8px !important;
-  font-size: 11px !important;
+  padding: 4px 8px;
+  font-size: 11px;
 }
 
 /* ---------- Modal de Motivo da Chamada no PiP ---------- */
 .pip-body-window .modal-backdrop {
   position: absolute !important;
   inset: 0 !important;
-  z-index: 65 !important;
-  padding: 8px !important;
-  background: rgba(0, 0, 0, 0.65) !important;
+  z-index: 65;
+  padding: 8px;
+  background: rgba(0, 0, 0, 0.65);
   display: grid !important;
-  place-items: center !important;
+  place-items: center;
 }
 
 .pip-body-window .modal-backdrop > .sheet.call-invite {
   width: min(340px, calc(100vw - 16px)) !important;
   max-height: calc(100vh - 16px) !important;
-  font-size: 12px !important;
-  border-radius: var(--radius-lg) !important;
+  font-size: 12px;
+  border-radius: var(--radius-lg);
 }
 
 .pip-body-window .modal-backdrop > .sheet.call-invite .sheet-head {
-  padding: 8px 12px !important;
+  padding: 8px 12px;
 }
 
 .pip-body-window .modal-backdrop > .sheet.call-invite .sheet-head h2 {
-  font-size: 13px !important;
+  font-size: 13px;
 }
 
 .pip-body-window .modal-backdrop > .sheet.call-invite .sheet-body {
-  padding: 10px 12px !important;
-  gap: 8px !important;
+  padding: 10px 12px;
+  gap: 8px;
 }
 
 .pip-body-window .modal-backdrop > .sheet.call-invite input {
-  padding: 6px 8px !important;
-  font-size: 12px !important;
+  padding: 6px 8px;
+  font-size: 12px;
 }
 
 .pip-body-window .modal-backdrop > .sheet.call-invite .call-reasons {
-  gap: 4px !important;
+  gap: 4px;
 }
 
 .pip-body-window .modal-backdrop > .sheet.call-invite .decor-chip {
-  padding: 3px 8px !important;
-  font-size: 11px !important;
+  padding: 3px 8px;
+  font-size: 11px;
 }
 
 .pip-body-window .modal-backdrop > .sheet.call-invite .call-send {
-  padding: 6px 12px !important;
-  font-size: 12px !important;
+  padding: 6px 12px;
+  font-size: 12px;
 }
 
 /* ---------- Avisos (Toasts) na Janela Flutuante (ex.: recusou chamada, chamando...) ---------- */
@@ -9783,15 +9809,15 @@ kbd {
   bottom: 46px !important;
   left: 50% !important;
   transform: translateX(-50%) !important;
-  z-index: 55 !important;
+  z-index: 55;
   max-width: calc(100vw - 16px) !important;
 }
 
 .pip-body-window .toast-item {
   max-width: calc(100vw - 24px) !important;
-  padding: 6px 10px !important;
-  font-size: var(--font-xs) !important;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5) !important;
+  padding: 6px 10px;
+  font-size: var(--font-xs);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
 }
 
 /* ---------- Desk Chip (Minha Mesa) na Janela Flutuante ---------- */
@@ -9801,13 +9827,13 @@ kbd {
   bottom: 46px !important;
   transform: translateX(-50%) !important;
   max-width: calc(100% - 16px) !important;
-  z-index: 25 !important;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45) !important;
-  padding: 4px 10px !important;
-  font-size: 11px !important;
-  gap: 6px !important;
-  background: var(--surface-1) !important;
-  border: 1px solid var(--border) !important;
+  z-index: 25;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+  padding: 4px 10px;
+  font-size: 11px;
+  gap: 6px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
 }
 
 .pip-shell:has(.pip-bottombar[hidden]) .desk-chip,
@@ -9816,37 +9842,37 @@ kbd {
 }
 
 .pip-shell .desk-chip .desk-chip-text {
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-  white-space: nowrap !important;
-  font-size: 11px !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
 }
 
 .pip-shell .desk-chip .btn-small {
-  padding: 3px 8px !important;
-  font-size: 11px !important;
-  white-space: nowrap !important;
+  padding: 3px 8px;
+  font-size: 11px;
+  white-space: nowrap;
 }
 
 .pip-shell .desk-chip > svg {
   width: 14px !important;
   height: 14px !important;
-  flex-shrink: 0 !important;
+  flex-shrink: 0;
 }
 
 /* ---------- Menus de Pessoas e Painéis no PiP ---------- */
 .pip-body-window .person-menu {
   position: absolute !important;
-  z-index: 70 !important;
+  z-index: 70;
   max-width: calc(100vw - 16px) !important;
-  font-size: 12px !important;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5) !important;
+  font-size: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
 }
 
 .pip-body-window .person-menu button {
   min-height: 28px !important;
-  padding: 4px 8px !important;
-  font-size: 12px !important;
+  padding: 4px 8px;
+  font-size: 12px;
 }
 
 .pip-body-window .tv-panel,
@@ -9858,14 +9884,14 @@ kbd {
   transform: translateX(-50%) !important;
   max-width: calc(100vw - 16px) !important;
   max-height: calc(100vh - 44px) !important;
-  z-index: 55 !important;
-  font-size: 12px !important;
+  z-index: 55;
+  font-size: 12px;
 }
 
 .pip-body-window .modal-backdrop > .sheet:not(.call-invite),
 .pip-body-window .modal-backdrop > .editor {
   max-width: min(380px, calc(100vw - 16px)) !important;
   max-height: calc(100vh - 24px) !important;
-  font-size: 12px !important;
-  border-radius: var(--radius-lg) !important;
+  font-size: 12px;
+  border-radius: var(--radius-lg);
 }
