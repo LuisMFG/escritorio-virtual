@@ -1812,6 +1812,23 @@ As fases 52 e 53 vêm primeiro porque corrigem o que já existe e é usado todo 
   - **Login:** por rede (IP) sobe de 10 para 60 tentativas por minuto (a equipe toda no mesmo escritório entra junto); por conta, no máximo 10 senhas erradas em 15 minutos (vale até para usuários que não existem, para não revelar quem existe), e acertar zera a contagem.
 - **Testes:** retrato de ida e volta, retrato velho ignorado e uso único (`RestartSnapshot.test.ts`); sessão vencida, renovada e limpa (`UserService.test.ts`); aba com sessão encerrada desconectada e 🎂 à meia-noite (`OfficeRoom.test.ts`); cota (`uploads.test.ts`); teto do cache e temporários (`cachePrune.test.ts`); senhas erradas por conta (`auth.test.ts`); dia de Brasília (`accounts.test.ts`).
 
+### Janela flutuante (PR #2 do Lukas, revisado em 29/10/2026) ✅ implementada
+- **Origem:** PR #2 (Lukas Pinheiro): o escritório numa janela que fica por cima dos outros programas (Document Picture-in-Picture, com popup comum nos navegadores sem a API). O commit dele entra como está; os ajustes da revisão vêm em seguida.
+- **Como funciona** (`client/src/ui/pip.ts`): o canvas do Pixi muda para a janela, com barra própria (conversa lateral, mudo, sair da chamada, centralizar, enquadrar, zoom, 4:3 ou preencher, voltar), campo de conversa embaixo, avisos, convites de chamada com Atender/Recusar e o painel da chamada. A aba mostra **Trazer de volta para esta aba**. As setas viram o avatar e as outras teclas são repassadas à aba.
+- **Ajustes da revisão:**
+  - **Fora do assunto:** voltaram o `better-sqlite3` 13 do servidor e o `LICENSE` fora do `.gitignore`.
+  - **Botões de chamada:** mudo e sair só aparecem com chamada, porque o `[hidden]` agora vence o `display` dos botões. A etiqueta **Em chamada (n)** aparece de fato (antes ficava escondida na caixa de fora).
+  - **Painéis no lugar certo:** o que abre na aba (Agenda, Equipe, Perfil…) fica na aba; o que abre na janela, ou sozinho enquanto você está nela, vai para ela. Antes, tudo pulava para a janela.
+  - **Preferências:** o `<html>` da janela copia e acompanha `data-theme`, `data-motion` e o tamanho do texto. Antes, reduzir animações não valia lá.
+  - **Resolução:** 2× a 3,5× em janela pequena (nitidez), mas com teto de pixels (≈ 1440×900) em janela grande (`pipLayout.ts`).
+  - **Tamanho lembrado:** a janela abre no tamanho em que foi fechada.
+  - **Conversa e cartão:** o campo de conversa vai até 200 caracteres, como o chat; o cartão de pessoa fecha ao clicar fora sempre (antes, uma vez só).
+  - **Pixi:** os handlers internos do Pixi (`_onPointerMove`/`_onPointerUp`) estão tipados e protegidos, com o motivo comentado, e o teste de ponta a ponta pega se mudarem.
+  - **Limpeza:** lint, `any` e 68 `!important` de enfeite tirados (ficaram os de posição e tamanho, que vencem o arrasto dos painéis).
+- **Testes:**
+  - unidade: resolução e tamanho lembrado (`pipLayout.test.ts`; os testes do PR, que só tinham simulações sem verificar nada, saíram);
+  - ponta a ponta: `janela-flutuante.spec.ts` (abrir, preferências, botões sem chamada, andar clicando na janela, conversa, cartão, convite atendido na janela com etiqueta e mudo, sair, painel da aba fica na aba, fechar com a sala do tamanho da aba e andando, tamanho lembrado). Falha no código original do PR e passa com os ajustes. O gancho `__e2e.tile()` acha o canvas também dentro da janela.
+
 ### Extras sugeridos (fora do pedido; dá para encaixar depois)
 
 | Código | Ideia | Impacto | Esforço |
